@@ -38,4 +38,4 @@ Proof. simpl. intros e. destruct e.
 Qed.
 
 (* Evaluate expressions*)
-Compute (eval_expr (Plu s (Constant 5) (Constant 6))).
+Compute (eval_expr (Plus (Constant 5) (Constant 6))).
