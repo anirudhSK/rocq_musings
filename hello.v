@@ -18,4 +18,14 @@ Example test1:
 (process_expr (Constant 5)) = (5).
 
 (* ... with proof *)
-Proof. simpl. reflexivity. Qed.                              
+Proof. simpl. reflexivity. Qed.
+  
+(* More involved theorem *)
+Example test2:
+(forall e: expr, process_expr(e) = 5).
+
+(* with proof .*)
+Proof. simpl. intros e. destruct e.
+       -simpl. reflexivity.
+       -simpl. reflexivity.
+Qed.
