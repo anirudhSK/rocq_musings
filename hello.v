@@ -39,3 +39,15 @@ Qed.
 
 (* Evaluate expressions*)
 Compute (eval_expr (Plus (Constant 5) (Constant 6))).
+
+(* Distributivity of eval_expr *)
+Example test3:
+(forall e1 e2: expr, (eval_expr e1) + (eval_expr e2) = (eval_expr (Plus e1 e2))).
+Proof.
+ intros e1 e2.
+ destruct e1, e2.
+ - simpl. reflexivity.
+ - simpl. reflexivity.
+ - simpl. reflexivity.
+ - simpl. reflexivity.
+Qed.
