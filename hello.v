@@ -1,3 +1,5 @@
+Require Import Arith.
+
 (* Simple data type of expressions *)
 Inductive expr : Type :=
   | Plus (e1 e2 : expr)
@@ -67,8 +69,8 @@ Example test4:
 Proof.
  intros e1 e2.
  destruct e1, e2.
- - simpl. apply add_comm.
- - simpl. apply add_comm.
- - simpl. apply add_comm.
- - simpl. apply add_comm.
+ - simpl. ring.
+ - simpl. ring.
+ - simpl. ring.
+ - simpl. ring.
  Qed.
