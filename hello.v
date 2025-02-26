@@ -1,10 +1,21 @@
+(* Simple data type of expressions *)
 Inductive expr : Type :=
   | Plus (e1 e2 : expr)
   | Constant (n1 : nat).
 
+(* Function to transforms expressions *)
 Definition process_expr (e : expr) :=
    match e with 
     | Constant n1 => 5
     | Plus _ _ => 5
    end.
 
+(* Compute using function *)
+Compute (process_expr (Constant 5)).
+
+(* Example theorem *)
+Example test1:
+(process_expr (Constant 5)) = (5).
+
+(* ... with proof *)
+Proof. simpl. reflexivity. Qed.                              
