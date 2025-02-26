@@ -10,6 +10,13 @@ Definition process_expr (e : expr) :=
     | Plus _ _ => 5
    end.
 
+(* Function to evaluate expressions *)
+Fixpoint eval_expr(e: expr) :=
+  match e with
+    | Constant n => n
+    | Plus e1 e2 => (eval_expr e1) + (eval_expr e2)
+  end.  
+
 (* Compute using function *)
 Compute (process_expr (Constant 5)).
 
@@ -29,3 +36,6 @@ Proof. simpl. intros e. destruct e.
        -simpl. reflexivity.
        -simpl. reflexivity.
 Qed.
+
+(* Evaluate expressions*)
+Compute (eval_expr (Plu s (Constant 5) (Constant 6))).
