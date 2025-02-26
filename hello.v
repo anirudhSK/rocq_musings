@@ -51,3 +51,24 @@ Proof.
  - simpl. reflexivity.
  - simpl. reflexivity.
 Qed.
+
+Theorem add_comm : forall (x y : nat),
+  x + y = y + x.
+Proof.
+  intros. induction x.
+  - trivial.
+  - simpl. rewrite -> IHx. trivial.
+Qed.
+
+(* Distributivity of eval_expr
+   with commutativity thrown in*)
+Example test4:
+(forall e1 e2: expr, (eval_expr e1) + (eval_expr e2) = (eval_expr (Plus e2 e1))).
+Proof.
+ intros e1 e2.
+ destruct e1, e2.
+ - simpl. apply add_comm.
+ - simpl. apply add_comm.
+ - simpl. apply add_comm.
+ - simpl. apply add_comm.
+ Qed.
