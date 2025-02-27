@@ -74,3 +74,31 @@ Proof.
  - simpl. ring.
  - simpl. ring.
  Qed.
+
+(* Constant folding pass *)
+Definition constant_fold(e : expr):=
+  match e with
+  | Plus (Constant n1) (Constant n2) => Constant (n1 + n2)
+  | _ => e
+end.
+
+Compute (constant_fold (Plus (Plus (Constant 5) (Constant 10))
+                             (Plus (Constant 5) (Constant 10)))).
+
+Axiom plus_equality: forall n1 n2,
+Constant (n1 + n2) =
+Plus (Constant n1) (Constant n2).
+
+(* Prove correctness of constant_fold *)
+Theorem constant_fold_thm : forall e,
+   constant_fold e = e.
+Proof.
+  intros.
+  induction e.
+  - unfold constant_fold. destruct e1, e2.
+       -- reflexivity.
+       -- reflexivity.
+       -- reflexivity.
+       -- apply plus_equality.
+  - intros. unfold constant_fold. reflexivity.
+Qed.
