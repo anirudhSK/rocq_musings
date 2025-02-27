@@ -82,9 +82,6 @@ Definition constant_fold(e : expr):=
   | _ => e
 end.
 
-Compute (constant_fold (Plus (Plus (Constant 5) (Constant 10))
-                             (Plus (Constant 5) (Constant 10)))).
-
 Axiom plus_equality: forall n1 n2,
 Constant (n1 + n2) =
 Plus (Constant n1) (Constant n2).
