@@ -82,13 +82,9 @@ Definition constant_fold(e : expr):=
   | _ => e
 end.
 
-Axiom plus_equality: forall n1 n2,
-Constant (n1 + n2) =
-Plus (Constant n1) (Constant n2).
-
 (* Prove correctness of constant_fold *)
 Theorem constant_fold_thm : forall e,
-   constant_fold e = e.
+   eval_expr (constant_fold e) =  eval_expr e.
 Proof.
   intros.
   induction e.
@@ -96,6 +92,6 @@ Proof.
        -- reflexivity.
        -- reflexivity.
        -- reflexivity.
-       -- apply plus_equality.
+       -- unfold eval_expr. reflexivity.
   - intros. unfold constant_fold. reflexivity.
 Qed.
