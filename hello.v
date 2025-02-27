@@ -87,7 +87,7 @@ Theorem constant_fold_thm : forall e,
    eval_expr (constant_fold e) =  eval_expr e.
 Proof.
   intros.
-  induction e.
+  destruct e. (* TODO: induction e also seems to work here, ask JoeT *)
   - unfold constant_fold. destruct e1, e2.
        -- reflexivity.
        -- reflexivity.
