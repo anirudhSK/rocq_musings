@@ -2,18 +2,21 @@ Require Import Arith.
 
 (* Simple data type of expressions *)
 Inductive expr : Type :=
+  | Constant (n1 : nat)
   | Plus (e1 e2 : expr)
-  | Constant (n1 : nat).
+  | Minus (e1 e2 : expr).
 
 (* Function to evaluate expressions *)
 Fixpoint eval_expr(e: expr) :=
   match e with
     | Constant n => n
     | Plus e1 e2 => (eval_expr e1) + (eval_expr e2)
+    | Minus e1 e2 => (eval_expr e1) - (eval_expr e2)
   end.  
 
 (* Evaluate expressions*)
 Compute (eval_expr (Plus (Constant 5) (Constant 6))).
+Compute (eval_expr (Minus (Constant 6) (Constant 10))).
 
 (* Distributivity of eval_expr
    with commutativity thrown in*)
@@ -22,6 +25,11 @@ Example test4:
 Proof.
  intros e1 e2.
  destruct e1, e2.
+ - simpl. ring.
+ - simpl. ring.
+ - simpl. ring.
+ - simpl. ring.
+ - simpl. ring.
  - simpl. ring.
  - simpl. ring.
  - simpl. ring.
@@ -41,11 +49,17 @@ Theorem constant_fold_thm : forall e,
 Proof.
   intros.
   destruct e. (* TODO: induction e also seems to work here, ask JoeT *)
-  - unfold constant_fold. destruct e1, e2.
+  - unfold constant_fold. reflexivity.
+  - destruct e1, e2.
        -- reflexivity.
        -- reflexivity.
        -- reflexivity.
        -- unfold eval_expr. reflexivity.
+       -- reflexivity.
+       -- reflexivity.
+       -- reflexivity.
+       -- reflexivity.
+       -- reflexivity.
   - intros. unfold constant_fold. reflexivity.
 Qed.
 
