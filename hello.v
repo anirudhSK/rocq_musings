@@ -106,3 +106,8 @@ Check constant_fold.
 
 Check expr->expr.
 (* Why is this Set? *)
+
+Check Set.
+
+Check Prop.
+(* Set and Prop both are of type Type *)
