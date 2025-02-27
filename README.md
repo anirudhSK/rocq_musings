@@ -15,3 +15,7 @@ Here's a minimal set of steps:
 * opam init
 * eval $(opam env)
 * opam update
+
+// Apparently the vscoq language server needs to be
+// bumped up in version. Don't know why. But it still 
+// works with the old version.
