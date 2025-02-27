@@ -95,3 +95,14 @@ Proof.
        -- unfold eval_expr. reflexivity.
   - intros. unfold constant_fold. reflexivity.
 Qed.
+
+(* Check some types *)
+Check constant_fold_thm.
+
+Check forall e : expr, eval_expr (constant_fold e) = eval_expr e.
+(* Why is this Prop? *)
+
+Check constant_fold.
+
+Check expr->expr.
+(* Why is this Set? *)
