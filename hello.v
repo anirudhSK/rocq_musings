@@ -50,19 +50,3 @@ Proof.
   - destruct e1, e2; reflexivity.
   - destruct e1, e2; reflexivity.
 Qed.
-
-(* Check some types *)
-Check constant_fold_thm.
-
-Check forall e : expr, eval_expr (constant_fold e) = eval_expr e.
-(* Why is this Prop? *)
-
-Check constant_fold.
-
-Check expr->expr.
-(* Why is this Set? *)
-
-Check Set.
-
-Check Prop.
-(* Set and Prop both are of type Type *)
