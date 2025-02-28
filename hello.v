@@ -36,6 +36,7 @@ Definition constant_fold(e : expr):=
   match e with
   | Plus (Constant n1) (Constant n2) => Constant (n1 + n2)
   | Minus (Constant n1) (Constant n2) => Constant (n1 - n2)
+  | Mul (Constant n1) (Constant n2) => Constant (n1 * n2)
   | _ => e
 end.
 
@@ -44,10 +45,10 @@ Theorem constant_fold_thm : forall e,
    eval_expr (constant_fold e) =  eval_expr e.
 Proof.
   destruct e. (* TODO: induction e also seems to work here, ask JoeT *)
-  - reflexivity.
+  - reflexivity. (* Why do you not need an unfold constant_fold here? *)
   - destruct e1, e2; reflexivity.
   - destruct e1, e2; reflexivity.
-  - reflexivity.
+  - destruct e1, e2; reflexivity.
 Qed.
 
 (* Check some types *)
