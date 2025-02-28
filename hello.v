@@ -45,9 +45,6 @@ end.
 Theorem constant_fold_thm : forall e,
    eval_expr (constant_fold e) =  eval_expr e.
 Proof.
-  destruct e. (* TODO: induction e also seems to work here, ask JoeT *)
-  - reflexivity. (* Why do you not need an unfold constant_fold here? *)
-  - destruct e1, e2; reflexivity.
-  - destruct e1, e2; reflexivity.
-  - destruct e1, e2; reflexivity.
+  destruct e; try reflexivity || destruct e1, e2; reflexivity.
+  (* TODO: induction e also seems to work here, ask JoeT *)
 Qed.
