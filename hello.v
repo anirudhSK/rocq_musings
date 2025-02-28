@@ -24,16 +24,7 @@ Example test4:
 (forall e1 e2: expr, (eval_expr e1) + (eval_expr e2) = (eval_expr (Plus e2 e1))).
 Proof.
  intros e1 e2.
- destruct e1, e2.
- - simpl. ring.
- - simpl. ring.
- - simpl. ring.
- - simpl. ring.
- - simpl. ring.
- - simpl. ring.
- - simpl. ring.
- - simpl. ring.
- - simpl. ring.
+ destruct e1, e2; simpl; ring.
  Qed.
 
 (* Constant folding pass *)
@@ -47,20 +38,10 @@ end.
 Theorem constant_fold_thm : forall e,
    eval_expr (constant_fold e) =  eval_expr e.
 Proof.
-  intros.
   destruct e. (* TODO: induction e also seems to work here, ask JoeT *)
-  - unfold constant_fold. reflexivity.
-  - destruct e1, e2.
-       -- reflexivity.
-       -- reflexivity.
-       -- reflexivity.
-       -- unfold eval_expr. reflexivity.
-       -- reflexivity.
-       -- reflexivity.
-       -- reflexivity.
-       -- reflexivity.
-       -- reflexivity.
-  - intros. unfold constant_fold. reflexivity.
+  - reflexivity.
+  - destruct e1, e2; reflexivity.
+  - reflexivity.
 Qed.
 
 (* Check some types *)
