@@ -22,13 +22,14 @@ Compute (eval_expr (Minus (Constant 6) (Constant 10))).
 Compute (eval_expr (Minus (Constant 6) (Constant 2))).
 Compute (eval_expr (Mul (Constant 6) (Constant 2))).
 
-(* Distributivity of eval_expr
-   with commutativity thrown in*)
-Example test4:
-(forall e1 e2: expr, (eval_expr e1) + (eval_expr e2) = (eval_expr (Plus e2 e1))).
+(* A*(B+C) = AB + AC *)
+Example distribute:
+forall a b c: expr, 
+  eval_expr (Mul a (Plus b c)) =
+  eval_expr (Mul a b) + eval_expr (Mul a c).
 Proof.
- intros e1 e2.
- destruct e1, e2; simpl; ring.
+ intros a b c.
+ destruct a, b, c; simpl; ring.
  Qed.
 
 (* Constant folding pass *)
