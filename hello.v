@@ -35,6 +35,7 @@ Proof.
 Definition constant_fold(e : expr):=
   match e with
   | Plus (Constant n1) (Constant n2) => Constant (n1 + n2)
+  | Minus (Constant n1) (Constant n2) => Constant (n1 - n2)
   | _ => e
 end.
 
@@ -45,7 +46,7 @@ Proof.
   destruct e. (* TODO: induction e also seems to work here, ask JoeT *)
   - reflexivity.
   - destruct e1, e2; reflexivity.
-  - reflexivity.
+  - destruct e1, e2; reflexivity.
   - reflexivity.
 Qed.
 
