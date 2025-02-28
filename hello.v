@@ -4,7 +4,8 @@ Require Import Arith.
 Inductive expr : Type :=
   | Constant (n1 : nat)
   | Plus (e1 e2 : expr)
-  | Minus (e1 e2 : expr).
+  | Minus (e1 e2 : expr)
+  | Mul (e1 e2 : expr).
 
 (* Function to evaluate expressions *)
 Fixpoint eval_expr(e: expr) :=
@@ -12,11 +13,14 @@ Fixpoint eval_expr(e: expr) :=
     | Constant n => n
     | Plus e1 e2 => (eval_expr e1) + (eval_expr e2)
     | Minus e1 e2 => (eval_expr e1) - (eval_expr e2)
+    | Mul e1 e2 => (eval_expr e1) * (eval_expr e2)
   end.  
 
 (* Evaluate expressions*)
 Compute (eval_expr (Plus (Constant 5) (Constant 6))).
 Compute (eval_expr (Minus (Constant 6) (Constant 10))).
+Compute (eval_expr (Minus (Constant 6) (Constant 2))).
+Compute (eval_expr (Mul (Constant 6) (Constant 2))).
 
 (* Distributivity of eval_expr
    with commutativity thrown in*)
@@ -41,6 +45,7 @@ Proof.
   destruct e. (* TODO: induction e also seems to work here, ask JoeT *)
   - reflexivity.
   - destruct e1, e2; reflexivity.
+  - reflexivity.
   - reflexivity.
 Qed.
 
