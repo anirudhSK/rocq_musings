@@ -41,7 +41,8 @@ forall (a b c : expr) (s : state),
   (eval_expr (Mul a b) s) + (eval_expr (Mul a c) s).
 Proof.
  intros a b c s.
- destruct a, b, c; simpl; ring. (* TODO: This destruct takes a while ... *)
+ simpl.
+ ring.
  Qed.
 
 (* Constant folding pass *)
