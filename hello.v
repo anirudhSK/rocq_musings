@@ -4,6 +4,10 @@ From Coq Require Import Strings.String.
 (* A few more concepts to model:
 local state, graphs of computations, concurrency,
 locks, etc.*)
+(* Here's something from SO on how to model graphs:
+https://stackoverflow.com/questions/24753975/simple-graph-theory-proofs-using-coq
+Definition graph : Type := {V : Type & V -> V -> bool}.
+*)
 
 (* Simple data type of expressions *)
 Inductive expr : Type :=
