@@ -1,6 +1,10 @@
 Require Import Arith.
 From Coq Require Import Strings.String.
 
+(* A few more concepts to model:
+local state, graphs of computations, concurrency,
+locks, etc.*)
+
 (* Simple data type of expressions *)
 Inductive expr : Type :=
   | Constant (n1 : nat)
