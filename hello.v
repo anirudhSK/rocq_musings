@@ -9,13 +9,19 @@ https://stackoverflow.com/questions/24753975/simple-graph-theory-proofs-using-co
 Definition graph : Type := {V : Type & V -> V -> bool}.
 *)
 
-(* Simple data type of expressions *)
+(* Simple data type of expressions (or computations) *)
 Inductive expr : Type :=
   | Constant (n1 : nat)
   | Plus (e1 e2 : expr)
   | Minus (e1 e2 : expr)
   | Mul (e1 e2 : expr)
   | Var (name : string).
+
+Record pkt_proc_module : Set :=
+   { local_state : nat;
+      computation : expr}.
+
+Check pkt_proc_module.
 
 (* State of the machine with current values of variables *)
 Definition state := string -> nat.
