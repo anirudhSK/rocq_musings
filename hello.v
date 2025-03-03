@@ -23,6 +23,11 @@ Record pkt_proc_module : Set :=
 
 Check pkt_proc_module.
 
+(* Graphs connect packet processing modules together. *)
+(* Maybe use this definition of graphs with simplifications:
+https://gist.github.com/andrejbauer/8dade8489dff8819c352e88f446154a1#file-graph-v-L16
+*)
+
 (* State of the machine with current values of variables *)
 Definition state := string -> nat.
 
