@@ -54,12 +54,12 @@ Definition aequiv (a1 a2 : expr) : Prop :=
 
 (* Simple theorem *)
 Theorem equivalence_example:
-  aequiv (Plus (Constant 5) (Constant 6)) (Constant 11).
+  aequiv (Plus (Constant 5) (Var "x")) (Plus (Var "x") (Constant 5)).
 Proof.
   unfold aequiv.
   intros st.
   simpl.
-  reflexivity.
+  ring.
 Qed.
 
 (* Evaluate expressions*)
