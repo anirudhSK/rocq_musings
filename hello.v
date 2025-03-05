@@ -47,6 +47,21 @@ Fixpoint eval_expr (e: expr) (s : state) :=
     | Var name => s name
   end.
 
+(* Expression equivalence *)
+Definition aequiv (a1 a2 : expr) : Prop :=
+  forall (st : state),
+    eval_expr a1 st = eval_expr a2 st.
+
+(* Simple theorem *)
+Theorem equivalence_example:
+  aequiv (Plus (Constant 5) (Constant 6)) (Constant 11).
+Proof.
+  unfold aequiv.
+  intros st.
+  simpl.
+  reflexivity.
+Qed.
+
 (* Evaluate expressions*)
 Compute (eval_expr (Plus (Constant 5) (Constant 6)) empty_state).
 Compute (eval_expr (Minus (Constant 6) (Constant 10)) empty_state).
