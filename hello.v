@@ -62,6 +62,58 @@ Proof.
   ring.
 Qed.
 
+Fixpoint equivalence_checker (e1 e2 : expr) : bool :=
+  match e1, e2 with
+    | Constant n1, Constant n2 => beq_nat n1 n2
+    | Plus e1' e2', Plus e1'' e2'' => andb (equivalence_checker e1' e1'') (equivalence_checker e2' e2'')
+    | Minus e1' e2', Minus e1'' e2'' => andb (equivalence_checker e1' e1'') (equivalence_checker e2' e2'')
+    | Mul e1' e2', Mul e1'' e2'' => andb (equivalence_checker e1' e1'') (equivalence_checker e2' e2'')
+    | Var name1, Var name2 => beq_string name1 name2
+    | _, _ => false
+  end.
+
+(* Prove that the equivalence checker is correct *)
+Theorem equivalence_checker_correct:
+  forall (e1 e2 : expr), equivalence_checker e1 e2 = true -> aequiv e1 e2.
+Proof.
+  unfold aequiv.
+  intros e1 e2 H st.
+  induction e1, e2; simpl in H; try discriminate H.
+  - apply beq_nat_true in H. rewrite H. reflexivity.
+  - apply andb_true in H as [H1 H2]. apply IHe1_1 in H1. apply IHe1_2 in H2. rewrite H1, H2. reflexivity.
+  - apply andb_true in H as [H1 H2]. apply IHe1_1 in H1. apply IHe1_2 in H2. rewrite H1, H2. reflexivity.
+  - apply andb_true in H as [H1 H2]. apply IHe1_1 in H1. apply IHe1_2 in H2. rewrite H1, H2. reflexivity.
+  - apply beq_string_true in H. rewrite H. reflexivity.
+Qed.
+
+(* Prove that the equivalence checker is complete *)
+Theorem equivalence_checker_complete:
+  forall (e1 e2 : expr), aequiv e1 e2 -> equivalence_checker e1 e2 = true.
+Proof.
+  unfold aequiv.
+  intros e1 e2 H.
+  induction e1, e2; simpl; try reflexivity.
+  - apply beq_nat_true_iff. apply H.
+  - apply andb_true_iff. split; apply H.
+  - apply andb_true_iff. split; apply H.
+  - apply andb_true_iff. split; apply H.
+  - apply beq_string_true_iff. apply H.
+Qed.  
+
+(* Prove that the equivalence checker is sound *)
+Theorem equivalence_checker_sound:
+  forall (e1 e2 : expr), equivalence_checker e1 e2 = false -> ~aequiv e1 e2.
+Proof.
+  unfold aequiv.
+  intros e1 e2 H1 H2.
+  induction e1, e2; simpl in H1; try discriminate H1.
+  - apply beq_nat_false in H1. apply H1. apply H2.
+  - apply andb_false in H1 as [H1 | H1]; apply IHe1_1 in H1 || apply IHe1_2 in H1; apply H1; apply H2.
+  - apply andb_false in H1 as [H1 | H1]; apply IHe1_1 in H1 || apply IHe1_2 in H1; apply H1; apply H2.
+  - apply andb_false in H1 as [H1 | H1]; apply IHe1_1 in H1 || apply IHe1_2 in H1; apply H1; apply H2.
+  - apply beq_string_false in H1. apply H1. apply H2.
+Qed.
+
 (* Evaluate expressions*)
 Compute (eval_expr (Plus (Constant 5) (Constant 6)) empty_state).
 Compute (eval_expr (Minus (Constant 6) (Constant 10)) empty_state).
