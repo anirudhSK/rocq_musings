@@ -1,5 +1,6 @@
 Require Import Arith.
 From Coq Require Import Strings.String.
+Open Scope string_scope.
 
 (* A few more concepts to model:
 local state, graphs of computations, concurrency,
@@ -64,11 +65,11 @@ Qed.
 
 Fixpoint equivalence_checker (e1 e2 : expr) : bool :=
   match e1, e2 with
-    | Constant n1, Constant n2 => beq_nat n1 n2
+    | Constant n1, Constant n2 => Nat.eqb n1 n2
     | Plus e1' e2', Plus e1'' e2'' => andb (equivalence_checker e1' e1'') (equivalence_checker e2' e2'')
     | Minus e1' e2', Minus e1'' e2'' => andb (equivalence_checker e1' e1'') (equivalence_checker e2' e2'')
     | Mul e1' e2', Mul e1'' e2'' => andb (equivalence_checker e1' e1'') (equivalence_checker e2' e2'')
-    | Var name1, Var name2 => beq_string name1 name2
+    | Var name1, Var name2 => String.eqb name1 name2
     | _, _ => false
   end.
 
