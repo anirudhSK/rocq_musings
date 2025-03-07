@@ -101,6 +101,13 @@ Theorem equivalence_checker_correct:
 Proof.
 unfold aequiv.
 intros e1 e2.
+intros H.
+intros st.
+Check H.
+Check equivalence_checker e1 e2 = true.
+
+
+unfold equivalence_checker in H.
 destruct e1, e2;
 unfold equivalence_checker; try discriminate.
  - intros H. intros st. unfold eval_expr. apply eqb_eq in H. apply H.
