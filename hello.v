@@ -1,4 +1,5 @@
 Require Import Arith.
+Require Import Bool.
 From Coq Require Import Strings.String.
 Open Scope string_scope.
 
@@ -63,6 +64,7 @@ Proof.
   ring.
 Qed.
 
+(* Simple equivalence checker *)
 Fixpoint equivalence_checker (e1 e2 : expr) : bool :=
   match e1, e2 with
     | Constant n1, Constant n2 => Nat.eqb n1 n2
@@ -73,14 +75,47 @@ Fixpoint equivalence_checker (e1 e2 : expr) : bool :=
     | _, _ => false
   end.
 
+Theorem eqb_true : forall n m : nat,
+  (n =? m)%nat = true -> n = m.
+Proof.
+(* FILL IN HERE *) Admitted.
+
+Theorem eqb_refl : forall n : nat,
+  (n =? n)%nat = true.
+Proof.
+  (* FILL IN HERE *) Admitted.
+
+Theorem eqb_eq : forall n1 n2 : nat,
+  (n1 =? n2)%nat = true <-> n1 = n2.
+Proof.
+  intros n1 n2. split.
+  - apply eqb_true.
+  - intros H. rewrite H. rewrite eqb_refl. reflexivity.
+Qed.
+(* Is this %nat a new coq thing? what is going on with intros H*)
+
+(* Is this theorem even true in the first place? ?? *)
 (* Prove that the equivalence checker is correct *)
 Theorem equivalence_checker_correct:
   forall (e1 e2 : expr), equivalence_checker e1 e2 = true -> aequiv e1 e2.
+Proof.
+unfold aequiv.
+intros e1 e2.
+destruct e1, e2;
+unfold equivalence_checker; try discriminate.
+ - intros H. intros st. unfold eval_expr. apply eqb_eq in H. apply H.
+ - destruct e1_1, e1_2, e2_1, e2_2; try discriminate.
+   -- intros H. apply andb_true_iff in H. destruct H. apply eqb_eq in H. intros st. unfold eval_expr.  apply H.
 
+(* TODO: Ask JoeT about the fine print of these theorem statements?
+   Are some of these equivalent to others? *)
 (* Prove that the equivalence checker is complete *)
+     
+
 Theorem equivalence_checker_complete:
   forall (e1 e2 : expr), aequiv e1 e2 -> equivalence_checker e1 e2 = true.
 
+(* The stuff below follows from law of excluded middle, which you can add as an axiom. *)
 (* Prove that the equivalence checker is sound *)
 Theorem equivalence_checker_sound:
   forall (e1 e2 : expr), equivalence_checker e1 e2 = false -> ~aequiv e1 e2.
