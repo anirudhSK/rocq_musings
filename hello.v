@@ -105,7 +105,8 @@ destruct e1, e2;
 unfold equivalence_checker; try discriminate.
  - intros H. intros st. unfold eval_expr. apply eqb_eq in H. apply H.
  - destruct e1_1, e1_2, e2_1, e2_2; try discriminate.
-   -- intros H. apply andb_true_iff in H. destruct H. apply eqb_eq in H. intros st. unfold eval_expr.  apply H.
+   -- intros H. apply andb_true_iff in H. destruct H. apply eqb_eq in H. apply eqb_eq in H0. intros st. unfold eval_expr. rewrite H. rewrite H0. reflexivity.
+   -- 
 
 (* TODO: Ask JoeT about the fine print of these theorem statements?
    Are some of these equivalent to others? *)
