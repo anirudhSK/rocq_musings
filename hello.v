@@ -1,5 +1,6 @@
 Require Import Arith.
 Require Import Bool.
+Require Import Coq.Logic.ClassicalFacts.  (* for excluded middle *)
 From Coq Require Import Strings.String.
 Open Scope string_scope.
 
@@ -69,20 +70,18 @@ Definition equivalence_checker (e1 e2 : expr) : bool :=
 Theorem eqb_true : forall n m : nat,
   (n =? m)%nat = true -> n = m.
 Proof.
-(* FILL IN HERE *) Admitted.
-
-Theorem eqb_refl : forall n : nat,
-  (n =? n)%nat = true.
-Proof.
-  (* FILL IN HERE *) Admitted.
-
-Theorem eqb_eq : forall n1 n2 : nat,
-  (n1 =? n2)%nat = true <-> n1 = n2.
-Proof.
-  intros n1 n2. split.
-  - apply eqb_true.
-  - intros H. rewrite H. rewrite eqb_refl. reflexivity.
+  intros n m.
+  apply Nat.eqb_eq.
 Qed.
+
+Theorem eqb_true_rev : forall n m : nat,
+  n = m -> (n =? m)%nat = true.
+Proof.
+  intros n m.
+  apply Nat.eqb_eq.
+Qed.
+
+
 (* Is this %nat a new coq thing? what is going on with intros H*)
 
 (* Is this theorem even true in the first place? ?? *)
@@ -95,10 +94,8 @@ unfold aequiv.
 unfold equivalence_checker.
 apply eqb_true.
 Qed.
-(* TODO: Ask JoeT about the fine print of these theorem statements?
-   Are some of these equivalent to others? *)
-(* Prove that the equivalence checker is complete *)
 
+(* Prove that the equivalence checker is complete *)
 Theorem equivalence_checker_complete:
   forall (e1 e2 : expr), aequiv e1 e2 -> equivalence_checker e1 e2 = true.
 Proof.
@@ -106,12 +103,23 @@ Proof.
   unfold aequiv.
   intros H.
   unfold equivalence_checker.
-  apply eqb_true.
+  apply eqb_true_rev.
+  apply H.
+Qed.
 
+(* TODO: How to simplify the proof below using excluded_middle? *)
 (* The stuff below follows from law of excluded middle, which you can add as an axiom. *)
 (* Prove that the equivalence checker is sound *)
 Theorem equivalence_checker_sound:
   forall (e1 e2 : expr), equivalence_checker e1 e2 = false -> ~aequiv e1 e2.
+Proof. 
+  intros e1 e2.
+  unfold aequiv.
+  intros H.
+  unfold equivalence_checker in H.
+  apply Nat.eqb_neq in H.
+  apply H.
+Qed.
 
 (* Evaluate expressions*)
 Compute (eval_expr (Plus (Constant 5) (Constant 6)) empty_state).
