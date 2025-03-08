@@ -67,21 +67,6 @@ Qed.
 Definition equivalence_checker (e1 e2 : expr) : bool := 
   Nat.eqb (eval_expr e1 empty_state) (eval_expr e2 empty_state).
 
-Theorem eqb_true : forall n m : nat,
-  (n =? m)%nat = true -> n = m.
-Proof.
-  intros n m.
-  apply Nat.eqb_eq.
-Qed.
-
-Theorem eqb_true_rev : forall n m : nat,
-  n = m -> (n =? m)%nat = true.
-Proof.
-  intros n m.
-  apply Nat.eqb_eq.
-Qed.
-
-
 (* Is this %nat a new coq thing? what is going on with intros H*)
 
 (* Is this theorem even true in the first place? ?? *)
@@ -92,7 +77,7 @@ Proof.
 intros e1 e2.
 unfold aequiv.
 unfold equivalence_checker.
-apply eqb_true.
+apply Nat.eqb_eq.
 Qed.
 
 (* Prove that the equivalence checker is complete *)
@@ -103,7 +88,7 @@ Proof.
   unfold aequiv.
   intros H.
   unfold equivalence_checker.
-  apply eqb_true_rev.
+  apply Nat.eqb_eq.
   apply H.
 Qed.
 
