@@ -51,29 +51,20 @@ Fixpoint eval_expr (e: expr) (s : state) :=
 
 (* Expression equivalence *)
 Definition aequiv (a1 a2 : expr) : Prop :=
-  forall (st : state),
-    eval_expr a1 st = eval_expr a2 st.
+    eval_expr a1 empty_state = eval_expr a2 empty_state.
 
 (* Simple theorem *)
 Theorem equivalence_example:
   aequiv (Plus (Constant 5) (Var "x")) (Plus (Var "x") (Constant 5)).
 Proof.
   unfold aequiv.
-  intros st.
   simpl.
-  ring.
+  reflexivity.
 Qed.
 
 (* Simple equivalence checker *)
-Fixpoint equivalence_checker (e1 e2 : expr) : bool :=
-  match e1, e2 with
-    | Constant n1, Constant n2 => Nat.eqb n1 n2
-    | Plus e1' e2', Plus e1'' e2'' => andb (equivalence_checker e1' e1'') (equivalence_checker e2' e2'')
-    | Minus e1' e2', Minus e1'' e2'' => andb (equivalence_checker e1' e1'') (equivalence_checker e2' e2'')
-    | Mul e1' e2', Mul e1'' e2'' => andb (equivalence_checker e1' e1'') (equivalence_checker e2' e2'')
-    | Var name1, Var name2 => String.eqb name1 name2
-    | _, _ => false
-  end.
+Definition equivalence_checker (e1 e2 : expr) : bool := 
+  Nat.eqb (eval_expr e1 empty_state) (eval_expr e2 empty_state).
 
 Theorem eqb_true : forall n m : nat,
   (n =? m)%nat = true -> n = m.
@@ -99,26 +90,14 @@ Qed.
 Theorem equivalence_checker_correct:
   forall (e1 e2 : expr), equivalence_checker e1 e2 = true -> aequiv e1 e2.
 Proof.
-unfold aequiv.
 intros e1 e2.
-intros H.
-intros st.
-Check H.
-Check equivalence_checker e1 e2 = true.
-
-
-unfold equivalence_checker in H.
-destruct e1, e2;
-unfold equivalence_checker; try discriminate.
- - intros H. intros st. unfold eval_expr. apply eqb_eq in H. apply H.
- - destruct e1_1, e1_2, e2_1, e2_2; try discriminate.
-   -- intros H. apply andb_true_iff in H. destruct H. apply eqb_eq in H. apply eqb_eq in H0. intros st. unfold eval_expr. rewrite H. rewrite H0. reflexivity.
-   -- 
-
+unfold aequiv.
+unfold equivalence_checker.
+apply eqb_true.
+Qed.
 (* TODO: Ask JoeT about the fine print of these theorem statements?
    Are some of these equivalent to others? *)
 (* Prove that the equivalence checker is complete *)
-     
 
 Theorem equivalence_checker_complete:
   forall (e1 e2 : expr), aequiv e1 e2 -> equivalence_checker e1 e2 = true.
