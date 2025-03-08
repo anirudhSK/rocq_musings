@@ -101,6 +101,12 @@ Qed.
 
 Theorem equivalence_checker_complete:
   forall (e1 e2 : expr), aequiv e1 e2 -> equivalence_checker e1 e2 = true.
+Proof.
+  intros e1 e2.
+  unfold aequiv.
+  intros H.
+  unfold equivalence_checker.
+  apply eqb_true.
 
 (* The stuff below follows from law of excluded middle, which you can add as an axiom. *)
 (* Prove that the equivalence checker is sound *)
