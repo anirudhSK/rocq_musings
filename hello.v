@@ -51,12 +51,12 @@ Fixpoint eval_expr (e: expr) (s : state) :=
   end.
 
 (* Expression equivalence *)
-Definition aequiv (a1 a2 : expr) : Prop :=
-    eval_expr a1 empty_state = eval_expr a2 empty_state.
+Definition aequiv (a1 a2 : expr) (s : state) : Prop :=
+    eval_expr a1 s = eval_expr a2 s.
 
 (* Simple theorem *)
 Theorem equivalence_example:
-  aequiv (Plus (Constant 5) (Var "x")) (Plus (Var "x") (Constant 5)).
+  aequiv (Plus (Constant 5) (Var "x")) (Plus (Var "x") (Constant 5)) empty_state.
 Proof.
   unfold aequiv.
   simpl.
@@ -64,28 +64,30 @@ Proof.
 Qed.
 
 (* Simple equivalence checker *)
-Definition equivalence_checker (e1 e2 : expr) : bool := 
-  Nat.eqb (eval_expr e1 empty_state) (eval_expr e2 empty_state).
+Definition equivalence_checker (e1 e2 : expr) (s : state) : bool := 
+  Nat.eqb (eval_expr e1 s) (eval_expr e2 s).
+(* TODO: Is this %nat a new coq thing? what is going on with intros H*)
 
-(* Is this %nat a new coq thing? what is going on with intros H*)
-
-(* Is this theorem even true in the first place? ?? *)
 (* Prove that the equivalence checker is correct *)
 Theorem equivalence_checker_correct:
-  forall (e1 e2 : expr), equivalence_checker e1 e2 = true -> aequiv e1 e2.
+  forall (e1 e2 : expr) (s : state), equivalence_checker e1 e2 s = true -> aequiv e1 e2 s.
 Proof.
 intros e1 e2.
 unfold aequiv.
 unfold equivalence_checker.
+intros s.
+intros H. (* TODO: I don't get this intros H business *)
 apply Nat.eqb_eq.
+apply H.
 Qed.
 
 (* Prove that the equivalence checker is complete *)
 Theorem equivalence_checker_complete:
-  forall (e1 e2 : expr), aequiv e1 e2 -> equivalence_checker e1 e2 = true.
+  forall (e1 e2 : expr) (s : state), aequiv e1 e2 s -> equivalence_checker e1 e2 s = true.
 Proof.
   intros e1 e2.
   unfold aequiv.
+  intros s.
   intros H.
   unfold equivalence_checker.
   apply Nat.eqb_eq.
@@ -96,10 +98,11 @@ Qed.
 (* The stuff below follows from law of excluded middle, which you can add as an axiom. *)
 (* Prove that the equivalence checker is sound *)
 Theorem equivalence_checker_sound:
-  forall (e1 e2 : expr), equivalence_checker e1 e2 = false -> ~aequiv e1 e2.
+  forall (e1 e2 : expr) (s : state), equivalence_checker e1 e2 s = false -> ~aequiv e1 e2 s.
 Proof. 
   intros e1 e2.
   unfold aequiv.
+  intros s.
   intros H.
   unfold equivalence_checker in H.
   apply Nat.eqb_neq in H.
