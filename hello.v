@@ -22,7 +22,7 @@ Inductive expr : Type :=
 
 Record pkt_proc_module : Set :=
    { local_state : nat;
-      computation : expr}.
+      computation : expr }.
 
 Check pkt_proc_module.
 
@@ -65,8 +65,22 @@ Qed.
 
 (* Simple equivalence checker *)
 Definition equivalence_checker (e1 e2 : expr) (s : state) : bool := 
-  Nat.eqb (eval_expr e1 s) (eval_expr e2 s).
-(* TODO: Is this %nat a new coq thing? what is going on with intros H*)
+  match e1, e2 with
+    | Constant n1, Constant n2 => Nat.eqb n1 n2
+    | _, _ => false
+  end.
+
+Lemma lemma1 :
+   forall (e1 e2 : expr) (s : state), equivalence_checker e1 e2 s = true -> e1 = e2.
+Proof.
+   intros e1 e2 s.
+   unfold equivalence_checker.
+   destruct e1, e2; try discriminate.
+   - intros H.
+      apply Nat.eqb_eq in H.
+      rewrite H.
+      reflexivity.
+Qed.
 
 (* Prove that the equivalence checker is correct *)
 Theorem equivalence_checker_correct:
@@ -74,39 +88,11 @@ Theorem equivalence_checker_correct:
 Proof.
 intros e1 e2.
 unfold aequiv.
-unfold equivalence_checker.
 intros s.
-intros H. (* TODO: I don't get this intros H business *)
-apply Nat.eqb_eq.
-apply H.
-Qed.
-
-(* Prove that the equivalence checker is complete *)
-Theorem equivalence_checker_complete:
-  forall (e1 e2 : expr) (s : state), aequiv e1 e2 s -> equivalence_checker e1 e2 s = true.
-Proof.
-  intros e1 e2.
-  unfold aequiv.
-  intros s.
-  intros H.
-  unfold equivalence_checker.
-  apply Nat.eqb_eq.
-  apply H.
-Qed.
-
-(* TODO: How to simplify the proof below using excluded_middle? *)
-(* The stuff below follows from law of excluded middle, which you can add as an axiom. *)
-(* Prove that the equivalence checker is sound *)
-Theorem equivalence_checker_sound:
-  forall (e1 e2 : expr) (s : state), equivalence_checker e1 e2 s = false -> ~aequiv e1 e2 s.
-Proof. 
-  intros e1 e2.
-  unfold aequiv.
-  intros s.
-  intros H.
-  unfold equivalence_checker in H.
-  apply Nat.eqb_neq in H.
-  apply H.
+intros H.
+apply lemma1 in H.
+rewrite H.
+reflexivity.
 Qed.
 
 (* Evaluate expressions*)
