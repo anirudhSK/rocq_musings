@@ -67,6 +67,7 @@ Qed.
 Definition equivalence_checker (e1 e2 : expr) (s : state) : bool := 
   match e1, e2 with
     | Constant n1, Constant n2 => Nat.eqb n1 n2
+    | Var name1, Var name2 => String.eqb name1 name2
     | _, _ => false
   end.
 
@@ -78,6 +79,10 @@ Proof.
    destruct e1, e2; try discriminate.
    - intros H.
       apply Nat.eqb_eq in H.
+      rewrite H.
+      reflexivity.
+   - intros H.
+      apply String.eqb_eq in H.
       rewrite H.
       reflexivity.
 Qed.
