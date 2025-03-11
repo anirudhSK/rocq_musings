@@ -62,10 +62,8 @@ Lemma one_more_lemma (e1 e2 : expr)  (s : state) :
     - simpl in H. (* TODO: lookup beta reduction *)
       apply Bool.andb_true_iff in H.
       destruct H.
-      specialize (IHe1_1 e2_1 H).
-      rewrite IHe1_1.
-      specialize (IHe1_2 e2_2 H0).
-      rewrite IHe1_2.
+      rewrite (IHe1_1 _ H).
+      rewrite (IHe1_2 e2_2 H0).
       reflexivity.
     (* TODO: Maybe ask for help here ... *)
     - apply String.eqb_eq in H.
