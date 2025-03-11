@@ -53,18 +53,25 @@ Lemma one_more_lemma (e1 e2 : expr)  (s : state) :
   Proof. (* intro is one term, intros is multiple terms *)
     intros H. (* Stuff on the right hand side of the colon doesn't go automatically into environment or context*)
     (* TODO: Need a more general induction hypothesis here .*)
-    induction e1; destruct e2; try discriminate.
+    revert H.
+    revert e2.
+    induction e1; intros e2 H; destruct e2; try discriminate.
     - apply Nat.eqb_eq in H.
       rewrite H.
       reflexivity.
     - simpl in H. (* TODO: lookup beta reduction *)
       apply Bool.andb_true_iff in H.
       destruct H.
+      specialize (IHe1_1 e2_1 H).
+      rewrite IHe1_1.
+      specialize (IHe1_2 e2_2 H0).
+      rewrite IHe1_2.
+      reflexivity.
     (* TODO: Maybe ask for help here ... *)
     - apply String.eqb_eq in H.
       rewrite H.
       reflexivity.
-Admitted.
+  Qed.
 
 Lemma rec_lemma: (forall (e1_1 e1_2 e2_1 e2_2 : expr) (s : state), 
   equivalence_checker e1_1 e2_1 s &&
