@@ -41,6 +41,7 @@ Fixpoint equivalence_checker (e1 e2 : expr) (s : state) : bool :=
     | Constant n1, Constant n2 => Nat.eqb n1 n2
     | Var name1, Var name2 => String.eqb name1 name2
     | Plus e11 e12, Plus e21 e22 => andb (equivalence_checker e11 e21 s) (equivalence_checker e12 e22 s)
+    | Minus e11 e12, Minus e21 e22 => andb (equivalence_checker e11 e21 s) (equivalence_checker e12 e22 s)
     | _, _ => false
   end.
 
@@ -65,15 +66,34 @@ Lemma one_more_lemma (e1 e2 : expr)  (s : state) :
       rewrite (IHe1_1 _ H).
       rewrite (IHe1_2 e2_2 H0).
       reflexivity.
-    (* TODO: Maybe ask for help here ... *)
+    - simpl in H.
+      apply Bool.andb_true_iff in H.
+      destruct H.
+      rewrite (IHe1_1 _ H).
+      rewrite (IHe1_2 e2_2 H0).
+      reflexivity.
     - apply String.eqb_eq in H.
       rewrite H.
       reflexivity.
   Qed.
 
-Lemma rec_lemma: (forall (e1_1 e1_2 e2_1 e2_2 : expr) (s : state), 
+Lemma plus_lemma: (forall (e1_1 e1_2 e2_1 e2_2 : expr) (s : state), 
   equivalence_checker e1_1 e2_1 s &&
   equivalence_checker e1_2 e2_2 s = true -> Plus e1_1 e1_2 = Plus e2_1 e2_2).
+  Proof.
+    intros.
+    apply Bool.andb_true_iff in H.
+    destruct H.
+    apply one_more_lemma in H.
+    apply one_more_lemma in H0.
+    rewrite H.
+    rewrite H0.
+    reflexivity.
+Qed.
+
+Lemma minus_lemma: (forall (e1_1 e1_2 e2_1 e2_2 : expr) (s : state), 
+  equivalence_checker e1_1 e2_1 s &&
+  equivalence_checker e1_2 e2_2 s = true -> Minus e1_1 e1_2 = Minus e2_1 e2_2).
   Proof.
     intros.
     apply Bool.andb_true_iff in H.
@@ -95,7 +115,8 @@ Lemma lemma1 :
       apply Nat.eqb_eq in H.
       rewrite H.
       reflexivity.
-    - apply rec_lemma.
+    - apply plus_lemma.
+    - apply minus_lemma.
     - intros H.
       apply String.eqb_eq in H.
       rewrite H.
