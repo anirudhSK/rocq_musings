@@ -64,13 +64,69 @@ Proof.
 Qed.
 
 (* Simple equivalence checker *)
-Definition equivalence_checker (e1 e2 : expr) (s : state) : bool := 
+Fixpoint equivalence_checker (e1 e2 : expr) (s : state) : bool := 
   match e1, e2 with
     | Constant n1, Constant n2 => Nat.eqb n1 n2
     | Var name1, Var name2 => String.eqb name1 name2
+    | Plus e11 e12, Plus e21 e22 => andb (equivalence_checker e11 e21 s) (equivalence_checker e12 e22 s)
     | _, _ => false
   end.
 
+
+Lemma rec_lemma: (forall (e1_1 e1_2 e2_1 e2_2 : expr) (s : state), 
+(fix equivalence_checker (e1 e2 : expr) (s0 : state) :
+bool :=
+match e1 with
+| Constant n1 =>
+match e2 with
+| Constant n2 => (n1 =? n2)%nat
+| _ => false
+end
+| Plus e11 e12 =>
+match e2 with
+| Plus e21 e22 =>
+equivalence_checker e11 e21 s0 &&
+equivalence_checker e12 e22 s0
+| _ => false
+end
+| Var name1 => match e2 with
+| Var name2 => name1 =? name2
+| _ => false
+end
+| _ => false
+end) e1_1 e2_1 s &&
+(fix equivalence_checker (e1 e2 : expr) (s0 : state) :
+bool :=
+match e1 with
+| Constant n1 =>
+match e2 with
+| Constant n2 => (n1 =? n2)%nat
+| _ => false
+end
+| Plus e11 e12 =>
+match e2 with
+| Plus e21 e22 =>
+equivalence_checker e11 e21 s0 &&
+equivalence_checker e12 e22 s0
+| _ => false
+end
+| Var name1 => match e2 with
+| Var name2 => name1 =? name2
+| _ => false
+end
+| _ => false
+end) e1_2 e2_2 s = true -> Plus e1_1 e1_2 = Plus e2_1 e2_2).
+Proof.
+intros.
+apply Bool.andb_true_iff in H.
+destruct H.
+(* TODO: Continue proving something here ... *)
+Admitted.
+(*Qed.*)
+
+Check equivalence_checker.
+
+(* TODO: What to do with brittle proofs needing many changes? *)
 Lemma lemma1 :
    forall (e1 e2 : expr) (s : state), equivalence_checker e1 e2 s = true -> e1 = e2.
 Proof.
@@ -81,6 +137,7 @@ Proof.
       apply Nat.eqb_eq in H.
       rewrite H.
       reflexivity.
+   - apply rec_lemma.
    - intros H.
       apply String.eqb_eq in H.
       rewrite H.
