@@ -161,8 +161,4 @@ Theorem constant_fold_thm : forall (e : expr) (s : state),
    eval_expr (constant_fold e) s =  eval_expr e s.
 Proof.
   destruct e; try reflexivity || destruct e1, e2; reflexivity.
-  (* induction e also seems to work here:
-   See https://www.cs.cornell.edu/courses/cs3110/2018sp/a5/coq-tactics-cheatsheet.html#induction
-   and https://www.reddit.com/r/Coq/comments/186hyk8/can_i_always_replace_destruct_with_induction/?rdt=33660
-  *)
 Qed.
