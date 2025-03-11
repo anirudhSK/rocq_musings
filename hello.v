@@ -1,16 +1,7 @@
 Require Import Arith.
 Require Import Bool.
-Require Import Coq.Logic.ClassicalFacts.  (* for excluded middle *)
 From Coq Require Import Strings.String.
 Open Scope string_scope.
-
-(* A few more concepts to model:
-local state, graphs of computations, concurrency,
-locks, etc.*)
-(* Here's something from SO on how to model graphs:
-https://stackoverflow.com/questions/24753975/simple-graph-theory-proofs-using-coq
-Definition graph : Type := {V : Type & V -> V -> bool}.
-*)
 
 (* Simple data type of expressions (or computations) *)
 Inductive expr : Type :=
@@ -20,18 +11,8 @@ Inductive expr : Type :=
   | Mul (e1 e2 : expr)
   | Var (name : string).
 
-Record pkt_proc_module : Set :=
-   { local_state : nat;
-      computation : expr }.
 
-Check pkt_proc_module.
-
-(* Graphs connect packet processing modules together. *)
-(* Maybe use this definition of graphs with simplifications:
-https://gist.github.com/andrejbauer/8dade8489dff8819c352e88f446154a1#file-graph-v-L16
-*)
-
-(* State of the machine with current values of variables *)
+  (* State of the machine with current values of variables *)
 Definition state := string -> nat.
 
 (* Empty state with no current values *)
@@ -54,15 +35,6 @@ Fixpoint eval_expr (e: expr) (s : state) :=
 Definition aequiv (a1 a2 : expr) (s : state) : Prop :=
     eval_expr a1 s = eval_expr a2 s.
 
-(* Simple theorem *)
-Theorem equivalence_example:
-  aequiv (Plus (Constant 5) (Var "x")) (Plus (Var "x") (Constant 5)) empty_state.
-Proof.
-  unfold aequiv.
-  simpl.
-  reflexivity.
-Qed.
-
 (* Simple equivalence checker *)
 Fixpoint equivalence_checker (e1 e2 : expr) (s : state) : bool := 
   match e1, e2 with
@@ -72,49 +44,54 @@ Fixpoint equivalence_checker (e1 e2 : expr) (s : state) : bool :=
     | _, _ => false
   end.
 
-Lemma one_more_lemma: forall (e1 e2 : expr)  (s : state),
+  (* destruct and induction both generate the same number of goals:
+     one for each data constructor,
+     the difference is induction generates additional inductive hypothesis
+     for the recursive data constructors (like Plus, Mul, MInus)*)
+Lemma one_more_lemma (e1 e2 : expr)  (s : state) :
   equivalence_checker e1 e2 s = true -> e1 = e2.
-  Proof.
-    intros.
-    destruct e1, e2; try discriminate.
+  Proof. (* intro is one term, intros is multiple terms *)
+    intros H. (* Stuff on the right hand side of the colon doesn't go automatically into environment or context*)
+    (* TODO: Need a more general induction hypothesis here .*)
+    induction e1; destruct e2; try discriminate.
     - apply Nat.eqb_eq in H.
       rewrite H.
       reflexivity.
-    - (* TODO: Maybe ask for help here ... *)
+    - simpl in H. (* TODO: lookup beta reduction *)
+      apply Bool.andb_true_iff in H.
+      destruct H.
+    (* TODO: Maybe ask for help here ... *)
     - apply String.eqb_eq in H.
       rewrite H.
       reflexivity.
 Admitted.
 
 Lemma rec_lemma: (forall (e1_1 e1_2 e2_1 e2_2 : expr) (s : state), 
-equivalence_checker e1_1 e2_1 s &&
-equivalence_checker e1_2 e2_2 s = true -> Plus e1_1 e1_2 = Plus e2_1 e2_2).
-Proof.
-intros.
-apply Bool.andb_true_iff in H.
-destruct H.
-apply one_more_lemma in H.
-apply one_more_lemma in H0.
-rewrite H.
-rewrite H0.
-reflexivity.
+  equivalence_checker e1_1 e2_1 s &&
+  equivalence_checker e1_2 e2_2 s = true -> Plus e1_1 e1_2 = Plus e2_1 e2_2).
+  Proof.
+    intros.
+    apply Bool.andb_true_iff in H.
+    destruct H.
+    apply one_more_lemma in H.
+    apply one_more_lemma in H0.
+    rewrite H.
+    rewrite H0.
+    reflexivity.
 Qed.
 
-Check equivalence_checker.
-
-(* TODO: What to do with brittle proofs needing many changes? *)
 Lemma lemma1 :
-   forall (e1 e2 : expr) (s : state), equivalence_checker e1 e2 s = true -> e1 = e2.
-Proof.
-   intros e1 e2 s.
-   unfold equivalence_checker.
-   destruct e1, e2; try discriminate.
-   - intros H.
+  forall (e1 e2 : expr) (s : state), equivalence_checker e1 e2 s = true -> e1 = e2.
+  Proof.
+    intros e1 e2 s.
+    unfold equivalence_checker.
+    destruct e1, e2; try discriminate.
+    - intros H.
       apply Nat.eqb_eq in H.
       rewrite H.
       reflexivity.
-   - apply rec_lemma.
-   - intros H.
+    - apply rec_lemma.
+    - intros H.
       apply String.eqb_eq in H.
       rewrite H.
       reflexivity.
@@ -132,12 +109,6 @@ apply lemma1 in H.
 rewrite H.
 reflexivity.
 Qed.
-
-(* Evaluate expressions*)
-Compute (eval_expr (Plus (Constant 5) (Constant 6)) empty_state).
-Compute (eval_expr (Minus (Constant 6) (Constant 10)) empty_state).
-Compute (eval_expr (Minus (Constant 6) (Constant 2)) empty_state).
-Compute (eval_expr (Mul (Constant 6) (Constant 2)) empty_state).
 
 (* A*(B+C) = AB + AC *)
 Example distribute:
