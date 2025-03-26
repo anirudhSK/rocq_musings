@@ -42,6 +42,7 @@ Fixpoint equivalence_checker (e1 e2 : expr) (s : state) : bool :=
     | Var name1, Var name2 => String.eqb name1 name2
     | Plus e11 e12, Plus e21 e22 => andb (equivalence_checker e11 e21 s) (equivalence_checker e12 e22 s)
     | Minus e11 e12, Minus e21 e22 => andb (equivalence_checker e11 e21 s) (equivalence_checker e12 e22 s)
+    | Mul e11 e12, Mul e21 e22 => andb (equivalence_checker e11 e21 s) (equivalence_checker e12 e22 s)
     | _, _ => false
   end.
 
@@ -61,6 +62,12 @@ Lemma one_more_lemma (e1 e2 : expr)  (s : state) :
       rewrite H.
       reflexivity.
     - simpl in H. (* TODO: lookup beta reduction *)
+      apply Bool.andb_true_iff in H.
+      destruct H.
+      rewrite (IHe1_1 _ H).
+      rewrite (IHe1_2 e2_2 H0).
+      reflexivity.
+    - simpl in H.
       apply Bool.andb_true_iff in H.
       destruct H.
       rewrite (IHe1_1 _ H).
@@ -105,6 +112,21 @@ Lemma minus_lemma: (forall (e1_1 e1_2 e2_1 e2_2 : expr) (s : state),
     reflexivity.
 Qed.
 
+
+Lemma mul_lemma: (forall (e1_1 e1_2 e2_1 e2_2 : expr) (s : state), 
+  equivalence_checker e1_1 e2_1 s &&
+  equivalence_checker e1_2 e2_2 s = true -> Mul e1_1 e1_2 = Mul e2_1 e2_2).
+  Proof.
+    intros.
+    apply Bool.andb_true_iff in H.
+    destruct H.
+    apply one_more_lemma in H.
+    apply one_more_lemma in H0.
+    rewrite H.
+    rewrite H0.
+    reflexivity.
+Qed.
+
 Lemma lemma1 :
   forall (e1 e2 : expr) (s : state), equivalence_checker e1 e2 s = true -> e1 = e2.
   Proof.
@@ -117,6 +139,7 @@ Lemma lemma1 :
       reflexivity.
     - apply plus_lemma.
     - apply minus_lemma.
+    - apply mul_lemma.
     - intros H.
       apply String.eqb_eq in H.
       rewrite H.
