@@ -2,56 +2,19 @@ Require Import Arith.
 Require Import Bool.
 From Coq Require Import Strings.String.
 Open Scope string_scope.
-
-(* Simple data type of expressions (or computations) *)
-Inductive expr : Type :=
-  | Constant (n1 : nat)
-  | Plus (e1 e2 : expr)
-  | Minus (e1 e2 : expr)
-  | Mul (e1 e2 : expr)
-  | Var (name : string).
+From MyProject Require Export EquivalenceChecker.
 
 
-  (* State of the machine with current values of variables *)
-Definition state := string -> nat.
+(* TODO: Write an SMT-based equivalence checker here. *)
+(* And prove it equivalent in the same way ... *)
 
-(* Empty state with no current values *)
-Definition empty_state (s : string) :=
-  match s with
-    | _ =>0
-  end.
 
-(* Function to evaluate expressions *)
-Fixpoint eval_expr (e: expr) (s : state) :=
-  match e with
-    | Constant n => n
-    | Plus e1 e2 => (eval_expr e1 s) + (eval_expr e2 s)
-    | Minus e1 e2 => (eval_expr e1 s) - (eval_expr e2 s)
-    | Mul e1 e2 => (eval_expr e1 s) * (eval_expr e2 s)
-    | Var name => s name
-  end.
-
-(* Expression equivalence *)
-Definition aequiv (a1 a2 : expr) (s : state) : Prop :=
-    eval_expr a1 s = eval_expr a2 s.
-
-(* Simple equivalence checker *)
-Fixpoint equivalence_checker (e1 e2 : expr) (s : state) : bool := 
-  match e1, e2 with
-    | Constant n1, Constant n2 => Nat.eqb n1 n2
-    | Var name1, Var name2 => String.eqb name1 name2
-    | Plus e11 e12, Plus e21 e22 => andb (equivalence_checker e11 e21 s) (equivalence_checker e12 e22 s)
-    | Minus e11 e12, Minus e21 e22 => andb (equivalence_checker e11 e21 s) (equivalence_checker e12 e22 s)
-    | Mul e11 e12, Mul e21 e22 => andb (equivalence_checker e11 e21 s) (equivalence_checker e12 e22 s)
-    | _, _ => false
-  end.
-
-  (* destruct and induction both generate the same number of goals:
+(* destruct and induction both generate the same number of goals:
      one for each data constructor,
      the difference is induction generates additional inductive hypothesis
      for the recursive data constructors (like Plus, Mul, MInus)*)
 Lemma one_more_lemma (e1 e2 : expr)  (s : state) :
-  equivalence_checker e1 e2 s = true -> e1 = e2.
+  EquivalenceChecker.equivalence_checker e1 e2 s = true -> e1 = e2.
   Proof. (* intro is one term, intros is multiple terms *)
     intros H. (* Stuff on the right hand side of the colon doesn't go automatically into environment or context*)
     (* TODO: Need a more general induction hypothesis here .*)
