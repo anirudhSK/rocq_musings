@@ -4,11 +4,18 @@ From Coq Require Import Strings.String.
 Inductive smt_expr : Type :=
   | SymConstant (n1 : nat)
   | SymBV (name: string)
+  | SymPlus (se1 se2 : smt_expr)
   | Empty.
 
-Definition symbolize_expr (e : expr) : smt_expr := Empty.
+Fixpoint symbolize_expr (e : expr) : smt_expr :=
+  match e with
+  | Constant n => SymConstant n
+  | Plus e1 e2 => SymPlus (symbolize_expr e1) (symbolize_expr e2)
+  | Var name => SymBV name
+  | _ => Empty
+  end.
 
-Definition sym_plus (e1 e2 : smt_expr) : smt_expr := Empty.
+Definition sym_plus (se1 se2 : smt_expr) : smt_expr := SymPlus se1 se2.
 
 (* Function signature for Z3 equivalence checker *)
 Parameter sym_checker :  smt_expr -> smt_expr -> bool.

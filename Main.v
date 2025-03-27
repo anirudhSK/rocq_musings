@@ -3,6 +3,7 @@ Require Import Bool.
 From Coq Require Import Strings.String.
 Open Scope string_scope.
 From MyProject Require Export EquivalenceChecker.
+From MyProject Require Export SmtEquivalenceChecker.
 
 (* destruct and induction both generate the same number of goals:
      one for each data constructor,
@@ -114,7 +115,7 @@ Lemma trivial_lemma1 :
       apply Nat.eqb_eq in H.
       rewrite H.
       reflexivity.
-  Qed.
+Qed.
 
 (* Prove that the equivalence checker is correct *)
 Theorem equivalence_checker_correct:
@@ -139,6 +140,38 @@ Proof.
   apply trivial_lemma1 in H.
   rewrite H.
   reflexivity.
+Qed.
+
+Lemma smt_plus_lemma:
+ forall (e1 e2 : expr),
+ symbolize_expr (Plus e1 e2) = SymPlus (symbolize_expr e1) (symbolize_expr e2).
+ Proof.
+  intros.
+  destruct e1, e2; try unfold symbolize_expr; reflexivity.
+ Qed.
+
+(* Prove that the SMT equivalence checker is correct *)
+Theorem smt_equivalence_checker_correct:
+  forall (e1 e2 : expr) (s : state), smt_equivalence_checker e1 e2 s = true -> aequiv e1 e2 s.
+Proof.
+  intros e1 e2 s.
+  unfold aequiv.
+  intros H.
+  destruct e1, e2; try discriminate.
+  - unfold smt_equivalence_checker in H.
+    apply Nat.eqb_eq in H.
+    rewrite H.
+    reflexivity.
+  - unfold smt_equivalence_checker in H.
+    unfold sym_plus in H.
+    apply sound_sym_checker.
+    rewrite smt_plus_lemma.
+    rewrite smt_plus_lemma.
+    apply H.
+  - unfold smt_equivalence_checker in H.
+    apply String.eqb_eq in H.
+    rewrite H.
+    reflexivity.
 Qed.
 
 (* A*(B+C) = AB + AC *)
