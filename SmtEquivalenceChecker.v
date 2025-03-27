@@ -1,7 +1,9 @@
 From MyProject Require Export Expr.
+From Coq Require Import Strings.String.
 
 Inductive smt_expr : Type :=
   | SymConstant (n1 : nat)
+  | SymBV (name: string)
   | Empty.
 
 Definition symbolize_expr (e : expr) : smt_expr := Empty.
@@ -9,6 +11,11 @@ Definition symbolize_expr (e : expr) : smt_expr := Empty.
 Definition sym_plus (e1 e2 : smt_expr) : smt_expr := Empty.
 
 Definition check_sym_equality (e1 e2 : smt_expr) : bool := false.
+
+Definition fn (e1 e2 : smt_expr) : bool.
+Admitted. (* Is this reasonable programming in Coq? *)
+
+Check fn.
 
 (* And prove it equivalent in the same way ... *)
 Definition smt_equivalence_checker (e1 e2 : expr) (s : state) : bool := 
