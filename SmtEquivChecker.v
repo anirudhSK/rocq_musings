@@ -22,6 +22,9 @@ Parameter sym_checker :  smt_expr -> smt_expr -> bool.
 
 (* Soundness of Z3: if the symbolic versions of 2 exprs are shown equivalent by z3, then the 2 exprs are equivalent *)
 Axiom sound_smt_checker : forall e1 e2 : expr, sym_checker (symbolize_expr e1) (symbolize_expr e2) = true -> forall s, aequiv e1 e2 s.
+(* Can make it return Option<bool>, true, false, or error *)
+(* The most rigorous way of doing this is a syntax and semantics for SMT-LIB. Like the smt2 library for Lean. But may not buy you that much. *)
+(* Think about this as a converter from a DSL into SMTLIB. Rather than using a Z3 or bitvector tactic (like with the smt2 tactic z3). *)
 
 (* And prove it equivalent in the same way ... *)
 Definition smt_equiv_checker (e1 e2 : expr) (s : state) : bool := 
