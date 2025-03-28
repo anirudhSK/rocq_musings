@@ -94,3 +94,12 @@ Proof.
     rewrite H.
     reflexivity.
 Qed.
+
+(* TODO: Write a constant fold optimizer before passing stuff into the z3 solver *)
+(* Kind of like the optimizations in the K2 project that speeded up equivalence checking *)
+
+(* TODO: Write a slicing optimizer that allows us to check different parts of the expression
+   separately. *)
+
+(* TODO: Effectively can think of an equivalence checker as an
+   optimizing compiler from DSL to SMT that does state merging, constant folding, slicing, etc. *)
