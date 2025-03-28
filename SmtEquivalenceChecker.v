@@ -5,17 +5,17 @@ Inductive smt_expr : Type :=
   | SymConstant (n1 : nat)
   | SymBV (name: string)
   | SymPlus (se1 se2 : smt_expr)
+  | SymMinus (se1 se2 : smt_expr)
   | Empty.
 
 Fixpoint symbolize_expr (e : expr) : smt_expr :=
   match e with
   | Constant n => SymConstant n
   | Plus e1 e2 => SymPlus (symbolize_expr e1) (symbolize_expr e2)
+  | Minus e1 e2 => SymMinus (symbolize_expr e1) (symbolize_expr e2)
   | Var name => SymBV name
   | _ => Empty
   end.
-
-Definition sym_plus (se1 se2 : smt_expr) : smt_expr := SymPlus se1 se2.
 
 (* Function signature for Z3 equivalence checker *)
 Parameter sym_checker :  smt_expr -> smt_expr -> bool.
@@ -28,7 +28,9 @@ Definition smt_equivalence_checker (e1 e2 : expr) (s : state) : bool :=
   match e1, e2 with
     | Constant n1, Constant n2 => Nat.eqb n1 n2
     | Var name1, Var name2 => String.eqb name1 name2
-    | Plus e11 e12, Plus e21 e22 => sym_checker (sym_plus (symbolize_expr e11) (symbolize_expr e12))
-                                                (sym_plus (symbolize_expr e21) (symbolize_expr e22))
+    | Plus e11 e12, Plus e21 e22 => sym_checker (SymPlus (symbolize_expr e11) (symbolize_expr e12))
+                                                (SymPlus (symbolize_expr e21) (symbolize_expr e22))
+    | Minus e11 e12, Minus e21 e22 => sym_checker (SymMinus (symbolize_expr e11) (symbolize_expr e12) )
+                                                  (SymMinus (symbolize_expr e21) (symbolize_expr e22))
     | _, _ => false
   end.
