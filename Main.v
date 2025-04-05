@@ -71,32 +71,48 @@ Lemma smt_plus_lemma:
 Theorem smt_equiv_checker_correct:
   forall (e1 e2 : expr) (s : state), smt_equiv_checker e1 e2 s = true -> aequiv e1 e2 s.
 Proof.
-  intros e1 e2 s.
-  unfold aequiv.
-  intros H.
-  destruct e1, e2; try discriminate.
-  - unfold smt_equiv_checker in H.
-    apply Nat.eqb_eq in H.
-    rewrite H.
-    reflexivity.
-  - unfold smt_equiv_checker in H.
-    apply sound_smt_checker.
-    rewrite smt_plus_lemma.
-    rewrite smt_plus_lemma.
-    apply H.
-  - unfold smt_equiv_checker in H.
-    apply sound_smt_checker.
-    rewrite smt_minus_lemma.
-    rewrite smt_minus_lemma.
-    apply H.
-  - unfold smt_equiv_checker in H.
-    apply String.eqb_eq in H.
-    rewrite H.
-    reflexivity.
+  apply sound_smt_checker.
 Qed.
 
 (* TODO: Write a constant fold optimizer before passing stuff into the z3 solver *)
 (* Kind of like the optimizations in the K2 project that speeded up equivalence checking *)
+Definition constant_fold(e : expr):=
+  match e with
+  | Plus (Constant n1) (Constant n2) => Constant (n1 + n2)
+  | Minus (Constant n1) (Constant n2) => Constant (n1 - n2)
+  | Mul (Constant n1) (Constant n2) => Constant (n1 * n2)
+  | _ => e
+end.
+
+(* Prove correctness of constant_fold *)
+Theorem constant_fold_thm : forall (e : expr) (s : state),
+   eval_expr (constant_fold e) s =  eval_expr e s.
+Proof.
+  destruct e; try reflexivity || destruct e1, e2; reflexivity.
+Qed.
+
+Theorem smt_checker_reflexive : forall (e : expr) (s : state),
+  smt_equiv_checker e e s = true.
+Proof.
+  intros.
+  destruct e; try unfold smt_equiv_checker; try unfold symbolize_expr; try apply reflexive_sym_checker.
+Qed.
+
+Theorem thm1 : forall (e : expr) (s : state),
+  smt_equiv_checker (constant_fold e) (e) s = true.
+Proof.
+  intros.
+  unfold smt_equiv_checker.
+  eapply eval_sym_checker.
+  apply constant_fold_thm.
+Qed.
+
+Theorem smt_equiv_constant_fold : forall (e : expr) (s: state),
+  smt_equiv_checker (constant_fold e) e s = true.
+Proof.
+  intros.
+  apply thm1.
+Qed.
 
 (* TODO: Write a slicing optimizer that allows us to check different parts of the expression
    separately. *)
