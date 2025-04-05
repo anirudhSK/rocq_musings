@@ -20,13 +20,6 @@ Proof.
   destruct e; try reflexivity || destruct e1, e2; reflexivity.
 Qed.
 
-Theorem smt_checker_reflexive : forall (e : expr) (s : state),
-  smt_equiv_checker e e s = true.
-Proof.
-  intros.
-  destruct e; try unfold smt_equiv_checker; try unfold symbolize_expr; try apply reflexive_sym_checker.
-Qed.
-
 Theorem thm1 : forall (e : expr) (s : state),
   smt_equiv_checker (constant_fold e) (e) s = true.
 Proof.
