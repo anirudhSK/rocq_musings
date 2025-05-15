@@ -2,10 +2,10 @@
 Require Import List.
 Import ListNotations.
 Require Import Strings.String.
-From MyProject Require Export CaracaraIdentifiers.
+From MyProject Require Export CrIdentifiers.
 
 (* A parser is a list of parser states *)
-Definition ParserStates : Type := list ParserState.
+Definition Parser : Type := list ParserState.
 
 (* An ExtractOp pulls out a Header starting at index Start and ending at index End *)
 Inductive ExtractOp : Type := 
