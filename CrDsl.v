@@ -8,16 +8,17 @@ Require Import Strings.String.
 From MyProject Require Export CrIdentifiers.
 From MyProject Require Export CrParser.
 From MyProject Require Export CrTransformer.
-
-(* Define the different types of expressions in the Caracara DSL *)
-Definition CaracaraProgram : Type := (list ModuleName) * (list ConnectionName).
+From MyProject Require Export CrScheduler.
 
 (* A Module has a module name and either a parser or transformer definition *)
 Inductive Module : Type := 
   | ParserModule (m : ModuleName) (p : Parser)
-  | TransformerModule (m : ModuleName) (t : Transformer).
+  | TransformerModule (m : ModuleName) (t : Transformer)
+  | SchedulerModule (m : ModuleName) (s : Scheduler).
 
-(* A ConnectionDef is a pair of module names *)
+(* A Connection is a pair of module names *)
 (* and a connection name *)
-Inductive ConnectionDef : Type := 
-  | ConnectionDefConstructor : ModuleName -> ModuleName -> ConnectionName -> ConnectionDef.
+Inductive Connection : Type := 
+  | ConnectionDef : ModuleName -> ModuleName -> ConnectionName -> Connection.
+
+Definition CaracaraProgram : Type := (list Module) * (list Connection).
