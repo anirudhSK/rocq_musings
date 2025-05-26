@@ -17,7 +17,7 @@ Inductive ExtractOp : Type :=
        conditional on the bits between index Start and index End of a particular Header matching a bit-pattern Pat *)
 Inductive Transition : Type :=
   | Unconditional : ParserState -> Transition
-  | Conditional : Header -> nat -> nat -> string -> ParserState -> Transition.
+  | Conditional : Header -> nat -> nat -> list bool -> ParserState -> Transition.
 
 (* A ParserStateDef is a pair consisting of 
  (1) an ExtractOp in that state, AND

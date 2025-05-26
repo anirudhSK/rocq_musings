@@ -20,7 +20,7 @@ Inductive FunctionArgument :=
 Definition BinaryFunction : Type := (nat -> nat -> nat).
 
 Inductive HdrOp :=
-  | StatefulOp  (f : BinaryFunction) (s1 : StateVar) (arg2 : FunctionArgument)
+  | StatefulOp  (f : BinaryFunction) (s1 : StateVar) (arg2 : FunctionArgument) (* Where is output of statefulop stored? *)
   | StatelessOp (f : BinaryFunction) (h1 : Header)   (arg2 : FunctionArgument).
 
 Inductive MatchActionRule :=
