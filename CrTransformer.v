@@ -28,3 +28,16 @@ Inductive MatchActionRule :=
   | Par (h : Header) (start_index : nat) (end_index : nat) (pat : list bool) (action : list HdrOp).
 
 Definition Transformer : Type := list MatchActionRule.
+
+(* Example header *)
+Definition example_header1 : Header := HeaderCtr "hdr1"%string.
+
+(* An example transformer *)
+Definition example_transformer : Transformer :=
+  [
+    Seq (HeaderCtr ("hdr1")) 0 7 [true; false; true; false; true; false; true; false]
+      [StatefulOp (fun x y => x + y) (StateVarCtr ("state1")) (CtrlPlaneArg (CtrlPlaneConfigNameCtr "ctrl1"));
+       StatelessOp (fun x y => x * y) (HeaderCtr ("hdr2")) (ConstantArg 42)];
+    Par (HeaderCtr ("hdr2")) 0 7 [false; true; false; true; false; true; false; true]
+      [StatelessOp (fun x y => x - y) (HeaderCtr ("hdr3")) (CtrlPlaneArg (CtrlPlaneConfigNameCtr "ctrl2"))]
+  ].
