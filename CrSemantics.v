@@ -38,3 +38,7 @@ Parameter eval_seq_rule : MatchActionRule -> InputType -> OutputType.
 (* Function to evaluate a parallel match-action rule,
    meaning header ops within an action are evaluated in parallel *)
 Parameter eval_par_rule : MatchActionRule -> InputType -> OutputType.
+
+(* Function to evaluate a header operation,
+   meaning we apply the operation to the header and state *)
+Parameter eval_hdr_op : HdrOp -> InputType -> OutputType.

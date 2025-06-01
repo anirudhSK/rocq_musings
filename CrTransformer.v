@@ -14,14 +14,15 @@ Inductive TransformerType : Type :=
 Inductive FunctionArgument :=
   | CtrlPlaneArg (c : CtrlPlaneConfigName)
   | HeaderArg (h : Header)
-  | ConstantArg (n : nat).
+  | ConstantArg (n : nat)
+  | StatefulArg (s : StateVar).
 
 (* A BinaryFunction takes two nat arguments and returns another nat *)
 Definition BinaryFunction : Type := (nat -> nat -> nat).
 
 Inductive HdrOp :=
-  | StatefulOp  (f : BinaryFunction) (s1 : StateVar) (arg2 : FunctionArgument) (* Where is output of statefulop stored? *)
-  | StatelessOp (f : BinaryFunction) (h1 : Header)   (arg2 : FunctionArgument).
+  | StatefulOp  (f : BinaryFunction) (arg1 : FunctionArgument) (arg2 : FunctionArgument) (target : StateVar)
+  | StatelessOp (f : BinaryFunction) (arg1 : FunctionArgument) (arg2 : FunctionArgument) (target : Header).
 
 Inductive MatchActionRule :=
   | Seq (h : Header) (start_index : nat) (end_index : nat) (pat : list bool) (action : list HdrOp)
@@ -35,9 +36,8 @@ Definition example_header1 : Header := HeaderCtr "hdr1"%string.
 (* An example transformer *)
 Definition example_transformer : Transformer :=
   [
-    Seq (HeaderCtr ("hdr1")) 0 7 [true; false; true; false; true; false; true; false]
-      [StatefulOp (fun x y => x + y) (StateVarCtr ("state1")) (CtrlPlaneArg (CtrlPlaneConfigNameCtr "ctrl1"));
-       StatelessOp (fun x y => x * y) (HeaderCtr ("hdr2")) (ConstantArg 42)];
-    Par (HeaderCtr ("hdr2")) 0 7 [false; true; false; true; false; true; false; true]
-      [StatelessOp (fun x y => x - y) (HeaderCtr ("hdr3")) (CtrlPlaneArg (CtrlPlaneConfigNameCtr "ctrl2"))]
+    Seq example_header1 0 10 [true; false; true] 
+      [StatefulOp (fun x y => x + y) (HeaderArg example_header1) (ConstantArg 5) (StateVarCtr "state1"%string)];
+    Par example_header1 0 10 [false; true; false] 
+      [StatelessOp (fun x y => x * y) (HeaderArg example_header1) (ConstantArg 3) (HeaderCtr "hdr2"%string)]
   ].
