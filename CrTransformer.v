@@ -27,9 +27,7 @@ Definition lookup_function_argument (arg : FunctionArgument) (valuation : Valuat
   | StatefulArg s =>  lookup (valuation.(state_var_map)) s
   end.
 
-Hypothesis lookup_function_argument_not_none :
-  forall arg valuation, lookup_function_argument arg valuation <> None.
-
+(*TODO: Need to make sense of the code below, something about dependent pattern matching *)
 Definition function_argument_to_nat (arg : FunctionArgument) (valuation : Valuation)
            (H : lookup_function_argument arg valuation <> None) : nat :=
   match lookup_function_argument arg valuation as res return (lookup_function_argument arg valuation = res -> nat) with
