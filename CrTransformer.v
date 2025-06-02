@@ -18,15 +18,24 @@ Inductive FunctionArgument :=
   | ConstantArg (n : nat)
   | StatefulArg (s : StateVar).
 
-  (* TODO: Can we guarantee that anytime function_argument_to_nat is called, the Option values are not None?
-     That seems doable with all of the magic of Rocq's type system. *)
-Definition function_argument_to_nat (arg : FunctionArgument) (valuation : Valuation) : nat :=
+(* lookup a function's argument *)
+Definition lookup_function_argument (arg : FunctionArgument) (valuation : Valuation) : option nat :=
   match arg with
-  | CtrlPlaneArg c => match lookup (valuation.(ctrl_plane_map)) c with Some n => n | None => 0 end
-  | HeaderArg h => match lookup (valuation.(header_map)) h with Some n => n | None => 0 end
-  | ConstantArg n => n
-  | StatefulArg s => match lookup (valuation.(state_var_map)) s with Some n => n | None => 0 end
+  | CtrlPlaneArg c => lookup (valuation.(ctrl_plane_map)) c
+  | HeaderArg h =>    lookup (valuation.(header_map)) h
+  | ConstantArg n => Some n
+  | StatefulArg s =>  lookup (valuation.(state_var_map)) s
   end.
+
+Hypothesis lookup_function_argument_not_none :
+  forall arg valuation, lookup_function_argument arg valuation <> None.
+
+Definition function_argument_to_nat (arg : FunctionArgument) (valuation : Valuation)
+           (H : lookup_function_argument arg valuation <> None) : nat :=
+  match lookup_function_argument arg valuation as res return (lookup_function_argument arg valuation = res -> nat) with
+  | Some n => fun _ => n
+  | None => fun H0 => match H H0 with end
+  end eq_refl.
 
 (* A BinaryFunction takes two nat arguments and returns another nat *)
 Definition BinaryFunction : Type := (nat -> nat -> nat).
