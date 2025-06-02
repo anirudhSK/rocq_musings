@@ -11,9 +11,11 @@ Require Import Coq.Structures.OrderedTypeEx.
 Module StringMap := FMapAVL.Make(String_as_OT).
 Definition Dict := StringMap.t nat.
 
-
 (* Headers and states (or rather their valuations) are both represented
    as maps from names of headers and state variables to their values expressed as integers *)
+   (* TODO: See if we can make HeaderMap map from Header to nat, rather than string to nat,
+      and similar for StateMap as well. This requires some level of playing around with UsualOrderedType,
+      which is where I got stuck: https://rocq-prover.org/doc/master/stdlib/Stdlib.Structures.OrderedTypeEx.html *)
 Definition HeaderMap := Dict.
 Definition StateMap := Dict.
 
