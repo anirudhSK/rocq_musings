@@ -4,26 +4,20 @@ Require Import List.
 Import ListNotations.
 Require Import Strings.String.
 From MyProject Require Export CrIdentifiers.
-
-(* Code below is for efficient finite maps from the Rocq stdlib *)
-Require Import Coq.FSets.FMapAVL.
-Require Import Coq.Structures.OrderedTypeEx.
-Module StringMap := FMapAVL.Make(String_as_OT).
-Definition Dict := StringMap.t nat.
+From MyProject Require Export Map.
 
 (* Headers and states (or rather their valuations) are both represented
    as maps from names of headers and state variables to their values expressed as integers *)
-   (* TODO: See if we can make HeaderMap map from Header to nat, rather than string to nat,
-      and similar for StateMap as well. This requires some level of playing around with UsualOrderedType,
-      which is where I got stuck: https://rocq-prover.org/doc/master/stdlib/Stdlib.Structures.OrderedTypeEx.html *)
-Definition HeaderMap := Dict.
-Definition StateMap := Dict.
+Definition HeaderMap := fmap Header nat.
+Definition StateMap := fmap StateVar nat.
 
 (* InputType is the input to the transformer, which is a pair of previous header and previous state *)
 (* OutputType is the output of the transformer, which is a pair of new header and new state *)
 Definition HeaderStatePair := (HeaderMap * StateMap)%type.
-Example header_state_pair_example : HeaderStatePair :=
-  (StringMap.empty nat, StringMap.empty nat).
+
+(* Empty header state pair *)
+Example header_state_pair_example : HeaderStatePair := (empty Header nat, empty StateVar nat).
+
 (* TODO: fill out eval_transformer body at the end,
    right now, we are just specifying it as a function that
    goes from previous value of header+state
