@@ -5,6 +5,7 @@ Require Import List.
 Import ListNotations.
 Require Import Strings.String.
 From MyProject Require Export CrIdentifiers.
+From MyProject Require Export Map.
 
 (* A transformer is either a sequential or a parallel transformer *)
 Inductive TransformerType : Type := 
@@ -16,6 +17,16 @@ Inductive FunctionArgument :=
   | HeaderArg (h : Header)
   | ConstantArg (n : nat)
   | StatefulArg (s : StateVar).
+
+  (* TODO: Can we guarantee that anytime function_argument_to_nat is called, the Option values are not None?
+     That seems doable with all of the magic of Rocq's type system. *)
+Definition function_argument_to_nat (arg : FunctionArgument) (valuation : Valuation) : nat :=
+  match arg with
+  | CtrlPlaneArg c => match lookup (valuation.(ctrl_plane_map)) c with Some n => n | None => 0 end
+  | HeaderArg h => match lookup (valuation.(header_map)) h with Some n => n | None => 0 end
+  | ConstantArg n => n
+  | StatefulArg s => match lookup (valuation.(state_var_map)) s with Some n => n | None => 0 end
+  end.
 
 (* A BinaryFunction takes two nat arguments and returns another nat *)
 Definition BinaryFunction : Type := (nat -> nat -> nat).
