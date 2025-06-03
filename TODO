@@ -1,0 +1,10 @@
+Planned to dos:
+1. Generalizing from single-packet semantics to stream semantics.
+2. Unifying parsing and header processing into a single format.
+
+
+Wishlist:
+
+1. Prove that if a program has been checked for uninitialized variables, you don't have any instance of a None being returned from the lookup to the valuation map.
+2. Semantics for the scheduler.
+3. Looking at Xavier Leroy's summer school on compilers to see if there are any design patterns I am missing.
