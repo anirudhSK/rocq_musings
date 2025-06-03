@@ -27,13 +27,11 @@ Definition lookup_function_argument (arg : FunctionArgument) (valuation : Valuat
   | StatefulArg s =>  lookup (valuation.(state_var_map)) s
   end.
 
-(*TODO: Need to make sense of the code below, something about dependent pattern matching *)
-Definition function_argument_to_nat (arg : FunctionArgument) (valuation : Valuation)
-           (H : lookup_function_argument arg valuation <> None) : nat :=
-  match lookup_function_argument arg valuation as res return (lookup_function_argument arg valuation = res -> nat) with
-  | Some n => fun _ => n
-  | None => fun H0 => match H H0 with end
-  end eq_refl.
+Definition function_argument_to_nat (arg : FunctionArgument) (valuation : Valuation) : nat :=
+  match lookup_function_argument arg valuation with
+  | Some n => n
+  | None => 0 (* TODO: or any default value or error handling as appropriate *)
+  end.
 
 (* A BinaryFunction takes two nat arguments and returns another nat *)
 Definition BinaryFunction : Type := (nat -> nat -> nat).
