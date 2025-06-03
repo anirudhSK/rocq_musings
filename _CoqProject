@@ -1,1 +1,2 @@
 -Q . MyProject
+-Q ../bbv/src/bbv bbv
