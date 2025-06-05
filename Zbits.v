@@ -16,8 +16,8 @@
 (** Additional operations and proofs about binary integers,
     on top of the ZArith standard library. *)
 
-From Stdlib Require Import Psatz Zquot.
-Require Import Rocqlib.
+Require Import Psatz Zquot.
+From MyProject Require Import Rocqlib.
 
 
 (** ** Modulo arithmetic *)

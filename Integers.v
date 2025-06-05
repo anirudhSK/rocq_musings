@@ -16,13 +16,13 @@
 
 (** Formalizations of machine integers modulo $2^N$ #2<sup>N</sup>#. *)
 
-From Stdlib Require Import Eqdep_dec Zquot.
+Require Import Eqdep_dec Zquot.
 
-Require Import Rocqlib.
+From MyProject Require Import Rocqlib.
 
-Require Import Stdlib.micromega.Lia.
+Require Import micromega.Lia.
 
-Require Archi.
+From MyProject Require Archi.
 
 (** * Comparisons *)
 
