@@ -1,3 +1,6 @@
+Immediate next steps:
+1. Import CompCert's MachineIntegers library into our own project.
+
 Planned to dos:
 1. Generalizing from single-packet semantics to stream semantics.
 2. Unifying parsing and header processing into a single format.
