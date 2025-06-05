@@ -6,3 +6,4 @@ Makefile
 *.vos
 *.glob
 *.Makefile.d
+.lia.cache
