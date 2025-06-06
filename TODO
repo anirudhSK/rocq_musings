@@ -1,3 +1,8 @@
+Immediate next steps:
+1. Replace nat with bit_int in CrTransformer.
+2. Define SmtSemantics using the same bit_ints.
+3. Prove equivalence between CrTransformer and SmtSemantics versions of bit_ints.
+
 Planned to dos:
 1. Generalizing from single-packet semantics to stream semantics.
 2. Unifying parsing and header processing into a single format.
