@@ -16,9 +16,9 @@ Inductive ConnectionName : Type := ConnectionNameCtr (name : string).
 Inductive CtrlPlaneConfigName : Type := CtrlPlaneConfigNameCtr (name : string).
 
 (* Current values for each of these identifiers as a map *)
-Definition HeaderMap := fmap Header nat.
-Definition StateVarMap := fmap StateVar nat.
-Definition CtrlPlaneConfigNameMap := fmap CtrlPlaneConfigName nat.
+Definition HeaderMap := fmap Header uint8.
+Definition StateVarMap := fmap StateVar uint8.
+Definition CtrlPlaneConfigNameMap := fmap CtrlPlaneConfigName uint8.
 
 (* The valuation is a record containing three maps:,
    one each for mapping headers/statevars/ctrlplaneconfigs to their current values *)
@@ -30,9 +30,9 @@ Record Valuation := {
 
 (* Empty valuation *)
 Example empty_valuation : Valuation := {|
-  ctrl_plane_map := empty CtrlPlaneConfigName nat;
-  header_map := empty Header nat;
-  state_var_map := empty StateVar nat
+  ctrl_plane_map := empty CtrlPlaneConfigName uint8;
+  header_map := empty Header uint8;
+  state_var_map := empty StateVar uint8
 |}.
 
 (* example of parser state *)

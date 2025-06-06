@@ -2,6 +2,7 @@
 
 (* Import necessary modules *)
 Require Import List.
+Require Import ZArith.
 Import ListNotations.
 Require Import Strings.String.
 From MyProject Require Export CrIdentifiers.
@@ -15,11 +16,11 @@ Inductive TransformerType : Type :=
 Inductive FunctionArgument :=
   | CtrlPlaneArg (c : CtrlPlaneConfigName)
   | HeaderArg (h : Header)
-  | ConstantArg (n : nat)
+  | ConstantArg (n : uint8)
   | StatefulArg (s : StateVar).
 
 (* lookup a function's argument *)
-Definition lookup_function_argument (arg : FunctionArgument) (valuation : Valuation) : option nat :=
+Definition lookup_function_argument (arg : FunctionArgument) (valuation : Valuation) : option uint8 :=
   match arg with
   | CtrlPlaneArg c => lookup (valuation.(ctrl_plane_map)) c
   | HeaderArg h =>    lookup (valuation.(header_map)) h
@@ -27,22 +28,22 @@ Definition lookup_function_argument (arg : FunctionArgument) (valuation : Valuat
   | StatefulArg s =>  lookup (valuation.(state_var_map)) s
   end.
 
-Definition function_argument_to_nat (arg : FunctionArgument) (valuation : Valuation) : nat :=
+Definition function_argument_to_uint8 (arg : FunctionArgument) (valuation : Valuation) : uint8 :=
   match lookup_function_argument arg valuation with
   | Some n => n
-  | None => 0 (* TODO: or any default value or error handling as appropriate *)
+  | None => zero (* TODO: or any default value or error handling as appropriate *)
   end.
 
-(* A BinaryFunction takes two nat arguments and returns another nat *)
-Definition BinaryFunction : Type := (nat -> nat -> nat).
+(* A BinaryFunction takes two uint8 arguments and returns another uint8 *)
+Definition BinaryFunction : Type := (uint8 -> uint8 -> uint8).
 
 Inductive HdrOp :=
   | StatefulOp  (f : BinaryFunction) (arg1 : FunctionArgument) (arg2 : FunctionArgument) (target : StateVar)
   | StatelessOp (f : BinaryFunction) (arg1 : FunctionArgument) (arg2 : FunctionArgument) (target : Header).
 
 Inductive MatchActionRule :=
-  | Seq (h : Header) (start_index : nat) (end_index : nat) (pat : list bool) (action : list HdrOp)
-  | Par (h : Header) (start_index : nat) (end_index : nat) (pat : list bool) (action : list HdrOp).
+  | Seq (h : Header) (start_index : uint8) (end_index : uint8) (pat : list bool) (action : list HdrOp)
+  | Par (h : Header) (start_index : uint8) (end_index : uint8) (pat : list bool) (action : list HdrOp).
 
 Definition Transformer : Type := list MatchActionRule.
 
@@ -52,8 +53,8 @@ Definition example_header1 : Header := HeaderCtr "hdr1"%string.
 (* An example transformer *)
 Definition example_transformer : Transformer :=
   [
-    Seq example_header1 0 10 [true; false; true] 
-      [StatefulOp (fun x y => x + y) (HeaderArg example_header1) (ConstantArg 5) (StateVarCtr "state1"%string)];
-    Par example_header1 0 10 [false; true; false] 
-      [StatelessOp (fun x y => x * y) (HeaderArg example_header1) (ConstantArg 3) (HeaderCtr "hdr2"%string)]
+    Seq example_header1 zero (repr 10%Z) [true; false; true] 
+      [StatefulOp (fun x y => Integers.add x y) (HeaderArg example_header1) (ConstantArg (repr 5%Z)) (StateVarCtr "state1"%string)];
+    Par example_header1 zero (repr 10%Z) [false; true; false] 
+      [StatelessOp (fun x y => Integers.mul x y) (HeaderArg example_header1) (ConstantArg (repr 3%Z)) (HeaderCtr "hdr2"%string)]
   ].

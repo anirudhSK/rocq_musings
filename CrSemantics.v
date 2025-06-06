@@ -34,14 +34,14 @@ Definition eval_hdr_op (op : HdrOp) (input_valuation : Valuation) : Valuation :=
     match op with
     | StatefulOp f arg1 arg2 target =>
         let new_state :=
-           let op_output := f (function_argument_to_nat arg1 input_valuation) (function_argument_to_nat arg2 input_valuation) in
+           let op_output := f (function_argument_to_uint8 arg1 input_valuation) (function_argument_to_uint8 arg2 input_valuation) in
             add (state_var_map input_valuation) target op_output in
             {| ctrl_plane_map := ctrl_plane_map input_valuation;   (* Leave this unchanged *)
                header_map := header_map input_valuation; (* Leave this unchanged *)
                state_var_map := new_state |}           (* Modify this *)
     | StatelessOp f arg1 arg2 target =>
         let new_hdr :=
-           let op_output := f (function_argument_to_nat arg1 input_valuation) (function_argument_to_nat arg2 input_valuation) in
+           let op_output := f (function_argument_to_uint8 arg1 input_valuation) (function_argument_to_uint8 arg2 input_valuation) in
             add (header_map input_valuation) target op_output in
             {| ctrl_plane_map := ctrl_plane_map input_valuation;   (* Leave this unchanged *)
                header_map := new_hdr; (* Modify this *)
