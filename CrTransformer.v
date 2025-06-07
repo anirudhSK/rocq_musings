@@ -34,12 +34,21 @@ Definition function_argument_to_uint8 (arg : FunctionArgument) (valuation : Valu
   | None => zero (* TODO: or any default value or error handling as appropriate *)
   end.
 
-(* A BinaryFunction takes two uint8 arguments and returns another uint8 *)
-Definition BinaryFunction : Type := (uint8 -> uint8 -> uint8).
+(* A BinaryOp takes two uint8 arguments and returns another uint8 *)
+Inductive BinaryOp :=
+  | AddOp
+  | MulOp.
 
+Definition apply_bin_op (f : BinaryOp) (arg1 : uint8) (arg2 : uint8) : uint8 :=
+  match f with
+  | AddOp => Integers.add arg1 arg2
+  | MulOp => Integers.mul arg1 arg2
+  end.
+
+(* Define the header operations *)
 Inductive HdrOp :=
-  | StatefulOp  (f : BinaryFunction) (arg1 : FunctionArgument) (arg2 : FunctionArgument) (target : StateVar)
-  | StatelessOp (f : BinaryFunction) (arg1 : FunctionArgument) (arg2 : FunctionArgument) (target : Header).
+  | StatefulOp  (f : BinaryOp) (arg1 : FunctionArgument) (arg2 : FunctionArgument) (target : StateVar)
+  | StatelessOp (f : BinaryOp) (arg1 : FunctionArgument) (arg2 : FunctionArgument) (target : Header).
 
 Inductive MatchActionRule :=
   | Seq (h : Header) (start_index : uint8) (end_index : uint8) (pat : list bool) (action : list HdrOp)
@@ -54,7 +63,7 @@ Definition example_header1 : Header := HeaderCtr "hdr1"%string.
 Definition example_transformer : Transformer :=
   [
     Seq example_header1 zero (repr 10%Z) [true; false; true] 
-      [StatefulOp (fun x y => Integers.add x y) (HeaderArg example_header1) (ConstantArg (repr 5%Z)) (StateVarCtr "state1"%string)];
+      [StatefulOp  AddOp (HeaderArg example_header1) (ConstantArg (repr 5%Z)) (StateVarCtr "state1"%string)];
     Par example_header1 zero (repr 10%Z) [false; true; false] 
-      [StatelessOp (fun x y => Integers.mul x y) (HeaderArg example_header1) (ConstantArg (repr 3%Z)) (HeaderCtr "hdr2"%string)]
+      [StatelessOp MulOp (HeaderArg example_header1) (ConstantArg (repr 3%Z)) (HeaderCtr "hdr2"%string)]
   ].
