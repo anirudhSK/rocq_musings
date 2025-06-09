@@ -1,14 +1,24 @@
 Immediate next steps:
-1. Replace nat with bit_int in CrTransformer.
-2. Define SmtSemantics using the same bit_ints.
-3. Prove equivalence between CrTransformer and SmtSemantics versions of bit_ints.
+1. Prove equivalence between CrTransformer and SmtSemantics versions of bit_ints.
+Here's one way to do it:
+1. Prove that if a program has been checked for uninitialized variables,
+   you don't have any instance of a None being returned from the lookup to the valuation map.
+2. Prove that if the program has been checked for duplicate variables,
+   you don't have any duplicate identifiers anywhere.
+3. Assuming item 1 and item 2 as lemmas, every identifier from a CrTransformer instance can be
+   mapped to a unique string name for the SmtExpr. We prefix the string name depending on the
+   identifier type (CtrlPlane, Header, State, etc.)
+4. Write an equivalence_checker function that (for now) takes two HdrOps and produces an smt query
+   asserting their equality using the items 1, 2, and 3 above.
+5. Forget for now about algebraic rewrites from CrDsl operations to Z3 SMT operations. Assume there's a one-to-one map,
+   which I think is mostly the case in practice.
+6. If HdrOps work out, we can move on to match-action rule, list of match-action rules, transfomer, list of transformers,
+   etc. i.e., moving up the hierarchy.
 
 Planned to dos:
 1. Generalizing from single-packet semantics to stream semantics.
 2. Unifying parsing and header processing into a single format.
 
-
 Wishlist:
-1. Prove that if a program has been checked for uninitialized variables, you don't have any instance of a None being returned from the lookup to the valuation map.
 2. Semantics for the scheduler.
 3. Looking at Xavier Leroy's summer school on compilers to see if there are any design patterns I am missing.
