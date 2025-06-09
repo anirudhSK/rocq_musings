@@ -9,6 +9,7 @@ From Coq.Strings Require Import String.
 Inductive SmtExpr :=
     | SmtConst (value : uint8)
     | SmtVar (name : string)
+    | SmtBitAdd (e1 e2 : SmtExpr)
     | SmtBitAnd (e1 e2 : SmtExpr)
     | SmtBitOr (e1 e2 : SmtExpr)
     | SmtBitNot (e : SmtExpr).
@@ -28,6 +29,7 @@ Fixpoint eval_smt_expr (e : SmtExpr) (v : fmap string uint8) : uint8 :=
                      | Some value => value
                      | None => zero (* Default to zero if variable not found *)
                      end
+    | SmtBitAdd e1 e2 => add (eval_smt_expr e1 v) (eval_smt_expr e2 v)
     | SmtBitAnd e1 e2 => and (eval_smt_expr e1 v) (eval_smt_expr e2 v)
     | SmtBitOr e1 e2 => or (eval_smt_expr e1 v) (eval_smt_expr e2 v)
     | SmtBitNot e => not (eval_smt_expr e v)
