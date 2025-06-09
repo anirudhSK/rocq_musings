@@ -36,13 +36,11 @@ Definition function_argument_to_uint8 (arg : FunctionArgument) (valuation : Valu
 
 (* A BinaryOp takes two uint8 arguments and returns another uint8 *)
 Inductive BinaryOp :=
-  | AddOp
-  | MulOp.
+  | AddOp.
 
 Definition apply_bin_op (f : BinaryOp) (arg1 : uint8) (arg2 : uint8) : uint8 :=
   match f with
   | AddOp => Integers.add arg1 arg2
-  | MulOp => Integers.mul arg1 arg2
   end.
 
 (* Define the header operations *)
@@ -65,5 +63,5 @@ Definition example_transformer : Transformer :=
     Seq example_header1 zero (repr 10%Z) [true; false; true] 
       [StatefulOp  AddOp (HeaderArg example_header1) (ConstantArg (repr 5%Z)) (StateVarCtr "state1"%string)];
     Par example_header1 zero (repr 10%Z) [false; true; false] 
-      [StatelessOp MulOp (HeaderArg example_header1) (ConstantArg (repr 3%Z)) (HeaderCtr "hdr2"%string)]
+      [StatelessOp AddOp (HeaderArg example_header1) (ConstantArg (repr 3%Z)) (HeaderCtr "hdr2"%string)]
   ].

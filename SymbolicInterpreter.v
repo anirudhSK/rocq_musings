@@ -8,12 +8,10 @@ Definition symbolic_interpreter (h : HdrOp) : SmtExpr :=
     | StatefulOp f arg1 arg2 target =>
        match f with 
          | AddOp => SmtConst zero (*TODO: placeholder *)
-         | MulOp => SmtConst (repr 1%Z) (*TODO: placeholder *)
        end
     | StatelessOp f arg1 arg2 target =>
        match f with
          | AddOp => SmtConst zero (*TODO: placeholder *)
-         | MulOp => SmtConst (repr 1%Z) (*TODO: placeholder *)
        end
     end.
 
