@@ -32,3 +32,13 @@ Definition symbolic_interpreter (h : HdrOp) : SmtExpr :=
          | AddOp => SmtBitAdd (fn_arg_to_smt_expr arg1) (fn_arg_to_smt_expr arg2)
        end
     end.
+
+(* Define equivalence checker function *)
+Definition hdr_ops_to_smt_query (h1 : HdrOp) (h2 : HdrOp) : SmtExpr :=
+  let smt_expr1 := symbolic_interpreter h1 in
+  let smt_expr2 := symbolic_interpreter h2 in
+  SmtBitEq smt_expr1 smt_expr2.
+
+Definition equivalence_checker (h1 : HdrOp) (h2 : HdrOp) : bool :=
+  if (SmtResult_eqb (smt_query_engine (hdr_ops_to_smt_query h1 h2)) (sat)) then true else false.
+(* Fill this in. *)

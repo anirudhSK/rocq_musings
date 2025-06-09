@@ -12,11 +12,19 @@ Inductive SmtExpr :=
     | SmtBitAdd (e1 e2 : SmtExpr)
     | SmtBitAnd (e1 e2 : SmtExpr)
     | SmtBitOr (e1 e2 : SmtExpr)
+    | SmtBitEq (e1 e2 : SmtExpr)
     | SmtBitNot (e : SmtExpr).
 
 Inductive SmtResult :=
     | sat
     | unsat.
+
+Definition SmtResult_eqb (a b : SmtResult) : bool :=
+  match a, b with
+  | sat, sat => true
+  | unsat, unsat => true
+  | _, _ => false
+  end.
 
 (* Model for Z3 (or any other SMT solver) *)
 Parameter smt_query_engine : SmtExpr -> SmtResult.
@@ -32,6 +40,7 @@ Fixpoint eval_smt_expr (e : SmtExpr) (v : fmap string uint8) : uint8 :=
     | SmtBitAdd e1 e2 => add (eval_smt_expr e1 v) (eval_smt_expr e2 v)
     | SmtBitAnd e1 e2 => and (eval_smt_expr e1 v) (eval_smt_expr e2 v)
     | SmtBitOr e1 e2 => or (eval_smt_expr e1 v) (eval_smt_expr e2 v)
+    | SmtBitEq e1 e2 => if (eq  (eval_smt_expr e1 v) (eval_smt_expr e2 v)) then one else zero (* Is this one = 1 or 255? Does it matter? *)
     | SmtBitNot e => not (eval_smt_expr e v)
     end.
 
