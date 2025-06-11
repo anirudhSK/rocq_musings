@@ -54,28 +54,13 @@ Proof.
   unfold apply_bin_op. 
   destruct arg1, arg2;
   unfold function_argument_to_uint8;
-  unfold symbolic_interpreter.
-  clear target. (* for now, target is unused. *)
-  - destruct h.
-    destruct h0.
-    unfold fn_arg_to_smt_expr.
-    unfold eval_smt_expr.
-    unfold cr_val_to_smt_val.
-    simpl.
-    reflexivity.
-  - destruct h.
-    unfold fn_arg_to_smt_expr.
-    unfold eval_smt_expr.
-    unfold cr_val_to_smt_val.
-    simpl.
-    reflexivity.
-  - destruct h.
-    unfold fn_arg_to_smt_expr.
-    unfold eval_smt_expr.
-    unfold cr_val_to_smt_val.
-    simpl.
-    reflexivity.
-  - unfold fn_arg_to_smt_expr.
-    unfold eval_smt_expr.
-    reflexivity.
+  unfold symbolic_interpreter;
+  try destruct h;
+  clear target; (* for now, target is unused. *)
+  try destruct h0;
+  try unfold fn_arg_to_smt_expr;
+  try unfold eval_smt_expr;
+  try unfold cr_val_to_smt_val;
+  try simpl;
+  reflexivity.
 Qed.
