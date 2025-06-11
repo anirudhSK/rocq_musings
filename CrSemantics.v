@@ -30,7 +30,6 @@ Parameter eval_par_rule : MatchActionRule -> Valuation -> Valuation.
 (* Expression version of a header operation, meaning side-effect-free and stateless *)
 Definition eval_hdr_op_expr (op : HdrOp) (v : Valuation) : uint8 :=
     match op with
-    | StatefulOp f arg1 arg2 target => apply_bin_op f (function_argument_to_uint8 arg1 v) (function_argument_to_uint8 arg2 v)
     | StatelessOp f arg1 arg2 target => apply_bin_op f (function_argument_to_uint8 arg1 v) (function_argument_to_uint8 arg2 v)
     end.
 
