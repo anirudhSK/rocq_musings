@@ -1,6 +1,8 @@
 From MyProject Require Import CrTransformer.
 From MyProject Require Import CrIdentifiers.
+From MyProject Require Import CrSemantics.
 From MyProject Require Import SmtExpr.
+From MyProject Require Import StringUtils.
 Require Import ZArith.
 Require Import Coq.Strings.String.
 
@@ -33,12 +35,22 @@ Definition symbolic_interpreter (h : HdrOp) : SmtExpr :=
        end
     end.
 
-(* Define equivalence checker function *)
-Definition hdr_ops_to_smt_query (h1 : HdrOp) (h2 : HdrOp) : SmtExpr :=
-  let smt_expr1 := symbolic_interpreter h1 in
-  let smt_expr2 := symbolic_interpreter h2 in
-  SmtBitEq smt_expr1 smt_expr2.
+(* Convert CR Valuation to SMT Valuation *)
+Definition cr_val_to_smt_val (v: Valuation) : SmtValuation :=
+    (* This returns a lambda function from string to uint8 *)
+    fun x =>
+      if string_prefix "hdr_" x then
+        header_map v (HeaderCtr (string_drop 4 x))
+      else if string_prefix "ctrl_" x then
+        ctrl_plane_map v (CtrlPlaneConfigNameCtr (string_drop 5 x))
+      else if string_prefix "state_" x then
+        state_var_map v (StateVarCtr (string_drop 6 x))
+      else zero. (* Default value if not found *)
+      (* TODO: Need to figure out what to do here, this is weird. *)
 
-Definition equivalence_checker (h1 : HdrOp) (h2 : HdrOp) : bool :=
-  if (SmtResult_eqb (smt_query_engine (hdr_ops_to_smt_query h1 h2)) (sat)) then true else false.
-(* Fill this in. *)
+(* Lemma relating evaluation of CR program and
+                  evaluation of SMT expression
+                  produced by symbolic_interpreter *)
+Lemma cr_eval_to_smt_eval :
+  forall (h : HdrOp) (v : Valuation), eval_hdr_op_expr h v = eval_smt_expr (symbolic_interpreter h) (cr_val_to_smt_val v).
+Admitted.

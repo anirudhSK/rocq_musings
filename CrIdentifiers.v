@@ -1,5 +1,4 @@
 Require Import Strings.String.
-From MyProject Require Export Map.
 From MyProject Require Export Integers.
 Require Import ZArith.
 
@@ -16,9 +15,14 @@ Inductive ConnectionName : Type := ConnectionNameCtr (name : string).
 Inductive CtrlPlaneConfigName : Type := CtrlPlaneConfigNameCtr (name : string).
 
 (* Current values for each of these identifiers as a map *)
-Definition HeaderMap := fmap Header uint8.
-Definition StateVarMap := fmap StateVar uint8.
-Definition CtrlPlaneConfigNameMap := fmap CtrlPlaneConfigName uint8.
+Definition HeaderMap := Header -> uint8.
+Definition StateVarMap := StateVar -> uint8.
+Definition CtrlPlaneConfigNameMap := CtrlPlaneConfigName -> uint8.
+
+(* Borrowed from https://xavierleroy.org/courses/EUTypes-2019/html/EUTypes2019.CompilerVerification.IMP.html *)
+(* Can make this less boilerplate, but this will do for now *)
+(* (Definition update_h_map (h : Header) (v: uint8) (s: (Header->uint8)) : Header->uint8 :=
+  fun y => if string_dec h y then v else s y.) *)
 
 (* The valuation is a record containing three maps:,
    one each for mapping headers/statevars/ctrlplaneconfigs to their current values *)
@@ -27,16 +31,3 @@ Record Valuation := {
   header_map : HeaderMap;
   state_var_map : StateVarMap
 }.
-
-(* Empty valuation *)
-Example empty_valuation : Valuation := {|
-  ctrl_plane_map := empty CtrlPlaneConfigName uint8;
-  header_map := empty Header uint8;
-  state_var_map := empty StateVar uint8
-|}.
-
-(* example of parser state *)
-Definition example_parser_state := ParserStateCtr "example_parser_state".
-
-(* example of header *)
-Definition example_header := HeaderCtr "example_header".

@@ -6,7 +6,6 @@ Require Import ZArith.
 Import ListNotations.
 Require Import Strings.String.
 From MyProject Require Export CrIdentifiers.
-From MyProject Require Export Map.
 
 (* A transformer is either a sequential or a parallel transformer *)
 Inductive TransformerType : Type := 
@@ -20,18 +19,12 @@ Inductive FunctionArgument :=
   | StatefulArg (s : StateVar).
 
 (* lookup a function's argument *)
-Definition lookup_function_argument (arg : FunctionArgument) (valuation : Valuation) : option uint8 :=
-  match arg with
-  | CtrlPlaneArg c => lookup (valuation.(ctrl_plane_map)) c
-  | HeaderArg h =>    lookup (valuation.(header_map)) h
-  | ConstantArg n => Some n
-  | StatefulArg s =>  lookup (valuation.(state_var_map)) s
-  end.
-
 Definition function_argument_to_uint8 (arg : FunctionArgument) (valuation : Valuation) : uint8 :=
-  match lookup_function_argument arg valuation with
-  | Some n => n
-  | None => zero (* TODO: or any default value or error handling as appropriate *)
+  match arg with
+  | CtrlPlaneArg c => valuation.(ctrl_plane_map) c
+  | HeaderArg h    => valuation.(header_map) h
+  | ConstantArg n  => n
+  | StatefulArg s  => valuation.(state_var_map) s
   end.
 
 (* A BinaryOp takes two uint8 arguments and returns another uint8 *)
