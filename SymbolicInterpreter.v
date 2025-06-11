@@ -36,11 +36,46 @@ Definition cr_val_to_smt_val (v: Valuation) : SmtValuation :=
       if string_prefix "hdr_" x then
         header_map v (HeaderCtr (string_drop 4 x))
       else zero. (* Default value if not found *)
-      (* TODO: Need to figure out what to do here, this is weird. *)
+      (* TODO: Need to figure out what to do here, this is weird.
+         Why does this even work?
+         I guess because cr_val_to_sml is only ever applied to the smt_transformed formula,
+        not arbitrary ones? *)
 
 (* Lemma relating evaluation of CR program and
                   evaluation of SMT expression
                   produced by symbolic_interpreter *)
 Lemma cr_eval_to_smt_eval :
   forall (h : HdrOp) (v : Valuation), eval_hdr_op_expr h v = eval_smt_expr (symbolic_interpreter h) (cr_val_to_smt_val v).
-Admitted.
+Proof.
+  intros h v.
+  destruct h.
+  unfold eval_hdr_op_expr.
+  destruct f.
+  unfold apply_bin_op. 
+  destruct arg1, arg2;
+  unfold function_argument_to_uint8;
+  unfold symbolic_interpreter.
+  clear target. (* for now, target is unused. *)
+  - destruct h.
+    destruct h0.
+    unfold fn_arg_to_smt_expr.
+    unfold eval_smt_expr.
+    unfold cr_val_to_smt_val.
+    simpl.
+    reflexivity.
+  - destruct h.
+    unfold fn_arg_to_smt_expr.
+    unfold eval_smt_expr.
+    unfold cr_val_to_smt_val.
+    simpl.
+    reflexivity.
+  - destruct h.
+    unfold fn_arg_to_smt_expr.
+    unfold eval_smt_expr.
+    unfold cr_val_to_smt_val.
+    simpl.
+    reflexivity.
+  - unfold fn_arg_to_smt_expr.
+    unfold eval_smt_expr.
+    reflexivity.
+Qed.
