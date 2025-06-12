@@ -36,23 +36,21 @@ Definition eval_hdr_op_expr (op : HdrOp) (v : Valuation) : uint8 :=
 
 (* Function to evaluate a header operation,
    meaning we apply the operation to a previous valuation to get a new one *)
-(*
-   Definition eval_hdr_op (op : HdrOp) (input_valuation : Valuation) : Valuation :=
+Definition eval_hdr_op (op : HdrOp) (input_valuation : Valuation) : Valuation :=
     match op with
     | StatefulOp f arg1 arg2 target =>
         let new_state :=
-           let op_output := apply_bin_op f (function_argument_to_uint8 arg1 input_valuation) (function_argument_to_uint8 arg2 input_valuation) in
-            add (state_var_map input_valuation) target op_output in
+           let op_output := eval_hdr_op_expr op input_valuation in
+            state_update (state_var_map input_valuation) target op_output in
             {| ctrl_plane_map := ctrl_plane_map input_valuation;   (* Leave this unchanged *)
-               header_map := header_map input_valuation; (* Leave this unchanged *)
-               state_var_map := new_state |}           (* Modify this *)
+               header_map := header_map input_valuation;           (* Leave this unchanged *)
+               state_var_map := new_state |}                       (* Modify this *)
     | StatelessOp f arg1 arg2 target =>
         let new_hdr :=
-           let op_output := apply_bin_op f (function_argument_to_uint8 arg1 input_valuation) (function_argument_to_uint8 arg2 input_valuation) in
-            add (header_map input_valuation) target op_output in
+           let op_output := eval_hdr_op_expr op input_valuation in
+            hdr_update (header_map input_valuation) target op_output in
             {| ctrl_plane_map := ctrl_plane_map input_valuation;   (* Leave this unchanged *)
-               header_map := new_hdr; (* Modify this *)
-               state_var_map := state_var_map input_valuation |}  (* Leave this unchanged *)
+               header_map := new_hdr;                              (* Modify this *)
+               state_var_map := state_var_map input_valuation |}   (* Leave this unchanged *)
     end.
 (*TODO: Maybe figure out a way to unify parsing and header manipulation into seq and par transformers respectively. *)
-*)

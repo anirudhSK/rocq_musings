@@ -19,10 +19,15 @@ Definition HeaderMap := Header -> uint8.
 Definition StateVarMap := StateVar -> uint8.
 Definition CtrlPlaneConfigNameMap := CtrlPlaneConfigName -> uint8.
 
-(* Borrowed from https://xavierleroy.org/courses/EUTypes-2019/html/EUTypes2019.CompilerVerification.IMP.html *)
-(* Can make this less boilerplate, but this will do for now *)
-(* (Definition update_h_map (h : Header) (v: uint8) (s: (Header->uint8)) : Header->uint8 :=
-  fun y => if string_dec h y then v else s y.) *)
+Definition hdr_update (s: Header -> uint8) (x: Header) (v: uint8) : (Header -> uint8) :=
+  fun y => match x, y with
+            | HeaderCtr x_name, HeaderCtr y_name => if string_dec x_name y_name then v else s y
+           end.
+
+Definition state_update (s: StateVar -> uint8) (x: StateVar) (v: uint8) : (StateVar -> uint8) :=
+  fun y => match x, y with
+            | StateVarCtr x_name, StateVarCtr y_name => if string_dec x_name y_name then v else s y
+           end.
 
 (* The valuation is a record containing three maps:,
    one each for mapping headers/statevars/ctrlplaneconfigs to their current values *)
