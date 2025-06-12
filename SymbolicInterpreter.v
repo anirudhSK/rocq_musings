@@ -45,15 +45,11 @@ Definition cr_val_to_smt_val (v: Valuation) : SmtValuation :=
                   evaluation of SMT expression
                   produced by symbolic_interpreter *)
 Lemma cr_eval_to_smt_eval :
-  forall (h : HdrOp) (v : Valuation), eval_hdr_op_expr h v = eval_smt_expr (symbolic_interpreter h) (cr_val_to_smt_val v).
+  forall (hop : HdrOp) (v : Valuation), eval_hdr_op_expr hop v = eval_smt_expr (symbolic_interpreter hop) (cr_val_to_smt_val v).
 Proof.
-  intros h v.
-  simpl.
-  destruct h,f;
-  simpl.
-  destruct arg1, arg2;
+  destruct hop, f, arg1, arg2. (* destruct on header op, binary function, and 2 arguments *)
   simpl;
-  try destruct h;
+  try destruct h; (* if the two arguments are headers, destruct on these *)
   try destruct h0;
   simpl;
   reflexivity.
