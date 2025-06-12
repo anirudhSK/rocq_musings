@@ -13,14 +13,18 @@ Inductive TransformerType : Type :=
   | Parallel.
 
 Inductive FunctionArgument :=
+  | CtrlPlaneArg (c : CtrlPlaneConfigName)
   | HeaderArg (h : Header)
-  | ConstantArg (n : uint8).
+  | ConstantArg (n : uint8)
+  | StatefulArg (s : StateVar).
 
 (* lookup a function's argument *)
 Definition function_argument_to_uint8 (arg : FunctionArgument) (valuation : Valuation) : uint8 :=
   match arg with
+  | CtrlPlaneArg c => valuation.(ctrl_plane_map) c
   | HeaderArg h    => valuation.(header_map) h
   | ConstantArg n  => n
+  | StatefulArg s  => valuation.(state_var_map) s
   end.
 
 (* A BinaryOp takes two uint8 arguments and returns another uint8 *)
@@ -34,6 +38,7 @@ Definition apply_bin_op (f : BinaryOp) (arg1 : uint8) (arg2 : uint8) : uint8 :=
 
 (* Define the header operations *)
 Inductive HdrOp :=
+  | StatefulOp  (f : BinaryOp) (arg1 : FunctionArgument) (arg2 : FunctionArgument) (target : StateVar)
   | StatelessOp (f : BinaryOp) (arg1 : FunctionArgument) (arg2 : FunctionArgument) (target : Header).
 
 Inductive MatchActionRule :=
@@ -41,3 +46,15 @@ Inductive MatchActionRule :=
   | Par (h : Header) (start_index : uint8) (end_index : uint8) (pat : list bool) (action : list HdrOp).
 
 Definition Transformer : Type := list MatchActionRule.
+
+(* Example header *)
+Definition example_header1 : Header := HeaderCtr "hdr1"%string.
+
+(* An example transformer *)
+Definition example_transformer : Transformer :=
+  [
+    Seq example_header1 zero (repr 10%Z) [true; false; true] 
+      [StatefulOp  AddOp (HeaderArg example_header1) (ConstantArg (repr 5%Z)) (StateVarCtr "state1"%string)];
+    Par example_header1 zero (repr 10%Z) [false; true; false] 
+      [StatelessOp AddOp (HeaderArg example_header1) (ConstantArg (repr 3%Z)) (HeaderCtr "hdr2"%string)]
+  ].

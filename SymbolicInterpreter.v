@@ -17,12 +17,18 @@ Parameter check_unique : Transformer -> bool.
 Definition fn_arg_to_smt_expr (arg : FunctionArgument) : SmtExpr :=
     match arg with
     | HeaderArg (HeaderCtr h) => SmtVar ("hdr_" ++ h)
+    | CtrlPlaneArg (CtrlPlaneConfigNameCtr c) => SmtVar ("ctrl_" ++ c)
     | ConstantArg n => SmtConst n
+    | StatefulArg (StateVarCtr s) => SmtVar ("state_" ++ s)
     end.
 
 (* Define the symbolic interpreter for header operations *)
 Definition symbolic_interpreter (h : HdrOp) : SmtExpr :=
     match h with
+    | StatefulOp f arg1 arg2 target =>
+       match f with 
+         | AddOp => SmtBitAdd (fn_arg_to_smt_expr arg1) (fn_arg_to_smt_expr arg2)
+       end
     | StatelessOp f arg1 arg2 target =>
        match f with
          | AddOp => SmtBitAdd (fn_arg_to_smt_expr arg1) (fn_arg_to_smt_expr arg2)
@@ -35,6 +41,10 @@ Definition cr_val_to_smt_val (v: Valuation) : SmtValuation :=
     fun x =>
       if string_prefix "hdr_" x then
         header_map v (HeaderCtr (string_drop 4 x))
+      else if string_prefix "ctrl_" x then
+        ctrl_plane_map v (CtrlPlaneConfigNameCtr (string_drop 5 x))
+      else if string_prefix "state_" x then
+        state_var_map v (StateVarCtr (string_drop 6 x))
       else zero. (* Default value if not found *)
       (* TODO: Need to figure out what to do here, this is weird.
          Why does this even work?
