@@ -22,17 +22,23 @@ Definition fn_arg_to_smt_expr (arg : FunctionArgument) : SmtExpr :=
     | StatefulArg (StateVarCtr s) => SmtVar ("state_" ++ s)
     end.
 
-(* Define the symbolic interpreter for header operations *)
-Definition symbolic_interpreter (h : HdrOp) : SmtExpr :=
+(* Define the symbolic interpreter for header operation expressions *)
+Definition cr_hdr_op_to_smt (h : HdrOp) : SmtExpr :=
     match h with
-    | StatefulOp f arg1 arg2 target =>
+    | StatefulOp f arg1 arg2 _ =>
        match f with 
          | AddOp => SmtBitAdd (fn_arg_to_smt_expr arg1) (fn_arg_to_smt_expr arg2)
        end
-    | StatelessOp f arg1 arg2 target =>
+    | StatelessOp f arg1 arg2 _ =>
        match f with
          | AddOp => SmtBitAdd (fn_arg_to_smt_expr arg1) (fn_arg_to_smt_expr arg2)
        end
+    end.
+
+Definition cr_hdr_op_to_smt_assign (h : HdrOp) : SmtExpr :=
+    match h with
+    | StatefulOp f arg1 arg2 target => SmtBitEq (fn_arg_to_smt_expr (StatefulArg target)) (cr_hdr_op_to_smt h)
+    | StatelessOp f arg1 arg2 target => SmtBitEq (fn_arg_to_smt_expr (HeaderArg target)) (cr_hdr_op_to_smt h)
     end.
 
 (* Convert CR Valuation to SMT Valuation *)
@@ -52,10 +58,9 @@ Definition cr_val_to_smt_val (v: Valuation) : SmtValuation :=
         not arbitrary ones? *)
 
 (* Lemma relating evaluation of CR program and
-                  evaluation of SMT expression
-                  produced by symbolic_interpreter *)
+                  evaluation of SMT expression *)
 Lemma cr_eval_to_smt_eval :
-  forall (hop : HdrOp) (v : Valuation), eval_hdr_op_expr hop v = eval_smt_expr (symbolic_interpreter hop) (cr_val_to_smt_val v).
+  forall (hop : HdrOp) (v : Valuation), eval_hdr_op_expr hop v = eval_smt_expr (cr_hdr_op_to_smt hop) (cr_val_to_smt_val v).
 Proof.
   destruct hop, f, arg1, arg2; (* destruct on header op, binary function, and 2 arguments *)
   simpl;
@@ -68,3 +73,5 @@ Proof.
   simpl;
   reflexivity.
 Qed.
+
+(* Prove something using this assignment function above *)
