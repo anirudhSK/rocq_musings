@@ -61,6 +61,10 @@ Proof.
   simpl;
   try destruct h; (* if the two arguments are headers, destruct on these *)
   try destruct h0;
+  try destruct c; (* similar with ctrl plane args *)
+  try destruct c0;
+  try destruct s; (* and state variables *)
+  try destruct s0;
   simpl;
   reflexivity.
 Qed.
