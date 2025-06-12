@@ -75,3 +75,11 @@ Proof.
 Qed.
 
 (* Prove something using this assignment function above *)
+Lemma cr_assign_correctness_stateful :
+  forall (f : BinaryOp) (arg1 arg2 : FunctionArgument) (target : StateVar) (v : Valuation),
+    (state_var_map (eval_hdr_op (StatefulOp f arg1 arg2 target) v)) target = (* updated value of target  *)
+      eval_hdr_op_expr (StatefulOp f arg1 arg2 target) v.                (* is what one would expect *)
+Proof.
+  intros.
+  destruct f, arg1, arg2, target; simpl; destruct (string_dec name name); try reflexivity; try congruence.
+Qed.
