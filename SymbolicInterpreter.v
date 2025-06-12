@@ -48,19 +48,13 @@ Lemma cr_eval_to_smt_eval :
   forall (h : HdrOp) (v : Valuation), eval_hdr_op_expr h v = eval_smt_expr (symbolic_interpreter h) (cr_val_to_smt_val v).
 Proof.
   intros h v.
-  destruct h.
-  unfold eval_hdr_op_expr.
-  destruct f.
-  unfold apply_bin_op. 
+  simpl.
+  destruct h,f;
+  simpl.
   destruct arg1, arg2;
-  unfold function_argument_to_uint8;
-  unfold symbolic_interpreter;
+  simpl;
   try destruct h;
-  clear target; (* for now, target is unused. *)
   try destruct h0;
-  try unfold fn_arg_to_smt_expr;
-  try unfold eval_smt_expr;
-  try unfold cr_val_to_smt_val;
-  try simpl;
+  simpl;
   reflexivity.
 Qed.
