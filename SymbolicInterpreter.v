@@ -42,15 +42,15 @@ Definition cr_hdr_op_to_smt_assign (h : HdrOp) : SmtExpr :=
     end.
 
 (* Convert CR Valuation to SMT Valuation *)
-Definition cr_val_to_smt_val (v: Valuation) : SmtValuation :=
+Definition cr_val_to_smt_val (ps: ProgramState) : SmtValuation :=
     (* This returns a lambda function from string to uint8 *)
     fun x =>
       if string_prefix "hdr_" x then
-        header_map v (HeaderCtr (string_drop 4 x))
+        header_map ps (HeaderCtr (string_drop 4 x))
       else if string_prefix "ctrl_" x then
-        ctrl_plane_map v (CtrlPlaneConfigNameCtr (string_drop 5 x))
+        ctrl_plane_map ps (CtrlPlaneConfigNameCtr (string_drop 5 x))
       else if string_prefix "state_" x then
-        state_var_map v (StateVarCtr (string_drop 6 x))
+        state_var_map ps (StateVarCtr (string_drop 6 x))
       else zero. (* Default value if not found *)
       (* TODO: Need to figure out what to do here, this is weird.
          Why does this even work?
@@ -60,7 +60,7 @@ Definition cr_val_to_smt_val (v: Valuation) : SmtValuation :=
 (* Lemma relating evaluation of CR program and
                   evaluation of SMT expression *)
 Lemma cr_eval_to_smt_eval :
-  forall (hop : HdrOp) (v : Valuation), eval_hdr_op_expr hop v = eval_smt_expr (cr_hdr_op_to_smt hop) (cr_val_to_smt_val v).
+  forall (hop : HdrOp) (ps : ProgramState), eval_hdr_op_expr hop ps = eval_smt_expr (cr_hdr_op_to_smt hop) (cr_val_to_smt_val ps).
 Proof.
   destruct hop, f, arg1, arg2; (* destruct on header op, binary function, and 2 arguments *)
   simpl;
@@ -76,9 +76,9 @@ Qed.
 
 (* Prove something using this assignment function above *)
 Lemma cr_assign_correctness_stateful :
-  forall (f : BinaryOp) (arg1 arg2 : FunctionArgument) (target : StateVar) (v : Valuation),
-    (state_var_map (eval_hdr_op (StatefulOp f arg1 arg2 target) v)) target = (* updated value of target  *)
-      eval_hdr_op_expr (StatefulOp f arg1 arg2 target) v.                (* is what one would expect *)
+  forall (f : BinaryOp) (arg1 arg2 : FunctionArgument) (target : StateVar) (ps: ProgramState),
+    (state_var_map (eval_hdr_op (StatefulOp f arg1 arg2 target) ps)) target = (* updated value of target  *)
+      eval_hdr_op_expr (StatefulOp f arg1 arg2 target) ps.                (* is what one would expect *)
 Proof.
   intros.
   destruct f, arg1, arg2, target; simpl; destruct (string_dec name name); try reflexivity; try congruence.
