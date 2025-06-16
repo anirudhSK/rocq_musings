@@ -19,23 +19,9 @@ Inductive FunctionArgument :=
   | ConstantArg (n : uint8)
   | StatefulArg (s : StateVar).
 
-(* lookup a function's argument *)
-Definition function_argument_to_uint8 (arg : FunctionArgument) (valuation : ProgramState uint8) : uint8 :=
-  match arg with
-  | CtrlPlaneArg c => ctrl_plane_map uint8 valuation c
-  | HeaderArg h    => header_map uint8 valuation h
-  | ConstantArg n  => n
-  | StatefulArg s  => state_var_map uint8 valuation s
-  end.
-
 (* A BinaryOp takes two uint8 arguments and returns another uint8 *)
 Inductive BinaryOp :=
   | AddOp.
-
-Definition apply_bin_op (f : BinaryOp) (arg1 : uint8) (arg2 : uint8) : uint8 :=
-  match f with
-  | AddOp => Integers.add arg1 arg2
-  end.
 
 (* Define the header operations *)
 Inductive HdrOp :=
