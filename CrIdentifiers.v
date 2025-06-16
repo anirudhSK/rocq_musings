@@ -15,9 +15,9 @@ Inductive ConnectionName : Type := ConnectionNameCtr (name : string).
 Inductive CtrlPlaneConfigName : Type := CtrlPlaneConfigNameCtr (name : string).
 
 (* Current values for each of these identifiers as a map *)
-Definition HeaderMap := Header -> uint8.
-Definition StateVarMap := StateVar -> uint8.
-Definition CtrlPlaneConfigNameMap := CtrlPlaneConfigName -> uint8.
+Definition HeaderMap (T : Type) := Header -> T.
+Definition StateVarMap (T : Type) := StateVar -> T.
+Definition CtrlPlaneConfigNameMap (T : Type) := CtrlPlaneConfigName -> T.
 
 Definition update_hdr_map (s: Header -> uint8) (x: Header) (v: uint8) : (Header -> uint8) :=
   fun y => match x, y with
@@ -32,7 +32,7 @@ Definition update_state_map (s: StateVar -> uint8) (x: StateVar) (v: uint8) : (S
 (* The ProgramState is a record containing three maps:,
    one each for mapping headers/statevars/ctrlplaneconfigs to their current values *)
 Record ProgramState := {
-  ctrl_plane_map : CtrlPlaneConfigNameMap;
-  header_map : HeaderMap;
-  state_var_map : StateVarMap
+  ctrl_plane_map : CtrlPlaneConfigNameMap uint8;
+  header_map : HeaderMap uint8;
+  state_var_map : StateVarMap uint8
 }.
