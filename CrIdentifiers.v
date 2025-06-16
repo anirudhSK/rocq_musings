@@ -19,12 +19,12 @@ Definition HeaderMap (T : Type) := Header -> T.
 Definition StateVarMap (T : Type) := StateVar -> T.
 Definition CtrlPlaneConfigNameMap (T : Type) := CtrlPlaneConfigName -> T.
 
-Definition update_hdr_map (s: Header -> uint8) (x: Header) (v: uint8) : (Header -> uint8) :=
+Definition update_hdr_map (s: HeaderMap uint8) (x: Header) (v: uint8) : (HeaderMap uint8) :=
   fun y => match x, y with
             | HeaderCtr x_name, HeaderCtr y_name => if string_dec x_name y_name then v else s y
            end.
 
-Definition update_state_map (s: StateVar -> uint8) (x: StateVar) (v: uint8) : (StateVar -> uint8) :=
+Definition update_state_map (s: StateVarMap uint8) (x: StateVar) (v: uint8) : (StateVarMap uint8) :=
   fun y => match x, y with
             | StateVarCtr x_name, StateVarCtr y_name => if string_dec x_name y_name then v else s y
            end.
