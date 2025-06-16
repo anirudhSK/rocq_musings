@@ -7,29 +7,19 @@ From MyProject Require Import CrSymbolicSemantics.
 Require Import ZArith.
 Require Import Coq.Strings.String.
 
-(* Lemma relating evaluation of CR program and
-                  evaluation of SMT expression *)
-Lemma cr_eval_to_smt_eval :
-  forall (hop : HdrOp) (ps : ProgramState uint8), eval_hdr_op_expr hop ps = eval_smt_expr (eval_hdr_op_expr_smt hop) (prog_state_to_smt_val ps).
-Proof.
-  destruct hop, f, arg1, arg2; (* destruct on header op, binary function, and 2 arguments *)
-  simpl;
-  try destruct h; (* if the two arguments are headers, destruct on these *)
-  try destruct h0;
-  try destruct c; (* similar with ctrl plane args *)
-  try destruct c0;
-  try destruct s; (* and state variables *)
-  try destruct s0;
-  simpl;
-  reflexivity.
-Qed.
+(* Apply SmtValuation f to every entry in the symbolic state across all 3 maps *)
+Definition eval_sym_state (s: ProgramState SmtExpr) (f : SmtValuation) : ProgramState uint8 :=
+  {| header_map := fun h => eval_smt_expr (header_map SmtExpr s h) f;
+     ctrl_plane_map := fun c => eval_smt_expr (ctrl_plane_map SmtExpr s c) f;
+     state_var_map := fun sv => eval_smt_expr (state_var_map SmtExpr s sv) f |}.
 
-(* Prove something using this assignment function above *)
-Lemma cr_assign_correctness_stateful :
-  forall (f : BinaryOp) (arg1 arg2 : FunctionArgument) (target : StateVar) (ps: ProgramState uint8),
-    (state_var_map uint8 (eval_hdr_op_assign (StatefulOp f arg1 arg2 target) ps)) target = (* updated value of target  *)
-      eval_hdr_op_expr (StatefulOp f arg1 arg2 target) ps.                (* is what one would expect *)
-Proof.
-  intros.
-  destruct f, arg1, arg2, target; simpl; destruct (string_dec name name); try reflexivity; try congruence.
-Qed.
+(* Joe's theorem relating the concrete and symbolic worlds translated into rocq slack *)
+Lemma symbolic_vs_concrete :
+  forall (f : SmtValuation) (ho : HdrOp)
+         (c1 : ProgramState uint8) (s1 : ProgramState SmtExpr)
+         (c2 : ProgramState uint8) (s2 : ProgramState SmtExpr),
+    c1 = eval_sym_state s1 f ->
+    c2 = eval_hdr_op_assign ho c1 ->
+    s2 = eval_hdr_op_assign ho s1 ->
+    c2 = eval_sym_state s2 f.
+Admitted.

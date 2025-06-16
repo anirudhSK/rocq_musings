@@ -3,6 +3,8 @@
 From MyProject Require Import CrIdentifiers.
 From Coq.Strings Require Import String.
 
+(* Note that these strings may or may not have a one-to-one correspondence with
+  identifiers in the CrDsl program. *)
 Definition SmtValuation := string -> uint8.
 
 (* Basic starting point of Smt expressions, just have 8 bit ands, ors, and nots.
