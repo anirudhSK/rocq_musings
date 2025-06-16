@@ -39,17 +39,9 @@ Definition eval_hdr_op_expr (op : HdrOp) (v : ProgramState uint8) : uint8 :=
 Definition eval_hdr_op (op : HdrOp) (input_valuation : ProgramState uint8) : ProgramState uint8 :=
     match op with
     | StatefulOp f arg1 arg2 target =>
-        let new_state :=
-           let op_output := eval_hdr_op_expr op input_valuation in
-            update_state_map (state_var_map uint8 input_valuation) target op_output in
-            {| ctrl_plane_map := ctrl_plane_map uint8 input_valuation;   (* Leave this unchanged *)
-               header_map := header_map uint8 input_valuation;           (* Leave this unchanged *)
-               state_var_map := new_state |}                       (* Modify this *)
+        let op_output := eval_hdr_op_expr op input_valuation in
+            update_state input_valuation target op_output
     | StatelessOp f arg1 arg2 target =>
-        let new_hdr :=
-           let op_output := eval_hdr_op_expr op input_valuation in
-            update_hdr_map (header_map uint8 input_valuation) target op_output in
-            {| ctrl_plane_map := ctrl_plane_map uint8 input_valuation;   (* Leave this unchanged *)
-               header_map := new_hdr;                              (* Modify this *)
-               state_var_map := state_var_map uint8 input_valuation |}   (* Leave this unchanged *)
+        let op_output := eval_hdr_op_expr op input_valuation in
+            update_hdr input_valuation target op_output
     end.
