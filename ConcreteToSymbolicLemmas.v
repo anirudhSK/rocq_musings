@@ -27,7 +27,7 @@ Qed.
 (* Prove something using this assignment function above *)
 Lemma cr_assign_correctness_stateful :
   forall (f : BinaryOp) (arg1 arg2 : FunctionArgument) (target : StateVar) (ps: ProgramState uint8),
-    (state_var_map uint8 (eval_hdr_op (StatefulOp f arg1 arg2 target) ps)) target = (* updated value of target  *)
+    (state_var_map uint8 (eval_hdr_op_assign (StatefulOp f arg1 arg2 target) ps)) target = (* updated value of target  *)
       eval_hdr_op_expr (StatefulOp f arg1 arg2 target) ps.                (* is what one would expect *)
 Proof.
   intros.

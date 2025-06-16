@@ -4,6 +4,7 @@ Require Import List.
 Import ListNotations.
 Require Import Strings.String.
 From MyProject Require Export CrIdentifiers.
+From MyProject Require Export CrSemantics.
 
 (* TODO: fill out eval_transformer body at the end,
    right now, we are just specifying it as a function that
@@ -27,8 +28,13 @@ Parameter eval_seq_rule : MatchActionRule -> ProgramState uint8 -> ProgramState 
    meaning header ops within an action are evaluated in parallel *)
 Parameter eval_par_rule : MatchActionRule -> ProgramState uint8 -> ProgramState uint8.
 
-(* lookup a function's argument *)
-Definition function_argument_to_uint8 (arg : FunctionArgument) (ps : ProgramState uint8) : uint8 :=
+(* Apply binary operation *)
+Definition apply_bin_op (f : BinaryOp) (arg1 : uint8) (arg2 : uint8) : uint8 :=
+  match f with
+  | AddOp => Integers.add arg1 arg2
+  end.
+
+Definition lookup_uint8 (arg : FunctionArgument) (ps : ProgramState uint8) : uint8 :=
   match arg with
   | CtrlPlaneArg c => ctrl_plane_map uint8 ps c
   | HeaderArg h    => header_map uint8 ps h
@@ -36,25 +42,25 @@ Definition function_argument_to_uint8 (arg : FunctionArgument) (ps : ProgramStat
   | StatefulArg s  => state_var_map uint8 ps s
   end.
 
-(* Apply binary operation *)
-Definition apply_bin_op (f : BinaryOp) (arg1 : uint8) (arg2 : uint8) : uint8 :=
-  match f with
-  | AddOp => Integers.add arg1 arg2
+Definition eval_hdr_op_expr_uint8 (op : HdrOp) (ps : ProgramState uint8) : uint8 :=
+  match op with
+  | StatefulOp f arg1 arg2 _ => apply_bin_op f (lookup_uint8 arg1 ps) (lookup_uint8 arg2 ps)
+  | StatelessOp f arg1 arg2 _ => apply_bin_op f (lookup_uint8 arg1 ps) (lookup_uint8 arg2 ps)
   end.
 
-(* Expression version of a header operation, meaning side-effect-free and stateless *)
-Definition eval_hdr_op_expr (op : HdrOp) (ps : ProgramState uint8) : uint8 :=
-    match op with
-    | StatefulOp f arg1 arg2 target => apply_bin_op f (function_argument_to_uint8 arg1 ps) (function_argument_to_uint8 arg2 ps)
-    | StatelessOp f arg1 arg2 target => apply_bin_op f (function_argument_to_uint8 arg1 ps) (function_argument_to_uint8 arg2 ps)
-    end.
-
-(* Function to evaluate a header operation,
-   meaning we apply the operation to a previous valuation to get a new one *)
-Definition eval_hdr_op (op : HdrOp) (ps : ProgramState uint8) : ProgramState uint8 :=
+Instance Semantics_uint8 : Semantics uint8 := {
+  (* Function to lookup arg in program state *)
+  lookup_function_argument := lookup_uint8;
+  
+  (* Function to evaluate header operation expression *)
+  eval_hdr_op_expr := eval_hdr_op_expr_uint8;
+  
+  (* Function to update header or state variable in program state *)
+  eval_hdr_op_assign := fun op ps =>
     match op with
     | StatefulOp f arg1 arg2 target =>
-        let op_output := eval_hdr_op_expr op ps in update_state ps target op_output
+        let op_output := eval_hdr_op_expr_uint8 op ps in update_state ps target op_output
     | StatelessOp f arg1 arg2 target => 
-        let op_output := eval_hdr_op_expr op ps in update_hdr ps target op_output
-    end.
+        let op_output := eval_hdr_op_expr_uint8 op ps in update_hdr ps target op_output
+    end; 
+}.
