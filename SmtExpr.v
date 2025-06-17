@@ -14,6 +14,8 @@ Inductive SmtExpr :=
     | SmtConst (value : uint8)
     | SmtVar (name : string)
     | SmtBitAdd (e1 e2 : SmtExpr)
+    | SmtBitSub (e1 e2 : SmtExpr) (* Note: this is modulo 256 subtraction *)
+    (* Bitwise operations *)
     | SmtBitAnd (e1 e2 : SmtExpr)
     | SmtBitOr (e1 e2 : SmtExpr)
     | SmtBitEq (e1 e2 : SmtExpr)
@@ -27,6 +29,8 @@ Fixpoint eval_smt_expr (e : SmtExpr) (v : SmtValuation) : uint8 :=
     (* Note: we assume that the valuation v is well-formed,
        i.e., it contains all the variables that appear in the expression *)
     | SmtBitAdd e1 e2 => add (eval_smt_expr e1 v) (eval_smt_expr e2 v)
+    | SmtBitSub e1 e2 => sub (eval_smt_expr e1 v) (eval_smt_expr e2 v) (* Modulo 256 subtraction *)
+    (* Bitwise operations *)
     | SmtBitAnd e1 e2 => and (eval_smt_expr e1 v) (eval_smt_expr e2 v)
     | SmtBitOr e1 e2 => or (eval_smt_expr e1 v) (eval_smt_expr e2 v)
     | SmtBitEq e1 e2 => if (eq  (eval_smt_expr e1 v) (eval_smt_expr e2 v)) then one else zero (* Is this one = 1 or 255? Does it matter? *)

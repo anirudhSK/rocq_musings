@@ -165,4 +165,8 @@ Proof.
     rewrite Hs2.
     rewrite Hc1.
     apply compose_sym_conc_lemma.
+  - rewrite Hc2.
+    rewrite Hs2.
+    rewrite Hc1.
+    apply compose_sym_conc_lemma.
 Qed.
