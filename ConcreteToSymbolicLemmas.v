@@ -72,9 +72,21 @@ Proof.
   - destruct n. reflexivity.
 Qed.
 
+(* Simpler lemma with no state update *)
+Lemma commute_smt_conc_expr:
+  forall (ho: HdrOp) (s : ProgramState SmtExpr) (f : SmtValuation),
+    eval_hdr_op_expr ho (eval_sym_state s f) =
+    eval_smt_expr (eval_hdr_op_expr ho s) f.
+Proof.
+  intros ho s f.
+  destruct ho, f0, arg1, arg2; simpl; try reflexivity.
+Qed.
+
 (* for any symbolic state, symbolic valuation, and header operation, 
-   evaluating the header assignment on the concrete state equals
-   as evaluating the symbolic state on the header assignment *)
+  concretizing and then evaluating EQUALS
+  evaluating and then concretizing *)
+  (* TODO: Maybe use the commute_smt_conc_expr lemma
+     to prove the state update lemma below. *)
 Lemma compose_sym_conc_lemma:
   forall (ho : HdrOp) (s : ProgramState SmtExpr) (f : SmtValuation),
      eval_hdr_op_assign ho (eval_sym_state s f) =
