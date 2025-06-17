@@ -82,12 +82,34 @@ Proof.
   destruct ho, f0, arg1, arg2; simpl; try reflexivity.
 Qed.
 
+Axiom functional_extensionality :
+  forall (A B : Type) (f g : A -> B),
+    (forall x, f x = g x) -> f = g.
 Lemma update_eval_compose:
   forall (s : ProgramState SmtExpr) (f : SmtValuation) (sv : StateVar) (v : SmtExpr),
     eval_sym_state (update_state s sv v) f =
     update_state (eval_sym_state s f) sv (eval_smt_expr v f).
 Proof.
-Admitted.
+  intros s f sv v.
+  destruct s as [con_ctrl con_hdr con_state].
+  simpl.
+  unfold eval_sym_state.
+  unfold update_state.
+  f_equal.
+  (* To prove f (e1 e2 e3) = f (e1' e2' e3'), it's enough to show e1 = e1', e2 = e2', e3 = e3'.*)
+  (* Record {|field1 := f1 ; field2 = f2 ; field3 = f3 ;|} is equivalent to mkRecord (f1 f2 f3)
+  and so then you can apply f_equal. *)
+  (* Can use the same f_equal for pairs, tuples, lists, etc. 
+     Any constructor of a type: f_equal is a good idea. *)
+  - apply functional_extensionality.
+    simpl.
+    intros x.
+    destruct x.
+    destruct sv.
+    destruct (string_dec name0 name).
+    + reflexivity.
+    + reflexivity.
+Qed.
 
 Lemma update_eval_compose2:
   forall (s : ProgramState SmtExpr) (f : SmtValuation) (h : Header) (v : SmtExpr),
