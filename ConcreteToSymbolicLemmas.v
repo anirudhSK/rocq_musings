@@ -14,64 +14,6 @@ Definition eval_sym_state (s: ProgramState SmtExpr) (f : SmtValuation) : Program
      ctrl_plane_map := fun c => eval_smt_expr (ctrl_plane_map SmtExpr s c) f;
      state_var_map := fun sv => eval_smt_expr (state_var_map SmtExpr s sv) f |}.
 
-(* Some kind of non interference,
-  Copilot proved this automatically, huh? *)
-Lemma non_interference:
-  forall (c1 c2 : ProgramState uint8) (v : uint8) (s : StateVar),
-    c2 = update_state c1 s v ->
-    header_map uint8 c2 = header_map uint8 c1 /\
-    ctrl_plane_map uint8 c2 = ctrl_plane_map uint8 c1.
-Proof.
-  intros c1 c2 v s H.
-  destruct c1 as [con_ctrl con_hdr con_state].
-  destruct c2 as [con_ctrl' con_hdr' con_state'].
-  inversion H.
-  split;
-  reflexivity.
-Qed.
-
-Lemma project_from_record :
-  forall (c : CtrlPlaneConfigNameMap uint8) (h : HeaderMap uint8) (s : StateVarMap uint8),
-    (state_var_map uint8 {| ctrl_plane_map := c; header_map := h; state_var_map := s |}) = s.
-Proof.
-  intros c h s.
-  unfold state_var_map.
-  reflexivity.
-Qed.
-
-Lemma update_state_on_record:
-  forall (c : CtrlPlaneConfigNameMap uint8) (h : HeaderMap uint8) (s : StateVarMap uint8) (sv : StateVar) (v : uint8),
-      (* update_state is a record update, so it only changes the state_var_map *)
-    (state_var_map uint8
-     (update_state ({|ctrl_plane_map := c; header_map := h; state_var_map := s|}) sv v) sv) = v.
-Proof.
-  intros c h s sv v.
-  unfold state_var_map.
-  unfold update_state.
-  unfold state_var_map.
-  destruct sv.
-  destruct (string_dec name name).
-  - reflexivity.
-  - destruct n. reflexivity.
-Qed.
-
-Lemma state_alone_updated:
-forall (c1 c2 : ProgramState uint8) (v : uint8) (s : StateVar),
-    c2 = update_state c1 s v ->
-    (state_var_map uint8 c2) s = v.
-Proof.
-  intros c1 c2 v s H.
-  destruct c1 as [con_ctrl con_hdr con_state].
-  destruct c2 as [con_ctrl' con_hdr' con_state'].
-  inversion H.
-  unfold state_var_map.
-  subst.
-  destruct s.
-  destruct (string_dec name name).
-  - reflexivity.
-  - destruct n. reflexivity.
-Qed.
-
 (* Simpler lemma with no state update *)
 Lemma commute_smt_conc_expr:
   forall (ho: HdrOp) (s : ProgramState SmtExpr) (f : SmtValuation),
@@ -85,7 +27,8 @@ Qed.
 Axiom functional_extensionality :
   forall (A B : Type) (f g : A -> B),
     (forall x, f x = g x) -> f = g.
-Lemma update_eval_compose:
+
+Lemma commute_update_eval:
   forall (s : ProgramState SmtExpr) (f : SmtValuation) (sv : StateVar) (v : SmtExpr),
     eval_sym_state (update_state s sv v) f =
     update_state (eval_sym_state s f) sv (eval_smt_expr v f).
@@ -106,7 +49,7 @@ Proof.
     + reflexivity.
 Qed.
 
-Lemma update_eval_compose2:
+Lemma commute2_update_eval:
   forall (s : ProgramState SmtExpr) (f : SmtValuation) (h : Header) (v : SmtExpr),
     eval_sym_state (update_hdr s h v) f =
     update_hdr (eval_sym_state s f) h (eval_smt_expr v f).
@@ -130,7 +73,7 @@ Qed.
 (* for any symbolic state, symbolic valuation, and header operation, 
   concretizing and then evaluating EQUALS
   evaluating and then concretizing *)
-Lemma compose_sym_conc_lemma:
+Lemma commute_sym_conc:
   forall (ho : HdrOp) (s : ProgramState SmtExpr) (f : SmtValuation),
      eval_hdr_op_assign_uint8 ho (eval_sym_state s f) =
       eval_sym_state (eval_hdr_op_assign_smt ho s) f.
@@ -139,8 +82,8 @@ Proof.
   unfold eval_hdr_op_assign_uint8.
   unfold eval_hdr_op_assign_smt.
   rewrite commute_smt_conc_expr.
-  destruct ho, f0, arg1, arg2, s; simpl; try rewrite update_eval_compose; simpl; try reflexivity;
-  try rewrite update_eval_compose2; simpl; try reflexivity.
+  destruct ho, f0, arg1, arg2, s; simpl; try rewrite commute_update_eval; simpl; try reflexivity;
+  try rewrite commute2_update_eval; simpl; try reflexivity.
 Qed.
 
 (* Joe's theorem relating the concrete and symbolic worlds translated into rocq slack *)
@@ -160,13 +103,13 @@ Proof.
   rewrite Hs2.
   rewrite Hc2.
   rewrite Hc1.
-  - apply compose_sym_conc_lemma.
+  - apply commute_sym_conc.
   - rewrite Hc2.
     rewrite Hs2.
     rewrite Hc1.
-    apply compose_sym_conc_lemma.
+    apply commute_sym_conc.
   - rewrite Hc2.
     rewrite Hs2.
     rewrite Hc1.
-    apply compose_sym_conc_lemma.
+    apply commute_sym_conc.
 Qed.
