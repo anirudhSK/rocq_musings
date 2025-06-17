@@ -75,24 +75,42 @@ Qed.
 (* Simpler lemma with no state update *)
 Lemma commute_smt_conc_expr:
   forall (ho: HdrOp) (s : ProgramState SmtExpr) (f : SmtValuation),
-    eval_hdr_op_expr ho (eval_sym_state s f) =
-    eval_smt_expr (eval_hdr_op_expr ho s) f.
+    eval_hdr_op_expr_uint8 ho (eval_sym_state s f) =
+    eval_smt_expr (eval_hdr_op_expr_smt ho s) f.
 Proof.
   intros ho s f.
   destruct ho, f0, arg1, arg2; simpl; try reflexivity.
 Qed.
 
+Lemma update_eval_compose:
+  forall (s : ProgramState SmtExpr) (f : SmtValuation) (sv : StateVar) (v : SmtExpr),
+    eval_sym_state (update_state s sv v) f =
+    update_state (eval_sym_state s f) sv (eval_smt_expr v f).
+Proof.
+Admitted.
+
+Lemma update_eval_compose2:
+  forall (s : ProgramState SmtExpr) (f : SmtValuation) (h : Header) (v : SmtExpr),
+    eval_sym_state (update_hdr s h v) f =
+    update_hdr (eval_sym_state s f) h (eval_smt_expr v f).
+Admitted.
+
+
 (* for any symbolic state, symbolic valuation, and header operation, 
   concretizing and then evaluating EQUALS
   evaluating and then concretizing *)
-  (* TODO: Maybe use the commute_smt_conc_expr lemma
-     to prove the state update lemma below. *)
 Lemma compose_sym_conc_lemma:
   forall (ho : HdrOp) (s : ProgramState SmtExpr) (f : SmtValuation),
-     eval_hdr_op_assign ho (eval_sym_state s f) =
-      eval_sym_state (eval_hdr_op_assign ho s) f.
+     eval_hdr_op_assign_uint8 ho (eval_sym_state s f) =
+      eval_sym_state (eval_hdr_op_assign_smt ho s) f.
 Proof.
-Admitted.
+  intros ho s f.
+  unfold eval_hdr_op_assign_uint8.
+  unfold eval_hdr_op_assign_smt.
+  rewrite commute_smt_conc_expr.
+  destruct ho, f0, arg1, arg2, s; simpl; try rewrite update_eval_compose; simpl; try reflexivity;
+  try rewrite update_eval_compose2; simpl; try reflexivity.
+Qed.
 
 (* Joe's theorem relating the concrete and symbolic worlds translated into rocq slack *)
 Lemma symbolic_vs_concrete :

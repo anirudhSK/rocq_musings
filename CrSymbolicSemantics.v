@@ -28,7 +28,7 @@ Definition eval_hdr_op_expr_smt (h : HdrOp) (ps : ProgramState SmtExpr) : SmtExp
        end
     end.
 
-Definition eval_hdr_op_smt_assign (ho : HdrOp) (ps: ProgramState SmtExpr) : ProgramState SmtExpr :=
+Definition eval_hdr_op_assign_smt (ho : HdrOp) (ps: ProgramState SmtExpr) : ProgramState SmtExpr :=
     match ho with
     | StatefulOp f arg1 arg2 target =>
         let op_output := eval_hdr_op_expr_smt ho ps in update_state ps target op_output
@@ -60,5 +60,5 @@ Instance Semantics_SmtExpr : Semantics SmtExpr := {
   eval_hdr_op_expr := eval_hdr_op_expr_smt;
 
   (* Function to update header or state variable in program state *)
-  eval_hdr_op_assign := eval_hdr_op_smt_assign;
+  eval_hdr_op_assign := eval_hdr_op_assign_smt;
 }.

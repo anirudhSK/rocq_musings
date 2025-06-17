@@ -48,6 +48,14 @@ Definition eval_hdr_op_expr_uint8 (op : HdrOp) (ps : ProgramState uint8) : uint8
   | StatelessOp f arg1 arg2 _ => apply_bin_op f (lookup_uint8 arg1 ps) (lookup_uint8 arg2 ps)
   end.
 
+Definition eval_hdr_op_assign_uint8 (op : HdrOp) (ps: ProgramState uint8) : ProgramState uint8 :=
+  match op with
+  | StatefulOp f arg1 arg2 target =>
+        let op_output := eval_hdr_op_expr_uint8 op ps in update_state ps target op_output
+  | StatelessOp f arg1 arg2 target => 
+        let op_output := eval_hdr_op_expr_uint8 op ps in update_hdr ps target op_output
+  end.
+
 Instance Semantics_uint8 : Semantics uint8 := {
   (* Function to lookup arg in program state *)
   lookup_function_argument := lookup_uint8;
@@ -56,11 +64,5 @@ Instance Semantics_uint8 : Semantics uint8 := {
   eval_hdr_op_expr := eval_hdr_op_expr_uint8;
   
   (* Function to update header or state variable in program state *)
-  eval_hdr_op_assign := fun op ps =>
-    match op with
-    | StatefulOp f arg1 arg2 target =>
-        let op_output := eval_hdr_op_expr_uint8 op ps in update_state ps target op_output
-    | StatelessOp f arg1 arg2 target => 
-        let op_output := eval_hdr_op_expr_uint8 op ps in update_hdr ps target op_output
-    end; 
+  eval_hdr_op_assign := eval_hdr_op_assign_uint8;
 }.
