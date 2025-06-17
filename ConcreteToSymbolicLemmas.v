@@ -110,8 +110,22 @@ Lemma update_eval_compose2:
   forall (s : ProgramState SmtExpr) (f : SmtValuation) (h : Header) (v : SmtExpr),
     eval_sym_state (update_hdr s h v) f =
     update_hdr (eval_sym_state s f) h (eval_smt_expr v f).
-Admitted.
-
+Proof.
+  intros s f h v.
+  destruct s as [con_ctrl con_hdr con_state].
+  simpl.
+  unfold eval_sym_state.
+  unfold update_hdr.
+  f_equal.
+  - apply functional_extensionality.
+    simpl.
+    intros x.
+    destruct x.
+    destruct h.
+    destruct (string_dec name0 name).
+    + reflexivity.
+    + reflexivity.
+Qed.
 
 (* for any symbolic state, symbolic valuation, and header operation, 
   concretizing and then evaluating EQUALS
