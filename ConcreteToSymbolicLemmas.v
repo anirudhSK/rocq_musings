@@ -87,17 +87,15 @@ Lemma symbolic_vs_concrete :
   forall (f : SmtValuation) (ho : HdrOp)
          (c1 : ProgramState uint8) (s1 : ProgramState SmtExpr)
          (c2 : ProgramState uint8) (s2 : ProgramState SmtExpr),
-    ho = StatefulOp AddOp (ConstantArg (repr 1)) (ConstantArg (repr 2)) (StateVarCtr "x") ->
     c1 = eval_sym_state s1 f ->
     c2 = eval_hdr_op_assign ho c1 ->
     s2 = eval_hdr_op_assign ho s1 ->
     c2 = eval_sym_state s2 f.
 Proof.
   intros f ho c1 s1 c2 s2.
-  intros Hho Hc1 Hc2 Hs2.
+  intros Hc1 Hc2 Hs2.
   destruct ho.
   destruct f0.
-  inversion Hho.
   rewrite Hs2.
   rewrite Hc2.
   rewrite Hc1.
