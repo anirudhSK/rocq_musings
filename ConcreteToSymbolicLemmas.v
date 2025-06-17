@@ -96,11 +96,6 @@ Proof.
   unfold eval_sym_state.
   unfold update_state.
   f_equal.
-  (* To prove f (e1 e2 e3) = f (e1' e2' e3'), it's enough to show e1 = e1', e2 = e2', e3 = e3'.*)
-  (* Record {|field1 := f1 ; field2 = f2 ; field3 = f3 ;|} is equivalent to mkRecord (f1 f2 f3)
-  and so then you can apply f_equal. *)
-  (* Can use the same f_equal for pairs, tuples, lists, etc. 
-     Any constructor of a type: f_equal is a good idea. *)
   - apply functional_extensionality.
     simpl.
     intros x.
