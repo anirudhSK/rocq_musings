@@ -1,0 +1,10 @@
+
+(* Next steps: connecting concrete_vs_symbolic to the equivalence checker.
+   Equivalence between programs boils down to equivalence between starting states of those programs.
+   Start both programs in the same initial state.
+   Then run the two SMT interpreters to get two symbolic final states (one for each program).
+   Then AliveInLean considers the formula: testing for equality of each of the state fields.
+   TODO: For this, you need a first-order representation like lists or the one from CompCert,
+   like the one based on Patricia tries because functions over infinite domains can not be
+   converted into equality checking SMT queries.
+   CompCert's map has some kind of functional extensionality for Patricia tries. *)
