@@ -34,7 +34,7 @@
   inefficient implementation of maps as functions is also provided.
 *)
 
-Require Import Coqlib.
+From MyProject Require Import Coqlib.
 
 (* To avoid useless definitions of inductors in extracted code. *)
 Local Unset Elimination Schemes.
