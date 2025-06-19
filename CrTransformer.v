@@ -24,7 +24,11 @@ Inductive BinaryOp :=
   | AddOp
   | SubOp (* In modulo u8 *)
   | AndOp
-  | OrOp.
+  | OrOp
+  | XorOp
+  | MulOp 
+  | DivOp 
+  | ModOp.
 
 (* Define the header operations *)
 Inductive HdrOp :=

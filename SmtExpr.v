@@ -18,8 +18,12 @@ Inductive SmtExpr :=
     (* Bitwise operations *)
     | SmtBitAnd (e1 e2 : SmtExpr)
     | SmtBitOr (e1 e2 : SmtExpr)
+    | SmtBitXor (e1 e2 : SmtExpr)
     | SmtBitEq (e1 e2 : SmtExpr)
-    | SmtBitNot (e : SmtExpr).
+    | SmtBitNot (e : SmtExpr)
+    | SmtBitMul (e1 e2 : SmtExpr)
+    | SmtBitDiv (e1 e2 : SmtExpr)
+    | SmtBitMod (e1 e2 : SmtExpr).
 
 (* Provide semantics for the SmtExpr above using the uint8 functions from Integer.v *)
 Fixpoint eval_smt_expr (e : SmtExpr) (v : SmtValuation) : uint8 :=
@@ -33,6 +37,10 @@ Fixpoint eval_smt_expr (e : SmtExpr) (v : SmtValuation) : uint8 :=
     (* Bitwise operations *)
     | SmtBitAnd e1 e2 => and (eval_smt_expr e1 v) (eval_smt_expr e2 v)
     | SmtBitOr e1 e2 => or (eval_smt_expr e1 v) (eval_smt_expr e2 v)
+    | SmtBitXor e1 e2 => xor  (eval_smt_expr e1 v) (eval_smt_expr e2 v)
     | SmtBitEq e1 e2 => if (eq  (eval_smt_expr e1 v) (eval_smt_expr e2 v)) then one else zero (* Is this one = 1 or 255? Does it matter? *)
     | SmtBitNot e => not (eval_smt_expr e v)
+    | SmtBitMul e1 e2 => mul (eval_smt_expr e1 v) (eval_smt_expr e2 v)
+    | SmtBitDiv e1 e2 => divu  (eval_smt_expr e1 v) (eval_smt_expr e2 v)
+    | SmtBitMod e1 e2 => modu  (eval_smt_expr e1 v) (eval_smt_expr e2 v)
     end.

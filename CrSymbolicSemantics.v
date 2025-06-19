@@ -24,6 +24,10 @@ Definition eval_hdr_op_expr_smt (h : HdrOp) (ps : ProgramState SmtExpr) : SmtExp
          | SubOp => SmtBitSub (lookup_smt arg1 ps) (lookup_smt arg2 ps)
          | AndOp => SmtBitAnd (lookup_smt arg1 ps) (lookup_smt arg2 ps)
          | OrOp => SmtBitOr (lookup_smt arg1 ps) (lookup_smt arg2 ps)
+         | XorOp => SmtBitXor (lookup_smt arg1 ps) (lookup_smt arg2 ps)
+         | MulOp => SmtBitMul (lookup_smt arg1 ps) (lookup_smt arg2 ps)
+         | DivOp => SmtBitDiv (lookup_smt arg1 ps) (lookup_smt arg2 ps)
+         | ModOp => SmtBitMod (lookup_smt arg1 ps) (lookup_smt arg2 ps)
        end
     | StatelessOp f arg1 arg2 _ =>
        match f with
@@ -31,6 +35,10 @@ Definition eval_hdr_op_expr_smt (h : HdrOp) (ps : ProgramState SmtExpr) : SmtExp
          | SubOp => SmtBitSub (lookup_smt arg1 ps) (lookup_smt arg2 ps)
          | AndOp => SmtBitAnd (lookup_smt arg1 ps) (lookup_smt arg2 ps)
          | OrOp => SmtBitOr (lookup_smt arg1 ps) (lookup_smt arg2 ps)
+         | XorOp => SmtBitXor (lookup_smt arg1 ps) (lookup_smt arg2 ps)
+         | MulOp => SmtBitMul (lookup_smt arg1 ps) (lookup_smt arg2 ps)
+         | DivOp => SmtBitDiv (lookup_smt arg1 ps) (lookup_smt arg2 ps)
+         | ModOp => SmtBitMod (lookup_smt arg1 ps) (lookup_smt arg2 ps)
        end
     end.
 

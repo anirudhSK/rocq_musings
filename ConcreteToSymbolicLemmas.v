@@ -120,4 +120,20 @@ Proof.
     rewrite Hs2.
     rewrite Hc1.
     apply commute_sym_conc.
+  - rewrite Hc2.
+    rewrite Hs2.
+    rewrite Hc1.
+    apply commute_sym_conc.
+  - rewrite Hc2.
+    rewrite Hs2.
+    rewrite Hc1.
+    apply commute_sym_conc.
+  - rewrite Hc2.
+    rewrite Hs2.
+    rewrite Hc1.
+    apply commute_sym_conc.
+  - rewrite Hc2.
+    rewrite Hs2.
+    rewrite Hc1.
+    apply commute_sym_conc.
 Qed.
