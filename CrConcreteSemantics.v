@@ -33,6 +33,8 @@ Definition apply_bin_op (f : BinaryOp) (arg1 : uint8) (arg2 : uint8) : uint8 :=
   match f with
   | AddOp => Integers.add arg1 arg2
   | SubOp => Integers.sub arg1 arg2
+  | AndOp => Integers.and arg1 arg2
+  | OrOp => Integers.or arg1 arg2
   end.
 
 Definition lookup_uint8 (arg : FunctionArgument) (ps : ProgramState uint8) : uint8 :=
