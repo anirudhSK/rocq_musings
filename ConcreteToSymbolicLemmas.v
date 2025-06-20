@@ -98,42 +98,5 @@ Lemma symbolic_vs_concrete :
 Proof.
   intros f ho c1 s1 c2 s2.
   intros Hc1 Hc2 Hs2.
-  destruct ho.
-  destruct f0.
-  rewrite Hs2.
-  rewrite Hc2.
-  rewrite Hc1.
-  - apply commute_sym_conc.
-  - rewrite Hc2.
-    rewrite Hs2.
-    rewrite Hc1.
-    apply commute_sym_conc.
-  - rewrite Hc2.
-    rewrite Hs2.
-    rewrite Hc1.
-    apply commute_sym_conc.
-  - rewrite Hc2.
-    rewrite Hs2.
-    rewrite Hc1.
-    apply commute_sym_conc.
-  - rewrite Hc2.
-    rewrite Hs2.
-    rewrite Hc1.
-    apply commute_sym_conc.
-  - rewrite Hc2.
-    rewrite Hs2.
-    rewrite Hc1.
-    apply commute_sym_conc.
-  - rewrite Hc2.
-    rewrite Hs2.
-    rewrite Hc1.
-    apply commute_sym_conc.
-  - rewrite Hc2.
-    rewrite Hs2.
-    rewrite Hc1.
-    apply commute_sym_conc.
-  - rewrite Hc2.
-    rewrite Hs2.
-    rewrite Hc1.
-    apply commute_sym_conc.
+  destruct ho; destruct f0; rewrite Hc2; rewrite Hs2; rewrite Hc1; apply commute_sym_conc.
 Qed.
