@@ -22,7 +22,13 @@ Inductive FunctionArgument :=
 (* A BinaryOp takes two uint8 arguments and returns another uint8 *)
 Inductive BinaryOp :=
   | AddOp
-  | SubOp. (* In modulo u8 *)
+  | SubOp (* In modulo u8 *)
+  | AndOp
+  | OrOp
+  | XorOp
+  | MulOp 
+  | DivOp 
+  | ModOp.
 
 (* Define the header operations *)
 Inductive HdrOp :=
