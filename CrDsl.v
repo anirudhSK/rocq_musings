@@ -9,6 +9,7 @@ From MyProject Require Export CrIdentifiers.
 From MyProject Require Export CrTransformer.
 From MyProject Require Export ListUtils.
 Require Import Coq.Bool.Bool.
+Require Import ZArith.
 
 (* A Module has a module name and either a parser or transformer definition *)
 Inductive Module : Type := 
@@ -73,11 +74,32 @@ Proof.
     apply orb_false_iff in H''''' as [H1 H2].
     (* Now H'''''' is the first, H2 is the second, ..., H7 is the last *)
     repeat split.
-    - apply has_duplicates_correct with (eqb := parser_state_equal). apply H1.
-    - apply has_duplicates_correct with (eqb := header_equal). apply H2.
-    - apply has_duplicates_correct with (eqb := state_var_equal). apply H3.
-    - apply has_duplicates_correct with (eqb := module_name_equal). apply H4.
-    - apply has_duplicates_correct with (eqb := function_name_equal). apply H5.
-    - apply has_duplicates_correct with (eqb := connection_name_equal). apply H6.
-    - apply has_duplicates_correct with (eqb := ctrl_plane_config_name_equal). apply H7.
+    - apply has_duplicates_correct with (eqb := parser_state_equal).
+      + intros. destruct a. simpl. apply Pos.eqb_refl.
+      + intros. destruct a, b. simpl. apply Pos.eqb_sym.
+      + apply H1.
+    - apply has_duplicates_correct with (eqb := header_equal).
+      + intros. destruct a. simpl. apply Pos.eqb_refl.
+      + intros. destruct a, b. simpl. apply Pos.eqb_sym.
+      + apply H2.
+    - apply has_duplicates_correct with (eqb := state_var_equal).
+      + intros. destruct a. simpl. apply Pos.eqb_refl.
+      + intros. destruct a, b. simpl. apply Pos.eqb_sym.
+      + apply H3.
+    - apply has_duplicates_correct with (eqb := module_name_equal).
+      + intros. destruct a. simpl. apply Pos.eqb_refl.
+      + intros. destruct a, b. simpl. apply Pos.eqb_sym.
+      + apply H4.
+    - apply has_duplicates_correct with (eqb := function_name_equal).
+      + intros. destruct a. simpl. apply Pos.eqb_refl.
+      + intros. destruct a, b. simpl. apply Pos.eqb_sym.
+      + apply H5.
+    - apply has_duplicates_correct with (eqb := connection_name_equal).
+      + intros. destruct a. simpl. apply Pos.eqb_refl.
+      + intros. destruct a, b. simpl. apply Pos.eqb_sym.
+      + apply H6.
+    - apply has_duplicates_correct with (eqb := ctrl_plane_config_name_equal).
+      + intros. destruct a. simpl. apply Pos.eqb_refl.
+      + intros. destruct a, b. simpl. apply Pos.eqb_sym.
+      + apply H7.
 Qed.
