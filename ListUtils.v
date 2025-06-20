@@ -13,23 +13,23 @@ Eval compute in (length my_list).
 
 (* Check if there are any duplicates in my_list.
    Use an existing library function directly if one exists. *)
-Fixpoint has_duplicates (l : list nat) : bool :=
+Fixpoint has_duplicates {T : Type} (eqb : T -> T -> bool) (l : list T) : bool :=
     match l with
-    | x :: xs => if List.existsb (fun y => Nat.eqb y x) xs then true else has_duplicates xs
+    | x :: xs => if List.existsb (fun y => eqb y x) xs then true else has_duplicates eqb xs
     | [] => false
     end.
 
-Eval compute in (has_duplicates my_list).
+Eval compute in (has_duplicates Nat.eqb my_list).
 
-Eval compute in (has_duplicates [1; 2; 3; 4; 5; 1]). (* Should return true *)
+Eval compute in (has_duplicates Nat.eqb [1; 2; 3; 4; 5; 1]). (* Should return true *)
 
-Eval compute in (has_duplicates [1; 2; 3; 4; 10]). (* Should return false *)
+Eval compute in (has_duplicates Nat.eqb [1; 2; 3; 4; 10]). (* Should return false *)
 
-Eval compute in (has_duplicates []). (* Should return false *)
+Eval compute in (has_duplicates Nat.eqb []). (* Should return false *)
 
-Eval compute in (has_duplicates [1; 2; 3; 4; 6; 10; 3]). (* Should return true *)
+Eval compute in (has_duplicates Nat.eqb [1; 2; 3; 4; 6; 10; 3]). (* Should return true *)
 
-Eval compute in (has_duplicates [1; 2; 3; 4; 6; 10; 30]). (* Should return false *)
+Eval compute in (has_duplicates Nat.eqb [1; 2; 3; 4; 6; 10; 30]). (* Should return false *)
 
 Lemma not_exists_not_in : forall (l : list nat) (a : nat),
     List.existsb (fun y => Nat.eqb y a) l = false ->
@@ -65,7 +65,7 @@ Proof.
 Qed.
 
 (* Theorem stating that has_duplicates returns a duplicate free list *)
-Theorem has_duplicates_correct : forall l, has_duplicates l = false -> NoDup l.
+Theorem has_duplicates_correct : forall l, has_duplicates Nat.eqb l = false -> NoDup l.
 Proof.
     intros l H.
     induction l.
