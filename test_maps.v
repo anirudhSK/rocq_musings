@@ -11,8 +11,6 @@ End StringEq.
 
 Module StringMap := EMap(StringEq).
 
-Definition test_map : StringMap.t nat.
-
 Example test_pmap  := PMap.init nat.
 
 Eval compute in PMap.init 0.
