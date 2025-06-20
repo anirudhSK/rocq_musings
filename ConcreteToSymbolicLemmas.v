@@ -44,7 +44,7 @@ Proof.
     intros x.
     destruct x.
     destruct sv.
-    destruct (string_dec name0 name).
+    destruct (Nat.eqb uid0 uid).
     + reflexivity.
     + reflexivity.
 Qed.
@@ -65,7 +65,7 @@ Proof.
     intros x.
     destruct x.
     destruct h.
-    destruct (string_dec name0 name).
+    destruct (Nat.eqb uid0 uid).
     + reflexivity.
     + reflexivity.
 Qed.

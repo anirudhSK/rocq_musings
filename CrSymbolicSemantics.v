@@ -50,22 +50,6 @@ Definition eval_hdr_op_assign_smt (ho : HdrOp) (ps: ProgramState SmtExpr) : Prog
         let op_output := eval_hdr_op_expr_smt ho ps in update_hdr ps target op_output
     end.  
 
-(* Convert ProgramState to SMT Valuation *)
-Definition prog_state_to_smt_val (ps: ProgramState uint8) : SmtValuation :=
-    (* This returns a lambda function from string to uint8 *)
-    fun x =>
-      if string_prefix "hdr_" x then
-        header_map uint8 ps (HeaderCtr (string_drop 4 x))
-      else if string_prefix "ctrl_" x then
-        ctrl_plane_map uint8 ps (CtrlPlaneConfigNameCtr (string_drop 5 x))
-      else if string_prefix "state_" x then
-        state_var_map uint8 ps (StateVarCtr (string_drop 6 x))
-      else zero. (* Default value if not found *)
-      (* TODO: Need to figure out what to do here, this is weird.
-         Why does this even work?
-         I guess because cr_val_to_sml is only ever applied to the smt_transformed formula,
-        not arbitrary ones? *)
-
 Instance Semantics_SmtExpr : Semantics SmtExpr := {
   (* Function to lookup arg in program state *)
   lookup_function_argument := lookup_smt;

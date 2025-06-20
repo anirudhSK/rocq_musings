@@ -6,10 +6,10 @@ Require Import ZArith.
 Definition uint8 := @bit_int 8.
 
 (* Define the different types of identifiers in the Caracara DSL *)
-Inductive ParserState : Type := ParserStateCtr (name : string).
-Inductive Header : Type := HeaderCtr (name : string).
-Inductive StateVar : Type := StateVarCtr (name : string).
-Inductive ModuleName : Type := ModuleNameCtr (name : string).
-Inductive FunctionName : Type := FunctionNameCtr (name : string).
-Inductive ConnectionName : Type := ConnectionNameCtr (name : string).
-Inductive CtrlPlaneConfigName : Type := CtrlPlaneConfigNameCtr (name : string).
+Inductive ParserState : Type := ParserStateCtr (uid : nat).
+Inductive Header : Type := HeaderCtr (uid : nat).
+Inductive StateVar : Type := StateVarCtr (uid : nat).
+Inductive ModuleName : Type := ModuleNameCtr (uid : nat).
+Inductive FunctionName : Type := FunctionNameCtr (uid : nat).
+Inductive ConnectionName : Type := ConnectionNameCtr (uid : nat).
+Inductive CtrlPlaneConfigName : Type := CtrlPlaneConfigNameCtr (uid : nat).
