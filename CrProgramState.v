@@ -1,5 +1,6 @@
 From MyProject Require Export CrIdentifiers.
 Require Import Strings.String.
+Require Import ZArith.
 
 (* Current values for each of these identifiers as a map *)
 Definition HeaderMap (T : Type) := Header -> T.
@@ -17,7 +18,7 @@ Record ProgramState (T : Type) := {
 Definition update_hdr {T : Type} (s: ProgramState T) (x: Header) (v: T) : ProgramState T :=
   {| ctrl_plane_map := ctrl_plane_map T s;
      header_map :=  fun y => match x, y with
-            | HeaderCtr x_id, HeaderCtr y_id => if Nat.eqb x_id y_id then v else header_map T s y
+            | HeaderCtr x_id, HeaderCtr y_id => if Pos.eqb x_id y_id then v else header_map T s y
            end;
      state_var_map := state_var_map T s|}.
 
@@ -25,5 +26,5 @@ Definition update_state {T : Type} (s: ProgramState T) (x: StateVar) (v: T) : Pr
   {| ctrl_plane_map := ctrl_plane_map T s;
      header_map := header_map T s;
      state_var_map := fun y => match x, y with
-            | StateVarCtr x_id, StateVarCtr y_id => if Nat.eqb x_id y_id then v else state_var_map T s y
+            | StateVarCtr x_id, StateVarCtr y_id => if Pos.eqb x_id y_id then v else state_var_map T s y
            end |}.
