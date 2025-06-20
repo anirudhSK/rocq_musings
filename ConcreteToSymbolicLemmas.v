@@ -2,7 +2,6 @@ From MyProject Require Import CrTransformer.
 From MyProject Require Import CrIdentifiers.
 From MyProject Require Import CrConcreteSemantics.
 From MyProject Require Import SmtExpr.
-From MyProject Require Import StringUtils.
 From MyProject Require Import CrSymbolicSemantics.
 Require Import ZArith.
 Require Import Coq.Strings.String.
