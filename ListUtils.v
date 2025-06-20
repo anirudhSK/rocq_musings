@@ -31,17 +31,24 @@ Eval compute in (has_duplicates Nat.eqb [1; 2; 3; 4; 6; 10; 3]). (* Should retur
 
 Eval compute in (has_duplicates Nat.eqb [1; 2; 3; 4; 6; 10; 30]). (* Should return false *)
 
-Lemma not_exists_not_in : forall (l : list nat) (a : nat),
-    List.existsb (fun y => Nat.eqb y a) l = false ->
+
+Axiom my_eqb_reflexive: forall {T : Type} (a : T) (eqb : T -> T -> bool),
+    eqb a a = true.
+
+Axiom my_eqb_symmetric: forall {T : Type} (a b : T) (eqb : T -> T -> bool),
+    eqb a b = eqb b a.
+
+Lemma not_exists_not_in : forall {T : Type} (l : list T) (a : T) (eqb : T -> T -> bool),
+    List.existsb (eqb a) l = false ->
     ~ In a l.
 Proof.
-    intros l a H.
+    intros T l a eqb H.
     induction l.
     - auto.
     - simpl in H.
       simpl in IHl.
-      destruct (existsb (fun y : nat => y =? a) l).
-       + destruct (a0 =? a) eqn:Heq.
+      destruct (existsb (eqb a) l).
+       + destruct (eqb a a0) eqn:Heq.
           * discriminate H.
           * assert (~ In a l) by (apply IHl; discriminate).
             clear IHl.
@@ -52,33 +59,45 @@ Proof.
                discriminate H.
             -- simpl in H.
                discriminate H.
-       + destruct (a0 =? a) eqn:Heq.
+       + destruct (eqb a a0) eqn:Heq.
           * simpl in H.
             discriminate H.
           * intros [H1 | H2].
             -- rewrite H1 in Heq.
-               rewrite Nat.eqb_refl in Heq.
+               rewrite my_eqb_reflexive in Heq.
                discriminate Heq.
             -- simpl in IHl.
                specialize (IHl eq_refl).
                contradiction.
 Qed.
 
-(* Theorem stating that has_duplicates returns a duplicate free list *)
-Theorem has_duplicates_correct : forall l, has_duplicates Nat.eqb l = false -> NoDup l.
+Axiom functional_extensionality : forall {A B : Type} (f g : A -> B),
+    (forall x, f x = g x) -> f = g.
+
+(* Theorem stating that has_duplicates returning false implies a duplicate free list *)
+Theorem has_duplicates_correct : forall {T : Type} (l : list T) (eqb : T -> T -> bool),
+    has_duplicates eqb l = false -> NoDup l.
 Proof.
-    intros l H.
+    intros T l eqb H.
     induction l.
     - constructor.
     - simpl in H.
-      destruct (List.existsb (fun y => Nat.eqb y a) l) eqn:E.
+      destruct (List.existsb (fun y => eqb y a) l) eqn:E.
       + apply existsb_exists in E.
         destruct E as [y [H1 H2]].
         discriminate H.
       + apply IHl in H.
         simpl in E.
         constructor.
-        * apply not_exists_not_in.
-          apply E.
+        * apply not_exists_not_in with (eqb := eqb) (a := a).
+          assert (test: (fun y : T => eqb y a) =
+                  (fun y : T => eqb a y)).
+                  { apply functional_extensionality.
+                    intros y.
+                    rewrite my_eqb_symmetric.
+                    reflexivity.
+                    }
+          rewrite test in E.
+          apply E.  
         * apply H.
 Qed.
