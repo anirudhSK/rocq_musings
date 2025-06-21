@@ -5,17 +5,17 @@ From MyProject Require Import SmtExpr.
 Require Import ZArith.
 Require Import Coq.Strings.String.
 
-(* Convert FunctionArgument to SmtExpr *)
-Definition lookup_smt (arg : FunctionArgument) (ps : ProgramState SmtExpr) : SmtExpr :=
+(* Convert FunctionArgument to SmtArithExpr *)
+Definition lookup_smt (arg : FunctionArgument) (ps : ProgramState SmtArithExpr) : SmtArithExpr :=
   match arg with
-  | CtrlPlaneArg c => ctrl_plane_map SmtExpr ps c
-  | HeaderArg h    => header_map SmtExpr ps h
+  | CtrlPlaneArg c => ctrl_plane_map SmtArithExpr ps c
+  | HeaderArg h    => header_map SmtArithExpr ps h
   | ConstantArg n  => SmtConst n
-  | StatefulArg s  => state_var_map SmtExpr ps s
+  | StatefulArg s  => state_var_map SmtArithExpr ps s
   end.
 
 (* Define the symbolic interpreter for header operation expressions *)
-Definition eval_hdr_op_expr_smt (h : HdrOp) (ps : ProgramState SmtExpr) : SmtExpr :=
+Definition eval_hdr_op_expr_smt (h : HdrOp) (ps : ProgramState SmtArithExpr) : SmtArithExpr :=
     match h with
     | StatefulOp f arg1 arg2 _ =>
        match f with 
@@ -41,7 +41,7 @@ Definition eval_hdr_op_expr_smt (h : HdrOp) (ps : ProgramState SmtExpr) : SmtExp
        end
     end.
 
-Definition eval_hdr_op_assign_smt (ho : HdrOp) (ps: ProgramState SmtExpr) : ProgramState SmtExpr :=
+Definition eval_hdr_op_assign_smt (ho : HdrOp) (ps: ProgramState SmtArithExpr) : ProgramState SmtArithExpr :=
     match ho with
     | StatefulOp f arg1 arg2 target =>
         let op_output := eval_hdr_op_expr_smt ho ps in update_state ps target op_output
@@ -49,7 +49,7 @@ Definition eval_hdr_op_assign_smt (ho : HdrOp) (ps: ProgramState SmtExpr) : Prog
         let op_output := eval_hdr_op_expr_smt ho ps in update_hdr ps target op_output
     end.  
 
-Instance Semantics_SmtExpr : Semantics SmtExpr := {
+Instance Semantics_SmtArithExpr : Semantics SmtArithExpr := {
   (* Function to lookup arg in program state *)
   lookup_function_argument := lookup_smt;
 

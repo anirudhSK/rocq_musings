@@ -10,37 +10,48 @@ Definition SmtValuation := string -> uint8.
 (* Basic starting point of Smt expressions, just have 8 bit ands, ors, and nots.
    Can express everything a sat solver cares about by just setting 7 bits to zero.
    so seems complete in some sense.*)
-Inductive SmtExpr :=
+Inductive SmtArithExpr :=
     | SmtConst (value : uint8)
-    | SmtVar (name : string)
-    | SmtBitAdd (e1 e2 : SmtExpr)
-    | SmtBitSub (e1 e2 : SmtExpr) (* Note: this is modulo 256 subtraction *)
+    | SmtArithVar (name : string)
+    | SmtBitAdd (e1 e2 : SmtArithExpr)
+    | SmtBitSub (e1 e2 : SmtArithExpr) (* Note: this is modulo 256 subtraction *)
     (* Bitwise operations *)
-    | SmtBitAnd (e1 e2 : SmtExpr)
-    | SmtBitOr (e1 e2 : SmtExpr)
-    | SmtBitXor (e1 e2 : SmtExpr)
-    | SmtBitEq (e1 e2 : SmtExpr)
-    | SmtBitNot (e : SmtExpr)
-    | SmtBitMul (e1 e2 : SmtExpr)
-    | SmtBitDiv (e1 e2 : SmtExpr)
-    | SmtBitMod (e1 e2 : SmtExpr).
+    | SmtBitAnd (e1 e2 : SmtArithExpr)
+    | SmtBitOr (e1 e2 : SmtArithExpr)
+    | SmtBitXor (e1 e2 : SmtArithExpr)
+    | SmtBitEq (e1 e2 : SmtArithExpr)
+    | SmtBitNot (e : SmtArithExpr)
+    | SmtBitMul (e1 e2 : SmtArithExpr)
+    | SmtBitDiv (e1 e2 : SmtArithExpr)
+    | SmtBitMod (e1 e2 : SmtArithExpr).
 
-(* Provide semantics for the SmtExpr above using the uint8 functions from Integer.v *)
-Fixpoint eval_smt_expr (e : SmtExpr) (v : SmtValuation) : uint8 :=
+Inductive SmtBoolExpr :=
+    | SmtTrue
+    | SmtFalse
+    | SmtBoolVar (name : string)
+    | SmtBoolNot (e : SmtBoolExpr)
+    | SmtBoolAnd (e1 e2 : SmtBoolExpr)
+    | SmtBoolOr (e1 e2 : SmtBoolExpr)
+    | SmtBoolEq  (e1 e2 : SmtArithExpr)
+    | SmtBoolLeq (e1 e2 : SmtArithExpr)
+    | SmtBoolGeq (e1 e2 : SmtArithExpr).   
+
+(* Provide semantics for the SmtArithExpr above using the uint8 functions from Integer.v *)
+Fixpoint eval_smt_arith (e : SmtArithExpr) (v : SmtValuation) : uint8 :=
     match e with
     | SmtConst value => value
-    | SmtVar name => v name
+    | SmtArithVar name => v name
     (* Note: we assume that the valuation v is well-formed,
        i.e., it contains all the variables that appear in the expression *)
-    | SmtBitAdd e1 e2 => add (eval_smt_expr e1 v) (eval_smt_expr e2 v)
-    | SmtBitSub e1 e2 => sub (eval_smt_expr e1 v) (eval_smt_expr e2 v) (* Modulo 256 subtraction *)
+    | SmtBitAdd e1 e2 => add (eval_smt_arith e1 v) (eval_smt_arith e2 v)
+    | SmtBitSub e1 e2 => sub (eval_smt_arith e1 v) (eval_smt_arith e2 v) (* Modulo 256 subtraction *)
     (* Bitwise operations *)
-    | SmtBitAnd e1 e2 => and (eval_smt_expr e1 v) (eval_smt_expr e2 v)
-    | SmtBitOr e1 e2 => or (eval_smt_expr e1 v) (eval_smt_expr e2 v)
-    | SmtBitXor e1 e2 => xor  (eval_smt_expr e1 v) (eval_smt_expr e2 v)
-    | SmtBitEq e1 e2 => if (eq  (eval_smt_expr e1 v) (eval_smt_expr e2 v)) then one else zero (* Is this one = 1 or 255? Does it matter? *)
-    | SmtBitNot e => not (eval_smt_expr e v)
-    | SmtBitMul e1 e2 => mul (eval_smt_expr e1 v) (eval_smt_expr e2 v)
-    | SmtBitDiv e1 e2 => divu  (eval_smt_expr e1 v) (eval_smt_expr e2 v)
-    | SmtBitMod e1 e2 => modu  (eval_smt_expr e1 v) (eval_smt_expr e2 v)
+    | SmtBitAnd e1 e2 => and (eval_smt_arith e1 v) (eval_smt_arith e2 v)
+    | SmtBitOr e1 e2 => or (eval_smt_arith e1 v) (eval_smt_arith e2 v)
+    | SmtBitXor e1 e2 => xor  (eval_smt_arith e1 v) (eval_smt_arith e2 v)
+    | SmtBitEq e1 e2 => if (eq  (eval_smt_arith e1 v) (eval_smt_arith e2 v)) then one else zero (* Is this one = 1 or 255? Does it matter? *)
+    | SmtBitNot e => not (eval_smt_arith e v)
+    | SmtBitMul e1 e2 => mul (eval_smt_arith e1 v) (eval_smt_arith e2 v)
+    | SmtBitDiv e1 e2 => divu  (eval_smt_arith e1 v) (eval_smt_arith e2 v)
+    | SmtBitMod e1 e2 => modu  (eval_smt_arith e1 v) (eval_smt_arith e2 v)
     end.
