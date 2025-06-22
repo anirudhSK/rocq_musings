@@ -11,34 +11,6 @@ From MyProject Require Export CrSemantics.
    goes from previous valuation to new one *)
 Parameter eval_transformer : Transformer -> ProgramState uint8 -> ProgramState uint8.
 
-(* A Transformer is a list of match-action rules,
-   where each rule is either sequential or parallel,
-   so let's first evaluate a single rule *)
-
-  
-(* Function to evaluate a sequential match-action rule,
-   meaning header ops within an action are evaluated sequentially *)
-Definition eval_seq_rule (srule : SeqRule) (ps : ProgramState uint8) : (ProgramState uint8) :=
-  match srule with
-  | SeqCtr h start_index end_index pat action => ps (* TODO: fix this up *)
-  end.
-
-(* Function to evaluate a parallel match-action rule,
-   meaning header ops within an action are evaluated in parallel *)
-Definition eval_par_rule (prule : ParRule) (ps : ProgramState uint8) : (ProgramState uint8) :=
-  match prule with
-  | ParCtr h start_index end_index pat action => ps (* TODO: fix this up *)
-  end.
-
-(* Function to evaluate a match-action rule,
-   meaning header ops within an action are evaluated
-   according to the type of the rule (sequential or parallel) *)
-Definition eval_match_action_rule (rule : MatchActionRule) (ps : ProgramState uint8) : (ProgramState uint8) :=
-  match rule with 
-  | Seq srule => eval_seq_rule srule ps
-  | Par prule => eval_par_rule prule ps
-  end.
-
 (* Apply binary operation *)
 Definition apply_bin_op (f : BinaryOp) (arg1 : uint8) (arg2 : uint8) : uint8 :=
   match f with
@@ -72,6 +44,36 @@ Definition eval_hdr_op_assign_uint8 (op : HdrOp) (ps: ProgramState uint8) : Prog
         let op_output := eval_hdr_op_expr_uint8 op ps in update_state ps target op_output
   | StatelessOp f arg1 arg2 target => 
         let op_output := eval_hdr_op_expr_uint8 op ps in update_hdr ps target op_output
+  end.
+  
+(* Function to evaluate a sequential match-action rule,
+   meaning header ops within an action are evaluated sequentially *)
+Definition eval_seq_rule (srule : SeqRule) (ps : ProgramState uint8) : (ProgramState uint8) :=
+  match srule with
+  | SeqCtr h start_index end_index pat action =>
+      let ps' := List.fold_left (fun acc op => eval_hdr_op_assign_uint8 op acc) action ps in
+      ps' (* TODO: fix this up, we need to handle the pattern matching with start_index and end_index *)
+  end.
+
+(* Function to evaluate a parallel match-action rule,
+   meaning header ops within an action are evaluated in parallel *)
+(* This is identical to eval_seq_rule,
+   except that the action is a list with some conditions: the targets are all unique
+   these conditions are realized using subset types, that's why we need proj1_sig *)
+Definition eval_par_rule (prule : ParRule) (ps : ProgramState uint8) : (ProgramState uint8) :=
+  match prule with
+  | ParCtr h start_index end_index pat action =>
+      let ps' := List.fold_left (fun acc op => eval_hdr_op_assign_uint8 op acc) (proj1_sig action) ps in 
+      ps' (* TODO: fix this up, we need to handle the pattern matching with start_index and end_index *)
+  end.
+
+(* Function to evaluate a match-action rule,
+   meaning header ops within an action are evaluated
+   according to the type of the rule (sequential or parallel) *)
+Definition eval_match_action_rule (rule : MatchActionRule) (ps : ProgramState uint8) : (ProgramState uint8) :=
+  match rule with 
+  | Seq srule => eval_seq_rule srule ps
+  | Par prule => eval_par_rule prule ps
   end.
 
 Instance Semantics_uint8 : Semantics uint8 := {
