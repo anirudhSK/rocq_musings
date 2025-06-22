@@ -35,8 +35,14 @@ Inductive HdrOp :=
   | StatefulOp  (f : BinaryOp) (arg1 : FunctionArgument) (arg2 : FunctionArgument) (target : StateVar)
   | StatelessOp (f : BinaryOp) (arg1 : FunctionArgument) (arg2 : FunctionArgument) (target : Header).
 
+Inductive SeqRule :=
+  | SeqCtr (h : Header) (start_index : uint8) (end_index : uint8) (pat : list bool) (action : list HdrOp).
+
+Inductive ParRule :=
+  | ParCtr (h : Header) (start_index : uint8) (end_index : uint8) (pat : list bool) (action : list HdrOp).
+
 Inductive MatchActionRule :=
-  | Seq (h : Header) (start_index : uint8) (end_index : uint8) (pat : list bool) (action : list HdrOp)
-  | Par (h : Header) (start_index : uint8) (end_index : uint8) (pat : list bool) (action : list HdrOp).
+  | Seq (s : SeqRule)
+  | Par (p : ParRule).
 
 Definition Transformer : Type := list MatchActionRule.

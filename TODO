@@ -1,6 +1,7 @@
 Immediate next steps:
-1. Generalize from pure function-based operations to operations that update header or state and leave the
-   updated value in place after the function is completed.
+1. Equivalence checker
+2. What is the story for initializing the concrete and symbolic state?
+3. Finish semantics for MatchActionRule, Modules, etc.
 
 Planned to dos:
 1. Generalizing from single-packet semantics to stream semantics.

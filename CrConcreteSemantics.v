@@ -15,18 +15,29 @@ Parameter eval_transformer : Transformer -> ProgramState uint8 -> ProgramState u
    where each rule is either sequential or parallel,
    so let's first evaluate a single rule *)
 
-(* Function to evaluate a match-action rule,
-   meaning header ops within an action are evaluated
-   according to the type of the rule (sequential or parallel) *)
-Parameter eval_match_action_rule : MatchActionRule -> ProgramState uint8 -> ProgramState uint8.
-
+  
 (* Function to evaluate a sequential match-action rule,
    meaning header ops within an action are evaluated sequentially *)
-Parameter eval_seq_rule : MatchActionRule -> ProgramState uint8 -> ProgramState uint8.
+Definition eval_seq_rule (srule : SeqRule) (ps : ProgramState uint8) : (ProgramState uint8) :=
+  match srule with
+  | SeqCtr h start_index end_index pat action => ps (* TODO: fix this up *)
+  end.
 
 (* Function to evaluate a parallel match-action rule,
    meaning header ops within an action are evaluated in parallel *)
-Parameter eval_par_rule : MatchActionRule -> ProgramState uint8 -> ProgramState uint8.
+Definition eval_par_rule (prule : ParRule) (ps : ProgramState uint8) : (ProgramState uint8) :=
+  match prule with
+  | ParCtr h start_index end_index pat action => ps (* TODO: fix this up *)
+  end.
+
+(* Function to evaluate a match-action rule,
+   meaning header ops within an action are evaluated
+   according to the type of the rule (sequential or parallel) *)
+Definition eval_match_action_rule (rule : MatchActionRule) (ps : ProgramState uint8) : (ProgramState uint8) :=
+  match rule with 
+  | Seq srule => eval_seq_rule srule ps
+  | Par prule => eval_par_rule prule ps
+  end.
 
 (* Apply binary operation *)
 Definition apply_bin_op (f : BinaryOp) (arg1 : uint8) (arg2 : uint8) : uint8 :=
