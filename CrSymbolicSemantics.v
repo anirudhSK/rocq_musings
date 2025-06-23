@@ -49,6 +49,15 @@ Definition eval_hdr_op_assign_smt (ho : HdrOp) (ps: ProgramState SmtArithExpr) :
         let op_output := eval_hdr_op_expr_smt ho ps in update_hdr ps target op_output
     end.  
 
+(* Function to evaluate a sequential match-action rule,
+   meaning header ops within an action are evaluated sequentially *)
+Definition eval_seq_rule_smt (srule : SeqRule) (ps : ProgramState SmtArithExpr) : (ProgramState SmtArithExpr) :=
+  match srule with
+  | SeqCtr h start_index end_index pat action =>
+      let ps' := List.fold_left (fun acc op => eval_hdr_op_assign_smt op acc) action ps in
+      ps' (* TODO: fix this up, we need to handle the pattern matching with start_index and end_index *)
+  end.
+
 Instance Semantics_SmtArithExpr : Semantics SmtArithExpr := {
   (* Function to lookup arg in program state *)
   lookup_function_argument := lookup_smt;

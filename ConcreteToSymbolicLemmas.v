@@ -6,6 +6,8 @@ From MyProject Require Import CrSymbolicSemantics.
 Require Import ZArith.
 Require Import Coq.Strings.String.
 Local Open Scope string_scope.
+Require Import Coq.Lists.List.
+Import ListNotations.
 
 (* Apply SmtValuation f to every entry in the symbolic state across all 3 maps *)
 Definition eval_sym_state (s: ProgramState SmtArithExpr) (f : SmtValuation) : ProgramState uint8 :=
@@ -86,16 +88,34 @@ Proof.
 Qed.
 
 (* Joe's theorem relating the concrete and symbolic worlds translated into rocq slack *)
-Lemma symbolic_vs_concrete :
-  forall (f : SmtValuation) (ho : HdrOp)
-         (c1 : ProgramState uint8) (s1 : ProgramState SmtArithExpr)
-         (c2 : ProgramState uint8) (s2 : ProgramState SmtArithExpr),
-    c1 = eval_sym_state s1 f ->
-    c2 = eval_hdr_op_assign ho c1 ->
-    s2 = eval_hdr_op_assign ho s1 ->
-    c2 = eval_sym_state s2 f.
+Lemma symbolic_vs_concrete_hdr_op :
+  forall (ho : HdrOp) (f : SmtValuation)
+         (s1 : ProgramState SmtArithExpr),
+    eval_hdr_op_assign_uint8 ho (eval_sym_state s1 f) = (* first concretize, and then interpret *) 
+    eval_sym_state (eval_hdr_op_assign_smt ho s1) f.    (* first interpret, and then concretize *)
 Proof.
-  intros f ho c1 s1 c2 s2.
-  intros Hc1 Hc2 Hs2.
-  destruct ho; destruct f0; rewrite Hc2; rewrite Hs2; rewrite Hc1; apply commute_sym_conc.
+  intros ho f s1.
+  destruct ho; destruct f0; apply commute_sym_conc.
+Qed.
+
+(* Define evaluation over a list of HdrOp *)
+(* Note we are evaluating the list from right to left (fold_right) because it simplifies proving. *)
+Definition eval_hdr_op_list_uint8 (hol : list HdrOp) (ps : ProgramState uint8) : ProgramState uint8 :=
+  List.fold_right (fun op acc => eval_hdr_op_assign_uint8 op acc) ps hol.
+
+Definition eval_hdr_op_list_smt (hol : list HdrOp) (ps : ProgramState SmtArithExpr) : ProgramState SmtArithExpr :=
+  List.fold_right (fun op acc => eval_hdr_op_assign_smt op acc) ps hol.
+
+Lemma symbolic_vs_concrete_hdr_op_list :
+  forall (hol : list HdrOp) (f : SmtValuation)
+         (s1 : ProgramState SmtArithExpr),
+    eval_hdr_op_list_uint8 hol (eval_sym_state s1 f) = (* first concretize, and then interpret *) 
+    eval_sym_state (eval_hdr_op_list_smt hol s1) f.    (* first interpret, and then concretize *)
+Proof.
+  intros hol f s1.
+  induction hol as [| h rest IHrest].
+  - reflexivity.
+  - simpl. rewrite IHrest.
+    rewrite symbolic_vs_concrete_hdr_op.
+    reflexivity.
 Qed.

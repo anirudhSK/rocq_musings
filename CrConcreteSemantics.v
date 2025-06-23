@@ -48,7 +48,7 @@ Definition eval_hdr_op_assign_uint8 (op : HdrOp) (ps: ProgramState uint8) : Prog
   
 (* Function to evaluate a sequential match-action rule,
    meaning header ops within an action are evaluated sequentially *)
-Definition eval_seq_rule (srule : SeqRule) (ps : ProgramState uint8) : (ProgramState uint8) :=
+Definition eval_seq_rule_uint8 (srule : SeqRule) (ps : ProgramState uint8) : (ProgramState uint8) :=
   match srule with
   | SeqCtr h start_index end_index pat action =>
       let ps' := List.fold_left (fun acc op => eval_hdr_op_assign_uint8 op acc) action ps in
@@ -72,7 +72,7 @@ Definition eval_par_rule (prule : ParRule) (ps : ProgramState uint8) : (ProgramS
    according to the type of the rule (sequential or parallel) *)
 Definition eval_match_action_rule (rule : MatchActionRule) (ps : ProgramState uint8) : (ProgramState uint8) :=
   match rule with 
-  | Seq srule => eval_seq_rule srule ps
+  | Seq srule => eval_seq_rule_uint8 srule ps
   | Par prule => eval_par_rule prule ps
   end.
 
