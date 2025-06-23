@@ -87,17 +87,6 @@ Proof.
   try rewrite commute2_update_eval; simpl; try reflexivity.
 Qed.
 
-(* Joe's theorem relating the concrete and symbolic worlds translated into rocq slack *)
-Lemma symbolic_vs_concrete_hdr_op :
-  forall (ho : HdrOp) (f : SmtValuation)
-         (s1 : ProgramState SmtArithExpr),
-    eval_hdr_op_assign_uint8 ho (eval_sym_state s1 f) = (* first concretize, and then interpret *) 
-    eval_sym_state (eval_hdr_op_assign_smt ho s1) f.    (* first interpret, and then concretize *)
-Proof.
-  intros ho f s1.
-  destruct ho; destruct f0; apply commute_sym_conc.
-Qed.
-
 (* Define evaluation over a list of HdrOp *)
 (* Note we are evaluating the list from right to left (fold_right) because it simplifies proving. *)
 Definition eval_hdr_op_list_uint8 (hol : list HdrOp) (ps : ProgramState uint8) : ProgramState uint8 :=
@@ -118,6 +107,6 @@ Proof.
   induction hol as [| h rest IHrest].
   - simpl. assumption.
   - simpl. rewrite IHrest.
-    rewrite symbolic_vs_concrete_hdr_op.
+    rewrite commute_sym_conc.
     reflexivity.
 Qed.
