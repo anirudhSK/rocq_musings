@@ -36,9 +36,13 @@ Inductive HdrOp :=
   | StatefulOp  (f : BinaryOp) (arg1 : FunctionArgument) (arg2 : FunctionArgument) (target : StateVar)
   | StatelessOp (f : BinaryOp) (arg1 : FunctionArgument) (arg2 : FunctionArgument) (target : Header).
 
-Inductive SeqRule :=
-  | SeqCtr (h : Header) (start_index : uint8) (end_index : uint8) (pat : list bool) (action : list HdrOp).
+(* Define MatchPattern as a list of header, pattern pairs,
+   where patterns are uint8 and headers contain uint8 values,
+   hence both can be compared. TODO: Need to handle wildcards. *)
+Definition MatchPattern := list (Header * uint8).
 
+Inductive SeqRule :=
+  | SeqCtr (match_pattern : MatchPattern) (action : list HdrOp).
 
 (* Extract targets out of a HdrOp *)
 Definition extract_targets (op : HdrOp) : (list StateVar) * (list Header) := 
@@ -53,8 +57,9 @@ Definition extract_all_targets (ops : list HdrOp) : (list StateVar) * (list Head
     let (state_vars, headers) := extract_targets op in
     (state_vars ++ fst acc, headers ++ snd acc)) ops ([], []).
 
+(* TODO: Add masks and don't care bits *)
 Inductive ParRule :=
-  | ParCtr (h : Header) (start_index : uint8) (end_index : uint8) (pat : list bool)
+  | ParCtr (match_pattern : MatchPattern)
     (action : {l : list HdrOp | NoDup (fst (extract_all_targets l)) /\
                                 NoDup (snd (extract_all_targets l))}).
 

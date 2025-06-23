@@ -47,15 +47,59 @@ Definition eval_hdr_op_assign_smt (ho : HdrOp) (ps: ProgramState SmtArithExpr) :
         let op_output := eval_hdr_op_expr_smt ho ps in update_state ps target op_output
     | StatelessOp f arg1 arg2 target => 
         let op_output := eval_hdr_op_expr_smt ho ps in update_hdr ps target op_output
-    end.  
+    end.
+
+(* Define evaluation over a list of HdrOp *)
+(* Note we are evaluating the list from right to left (fold_right) because it simplifies proving. *)
+Definition eval_hdr_op_list_smt (hol : list HdrOp) (ps : ProgramState SmtArithExpr) : ProgramState SmtArithExpr :=
+  List.fold_right (fun op acc => eval_hdr_op_assign_smt op acc) ps hol.
+
+Definition eval_match_smt (match_pattern : MatchPattern) (ps : ProgramState SmtArithExpr) : SmtBoolExpr :=
+  (* For every list element, check if the Header's current value (determined by ps) equals the uint8 *)
+  (* Note that because SmtBoolAnd is associative and commutative, both fold_left and fold_right give the same answer. *)
+  List.fold_right (fun '(h, v) acc =>
+    match acc with
+    | SmtTrue => SmtBoolEq (header_map SmtArithExpr ps h) (SmtConst v)
+    | _ => SmtBoolAnd acc (SmtBoolEq (header_map SmtArithExpr ps h) (SmtConst v))
+    end) SmtTrue match_pattern.
+
+(* Maybe there's an intermediate function that evaluates a *single* HdrOp conditionally? *)
+Definition eval_hdr_op_assign_smt_conditional
+  (match_condition : MatchPattern)
+  (ho : HdrOp) (ps: ProgramState SmtArithExpr) 
+  : ProgramState SmtArithExpr :=
+  let condition := eval_match_smt match_condition ps in
+    match ho with
+    | StatefulOp _ _ _ target =>
+        let op_output := SmtConditional condition (eval_hdr_op_expr_smt ho ps)
+                        (state_var_map SmtArithExpr ps target) in
+                        update_state ps target op_output
+    | StatelessOp _ _ _ target =>
+        let op_output := SmtConditional condition (eval_hdr_op_expr_smt ho ps)
+                        (header_map SmtArithExpr ps target) in
+                        update_hdr ps target op_output
+    end.
 
 (* Function to evaluate a sequential match-action rule,
    meaning header ops within an action are evaluated sequentially *)
 Definition eval_seq_rule_smt (srule : SeqRule) (ps : ProgramState SmtArithExpr) : (ProgramState SmtArithExpr) :=
   match srule with
-  | SeqCtr h start_index end_index pat action =>
-      let ps' := List.fold_left (fun acc op => eval_hdr_op_assign_smt op acc) action ps in
-      ps' (* TODO: fix this up, we need to handle the pattern matching with start_index and end_index *)
+  | SeqCtr match_pattern action =>
+          List.fold_right (fun ho state => eval_hdr_op_assign_smt_conditional match_pattern ho state)          
+          ps
+          action
+  end.
+
+(* Function to evaluate a parallel match-action rule,
+   meaning header ops within an action are evaluated in parallel.
+   This is identical to eval_seq_rule, except that the action is a list with some conditions: the targets are all unique
+   these conditions are realized using subset types, that's why we need proj1_sig *)
+Definition eval_par_rule_smt (prule : ParRule) (ps : ProgramState SmtArithExpr) : (ProgramState SmtArithExpr) :=
+  match prule with
+  | ParCtr match_pattern action =>  
+          List.fold_right (fun ho state => eval_hdr_op_assign_smt_conditional match_pattern ho state)
+          ps
+          (proj1_sig action)
   end.
 
 Instance Semantics_SmtArithExpr : Semantics SmtArithExpr := {

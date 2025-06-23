@@ -7,3 +7,4 @@ Makefile
 *.glob
 *.Makefile.d
 .lia.cache
+.DS_Store

@@ -87,14 +87,6 @@ Proof.
   try rewrite commute2_update_eval; simpl; try reflexivity.
 Qed.
 
-(* Define evaluation over a list of HdrOp *)
-(* Note we are evaluating the list from right to left (fold_right) because it simplifies proving. *)
-Definition eval_hdr_op_list_uint8 (hol : list HdrOp) (ps : ProgramState uint8) : ProgramState uint8 :=
-  List.fold_right (fun op acc => eval_hdr_op_assign_uint8 op acc) ps hol.
-
-Definition eval_hdr_op_list_smt (hol : list HdrOp) (ps : ProgramState SmtArithExpr) : ProgramState SmtArithExpr :=
-  List.fold_right (fun op acc => eval_hdr_op_assign_smt op acc) ps hol.
-
 Lemma symbolic_vs_concrete_hdr_op_list :
   forall (hol : list HdrOp) (f : SmtValuation)
          (s1 : ProgramState SmtArithExpr)
