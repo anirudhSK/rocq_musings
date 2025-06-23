@@ -108,13 +108,15 @@ Definition eval_hdr_op_list_smt (hol : list HdrOp) (ps : ProgramState SmtArithEx
 
 Lemma symbolic_vs_concrete_hdr_op_list :
   forall (hol : list HdrOp) (f : SmtValuation)
-         (s1 : ProgramState SmtArithExpr),
-    eval_hdr_op_list_uint8 hol (eval_sym_state s1 f) = (* first concretize, and then interpret *) 
+         (s1 : ProgramState SmtArithExpr)
+         (c1 : ProgramState uint8),
+    c1 = eval_sym_state s1 f ->
+    eval_hdr_op_list_uint8 hol c1 = (* first concretize, and then interpret *) 
     eval_sym_state (eval_hdr_op_list_smt hol s1) f.    (* first interpret, and then concretize *)
 Proof.
-  intros hol f s1.
+  intros hol f s1 c1 Hc1.
   induction hol as [| h rest IHrest].
-  - reflexivity.
+  - simpl. assumption.
   - simpl. rewrite IHrest.
     rewrite symbolic_vs_concrete_hdr_op.
     reflexivity.
