@@ -60,7 +60,7 @@ Definition eval_match_smt (match_pattern : MatchPattern) (ps : ProgramState SmtA
   List.fold_right (fun '(h, v) acc =>
     match acc with
     | SmtTrue => SmtBoolEq (header_map SmtArithExpr ps h) (SmtConst v)
-    | _ => SmtBoolAnd acc (SmtBoolEq (header_map SmtArithExpr ps h) (SmtConst v))
+    | _ => SmtBoolAnd (SmtBoolEq (header_map SmtArithExpr ps h) (SmtConst v)) acc
     end) SmtTrue match_pattern.
 
 (* Maybe there's an intermediate function that evaluates a *single* HdrOp conditionally? *)

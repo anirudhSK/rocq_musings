@@ -130,6 +130,11 @@ Proof.
   - reflexivity.
 Qed.
 
+Lemma SmtAndTrue :
+  forall (b : SmtBoolExpr),
+    SmtBoolAnd b SmtTrue = b.
+Admitted.
+
 (* Can you write down the same lemma as above, but
    generalized to a MatchPattern instead of a header_pair? *)
 Lemma symbolic_vs_concrete_match_pattern :
@@ -149,7 +154,12 @@ Proof.
     rewrite H1.
     assert (H2 : eval_match_smt (hv_pair :: rest) s1 =
                  SmtBoolAnd (eval_match_smt [hv_pair] s1) (eval_match_smt rest s1)).
-    { admit. }
+    { destruct hv_pair as [h v].
+      simpl.
+      destruct (eval_match_smt rest s1); try reflexivity.
+      rewrite SmtAndTrue.
+      reflexivity.
+     }
     rewrite H2.
     assert (H3 : eval_smt_bool (SmtBoolAnd (eval_match_smt [hv_pair] s1) (eval_match_smt rest s1)) f
                  = eval_smt_bool (eval_match_smt [hv_pair] s1) f &&
