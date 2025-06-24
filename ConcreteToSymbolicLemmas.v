@@ -130,13 +130,8 @@ Proof.
   - reflexivity.
 Qed.
 
-Lemma SmtAndTrue :
-  forall (b : SmtBoolExpr),
-    SmtBoolAnd b SmtTrue = b.
-Admitted.
-
-(* Can you write down the same lemma as above, but
-   generalized to a MatchPattern instead of a header_pair? *)
+(* The same lemma as above, but
+   generalized to a MatchPattern instead of a header_pair *)
 Lemma symbolic_vs_concrete_match_pattern :
   forall (mp: MatchPattern) (f : SmtValuation)
          (s1 : ProgramState SmtArithExpr)
@@ -152,21 +147,16 @@ Proof.
                  eval_match_uint8 [hv_pair] c1 && eval_match_uint8 rest c1).
     { simpl. rewrite andb_true_r. reflexivity. } 
     rewrite H1.
-    assert (H2 : eval_match_smt (hv_pair :: rest) s1 =
-                 SmtBoolAnd (eval_match_smt [hv_pair] s1) (eval_match_smt rest s1)).
-    { destruct hv_pair as [h v].
-      simpl.
-      destruct (eval_match_smt rest s1); try reflexivity.
-      rewrite SmtAndTrue.
-      reflexivity.
-     }
-    rewrite H2.
     assert (H3 : eval_smt_bool (SmtBoolAnd (eval_match_smt [hv_pair] s1) (eval_match_smt rest s1)) f
                  = eval_smt_bool (eval_match_smt [hv_pair] s1) f &&
                    eval_smt_bool (eval_match_smt rest s1) f).
     { reflexivity. }
-    rewrite H3.
     rewrite (symbolic_vs_concrete_cond hv_pair f s1 c1 Hc1).
     rewrite IHrest.
-    reflexivity.
-Admitted.
+    destruct hv_pair as [h v].
+    simpl.
+    destruct (eval_match_smt rest s1); try reflexivity.
+    destruct (eq (eval_smt_arith (header_map SmtArithExpr s1 h) f) v) eqn:des.
+    -- rewrite andb_true_r. simpl. rewrite des. reflexivity.
+    -- rewrite andb_false_l. simpl. rewrite des. reflexivity.
+Qed.
