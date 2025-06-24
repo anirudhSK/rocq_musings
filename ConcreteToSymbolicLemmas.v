@@ -129,3 +129,34 @@ Proof.
   - reflexivity.
   - reflexivity.
 Qed.
+
+(* Can you write down the same lemma as above, but
+   generalized to a MatchPattern instead of a header_pair? *)
+Lemma symbolic_vs_concrete_match_pattern :
+  forall (mp: MatchPattern) (f : SmtValuation)
+         (s1 : ProgramState SmtArithExpr)
+         (c1 : ProgramState uint8),
+    c1 = eval_sym_state s1 f ->
+    eval_match_uint8 mp c1 = (* first concretize, and then interpret *)
+    eval_smt_bool (eval_match_smt mp s1) f. (* first interpret , and then concretize *)
+Proof.
+  intros mp f s1 c1 Hc1.
+  induction mp as [| hv_pair rest IHrest].
+  - simpl. reflexivity.
+  - assert (H1 : eval_match_uint8 (hv_pair :: rest) c1 =
+                 eval_match_uint8 [hv_pair] c1 && eval_match_uint8 rest c1).
+    { simpl. rewrite andb_true_r. reflexivity. } 
+    rewrite H1.
+    assert (H2 : eval_match_smt (hv_pair :: rest) s1 =
+                 SmtBoolAnd (eval_match_smt [hv_pair] s1) (eval_match_smt rest s1)).
+    { admit. }
+    rewrite H2.
+    assert (H3 : eval_smt_bool (SmtBoolAnd (eval_match_smt [hv_pair] s1) (eval_match_smt rest s1)) f
+                 = eval_smt_bool (eval_match_smt [hv_pair] s1) f &&
+                   eval_smt_bool (eval_match_smt rest s1) f).
+    { reflexivity. }
+    rewrite H3.
+    rewrite (symbolic_vs_concrete_cond hv_pair f s1 c1 Hc1).
+    rewrite IHrest.
+    reflexivity.
+Admitted.
