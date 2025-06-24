@@ -8,6 +8,7 @@ Require Import Coq.Strings.String.
 Local Open Scope string_scope.
 Require Import Coq.Lists.List.
 Import ListNotations.
+Require Import Coq.Bool.Bool.
 
 (* Apply SmtValuation f to every entry in the symbolic state across all 3 maps *)
 Definition eval_sym_state (s: ProgramState SmtArithExpr) (f : SmtValuation) : ProgramState uint8 :=
@@ -101,4 +102,30 @@ Proof.
   - simpl. rewrite IHrest.
     rewrite commute_sym_conc.
     reflexivity.
+Qed.
+
+(* For any Header, uint8 pair,
+   concrete and symbolic execution match up. *)
+Lemma symbolic_vs_concrete_cond :
+  forall (hv_pair: Header * uint8) (f : SmtValuation)
+         (s1 : ProgramState SmtArithExpr)
+         (c1 : ProgramState uint8),
+    c1 = eval_sym_state s1 f ->
+    eval_match_uint8 [hv_pair] c1 = (* first concretize, and then interpret *)
+    eval_smt_bool (eval_match_smt [hv_pair] s1) f. (* first interpret, and then concretize *)
+Proof.
+  intros hv_pair f s1 c1 Hc1.
+  destruct hv_pair as [h v].
+  simpl.
+  rewrite andb_true_r.
+  rewrite Hc1.
+  assert (H : header_map uint8 (eval_sym_state s1 f) h =
+              eval_smt_arith (header_map SmtArithExpr s1 h) f).
+  { unfold eval_sym_state.
+    simpl.
+    reflexivity. }
+  rewrite H.
+  destruct (eq (eval_smt_arith (header_map SmtArithExpr s1 h) f) v).
+  - reflexivity.
+  - reflexivity.
 Qed.
