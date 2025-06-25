@@ -263,3 +263,45 @@ Proof.
     rewrite des.
     apply nothing_changed_hdr.
 Qed.
+
+Lemma fold_right_cons {A B : Type} (f : A -> B -> B) (x : A) (l : list A) (i : B) :
+  fold_right f i (x :: l) = f x (fold_right f i l).
+Proof.
+  reflexivity.
+Qed.
+
+Lemma eval_seq_rule_smt_lemma :
+  forall (mp : MatchPattern)  (hol : list HdrOp) (ho : HdrOp)
+         (s1 : ProgramState SmtArithExpr),
+    eval_seq_rule_smt (SeqCtr mp (ho::hol)) s1 =
+    eval_hdr_op_assign_smt_conditional mp ho (eval_seq_rule_smt (SeqCtr mp (hol)) s1).
+Proof.
+  intros mp hol ho s1.
+  unfold eval_seq_rule_smt.
+  apply fold_right_cons.
+Qed.
+
+(* Same lemma as eval_seq_rule_smt but for eval_seq_rule_uint8 *)
+Lemma eval_seq_rule_uint8_lemma :
+  forall (mp : MatchPattern)  (hol : list HdrOp) (ho : HdrOp)
+         (c1 : ProgramState uint8),
+    eval_seq_rule_uint8 (SeqCtr mp (ho::hol)) c1 =
+    eval_hdr_op_assign_uint8_conditional mp ho (eval_seq_rule_uint8 (SeqCtr mp (hol)) c1).
+Proof.
+Admitted.
+
+Lemma symbolic_vs_concrete_seq_rule :
+  forall (sr: SeqRule) (f : SmtValuation)
+         (s1 : ProgramState SmtArithExpr),
+      eval_seq_rule_uint8 sr (eval_sym_state s1 f) = (* first concretize, and then interpret *)
+      eval_sym_state (eval_seq_rule_smt sr s1) f. (* first interpret, and then concretize *)
+Proof.
+  intros sr f s1.
+  destruct sr as [mp hol].
+  induction hol.
+  - simpl. destruct (eval_match_uint8 mp (eval_sym_state s1 f)); reflexivity.
+  - rewrite eval_seq_rule_uint8_lemma.
+    rewrite eval_seq_rule_smt_lemma.
+    rewrite IHhol.
+    apply symbolic_vs_concrete_hdr_op_match_pattern.
+Qed.
