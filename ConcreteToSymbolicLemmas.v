@@ -160,3 +160,106 @@ Proof.
     -- rewrite andb_true_r. simpl. rewrite des. reflexivity.
     -- rewrite andb_false_l. simpl. rewrite des. reflexivity.
 Qed.
+
+Lemma test2:
+      forall (ps1 ps2: ProgramState uint8),
+        ctrl_plane_map uint8 ps1 = ctrl_plane_map uint8 ps2 ->
+        header_map uint8 ps1 = header_map uint8 ps2 ->
+        state_var_map uint8 ps1 = state_var_map uint8 ps2 ->
+        ps1 = ps2.
+Proof.
+  intros ps1 ps2 Hctrl Hhdr Hstate.
+  destruct ps1 as [ctrl1 hdr1 state1].
+  destruct ps2 as [ctrl2 hdr2 state2].
+  simpl in *.
+  f_equal; try assumption.
+Qed.
+
+Lemma nothing_changed_state:
+  forall s f target,
+    eval_sym_state s f = 
+    update_state (eval_sym_state s f) target
+     (eval_smt_arith (state_var_map SmtArithExpr s target) f).
+Proof.
+  intros s f target.
+  destruct target.
+  unfold eval_sym_state.
+  apply test2; simpl; try reflexivity.
+  apply functional_extensionality.
+  intros x.
+  destruct x.
+  destruct (uid =? uid0)%positive eqn:des.
+  - apply Pos.eqb_eq in des.
+    rewrite des.
+    reflexivity.
+  - reflexivity.
+Qed.
+
+Lemma nothing_changed_hdr:
+  forall s f target,
+    eval_sym_state s f = 
+    update_hdr (eval_sym_state s f) target
+     (eval_smt_arith (header_map SmtArithExpr s target) f).
+Proof.
+  intros s f target.
+  destruct target.
+  unfold eval_sym_state.
+  apply test2; simpl; try reflexivity.
+  apply functional_extensionality.
+  intros x.
+  destruct x.
+  destruct (uid =? uid0)%positive eqn:des.
+  - apply Pos.eqb_eq in des.
+    rewrite des.
+    reflexivity.
+  - reflexivity.
+Qed.
+
+Lemma lookup_eval_commute:
+  forall (s : ProgramState SmtArithExpr) (f : SmtValuation)
+        arg,
+    lookup_uint8 arg (eval_sym_state s f) =
+    eval_smt_arith (lookup_smt arg s) f.
+Proof.
+  intros s f arg.
+  destruct arg; simpl; reflexivity.
+Qed.
+
+(* Same as above lemma, but for a HdrOp gated by a match pattern *)
+Lemma symbolic_vs_concrete_hdr_op_match_pattern :
+  forall (ho: HdrOp) (mp: MatchPattern) (f : SmtValuation)
+         (s1 : ProgramState SmtArithExpr),
+    eval_hdr_op_assign_uint8_conditional mp ho (eval_sym_state s1 f  )= (* first concretize, and then interpret *)
+    eval_sym_state (eval_hdr_op_assign_smt_conditional mp ho s1) f. (* first interpret, and then concretize *)
+Proof.
+  intros ho mp f s1.
+  unfold eval_hdr_op_assign_uint8_conditional.
+  unfold eval_hdr_op_assign_smt_conditional.
+  unfold eval_hdr_op_assign_uint8.
+  destruct ho;
+  destruct (eval_match_uint8 mp (eval_sym_state s1 f)) eqn:des.
+  - rewrite commute_update_eval.
+    f_equal.
+    simpl.
+    erewrite <- symbolic_vs_concrete_match_pattern.
+    rewrite des.
+    destruct f0; simpl; repeat (rewrite lookup_eval_commute); reflexivity. reflexivity.
+  - rewrite commute_update_eval.
+    f_equal.
+    simpl.
+    erewrite <- symbolic_vs_concrete_match_pattern; try reflexivity.
+    rewrite des.
+    apply nothing_changed_state.
+  - rewrite commute2_update_eval.
+    f_equal.
+    simpl.
+    erewrite <- symbolic_vs_concrete_match_pattern.
+    rewrite des.
+    destruct f0; simpl; repeat (rewrite lookup_eval_commute); reflexivity. reflexivity.
+  - rewrite commute2_update_eval.
+    f_equal.
+    simpl.
+    erewrite <- symbolic_vs_concrete_match_pattern; try reflexivity.
+    rewrite des.
+    apply nothing_changed_hdr.
+Qed.
