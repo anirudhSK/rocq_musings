@@ -85,9 +85,20 @@ Definition eval_hdr_op_assign_smt_conditional
 Definition eval_seq_rule_smt (srule : SeqRule) (ps : ProgramState SmtArithExpr) : (ProgramState SmtArithExpr) :=
   match srule with
   | SeqCtr match_pattern action =>
-          List.fold_right (fun ho state => eval_hdr_op_assign_smt_conditional match_pattern ho state)          
-          ps
-          action
+        (* First evaluate the match pattern by itself against the original state ps *)
+        let condition := eval_match_smt match_pattern ps in
+
+          (* Second, evaluate all the hdr_ops contained in the action to get a new intermediate state ps' from ps *)
+          let ps' := eval_hdr_op_list_smt (action) ps in
+
+          (* Third, return the updated program state:
+             ctrl_plane_map: same as what it was in the original state ps,
+             header_map: for every header, its value is SmtConditional condition (value in ps') (value in ps)
+             state_map: similar to header_map *)
+
+          {| ctrl_plane_map := ctrl_plane_map SmtArithExpr ps;
+             header_map := fun h => SmtConditional condition (header_map SmtArithExpr ps' h) (header_map SmtArithExpr ps h);
+             state_var_map := fun s => SmtConditional condition (state_var_map SmtArithExpr ps' s) (state_var_map SmtArithExpr ps s) |}   
   end.
 
 (* Function to evaluate a parallel match-action rule,

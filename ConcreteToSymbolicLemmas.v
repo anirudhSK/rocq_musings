@@ -161,7 +161,7 @@ Proof.
     -- rewrite andb_false_l. simpl. rewrite des. reflexivity.
 Qed.
 
-Lemma test2:
+Lemma program_state_equality:
       forall (ps1 ps2: ProgramState uint8),
         ctrl_plane_map uint8 ps1 = ctrl_plane_map uint8 ps2 ->
         header_map uint8 ps1 = header_map uint8 ps2 ->
@@ -184,7 +184,7 @@ Proof.
   intros s f target.
   destruct target.
   unfold eval_sym_state.
-  apply test2; simpl; try reflexivity.
+  apply program_state_equality; simpl; try reflexivity.
   apply functional_extensionality.
   intros x.
   destruct x.
@@ -204,7 +204,7 @@ Proof.
   intros s f target.
   destruct target.
   unfold eval_sym_state.
-  apply test2; simpl; try reflexivity.
+  apply program_state_equality; simpl; try reflexivity.
   apply functional_extensionality.
   intros x.
   destruct x.
@@ -270,25 +270,36 @@ Proof.
   reflexivity.
 Qed.
 
-Lemma eval_seq_rule_smt_lemma :
-  forall (mp : MatchPattern)  (hol : list HdrOp) (ho : HdrOp)
-         (s1 : ProgramState SmtArithExpr),
-    eval_seq_rule_smt (SeqCtr mp (ho::hol)) s1 =
-    eval_hdr_op_assign_smt_conditional mp ho (eval_seq_rule_smt (SeqCtr mp (hol)) s1).
+(* Effectively, ctrl plane doesn't change *)
+Lemma ctrl_plane_invariant:
+  forall (ho: HdrOp)
+         (c1: ProgramState uint8),
+  ctrl_plane_map uint8 (eval_hdr_op_assign_uint8 ho c1) =
+  ctrl_plane_map uint8 c1.
 Proof.
-  intros mp hol ho s1.
-  unfold eval_seq_rule_smt.
-  apply fold_right_cons.
+  intros ho c1.
+  destruct ho; simpl; try reflexivity.
 Qed.
 
-(* Same lemma as eval_seq_rule_smt but for eval_seq_rule_uint8 *)
-Lemma eval_seq_rule_uint8_lemma :
-  forall (mp : MatchPattern)  (hol : list HdrOp) (ho : HdrOp)
-         (c1 : ProgramState uint8),
-    eval_seq_rule_uint8 (SeqCtr mp (ho::hol)) c1 =
-    eval_hdr_op_assign_uint8_conditional mp ho (eval_seq_rule_uint8 (SeqCtr mp (hol)) c1).
+Lemma header_map_sym_state :
+ forall s hol f h,
+    header_map uint8 (eval_hdr_op_list_uint8 hol (eval_sym_state s f)) h =
+    eval_smt_arith (header_map SmtArithExpr (eval_hdr_op_list_smt hol s) h) f.
 Proof.
-Admitted.
+  intros s hol f h.
+  rewrite symbolic_vs_concrete_hdr_op_list with (f := f) (s1 := s) (c1 := eval_sym_state s f);
+  reflexivity.
+Qed.
+
+Lemma state_map_sym_state :
+ forall s hol f sv,
+    state_var_map uint8 (eval_hdr_op_list_uint8 hol (eval_sym_state s f)) sv =
+    eval_smt_arith (state_var_map SmtArithExpr (eval_hdr_op_list_smt hol s) sv) f.
+Proof.
+  intros s hol f sv.
+  rewrite symbolic_vs_concrete_hdr_op_list with (f := f) (s1 := s) (c1 := eval_sym_state s f);
+  reflexivity.
+Qed.
 
 Lemma symbolic_vs_concrete_seq_rule :
   forall (sr: SeqRule) (f : SmtValuation)
@@ -298,10 +309,40 @@ Lemma symbolic_vs_concrete_seq_rule :
 Proof.
   intros sr f s1.
   destruct sr as [mp hol].
-  induction hol.
-  - simpl. destruct (eval_match_uint8 mp (eval_sym_state s1 f)); reflexivity.
-  - rewrite eval_seq_rule_uint8_lemma.
-    rewrite eval_seq_rule_smt_lemma.
-    rewrite IHhol.
-    apply symbolic_vs_concrete_hdr_op_match_pattern.
+  unfold eval_seq_rule_uint8.
+  unfold eval_seq_rule_smt.
+  apply program_state_equality.
+  - apply functional_extensionality.
+    intros x.
+    destruct x.
+    simpl.
+    destruct (eval_match_uint8 mp (eval_sym_state s1 f)) eqn:des.
+    + induction hol.
+      * simpl. reflexivity.
+      * simpl. rewrite <- IHhol.
+        rewrite ctrl_plane_invariant.
+        reflexivity. 
+    + simpl. reflexivity.
+  - apply functional_extensionality.
+    intros x.
+    destruct x.
+    simpl.
+    destruct (eval_match_uint8 mp (eval_sym_state s1 f)) eqn:des.
+    + rewrite <- symbolic_vs_concrete_match_pattern with (c1 := eval_sym_state s1 f); try reflexivity.
+      rewrite des.
+      apply header_map_sym_state.
+    + rewrite <- symbolic_vs_concrete_match_pattern with (c1 := eval_sym_state s1 f); try reflexivity.
+      rewrite des.
+      simpl. reflexivity.
+  - apply functional_extensionality.
+    intros x.
+    destruct x.
+    simpl.
+    destruct (eval_match_uint8 mp (eval_sym_state s1 f)) eqn:des.
+    + rewrite <- symbolic_vs_concrete_match_pattern with (c1 := eval_sym_state s1 f); try reflexivity.
+      rewrite des.
+      apply state_map_sym_state.
+    + rewrite <- symbolic_vs_concrete_match_pattern with (c1 := eval_sym_state s1 f); try reflexivity.
+      rewrite des.
+      simpl. reflexivity.
 Qed.
