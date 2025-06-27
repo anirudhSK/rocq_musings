@@ -24,25 +24,28 @@ Axiom smt_query_complete : forall e,
   smt_query e = None ->
   forall v', eval_smt_bool e v' = false.
 
+(* check if s1 and s2 are equivalent *)
+(* Need to look at all variables within s1 and s2,
+   which means we need to iterate through header_list and state_var_list *)
+(* function that given 2 states and a list of headers and state vars, asserts that each header/state var is the same across the two states *)
+Definition check_headers_and_state_vars (s1 s2 : ProgramState SmtArithExpr)
+  (header_list : list Header) (state_var_list : list StateVar)
+  : SmtBoolExpr :=
+  SmtBoolNot (List.fold_right (fun h acc => SmtBoolAnd acc (SmtBoolEq (header_map SmtArithExpr s1 h) (header_map SmtArithExpr s2 h))) 
+                   (List.fold_right (fun sv acc => SmtBoolAnd acc (SmtBoolEq (state_var_map SmtArithExpr s1 sv) (state_var_map SmtArithExpr s2 sv))) 
+                                    SmtTrue state_var_list) header_list).
+
 Definition equivalence_checker
-   (s : ProgramState SmtArithExpr)
-   (sr1 : SeqRule) (sr2 : SeqRule)
-   (header_list : list Header) (state_var_list : list StateVar)
+  (s : ProgramState SmtArithExpr)
+  (sr1 : SeqRule) (sr2 : SeqRule)
+  (header_list : list Header) (state_var_list : list StateVar)
    :  option (SmtValuation) :=
   (* assume a starting symbolic state s*)
   (* convert sr1 and sr2 to an equivalent SmtArithExpr, assuming s *)
   let s1 := eval_seq_rule_smt sr1 s in
   let s2 := eval_seq_rule_smt sr2 s in
-  (* check if s1 and s2 are equivalent *)
-  (* Need to look at all variables within s1 and s2,
-     which means we need to iterate through header_list and state_var_list *)
-  (* function that given 2 states and a list of headers and state vars, asserts that each header/state var is the same across the two states *)
-  let check_headers_and_state_vars (s1 s2 : ProgramState SmtArithExpr) : SmtBoolExpr :=
-    SmtBoolNot (List.fold_right (fun h acc => SmtBoolAnd acc (SmtBoolEq (header_map SmtArithExpr s1 h) (header_map SmtArithExpr s2 h))) 
-                     (List.fold_right (fun sv acc => SmtBoolAnd acc (SmtBoolEq (state_var_map SmtArithExpr s1 sv) (state_var_map SmtArithExpr s2 sv))) 
-                                       SmtTrue state_var_list) header_list) in
   (* check if the headers and state vars are equivalent *)
-  smt_query (check_headers_and_state_vars s1 s2).
+  smt_query (check_headers_and_state_vars s1 s2 header_list state_var_list).
 
 (* Lemma about equivalence_checker conditional on the axioms above *)
 Lemma equivalence_checker_sound :
