@@ -35,6 +35,8 @@ Definition check_headers_and_state_vars (s1 s2 : ProgramState SmtArithExpr)
                    (List.fold_right (fun sv acc => SmtBoolAnd acc (SmtBoolEq (state_var_map SmtArithExpr s1 sv) (state_var_map SmtArithExpr s2 sv))) 
                                     SmtTrue state_var_list) header_list).
 
+(* Want to prove a lemma for check_headers_and_state_vars. Move it out of equivalence_checker as its own function. *)
+
 Definition equivalence_checker
   (s : ProgramState SmtArithExpr)
   (sr1 : SeqRule) (sr2 : SeqRule)
@@ -47,7 +49,7 @@ Definition equivalence_checker
   (* check if the headers and state vars are equivalent *)
   smt_query (check_headers_and_state_vars s1 s2 header_list state_var_list).
 
-(* Lemma about equivalence_checker conditional on the axioms above *)
+(* Soundness lemma about equivalence_checker conditional on the axioms above *)
 Lemma equivalence_checker_sound :
   forall s sr1 sr2 header_list state_var_list f,
   equivalence_checker s sr1 sr2 header_list state_var_list = None ->
@@ -58,17 +60,24 @@ Lemma equivalence_checker_sound :
   (header_map uint8 c1 v) = (header_map uint8 c2 v)) /\
   (forall v, In v state_var_list ->
   (state_var_map uint8 c1 v) = (state_var_map uint8 c2 v)).
+Proof.
+  intros s sr1 sr2 header_list state_var_list f.
+  intro H.
+  simpl.
+  split.
+  -- intros. admit.
+  -- admit.
 Admitted.
-(* Need to use law of excluded middle to go from equivalence_checker definition (there is no valuation (None)
+
+  (* Need to use law of excluded middle to go from equivalence_checker definition (there is no valuation (None)
                                                                                    for which they are not equal (SmtBoolNot))
    to the forall condition that for all valuations they are equal for all headers and state vars *)
-(* Want to prove a lemma for check_headers_and_state_vars. Move it out of equivalence_checker as its own function. *)
 (* Want to combine this with the main lemma about symbolic-concrete semantics from the bottom of ConcreteToSymbolicLemmas.v *)
 
-(* Lemma about equivalence_checker conditional on the axioms above *)
+(* Completeness lemma about equivalence_checker conditional on the axioms above *)
 Lemma equivalence_checker_complete :
-  forall s sr1 sr2 header_list state_var_list,
-  exists f', equivalence_checker s sr1 sr2 header_list state_var_list = Some f' ->
+  forall s sr1 sr2 header_list state_var_list f',
+  equivalence_checker s sr1 sr2 header_list state_var_list = Some f' ->
   let c' := eval_sym_state s f' in
   let c1 := eval_seq_rule_uint8 sr1 c' in
   let c2 := eval_seq_rule_uint8 sr2 c' in
