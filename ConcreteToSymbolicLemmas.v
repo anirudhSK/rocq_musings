@@ -328,3 +328,5 @@ Proof.
       rewrite des.
       simpl. reflexivity.
 Qed.
+
+Print Assumptions symbolic_vs_concrete_seq_rule.
