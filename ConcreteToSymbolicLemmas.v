@@ -281,26 +281,6 @@ Proof.
   destruct ho; simpl; try reflexivity.
 Qed.
 
-Lemma header_map_sym_state :
- forall s hol f h,
-    header_map uint8 (eval_hdr_op_list_uint8 hol (eval_sym_state s f)) h =
-    eval_smt_arith (header_map SmtArithExpr (eval_hdr_op_list_smt hol s) h) f.
-Proof.
-  intros s hol f h.
-  rewrite symbolic_vs_concrete_hdr_op_list with (f := f) (s1 := s) (c1 := eval_sym_state s f);
-  reflexivity.
-Qed.
-
-Lemma state_map_sym_state :
- forall s hol f sv,
-    state_var_map uint8 (eval_hdr_op_list_uint8 hol (eval_sym_state s f)) sv =
-    eval_smt_arith (state_var_map SmtArithExpr (eval_hdr_op_list_smt hol s) sv) f.
-Proof.
-  intros s hol f sv.
-  rewrite symbolic_vs_concrete_hdr_op_list with (f := f) (s1 := s) (c1 := eval_sym_state s f);
-  reflexivity.
-Qed.
-
 Lemma symbolic_vs_concrete_seq_rule :
   forall (sr: SeqRule) (f : SmtValuation)
          (s1 : ProgramState SmtArithExpr),
@@ -330,7 +310,8 @@ Proof.
     destruct (eval_match_uint8 mp (eval_sym_state s1 f)) eqn:des.
     + rewrite <- symbolic_vs_concrete_match_pattern with (c1 := eval_sym_state s1 f); try reflexivity.
       rewrite des.
-      apply header_map_sym_state.
+      rewrite symbolic_vs_concrete_hdr_op_list with (f := f) (s1 := s1) (c1 := eval_sym_state s1 f);
+      reflexivity.
     + rewrite <- symbolic_vs_concrete_match_pattern with (c1 := eval_sym_state s1 f); try reflexivity.
       rewrite des.
       simpl. reflexivity.
@@ -341,7 +322,8 @@ Proof.
     destruct (eval_match_uint8 mp (eval_sym_state s1 f)) eqn:des.
     + rewrite <- symbolic_vs_concrete_match_pattern with (c1 := eval_sym_state s1 f); try reflexivity.
       rewrite des.
-      apply state_map_sym_state.
+      rewrite symbolic_vs_concrete_hdr_op_list with (f := f) (s1 := s1) (c1 := eval_sym_state s1 f);
+      reflexivity.
     + rewrite <- symbolic_vs_concrete_match_pattern with (c1 := eval_sym_state s1 f); try reflexivity.
       rewrite des.
       simpl. reflexivity.
