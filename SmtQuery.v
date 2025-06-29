@@ -39,13 +39,126 @@ Definition check_headers_and_state_vars (s1 s2 : ProgramState SmtArithExpr)
              (List.fold_right (fun sv acc => SmtBoolAnd acc (SmtBoolEq (state_var_map SmtArithExpr s1 sv) (state_var_map SmtArithExpr s2 sv))) 
                                     SmtTrue state_var_list)).
 
+Lemma eval_smt_bool_smt_bool_not :
+  forall e1 e2 f,
+  eval_smt_bool (SmtBoolNot (SmtBoolAnd e1 e2)) f = false ->
+  eval_smt_bool e1 f = true /\ eval_smt_bool e2 f = true.
+Proof.
+  intros e1 e2 f H.
+  simpl in H.
+  destruct (eval_smt_bool e1 f && eval_smt_bool e2 f) eqn:Ex.
+  -- apply andb_true_iff.
+     assumption.
+  -- exfalso. simpl in H. congruence.
+Qed.
+
+Lemma SmtBoolConjunction_true_header:
+  forall s1 s2 header_list f,
+  eval_smt_bool (fold_right 
+    (fun (h : Header) (acc : SmtBoolExpr) =>
+          SmtBoolAnd acc
+          (SmtBoolEq (header_map SmtArithExpr s1 h)
+          (header_map SmtArithExpr s2 h))) SmtTrue header_list) f =
+    true ->
+  forallb (fun h => (eval_smt_bool
+          (SmtBoolEq
+          (header_map SmtArithExpr s1 h)
+          (header_map SmtArithExpr s2 h)) f)) header_list = true.
+Proof.
+  intros s1 s2 header_list f H.
+  induction header_list as [|h t IH].
+  - simpl in H. reflexivity.
+  - simpl in H.
+    simpl. apply andb_true_iff. split.
+    apply andb_true_iff in H. apply H.
+    apply andb_true_iff in H.
+    destruct H as [H1 H2].
+    apply IH in H1.
+    assumption.
+Qed.
+
+(* Same lemma as above, but for state var instead of header *)
+Lemma SmtBoolConjunction_true_state_var:
+  forall s1 s2 state_var_list f,
+  eval_smt_bool (fold_right 
+    (fun (sv : StateVar) (acc : SmtBoolExpr) =>
+          SmtBoolAnd acc
+          (SmtBoolEq (state_var_map SmtArithExpr s1 sv)
+          (state_var_map SmtArithExpr s2 sv))) SmtTrue state_var_list) f =
+    true ->
+  forallb (fun sv => (eval_smt_bool
+          (SmtBoolEq
+          (state_var_map SmtArithExpr s1 sv)
+          (state_var_map SmtArithExpr s2 sv)) f)) state_var_list = true.
+Proof.
+  intros s1 s2 state_var_list f H.
+  induction state_var_list as [|sv t IH].
+  - simpl in H. reflexivity.
+  - simpl in H.
+    simpl. apply andb_true_iff. split.
+    apply andb_true_iff in H. apply H.
+    apply andb_true_iff in H.
+    destruct H as [H1 H2].
+    apply IH in H1.
+    assumption.
+Qed.
+
+Lemma forallb_in_hdr_list :
+  forall (f : Header -> bool) (l : list Header),
+  forallb f l = true ->
+  forall x, In x l -> f x = true.
+Proof.
+  intros f l H.
+  induction l as [|x t IH].
+  - intros x H_in. exfalso. simpl in H_in. contradiction.
+  - simpl in H.
+    apply andb_true_iff in H as [H1 H2].
+    specialize (IH H2).
+    simpl.
+    intros x0.
+    intros H_in.
+    destruct H_in as [H_eq | H_in_t].
+    + subst x0. assumption.
+    + apply IH. assumption.
+Qed.
+
+(* Same lemma as above but for state var list *)
+Lemma forallb_in_state_var_list :
+  forall (f : StateVar -> bool) (l : list StateVar),
+  forallb f l = true ->
+  forall x, In x l -> f x = true.
+Proof.
+  intros f l H.
+  induction l as [|x t IH].
+  - intros x H_in. exfalso. simpl in H_in. contradiction.
+  - simpl in H.
+    apply andb_true_iff in H as [H1 H2].
+    specialize (IH H2).
+    simpl.
+    intros x0.
+    intros H_in.
+    destruct H_in as [H_eq | H_in_t].
+    + subst x0. assumption.
+    + apply IH. assumption.
+Qed.
+
 Lemma check_headers_and_state_vars_false:
   forall s1 s2 header_list state_var_list f,
   eval_smt_bool(check_headers_and_state_vars s1 s2 header_list state_var_list) f = false ->
   (forall h, In h header_list -> eval_smt_bool (SmtBoolEq (header_map SmtArithExpr s1 h) (header_map SmtArithExpr s2 h)) f = true) /\
   (forall sv, In sv state_var_list -> eval_smt_bool (SmtBoolEq (state_var_map SmtArithExpr s1 sv) (state_var_map SmtArithExpr s2 sv)) f = true).
 Proof.
-Admitted.
+  intros s1 s2 header_list state_var_list f H.
+  unfold check_headers_and_state_vars in H.
+  apply eval_smt_bool_smt_bool_not in H as [H1 H2].
+  apply SmtBoolConjunction_true_header in H1.
+  apply SmtBoolConjunction_true_state_var in H2.
+  split.
+  - apply forallb_in_hdr_list.
+    assumption.
+  - apply forallb_in_state_var_list.
+    assumption.
+Qed.
 
 Definition equivalence_checker
   (s : ProgramState SmtArithExpr)
