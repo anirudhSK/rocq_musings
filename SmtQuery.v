@@ -33,9 +33,11 @@ Axiom smt_query_complete : forall e,
 Definition check_headers_and_state_vars (s1 s2 : ProgramState SmtArithExpr)
   (header_list : list Header) (state_var_list : list StateVar)
   : SmtBoolExpr :=
-  SmtBoolNot (List.fold_right (fun h acc => SmtBoolAnd acc (SmtBoolEq (header_map SmtArithExpr s1 h) (header_map SmtArithExpr s2 h))) 
-                   (List.fold_right (fun sv acc => SmtBoolAnd acc (SmtBoolEq (state_var_map SmtArithExpr s1 sv) (state_var_map SmtArithExpr s2 sv))) 
-                                    SmtTrue state_var_list) header_list).
+  SmtBoolNot(
+  SmtBoolAnd (List.fold_right (fun h acc => SmtBoolAnd acc (SmtBoolEq (header_map SmtArithExpr s1 h) (header_map SmtArithExpr s2 h))) 
+                                    SmtTrue header_list)
+             (List.fold_right (fun sv acc => SmtBoolAnd acc (SmtBoolEq (state_var_map SmtArithExpr s1 sv) (state_var_map SmtArithExpr s2 sv))) 
+                                    SmtTrue state_var_list)).
 
 Lemma check_headers_and_state_vars_false:
   forall s1 s2 header_list state_var_list f,
