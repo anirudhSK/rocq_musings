@@ -160,6 +160,16 @@ Proof.
     assumption.
 Qed.
 
+Lemma check_headers_and_state_vars_true:
+  forall s1 s2 header_list state_var_list f,
+  eval_smt_bool(check_headers_and_state_vars s1 s2 header_list state_var_list) f = true ->
+  (exists h : Header, In h header_list /\
+                      eval_smt_bool (SmtBoolEq (header_map SmtArithExpr s1 h) (header_map SmtArithExpr s2 h)) f = false) \/
+  (exists sv : StateVar, In sv state_var_list /\
+                      eval_smt_bool (SmtBoolEq (state_var_map SmtArithExpr s1 sv) (state_var_map SmtArithExpr s2 sv)) f = false).
+Proof.
+Admitted.
+
 Definition equivalence_checker
   (s : ProgramState SmtArithExpr)
   (sr1 : SeqRule) (sr2 : SeqRule)
@@ -275,6 +285,44 @@ Qed.
 
 Print Assumptions equivalence_checker_sound.
 
+Lemma smt_bool_eq_false : forall e1 e2 f,
+  eval_smt_bool (SmtBoolEq e1 e2) f = false -> 
+  eval_smt_arith e1 f <> eval_smt_arith e2 f.
+Proof.
+Admitted.
+
+Lemma eval_smt_bool_lemma_hdr_false :
+  forall sr1 sr2 s h f,
+  eval_smt_bool
+(SmtBoolEq (header_map SmtArithExpr (eval_seq_rule_smt sr1 s) h)
+(header_map SmtArithExpr (eval_seq_rule_smt sr2 s) h)) f = false ->
+header_map uint8 (eval_seq_rule_uint8 sr1 (eval_sym_state s f)) h <>
+header_map uint8 (eval_seq_rule_uint8 sr2 (eval_sym_state s f)) h.
+Proof.
+  intros sr1 sr2 s h f.
+  intro H.
+  apply smt_bool_eq_false in H.
+  rewrite symbolic_vs_concrete_seq_rule.
+  rewrite symbolic_vs_concrete_seq_rule.
+  apply H.
+Qed.
+
+Lemma eval_smt_bool_lemma_state_false :
+  forall sr1 sr2 s sv f,
+  eval_smt_bool
+(SmtBoolEq (state_var_map SmtArithExpr (eval_seq_rule_smt sr1 s) sv)
+(state_var_map SmtArithExpr (eval_seq_rule_smt sr2 s) sv)) f = false ->
+state_var_map uint8 (eval_seq_rule_uint8 sr1 (eval_sym_state s f)) sv <>
+state_var_map uint8 (eval_seq_rule_uint8 sr2 (eval_sym_state s f)) sv.
+Proof.
+  intros sr1 sr2 s sv f.
+  intro H.
+  apply smt_bool_eq_false in H.
+  rewrite symbolic_vs_concrete_seq_rule.
+  rewrite symbolic_vs_concrete_seq_rule.
+  apply H.
+Qed.
+
 (* Completeness lemma about equivalence_checker conditional on the axioms above *)
 Lemma equivalence_checker_complete :
   forall s sr1 sr2 header_list state_var_list f',
@@ -286,4 +334,28 @@ Lemma equivalence_checker_complete :
   (header_map uint8 c1 v) <> (header_map uint8 c2 v)) \/
   (exists v, In v state_var_list /\
   (state_var_map uint8 c1 v) <> (state_var_map uint8 c2 v)).
-Admitted.
+Proof.
+  intros s sr1 sr2 header_list state_var_list f'.
+  intro H.
+  simpl.
+  unfold equivalence_checker in H.
+  destruct (smt_query (check_headers_and_state_vars (eval_seq_rule_smt sr1 s) (eval_seq_rule_smt sr2 s) header_list state_var_list)) eqn:H_query.
+  - injection H as Heq.
+    subst f'.
+    apply smt_query_sound in H_query.
+    apply check_headers_and_state_vars_true in H_query.
+    destruct H_query as [H_header | H_state_var].
+    -- destruct H_header as [h Hw].
+       destruct Hw.
+       pose proof (eval_smt_bool_lemma_hdr_false sr1 sr2 s h s0 H0) as H_neq.
+       left.
+       exists h.
+       split; assumption.
+    -- destruct H_state_var as [sv Hw].
+       destruct Hw.
+       pose proof (eval_smt_bool_lemma_state_false sr1 sr2 s sv s0 H0) as H_neq.
+       right.
+       exists sv.
+       split; assumption.
+  - discriminate H.
+Qed.
