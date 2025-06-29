@@ -359,3 +359,5 @@ Proof.
        split; assumption.
   - discriminate H.
 Qed.
+
+Print Assumptions equivalence_checker_complete.
