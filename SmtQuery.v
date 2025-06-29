@@ -275,10 +275,6 @@ Qed.
 
 Print Assumptions equivalence_checker_sound.
 
-  (* Need to use law of excluded middle to go from equivalence_checker definition (there is no valuation (None)
-                                                                                   for which they are not equal (SmtBoolNot))
-   to the forall condition that for all valuations they are equal for all headers and state vars *)
-
 (* Completeness lemma about equivalence_checker conditional on the axioms above *)
 Lemma equivalence_checker_complete :
   forall s sr1 sr2 header_list state_var_list f',
