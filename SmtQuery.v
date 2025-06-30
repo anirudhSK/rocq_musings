@@ -283,11 +283,7 @@ Proof.
   intros v1 v2 H.
   destruct v1 as [val1 range1].
   destruct v2 as [val2 range2].
-  simpl in H.
-  subst val2.
-  f_equal.
-  (* The proof obligations about range equality should be automatic *)
-  apply proof_irrelevance.
+  apply mkint_eq; auto.
 Qed.
 
 (* TODO: Not sure if this lemma uses law of excluded middle or not?
