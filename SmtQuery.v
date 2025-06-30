@@ -39,7 +39,7 @@ Definition check_headers_and_state_vars (s1 s2 : ProgramState SmtArithExpr)
              (List.fold_right (fun sv acc => SmtBoolAnd acc (SmtBoolEq (state_var_map SmtArithExpr s1 sv) (state_var_map SmtArithExpr s2 sv))) 
                                     SmtTrue state_var_list)).
 
-Lemma eval_smt_bool_smt_bool_not :
+Lemma eval_smt_bool_smt_bool_not_false :
   forall e1 e2 f,
   eval_smt_bool (SmtBoolNot (SmtBoolAnd e1 e2)) f = false ->
   eval_smt_bool e1 f = true /\ eval_smt_bool e2 f = true.
@@ -50,6 +50,20 @@ Proof.
   -- apply andb_true_iff.
      assumption.
   -- exfalso. simpl in H. congruence.
+Qed.
+
+Lemma eval_smt_bool_smt_bool_not_true :
+  forall e1 e2 f,
+  eval_smt_bool (SmtBoolNot (SmtBoolAnd e1 e2)) f = true ->
+  eval_smt_bool e1 f = false \/ eval_smt_bool e2 f = false.
+Proof.
+  intros e1 e2 f H.
+  simpl in H.
+  destruct (eval_smt_bool e1 f && eval_smt_bool e2 f) eqn:Ex.
+  -- exfalso. simpl in H.
+     congruence.
+  -- apply andb_false_iff in Ex.
+     assumption.
 Qed.
 
 Lemma SmtBoolConjunction_true_header:
@@ -103,6 +117,65 @@ Proof.
     assumption.
 Qed.
 
+Lemma SmtBoolConjunction_false_header:
+  forall s1 s2 header_list f,
+  eval_smt_bool (fold_right 
+    (fun (h : Header) (acc : SmtBoolExpr) =>
+          SmtBoolAnd acc
+          (SmtBoolEq (header_map SmtArithExpr s1 h)
+          (header_map SmtArithExpr s2 h))) SmtTrue header_list) f =
+    false ->
+  existsb (fun h => (eval_smt_bool
+          (SmtBoolNot (SmtBoolEq
+          (header_map SmtArithExpr s1 h)
+          (header_map SmtArithExpr s2 h))) f)) header_list = true.
+          (* there is a header (true), such that:
+             If you assert the inequality of the headers (equality and then not),
+             that resulting statement is true*)
+Proof.
+  intros s1 s2 header_list f H.
+  induction header_list as [|h t IH].
+  - simpl in H. exfalso. congruence.
+  - simpl in *.
+    apply andb_false_iff in H.
+    apply orb_true_iff.
+    destruct H.
+    + right. apply IH in H.
+      assumption.
+    + apply f_equal with (f := negb) in H.
+      simpl in H. left. assumption.
+Qed.
+  
+(* Same lemma as above, but for state var instead of header *)
+Lemma SmtBoolConjunction_false_state_var:
+  forall s1 s2 state_var_list f,
+  eval_smt_bool (fold_right 
+    (fun (sv : StateVar) (acc : SmtBoolExpr) =>
+          SmtBoolAnd acc
+          (SmtBoolEq (state_var_map SmtArithExpr s1 sv)
+          (state_var_map SmtArithExpr s2 sv))) SmtTrue state_var_list) f =
+    false ->
+  existsb (fun sv => (eval_smt_bool
+          (SmtBoolNot (SmtBoolEq
+          (state_var_map SmtArithExpr s1 sv)
+          (state_var_map SmtArithExpr s2 sv))) f)) state_var_list = true.
+          (* there is a state var (true), such that:
+             If you assert the inequality of the state vars (equality and then not),
+             that resulting statement is true*) 
+Proof.
+  intros s1 s2 state_var_list f H.
+  induction state_var_list as [|sv t IH].
+  - simpl in H. exfalso. congruence.
+  - simpl in *.
+    apply andb_false_iff in H.
+    apply orb_true_iff.
+    destruct H.
+    + right. apply IH in H.
+      assumption.
+    + apply f_equal with (f := negb) in H.
+      simpl in H. left. assumption.
+Qed.
+
 Lemma forallb_in_hdr_list :
   forall (f : Header -> bool) (l : list Header),
   forallb f l = true ->
@@ -150,7 +223,7 @@ Lemma check_headers_and_state_vars_false:
 Proof.
   intros s1 s2 header_list state_var_list f H.
   unfold check_headers_and_state_vars in H.
-  apply eval_smt_bool_smt_bool_not in H as [H1 H2].
+  apply eval_smt_bool_smt_bool_not_false in H as [H1 H2].
   apply SmtBoolConjunction_true_header in H1.
   apply SmtBoolConjunction_true_state_var in H2.
   split.
@@ -168,7 +241,29 @@ Lemma check_headers_and_state_vars_true:
   (exists sv : StateVar, In sv state_var_list /\
                       eval_smt_bool (SmtBoolEq (state_var_map SmtArithExpr s1 sv) (state_var_map SmtArithExpr s2 sv)) f = false).
 Proof.
-Admitted.
+  intros s1 s2 header_list state_var_list f H.
+  unfold check_headers_and_state_vars in H.
+  apply eval_smt_bool_smt_bool_not_true in H.
+  destruct H as [H1 | H2].
+  - apply SmtBoolConjunction_false_header in H1. left.
+    apply existsb_exists in H1.
+    simpl in H1.
+    destruct H1 as [h H1'].
+    destruct H1' as [H_in H_eq].
+    apply Bool.negb_true_iff in H_eq.
+    simpl.
+    exists h.
+    split; assumption.
+  - apply SmtBoolConjunction_false_state_var in H2. right.
+    apply existsb_exists in H2.
+    simpl in H2.
+    destruct H2 as [sv H2'].
+    destruct H2' as [H_in H_eq].
+    apply Bool.negb_true_iff in H_eq.
+    simpl.
+    exists sv.
+    split; assumption.
+Qed.
 
 Definition equivalence_checker
   (s : ProgramState SmtArithExpr)
@@ -195,6 +290,21 @@ Proof.
   apply proof_irrelevance.
 Qed.
 
+(* TODO: Not sure if this lemma uses law of excluded middle or not?
+   What about the intro Heq step? *)
+Lemma uint8_neq_from_unsigned : forall (v1 v2 : uint8),
+  unsigned v1 <> unsigned v2 -> v1 <> v2.
+Proof.
+  intros v1 v2 H.
+  destruct v1 as [val1 range1].
+  destruct v2 as [val2 range2].
+  simpl in H.
+  intro Heq.
+  injection Heq as H_val_eq.
+  apply H.
+  assumption.
+Qed.
+
 Lemma uint8_if_else : forall (v1 v2 : uint8),
   ((if eq v1 v2 then true else false) = true)->
   v1 = v2.
@@ -207,7 +317,24 @@ Proof.
      ++ apply uint8_eq_from_unsigned. assumption.
      ++ exfalso. congruence.
   -- exfalso. congruence.
-Qed. 
+Qed.
+
+Lemma uint8_if_else2 : forall (v1 v2 : uint8),
+  ((if eq v1 v2 then true else false) = false)->
+  v1 <> v2.
+Proof.
+  intros v1 v2 H.
+  destruct (eq v1 v2) eqn:Ex.
+  -- unfold eq in Ex.
+     unfold Rocqlib.zeq in Ex.
+     destruct (Z.eq_dec (unsigned v1) (unsigned v2)) as [Heq|Hneq].
+     ++ exfalso. congruence.
+     ++ apply uint8_neq_from_unsigned. assumption.
+  -- unfold eq in Ex.
+     destruct (Rocqlib.zeq (unsigned v1) (unsigned v2)) eqn:Ex2.
+     ++ exfalso. congruence.
+     ++ apply uint8_neq_from_unsigned. assumption.
+Qed.
         
 Lemma smt_bool_eq_true : forall e1 e2 f,
   eval_smt_bool (SmtBoolEq e1 e2) f = true -> 
@@ -289,7 +416,12 @@ Lemma smt_bool_eq_false : forall e1 e2 f,
   eval_smt_bool (SmtBoolEq e1 e2) f = false -> 
   eval_smt_arith e1 f <> eval_smt_arith e2 f.
 Proof.
-Admitted.
+  intros e1 e2 f H.
+  destruct (eval_smt_bool (SmtBoolEq e1 e2) f) eqn:Ex1.
+  -- exfalso. congruence.
+  -- destruct e1, e2; apply uint8_if_else2 in Ex1;
+     try unfold eval_smt_arith; try assumption.
+Qed.
 
 Lemma eval_smt_bool_lemma_hdr_false :
   forall sr1 sr2 s h f,
