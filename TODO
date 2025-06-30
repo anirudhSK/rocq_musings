@@ -1,5 +1,5 @@
 Immediate next steps:
-1. Equivalence checker
+1. Building an end-to-end pipeline: P4 to IR to Z3, and then equivalence checking.
 2. What is the story for initializing the concrete and symbolic state?
 3. Finish semantics for MatchActionRule, Modules, etc.
 4. Replace symbolic maps with PMap.
