@@ -17,12 +17,12 @@ From MyProject Require Import ConcreteToSymbolicLemmas.
 Parameter smt_query : SmtBoolExpr -> option (SmtValuation).
 
 (* Axiom that smt_query is sound. *)
-Axiom smt_query_sound : forall e v,
+Axiom smt_query_sound_some : forall e v,
   smt_query e = Some v ->
   eval_smt_bool e v = true.
 
 (* Axiom that smt_query is complete. *)
-Axiom smt_query_complete : forall e,
+Axiom smt_query_sound_none : forall e,
   smt_query e = None ->
   forall v', eval_smt_bool e v' = false.
 
@@ -392,13 +392,13 @@ Proof.
   simpl.
   unfold equivalence_checker in H.
   split; intro h; intro H_in.
-  -- specialize (smt_query_complete _ H f) as H_complete.
+  -- specialize (smt_query_sound_none _ H f) as H_complete.
      apply check_headers_and_state_vars_false in H_complete.
      destruct H_complete as [H_header H_state_var].
      clear H_state_var. (* declutter *)
      specialize (H_header h H_in).
      apply eval_smt_bool_lemma_hdr. assumption.
-  -- specialize (smt_query_complete _ H f) as H_complete.
+  -- specialize (smt_query_sound_none _ H f) as H_complete.
      apply check_headers_and_state_vars_false in H_complete.
      destruct H_complete as [H_header H_state_var].
      clear H_header. (* declutter *)
@@ -470,7 +470,7 @@ Proof.
   destruct (smt_query (check_headers_and_state_vars (eval_seq_rule_smt sr1 s) (eval_seq_rule_smt sr2 s) header_list state_var_list)) eqn:H_query.
   - injection H as Heq.
     subst f'.
-    apply smt_query_sound in H_query.
+    apply smt_query_sound_some in H_query.
     apply check_headers_and_state_vars_true in H_query.
     destruct H_query as [H_header | H_state_var].
     -- destruct H_header as [h Hw].
