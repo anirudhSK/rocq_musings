@@ -11,19 +11,24 @@ From MyProject Require Import CrSymbolicSemantics.
 From MyProject Require Import CrConcreteSemantics.
 From MyProject Require Import ConcreteToSymbolicLemmas.
 
+Inductive SmtResult : Type :=
+  | SmtSat (f : SmtValuation)  (* Satisfiable with valuation f *)
+  | SmtUnsat                   (* Unsatisfiable *)
+  | SmtUnknown.                (* Unknown status *)
+
 (* An SmtQuery takes an SmtBoolExpr and returns:
    None: meaning it is false for all possible valuations (or)
    Some(SmtValuation): a valuation for which it is true *)
-Parameter smt_query : SmtBoolExpr -> option (SmtValuation).
+Parameter smt_query : SmtBoolExpr -> SmtResult.
 
 (* Axiom that smt_query is sound. *)
 Axiom smt_query_sound_some : forall e v,
-  smt_query e = Some v ->
+  smt_query e = SmtSat v ->
   eval_smt_bool e v = true.
 
 (* Axiom that smt_query is complete. *)
 Axiom smt_query_sound_none : forall e,
-  smt_query e = None ->
+  smt_query e = SmtUnsat ->
   forall v', eval_smt_bool e v' = false.
 
 (* check if s1 and s2 are equivalent *)
@@ -269,7 +274,7 @@ Definition equivalence_checker
   (s : ProgramState SmtArithExpr)
   (sr1 : SeqRule) (sr2 : SeqRule)
   (header_list : list Header) (state_var_list : list StateVar)
-   :  option (SmtValuation) :=
+   :  SmtResult :=
   (* assume a starting symbolic state s*)
   (* convert sr1 and sr2 to an equivalent SmtArithExpr, assuming s *)
   let s1 := eval_seq_rule_smt sr1 s in
@@ -378,7 +383,7 @@ Qed.
 (* Soundness lemma about equivalence_checker conditional on the axioms above *)
 Lemma equivalence_checker_sound :
   forall s sr1 sr2 header_list state_var_list f,
-  equivalence_checker s sr1 sr2 header_list state_var_list = None ->
+  equivalence_checker s sr1 sr2 header_list state_var_list = SmtUnsat ->
   let c  := eval_sym_state s f in
   let c1 := eval_seq_rule_uint8 sr1 c in
   let c2 := eval_seq_rule_uint8 sr2 c in
@@ -454,7 +459,7 @@ Qed.
 (* Completeness lemma about equivalence_checker conditional on the axioms above *)
 Lemma equivalence_checker_complete :
   forall s sr1 sr2 header_list state_var_list f',
-  equivalence_checker s sr1 sr2 header_list state_var_list = Some f' ->
+  equivalence_checker s sr1 sr2 header_list state_var_list = SmtSat f' ->
   let c' := eval_sym_state s f' in
   let c1 := eval_seq_rule_uint8 sr1 c' in
   let c2 := eval_seq_rule_uint8 sr2 c' in
@@ -475,16 +480,17 @@ Proof.
     destruct H_query as [H_header | H_state_var].
     -- destruct H_header as [h Hw].
        destruct Hw.
-       pose proof (eval_smt_bool_lemma_hdr_false sr1 sr2 s h s0 H0) as H_neq.
+       pose proof (eval_smt_bool_lemma_hdr_false sr1 sr2 s h f H0) as H_neq.
        left.
        exists h.
        split; assumption.
     -- destruct H_state_var as [sv Hw].
        destruct Hw.
-       pose proof (eval_smt_bool_lemma_state_false sr1 sr2 s sv s0 H0) as H_neq.
+       pose proof (eval_smt_bool_lemma_state_false sr1 sr2 s sv f H0) as H_neq.
        right.
        exists sv.
        split; assumption.
+  - discriminate H.
   - discriminate H.
 Qed.
 
