@@ -5,6 +5,7 @@ Require Import Coq.Arith.EqNat.
 Require Import Coq.Arith.PeanoNat.
 Import ListNotations.
 Require Import Coq.Logic.Classical_Prop.
+From Coq Require Import FunctionalExtensionality.
 
 (* Define a list of 5 elements *)
 Definition my_list : list nat := [1; 2; 3; 4; 5].
@@ -59,9 +60,6 @@ Section ListUtilsLemmas.
                 specialize (IHl eq_refl).
                 contradiction.
     Qed.
-
-    Axiom functional_extensionality : forall {A B : Type} (f g : A -> B),
-      (forall x, f x = g x) -> f = g.
 
     (* Theorem stating that has_duplicates returning false implies a duplicate free list *)
     Theorem has_duplicates_correct : forall (l : list T),

@@ -9,6 +9,7 @@ Local Open Scope string_scope.
 Require Import Coq.Lists.List.
 Import ListNotations.
 Require Import Coq.Bool.Bool.
+From Coq Require Import FunctionalExtensionality.
 
 (* Apply SmtValuation f to every entry in the symbolic state across all 3 maps *)
 Definition eval_sym_state (s: ProgramState SmtArithExpr) (f : SmtValuation) : ProgramState uint8 :=
@@ -25,10 +26,6 @@ Proof.
   intros ho s f.
   destruct ho, f0, arg1, arg2; simpl; try reflexivity.
 Qed.
-
-Axiom functional_extensionality :
-  forall (A B : Type) (f g : A -> B),
-    (forall x, f x = g x) -> f = g.
 
 Lemma commute_update_eval:
   forall (s : ProgramState SmtArithExpr) (f : SmtValuation) (sv : StateVar) (v : SmtArithExpr),
