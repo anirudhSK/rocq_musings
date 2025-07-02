@@ -8,10 +8,10 @@ Require Import Coq.Strings.String.
 (* Convert FunctionArgument to SmtArithExpr *)
 Definition lookup_smt (arg : FunctionArgument) (ps : ProgramState SmtArithExpr) : SmtArithExpr :=
   match arg with
-  | CtrlPlaneArg c => ctrl_plane_map SmtArithExpr ps c
-  | HeaderArg h    => header_map SmtArithExpr ps h
+  | CtrlPlaneArg c => ctrl_plane_map ps c
+  | HeaderArg h    => header_map ps h
   | ConstantArg n  => SmtConst n
-  | StatefulArg s  => state_var_map SmtArithExpr ps s
+  | StatefulArg s  => state_var_map ps s
   end.
 
 (* Define the symbolic interpreter for header operation expressions *)
@@ -59,8 +59,8 @@ Definition eval_match_smt (match_pattern : MatchPattern) (ps : ProgramState SmtA
   (* Note that because SmtBoolAnd is associative and commutative, both fold_left and fold_right give the same answer. *)
   List.fold_right (fun '(h, v) acc =>
     match acc with
-    | SmtTrue => SmtBoolEq (header_map SmtArithExpr ps h) (SmtConst v)
-    | _ => SmtBoolAnd (SmtBoolEq (header_map SmtArithExpr ps h) (SmtConst v)) acc
+    | SmtTrue => SmtBoolEq (header_map ps h) (SmtConst v)
+    | _ => SmtBoolAnd (SmtBoolEq (header_map ps h) (SmtConst v)) acc
     end) SmtTrue match_pattern.
 
 (* Maybe there's an intermediate function that evaluates a *single* HdrOp conditionally? *)
@@ -72,11 +72,11 @@ Definition eval_hdr_op_assign_smt_conditional
     match ho with
     | StatefulOp _ _ _ target =>
         let op_output := SmtConditional condition (eval_hdr_op_expr_smt ho ps)
-                        (state_var_map SmtArithExpr ps target) in
+                        (state_var_map ps target) in
                         update_state ps target op_output
     | StatelessOp _ _ _ target =>
         let op_output := SmtConditional condition (eval_hdr_op_expr_smt ho ps)
-                        (header_map SmtArithExpr ps target) in
+                        (header_map ps target) in
                         update_hdr ps target op_output
     end.
 
@@ -96,9 +96,9 @@ Definition eval_seq_rule_smt (srule : SeqRule) (ps : ProgramState SmtArithExpr) 
              header_map: for every header, its value is SmtConditional condition (value in ps') (value in ps)
              state_map: similar to header_map *)
 
-          {| ctrl_plane_map := ctrl_plane_map SmtArithExpr ps;
-             header_map := fun h => SmtConditional condition (header_map SmtArithExpr ps' h) (header_map SmtArithExpr ps h);
-             state_var_map := fun s => SmtConditional condition (state_var_map SmtArithExpr ps' s) (state_var_map SmtArithExpr ps s) |}   
+          {| ctrl_plane_map := ctrl_plane_map ps;
+             header_map := fun h => SmtConditional condition (header_map ps' h) (header_map ps h);
+             state_var_map := fun s => SmtConditional condition (state_var_map ps' s) (state_var_map ps s) |}   
   end.
 
 (* Function to evaluate a parallel match-action rule,

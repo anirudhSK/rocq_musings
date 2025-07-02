@@ -39,9 +39,9 @@ Definition check_headers_and_state_vars (s1 s2 : ProgramState SmtArithExpr)
   (header_list : list Header) (state_var_list : list StateVar)
   : SmtBoolExpr :=
   SmtBoolNot(
-  SmtBoolAnd (List.fold_right (fun h acc => SmtBoolAnd acc (SmtBoolEq (header_map SmtArithExpr s1 h) (header_map SmtArithExpr s2 h))) 
+  SmtBoolAnd (List.fold_right (fun h acc => SmtBoolAnd acc (SmtBoolEq (header_map s1 h) (header_map s2 h))) 
                                     SmtTrue header_list)
-             (List.fold_right (fun sv acc => SmtBoolAnd acc (SmtBoolEq (state_var_map SmtArithExpr s1 sv) (state_var_map SmtArithExpr s2 sv))) 
+             (List.fold_right (fun sv acc => SmtBoolAnd acc (SmtBoolEq (state_var_map s1 sv) (state_var_map s2 sv))) 
                                     SmtTrue state_var_list)).
 
 Lemma eval_smt_bool_smt_bool_not_false :
@@ -76,13 +76,13 @@ Lemma SmtBoolConjunction_true_header:
   eval_smt_bool (fold_right 
     (fun (h : Header) (acc : SmtBoolExpr) =>
           SmtBoolAnd acc
-          (SmtBoolEq (header_map SmtArithExpr s1 h)
-          (header_map SmtArithExpr s2 h))) SmtTrue header_list) f =
+          (SmtBoolEq (header_map s1 h)
+          (header_map s2 h))) SmtTrue header_list) f =
     true ->
   forallb (fun h => (eval_smt_bool
           (SmtBoolEq
-          (header_map SmtArithExpr s1 h)
-          (header_map SmtArithExpr s2 h)) f)) header_list = true.
+          (header_map s1 h)
+          (header_map s2 h)) f)) header_list = true.
 Proof.
   intros s1 s2 header_list f H.
   induction header_list as [|h t IH].
@@ -102,13 +102,13 @@ Lemma SmtBoolConjunction_true_state_var:
   eval_smt_bool (fold_right 
     (fun (sv : StateVar) (acc : SmtBoolExpr) =>
           SmtBoolAnd acc
-          (SmtBoolEq (state_var_map SmtArithExpr s1 sv)
-          (state_var_map SmtArithExpr s2 sv))) SmtTrue state_var_list) f =
+          (SmtBoolEq (state_var_map s1 sv)
+          (state_var_map s2 sv))) SmtTrue state_var_list) f =
     true ->
   forallb (fun sv => (eval_smt_bool
           (SmtBoolEq
-          (state_var_map SmtArithExpr s1 sv)
-          (state_var_map SmtArithExpr s2 sv)) f)) state_var_list = true.
+          (state_var_map s1 sv)
+          (state_var_map s2 sv)) f)) state_var_list = true.
 Proof.
   intros s1 s2 state_var_list f H.
   induction state_var_list as [|sv t IH].
@@ -127,13 +127,13 @@ Lemma SmtBoolConjunction_false_header:
   eval_smt_bool (fold_right 
     (fun (h : Header) (acc : SmtBoolExpr) =>
           SmtBoolAnd acc
-          (SmtBoolEq (header_map SmtArithExpr s1 h)
-          (header_map SmtArithExpr s2 h))) SmtTrue header_list) f =
+          (SmtBoolEq (header_map s1 h)
+          (header_map s2 h))) SmtTrue header_list) f =
     false ->
   existsb (fun h => (eval_smt_bool
           (SmtBoolNot (SmtBoolEq
-          (header_map SmtArithExpr s1 h)
-          (header_map SmtArithExpr s2 h))) f)) header_list = true.
+          (header_map s1 h)
+          (header_map s2 h))) f)) header_list = true.
           (* there is a header (true), such that:
              If you assert the inequality of the headers (equality and then not),
              that resulting statement is true*)
@@ -157,13 +157,13 @@ Lemma SmtBoolConjunction_false_state_var:
   eval_smt_bool (fold_right 
     (fun (sv : StateVar) (acc : SmtBoolExpr) =>
           SmtBoolAnd acc
-          (SmtBoolEq (state_var_map SmtArithExpr s1 sv)
-          (state_var_map SmtArithExpr s2 sv))) SmtTrue state_var_list) f =
+          (SmtBoolEq (state_var_map s1 sv)
+          (state_var_map s2 sv))) SmtTrue state_var_list) f =
     false ->
   existsb (fun sv => (eval_smt_bool
           (SmtBoolNot (SmtBoolEq
-          (state_var_map SmtArithExpr s1 sv)
-          (state_var_map SmtArithExpr s2 sv))) f)) state_var_list = true.
+          (state_var_map s1 sv)
+          (state_var_map s2 sv))) f)) state_var_list = true.
           (* there is a state var (true), such that:
              If you assert the inequality of the state vars (equality and then not),
              that resulting statement is true*) 
@@ -223,8 +223,8 @@ Qed.
 Lemma check_headers_and_state_vars_false:
   forall s1 s2 header_list state_var_list f,
   eval_smt_bool(check_headers_and_state_vars s1 s2 header_list state_var_list) f = false ->
-  (forall h, In h header_list -> eval_smt_bool (SmtBoolEq (header_map SmtArithExpr s1 h) (header_map SmtArithExpr s2 h)) f = true) /\
-  (forall sv, In sv state_var_list -> eval_smt_bool (SmtBoolEq (state_var_map SmtArithExpr s1 sv) (state_var_map SmtArithExpr s2 sv)) f = true).
+  (forall h, In h header_list -> eval_smt_bool (SmtBoolEq (header_map s1 h) (header_map s2 h)) f = true) /\
+  (forall sv, In sv state_var_list -> eval_smt_bool (SmtBoolEq (state_var_map s1 sv) (state_var_map s2 sv)) f = true).
 Proof.
   intros s1 s2 header_list state_var_list f H.
   unfold check_headers_and_state_vars in H.
@@ -242,9 +242,9 @@ Lemma check_headers_and_state_vars_true:
   forall s1 s2 header_list state_var_list f,
   eval_smt_bool(check_headers_and_state_vars s1 s2 header_list state_var_list) f = true ->
   (exists h : Header, In h header_list /\
-                      eval_smt_bool (SmtBoolEq (header_map SmtArithExpr s1 h) (header_map SmtArithExpr s2 h)) f = false) \/
+                      eval_smt_bool (SmtBoolEq (header_map s1 h) (header_map s2 h)) f = false) \/
   (exists sv : StateVar, In sv state_var_list /\
-                      eval_smt_bool (SmtBoolEq (state_var_map SmtArithExpr s1 sv) (state_var_map SmtArithExpr s2 sv)) f = false).
+                      eval_smt_bool (SmtBoolEq (state_var_map s1 sv) (state_var_map s2 sv)) f = false).
 Proof.
   intros s1 s2 header_list state_var_list f H.
   unfold check_headers_and_state_vars in H.
@@ -351,10 +351,10 @@ Qed.
 Lemma eval_smt_bool_lemma_hdr :
   forall sr1 sr2 s h f,
   eval_smt_bool
-(SmtBoolEq (header_map SmtArithExpr (eval_seq_rule_smt sr1 s) h)
-(header_map SmtArithExpr (eval_seq_rule_smt sr2 s) h)) f = true ->
-header_map uint8 (eval_seq_rule_uint8 sr1 (eval_sym_state s f)) h =
-header_map uint8 (eval_seq_rule_uint8 sr2 (eval_sym_state s f)) h.
+(SmtBoolEq (header_map (eval_seq_rule_smt sr1 s) h)
+(header_map (eval_seq_rule_smt sr2 s) h)) f = true ->
+header_map (eval_seq_rule_uint8 sr1 (eval_sym_state s f)) h =
+header_map (eval_seq_rule_uint8 sr2 (eval_sym_state s f)) h.
 Proof.
   intros sr1 sr2 s h f.
   intro H.
@@ -367,10 +367,10 @@ Qed.
 Lemma eval_smt_bool_lemma_state :
   forall sr1 sr2 s sv f,
   eval_smt_bool
-(SmtBoolEq (state_var_map SmtArithExpr (eval_seq_rule_smt sr1 s) sv)
-(state_var_map SmtArithExpr (eval_seq_rule_smt sr2 s) sv)) f = true ->
-state_var_map uint8 (eval_seq_rule_uint8 sr1 (eval_sym_state s f)) sv =
-state_var_map uint8 (eval_seq_rule_uint8 sr2 (eval_sym_state s f)) sv.
+(SmtBoolEq (state_var_map (eval_seq_rule_smt sr1 s) sv)
+(state_var_map (eval_seq_rule_smt sr2 s) sv)) f = true ->
+state_var_map (eval_seq_rule_uint8 sr1 (eval_sym_state s f)) sv =
+state_var_map (eval_seq_rule_uint8 sr2 (eval_sym_state s f)) sv.
 Proof.
   intros sr1 sr2 s sv f.
   intro H.
@@ -388,9 +388,9 @@ Lemma equivalence_checker_sound :
   let c1 := eval_seq_rule_uint8 sr1 c in
   let c2 := eval_seq_rule_uint8 sr2 c in
   (forall v, In v header_list ->
-  (header_map uint8 c1 v) = (header_map uint8 c2 v)) /\
+  (header_map c1 v) = (header_map c2 v)) /\
   (forall v, In v state_var_list ->
-  (state_var_map uint8 c1 v) = (state_var_map uint8 c2 v)).
+  (state_var_map c1 v) = (state_var_map c2 v)).
 Proof.
   intros s sr1 sr2 header_list state_var_list f.
   intro H.
@@ -427,10 +427,10 @@ Qed.
 Lemma eval_smt_bool_lemma_hdr_false :
   forall sr1 sr2 s h f,
   eval_smt_bool
-(SmtBoolEq (header_map SmtArithExpr (eval_seq_rule_smt sr1 s) h)
-(header_map SmtArithExpr (eval_seq_rule_smt sr2 s) h)) f = false ->
-header_map uint8 (eval_seq_rule_uint8 sr1 (eval_sym_state s f)) h <>
-header_map uint8 (eval_seq_rule_uint8 sr2 (eval_sym_state s f)) h.
+(SmtBoolEq (header_map  (eval_seq_rule_smt sr1 s) h)
+(header_map  (eval_seq_rule_smt sr2 s) h)) f = false ->
+header_map (eval_seq_rule_uint8 sr1 (eval_sym_state s f)) h <>
+header_map (eval_seq_rule_uint8 sr2 (eval_sym_state s f)) h.
 Proof.
   intros sr1 sr2 s h f.
   intro H.
@@ -443,10 +443,10 @@ Qed.
 Lemma eval_smt_bool_lemma_state_false :
   forall sr1 sr2 s sv f,
   eval_smt_bool
-(SmtBoolEq (state_var_map SmtArithExpr (eval_seq_rule_smt sr1 s) sv)
-(state_var_map SmtArithExpr (eval_seq_rule_smt sr2 s) sv)) f = false ->
-state_var_map uint8 (eval_seq_rule_uint8 sr1 (eval_sym_state s f)) sv <>
-state_var_map uint8 (eval_seq_rule_uint8 sr2 (eval_sym_state s f)) sv.
+(SmtBoolEq (state_var_map  (eval_seq_rule_smt sr1 s) sv)
+(state_var_map  (eval_seq_rule_smt sr2 s) sv)) f = false ->
+state_var_map (eval_seq_rule_uint8 sr1 (eval_sym_state s f)) sv <>
+state_var_map (eval_seq_rule_uint8 sr2 (eval_sym_state s f)) sv.
 Proof.
   intros sr1 sr2 s sv f.
   intro H.
@@ -464,9 +464,9 @@ Lemma equivalence_checker_complete :
   let c1 := eval_seq_rule_uint8 sr1 c' in
   let c2 := eval_seq_rule_uint8 sr2 c' in
   (exists v, In v header_list /\
-  (header_map uint8 c1 v) <> (header_map uint8 c2 v)) \/
+  (header_map c1 v) <> (header_map c2 v)) \/
   (exists v, In v state_var_list /\
-  (state_var_map uint8 c1 v) <> (state_var_map uint8 c2 v)).
+  (state_var_map c1 v) <> (state_var_map c2 v)).
 Proof.
   intros s sr1 sr2 header_list state_var_list f'.
   intro H.

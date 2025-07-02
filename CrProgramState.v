@@ -15,16 +15,22 @@ Record ProgramState (T : Type) := {
   state_var_map : StateVarMap T
 }.
 
+Check header_map.
+
+Arguments header_map {T} _ _.
+Arguments state_var_map {T} _ _.  
+Arguments ctrl_plane_map {T} _ _.
+
 Definition update_hdr {T : Type} (s: ProgramState T) (x: Header) (v: T) : ProgramState T :=
-  {| ctrl_plane_map := ctrl_plane_map T s;
+  {| ctrl_plane_map := ctrl_plane_map s;
      header_map :=  fun y => match x, y with
-            | HeaderCtr x_id, HeaderCtr y_id => if Pos.eqb x_id y_id then v else header_map T s y
+            | HeaderCtr x_id, HeaderCtr y_id => if Pos.eqb x_id y_id then v else header_map s y
            end;
-     state_var_map := state_var_map T s|}.
+     state_var_map := state_var_map s|}.
 
 Definition update_state {T : Type} (s: ProgramState T) (x: StateVar) (v: T) : ProgramState T :=
-  {| ctrl_plane_map := ctrl_plane_map T s;
-     header_map := header_map T s;
+  {| ctrl_plane_map := ctrl_plane_map s;
+     header_map := header_map s;
      state_var_map := fun y => match x, y with
-            | StateVarCtr x_id, StateVarCtr y_id => if Pos.eqb x_id y_id then v else state_var_map T s y
+            | StateVarCtr x_id, StateVarCtr y_id => if Pos.eqb x_id y_id then v else state_var_map s y
            end |}.

@@ -26,10 +26,10 @@ Definition apply_bin_op (f : BinaryOp) (arg1 : uint8) (arg2 : uint8) : uint8 :=
 
 Definition lookup_uint8 (arg : FunctionArgument) (ps : ProgramState uint8) : uint8 :=
   match arg with
-  | CtrlPlaneArg c => ctrl_plane_map uint8 ps c
-  | HeaderArg h    => header_map uint8 ps h
+  | CtrlPlaneArg c => ctrl_plane_map ps c
+  | HeaderArg h    => header_map ps h
   | ConstantArg n  => n
-  | StatefulArg s  => state_var_map uint8 ps s
+  | StatefulArg s  => state_var_map ps s
   end.
 
 Definition eval_hdr_op_expr_uint8 (op : HdrOp) (ps : ProgramState uint8) : uint8 :=
@@ -48,7 +48,7 @@ Definition eval_hdr_op_assign_uint8 (op : HdrOp) (ps: ProgramState uint8) : Prog
 
 Definition eval_match_uint8 (match_pattern : MatchPattern) (ps : ProgramState uint8) : bool :=
   (* For every list element, check if the Header's current value (determined by ps) equals the uint8 *)
-  List.forallb (fun '(h, v) => eq (header_map uint8 ps h) v) match_pattern.
+  List.forallb (fun '(h, v) => eq (header_map ps h) v) match_pattern.
 
 (* Define evaluation over a list of HdrOp *)
 (* Note we are evaluating the list from right to left (fold_right) because it simplifies proving. *)

@@ -12,9 +12,9 @@ Require Import Coq.Bool.Bool.
 
 (* Apply SmtValuation f to every entry in the symbolic state across all 3 maps *)
 Definition eval_sym_state (s: ProgramState SmtArithExpr) (f : SmtValuation) : ProgramState uint8 :=
-  {| header_map := fun h => eval_smt_arith (header_map SmtArithExpr s h) f;
-     ctrl_plane_map := fun c => eval_smt_arith (ctrl_plane_map SmtArithExpr s c) f;
-     state_var_map := fun sv => eval_smt_arith (state_var_map SmtArithExpr s sv) f |}.
+  {| header_map := fun h => eval_smt_arith (header_map s h) f;
+     ctrl_plane_map := fun c => eval_smt_arith (ctrl_plane_map s c) f;
+     state_var_map := fun sv => eval_smt_arith (state_var_map s sv) f |}.
 
 (* Simpler lemma with no state update *)
 Lemma commute_smt_conc_expr:
@@ -119,13 +119,13 @@ Proof.
   simpl.
   rewrite andb_true_r.
   rewrite Hc1.
-  assert (H : header_map uint8 (eval_sym_state s1 f) h =
-              eval_smt_arith (header_map SmtArithExpr s1 h) f).
+  assert (H : header_map (eval_sym_state s1 f) h =
+              eval_smt_arith (header_map s1 h) f).
   { unfold eval_sym_state.
     simpl.
     reflexivity. }
   rewrite H.
-  destruct (eq (eval_smt_arith (header_map SmtArithExpr s1 h) f) v).
+  destruct (eq (eval_smt_arith (header_map s1 h) f) v).
   - reflexivity.
   - reflexivity.
 Qed.
@@ -156,16 +156,16 @@ Proof.
     destruct hv_pair as [h v].
     simpl.
     destruct (eval_match_smt rest s1); try reflexivity.
-    destruct (eq (eval_smt_arith (header_map SmtArithExpr s1 h) f) v) eqn:des.
+    destruct (eq (eval_smt_arith (header_map s1 h) f) v) eqn:des.
     -- rewrite andb_true_r. simpl. rewrite des. reflexivity.
     -- rewrite andb_false_l. simpl. rewrite des. reflexivity.
 Qed.
 
 Lemma program_state_equality:
       forall (ps1 ps2: ProgramState uint8),
-        ctrl_plane_map uint8 ps1 = ctrl_plane_map uint8 ps2 ->
-        header_map uint8 ps1 = header_map uint8 ps2 ->
-        state_var_map uint8 ps1 = state_var_map uint8 ps2 ->
+        ctrl_plane_map ps1 = ctrl_plane_map ps2 ->
+        header_map ps1 = header_map ps2 ->
+        state_var_map  ps1 = state_var_map ps2 ->
         ps1 = ps2.
 Proof.
   intros ps1 ps2 Hctrl Hhdr Hstate.
@@ -179,7 +179,7 @@ Lemma nothing_changed_state:
   forall s f target,
     eval_sym_state s f = 
     update_state (eval_sym_state s f) target
-     (eval_smt_arith (state_var_map SmtArithExpr s target) f).
+     (eval_smt_arith (state_var_map s target) f).
 Proof.
   intros s f target.
   destruct target.
@@ -199,7 +199,7 @@ Lemma nothing_changed_hdr:
   forall s f target,
     eval_sym_state s f = 
     update_hdr (eval_sym_state s f) target
-     (eval_smt_arith (header_map SmtArithExpr s target) f).
+     (eval_smt_arith (header_map s target) f).
 Proof.
   intros s f target.
   destruct target.
@@ -274,8 +274,8 @@ Qed.
 Lemma ctrl_plane_invariant:
   forall (ho: HdrOp)
          (c1: ProgramState uint8),
-  ctrl_plane_map uint8 (eval_hdr_op_assign_uint8 ho c1) =
-  ctrl_plane_map uint8 c1.
+  ctrl_plane_map (eval_hdr_op_assign_uint8 ho c1) =
+  ctrl_plane_map c1.
 Proof.
   intros ho c1.
   destruct ho; simpl; try reflexivity.
