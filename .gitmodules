@@ -1,0 +1,3 @@
+[submodule "translation/p4c"]
+	path = translation/p4c
+	url = https://github.com/LanderDuncan/p4c

@@ -1,0 +1,17 @@
+     = smt_query
+        (SmtBoolNot
+            (SmtBoolAnd SmtTrue
+                (SmtBoolEq
+                    (SmtConditional     
+                        (SmtBoolEq (SmtConst {| intval := 0; intrange := [...] |})
+                            (SmtConst {| intval := 0; intrange := [...] |}))
+                        (SmtBitAdd (SmtConst {| intval := 1; intrange := [...] |})
+                            (SmtConst {| intval := 0; intrange := [...] |}))
+                        (SmtConst {| intval := 0; intrange := Z_mod_modulus_range' 0 |}))
+                    (SmtConditional
+                        (SmtBoolEq (SmtConst {| intval := 0; intrange := [...] |})
+                            (SmtConst {| intval := 0; intrange := [...] |}))
+                        (SmtBitAdd (SmtConst {| intval := 1; intrange := [...] |})
+                            (SmtConst {| intval := 0; intrange := [...] |}))
+                        (SmtConst {| intval := 0; intrange := Z_mod_modulus_range' 0 |})))))
+     : option SmtValuation
