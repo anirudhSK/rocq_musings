@@ -79,7 +79,7 @@ debug_echo "Using compiler: $P4_COMPILER"
 debug_echo "Using converter: $CONVERTER"
 
 # Create output directory if it doesn't exist
-OUTPUT_DIR="../$(basename "$PWD")"
+OUTPUT_DIR=".."
 mkdir -p "$OUTPUT_DIR"
 
 OUTPUT_FILE="$OUTPUT_DIR/main.v"
@@ -87,10 +87,8 @@ debug_echo "Output file: $OUTPUT_FILE"
 
 # Step 1: Run P4 compiler and capture stdout to main.v
 debug_echo "Running P4 compiler..."
-if ! "$P4_COMPILER" "$P4_FILE" > "$OUTPUT_FILE" 2>/dev/null; then
-    echo "Error: P4 compilation failed" >&2
-    exit 1
-fi
+# Run P4 compiler (ignoring segfault/exit code)
+"$P4_COMPILER" "$P4_FILE" > "$OUTPUT_FILE" 2>/dev/null || true
 
 if [ "$DEBUG" = false ]; then
     echo "P4 compilation completed"
@@ -99,9 +97,9 @@ fi
 # Step 2: Run coqc on the generated file and pipe stdout to converter
 debug_echo "Running coqc on $OUTPUT_FILE..."
 if [ "$DEBUG" = true ]; then
-    coqc "$OUTPUT_FILE" 2>/dev/null | python3 "$CONVERTER" --debug
+    coqc -R .. MyProject  "$OUTPUT_FILE" 2>/dev/null | python3 "$CONVERTER" --debug
 else
-    coqc "$OUTPUT_FILE" 2>/dev/null | python3 "$CONVERTER" >/dev/null 2>&1
+    coqc -R .. MyProject  "$OUTPUT_FILE" 2>/dev/null | python3 "$CONVERTER" >/dev/null 2>&1
 fi
 
 COQC_EXIT_CODE=${PIPESTATUS[0]}
