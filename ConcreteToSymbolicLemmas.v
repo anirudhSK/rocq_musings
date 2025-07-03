@@ -261,12 +261,6 @@ Proof.
     apply nothing_changed_hdr.
 Qed.
 
-Lemma fold_right_cons {A B : Type} (f : A -> B -> B) (x : A) (l : list A) (i : B) :
-  fold_right f i (x :: l) = f x (fold_right f i l).
-Proof.
-  reflexivity.
-Qed.
-
 (* Effectively, ctrl plane doesn't change *)
 Lemma ctrl_plane_invariant:
   forall (ho: HdrOp)
