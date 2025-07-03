@@ -359,8 +359,8 @@ Proof.
   intros sr1 sr2 s h f.
   intro H.
   apply smt_bool_eq_true in H.
-  rewrite symbolic_vs_concrete_seq_rule.
-  rewrite symbolic_vs_concrete_seq_rule.
+  rewrite commute_sym_vs_conc_seq_rule.
+  rewrite commute_sym_vs_conc_seq_rule.
   apply H.
 Qed.
 
@@ -375,8 +375,8 @@ Proof.
   intros sr1 sr2 s sv f.
   intro H.
   apply smt_bool_eq_true in H.
-  rewrite symbolic_vs_concrete_seq_rule.
-  rewrite symbolic_vs_concrete_seq_rule.
+  rewrite commute_sym_vs_conc_seq_rule.
+  rewrite commute_sym_vs_conc_seq_rule.
   apply H.
 Qed.
 
@@ -435,8 +435,8 @@ Proof.
   intros sr1 sr2 s h f.
   intro H.
   apply smt_bool_eq_false in H.
-  rewrite symbolic_vs_concrete_seq_rule.
-  rewrite symbolic_vs_concrete_seq_rule.
+  rewrite commute_sym_vs_conc_seq_rule.
+  rewrite commute_sym_vs_conc_seq_rule.
   apply H.
 Qed.
 
@@ -451,8 +451,8 @@ Proof.
   intros sr1 sr2 s sv f.
   intro H.
   apply smt_bool_eq_false in H.
-  rewrite symbolic_vs_concrete_seq_rule.
-  rewrite symbolic_vs_concrete_seq_rule.
+  rewrite commute_sym_vs_conc_seq_rule.
+  rewrite commute_sym_vs_conc_seq_rule.
   apply H.
 Qed.
 
