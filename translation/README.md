@@ -1,5 +1,5 @@
 ## Usage
-To compile the file `main.v` run the command `./compile.sh`
+To compile the file `main.v` run the command `./compile.sh` from the translation directory. This will output either unsat (equivalent programs) or sat
 #### Custom arguments
 ```
 Usage: ./compile.sh [OPTIONS] [FILE]

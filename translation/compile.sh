@@ -88,9 +88,10 @@ debug_echo "Output file: $OUTPUT_FILE"
 # Step 1: Run P4 compiler and capture stdout to main.v
 debug_echo "Running P4 compiler..."
 # Run P4 compiler (ignoring segfault/exit code)
-"$P4_COMPILER" "$P4_FILE" > "$OUTPUT_FILE" 2>/dev/null || true
+(exec 2>/dev/null; "$P4_COMPILER" "$P4_FILE" > "$OUTPUT_FILE") || true
 
-if [ "$DEBUG" = false ]; then
+
+if [ "$DEBUG" = true ]; then
     echo "P4 compilation completed"
 fi
 
@@ -99,22 +100,9 @@ debug_echo "Running coqc on $OUTPUT_FILE..."
 if [ "$DEBUG" = true ]; then
     coqc -R .. MyProject  "$OUTPUT_FILE" 2>/dev/null | python3 "$CONVERTER" --debug
 else
-    coqc -R .. MyProject  "$OUTPUT_FILE" 2>/dev/null | python3 "$CONVERTER" >/dev/null 2>&1
+    coqc -R .. MyProject  "$OUTPUT_FILE" 2>/dev/null | python3 "$CONVERTER"
 fi
 
-COQC_EXIT_CODE=${PIPESTATUS[0]}
-CONVERTER_EXIT_CODE=${PIPESTATUS[1]}
-
-if [ $COQC_EXIT_CODE -ne 0 ]; then
-    echo "Error: coqc failed" >&2
-    exit 1
-fi
-
-if [ $CONVERTER_EXIT_CODE -ne 0 ]; then
-    echo "Error: converter failed" >&2
-    exit 1
-fi
-
-if [ "$DEBUG" = false ]; then
+if [ "$DEBUG" = true ]; then
     echo "Conversion completed successfully"
 fi

@@ -8,3 +8,4 @@ Makefile
 *.Makefile.d
 .lia.cache
 .DS_Store
+main.v
