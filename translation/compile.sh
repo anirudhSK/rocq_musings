@@ -2,7 +2,7 @@
 
 # Default values
 P4_FILE="main.p4"
-P4_COMPILER="./p4c/build/p4dummy"
+P4_COMPILER="./p4c/build/rocq"
 CONVERTER="convert.py"
 DEBUG=false
 
@@ -29,7 +29,7 @@ while [[ $# -gt 0 ]]; do
             echo "Usage: $0 [OPTIONS] [FILE]"
             echo "Options:"
             echo "  --file FILE       P4 file to compile (default: main.p4)"
-            echo "  --compiler PATH   P4 compiler path (default: ./p4c/build/p4dummy)"
+            echo "  --compiler PATH   P4 compiler path (default: ./p4c/build/rocq)"
             echo "  --converter PATH  Python converter script (default: convert.py)"
             echo "  --debug          Enable debug output"
             echo "  -h, --help       Show this help message"
