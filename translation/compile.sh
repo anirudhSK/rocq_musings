@@ -1,7 +1,8 @@
 #!/bin/bash
 
 # Default values
-P4_FILE="main.p4"
+P4_FILE_FIRST="first.p4"
+P4_FILE_SECOND="second.p4"
 P4_COMPILER="./p4c/build/rocq"
 CONVERTER="convert.py"
 DEBUG=false
@@ -13,8 +14,12 @@ while [[ $# -gt 0 ]]; do
             DEBUG=true
             shift
             ;;
-        --file)
-            P4_FILE="$2"
+        --first)
+            P4_FILE_FIRST="$2"
+            shift 2
+            ;;
+        --second)
+            P4_FILE_SECOND="$2"
             shift 2
             ;;
         --compiler)
@@ -26,9 +31,10 @@ while [[ $# -gt 0 ]]; do
             shift 2
             ;;
         -h|--help)
-            echo "Usage: $0 [OPTIONS] [FILE]"
+            echo "Usage: $0 [OPTIONS]"
             echo "Options:"
-            echo "  --file FILE       P4 file to compile (default: main.p4)"
+            echo "  --first FILE       P4 file to compile (default: first.p4)"
+            echo "  --second FILE       P4 file to compile (default: second.p4)"
             echo "  --compiler PATH   P4 compiler path (default: ./p4c/build/rocq)"
             echo "  --converter PATH  Python converter script (default: convert.py)"
             echo "  --debug          Enable debug output"
@@ -57,10 +63,18 @@ debug_echo() {
 }
 
 # Check if P4 file exists
-if [ ! -f "$P4_FILE" ]; then
-    echo "Error: P4 file '$P4_FILE' not found" >&2
+if [ ! -f "$P4_FILE_FIRST" ]; then
+    echo "Error: P4 file '$P4_FILE_FIRST' not found" >&2
     exit 1
 fi
+
+
+# Check if P4 file exists
+if [ ! -f "$P4_FILE_SECOND" ]; then
+    echo "Error: P4 file '$P4_FILE_SECOND' not found" >&2
+    exit 1
+fi
+
 
 # Check if P4 compiler exists
 if [ ! -f "$P4_COMPILER" ]; then
@@ -74,33 +88,48 @@ if [ ! -f "$CONVERTER" ]; then
     exit 1
 fi
 
-debug_echo "Compiling P4 file: $P4_FILE"
+# Compile first P4 file
+debug_echo "Compiling P4 file: $P4_FILE_FIRST"
 debug_echo "Using compiler: $P4_COMPILER"
 debug_echo "Using converter: $CONVERTER"
 
-# Create output directory if it doesn't exist
-OUTPUT_DIR=".."
-mkdir -p "$OUTPUT_DIR"
-
-OUTPUT_FILE="$OUTPUT_DIR/main.v"
+OUTPUT_FILE="../first_generated.v"
 debug_echo "Output file: $OUTPUT_FILE"
 
-# Step 1: Run P4 compiler and capture stdout to main.v
 debug_echo "Running P4 compiler..."
-# Run P4 compiler (ignoring segfault/exit code)
-(exec 2>/dev/null; "$P4_COMPILER" "$P4_FILE" > "$OUTPUT_FILE") || true
+
+(exec 2>/dev/null; "$P4_COMPILER" "$P4_FILE_FIRST" > "$OUTPUT_FILE") || true
+
+debug_echo "P4 compilation completed"
 
 
+# Compile second P4 file
+debug_echo "Compiling P4 file: $P4_FILE_SECOND"
+
+OUTPUT_FILE="../second_generated.v"
+debug_echo "Output file: $OUTPUT_FILE"
+
+debug_echo "Running P4 compiler..."
+
+(exec 2>/dev/null; "$P4_COMPILER" "$P4_FILE_SECOND" > "$OUTPUT_FILE") || true
+
+debug_echo "P4 compilation completed"
+
+# Add combination file to main dir
+COMBINATION_FILE="../combine.v"
+cp ./combine.v $COMBINATION_FILE
+
+# Make coq files
+(exec 2>/dev/null;coq_makefile -f _CoqProject *.v -o Makefile > /dev/null)
+(exec 2>/dev/null; make -C ../ > /dev/null)
+
+
+# Run coqc on the generated file and pipe stdout to converter
+debug_echo "Running coqc on $COMBINATION_FILE..."
 if [ "$DEBUG" = true ]; then
-    echo "P4 compilation completed"
-fi
-
-# Step 2: Run coqc on the generated file and pipe stdout to converter
-debug_echo "Running coqc on $OUTPUT_FILE..."
-if [ "$DEBUG" = true ]; then
-    coqc -R .. MyProject  "$OUTPUT_FILE" 2>/dev/null | python3 "$CONVERTER" --debug
+    coqc -R .. MyProject  "$COMBINATION_FILE" 2>/dev/null | python3 "$CONVERTER" --debug
 else
-    coqc -R .. MyProject  "$OUTPUT_FILE" 2>/dev/null | python3 "$CONVERTER"
+    coqc -R .. MyProject  "$COMBINATION_FILE" 2>/dev/null | python3 "$CONVERTER"
 fi
 
 if [ "$DEBUG" = true ]; then

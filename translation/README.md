@@ -1,14 +1,17 @@
 ## Usage
-To compile the file `main.v` run the command `./compile.sh` from the translation directory. This will output either unsat (equivalent programs) or sat
+To compile the file `first.p4` and `second.p4` into `first_generated.v` and `second_generated.v` combined in `combine.v` and verfied through SMT, run the command `./compile.sh` from the translation directory. This will output either unsat (equivalent programs) or sat. Adding the `--debug` flag will include further Z3 output.
 #### Custom arguments
 ```
-Usage: ./compile.sh [OPTIONS] [FILE]
+Usage: ./compile.sh [OPTIONS]
 Options:
-  --file FILE       P4 file to compile (default: main.p4)
-  --compiler PATH   P4 compiler path (default: ./p4c/build/p4dummy)
+  --first FILE       P4 file to compile (default: first.p4)
+  --second FILE       P4 file to compile (default: second.p4)
+  --compiler PATH   P4 compiler path (default: ./p4c/build/rocq)
   --converter PATH  Python converter script (default: convert.py)
   --debug          Enable debug output
   -h, --help       Show this help message
+
+If FILE is provided as positional argument, it overrides --file option
 ```
 
 ## Compilation steps
