@@ -1,5 +1,9 @@
 ## Usage
 To compile the file `first.p4` and `second.p4` into `first_generated.v` and `second_generated.v` combined in `combine.v` and verfied through SMT, run the command `./compile.sh` from the translation directory. This will output either unsat (equivalent programs) or sat. Adding the `--debug` flag will include further Z3 output.
+
+#### Limitations
+The variable names in the combination file are hardcoded. Thus, any changes to reference names in either `first.p4` or `second.p4` will need to be manually changed in `combine.v`.
+
 #### Custom arguments
 ```
 Usage: ./compile.sh [OPTIONS]
