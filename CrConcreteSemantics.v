@@ -100,6 +100,25 @@ Definition eval_match_action_rule (rule : MatchActionRule) (ps : ProgramState ui
   | Par prule => eval_par_rule_uint8 prule ps
   end.
 
+(* Function to evaluate a transformer, which is a list of match-action rules *)
+Definition eval_transformer_uint8 (t : Transformer) (ps : ProgramState uint8) : (ProgramState uint8) :=
+  (* lookup header against each of the match-action rules *)
+  match t with
+  | Transformer rules =>
+    let match_results := List.map (fun rule =>
+                                       match rule with 
+                                          | Seq (SeqCtr match_pattern _) => eval_match_uint8 match_pattern ps
+                                          | Par (ParCtr match_pattern _) => eval_match_uint8 match_pattern ps
+                                       end) rules in
+    (* If any match, evaluate the corresponding rule *)
+        if List.existsb (fun b => b) match_results then
+           (* find the first true/match
+              in match_results (assume rules are listed in priority order) *)
+            let matched_rule := List.find (fun b => b) match_results in
+              
+
+  end.
+
 Instance Semantics_uint8 : Semantics uint8 := {
   (* Function to lookup arg in program state *)
   lookup_function_argument := lookup_uint8;
