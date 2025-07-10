@@ -5,11 +5,7 @@ Import ListNotations.
 Require Import Strings.String.
 From MyProject Require Export CrIdentifiers.
 From MyProject Require Export CrSemantics.
-
-(* TODO: fill out eval_transformer body at the end,
-   right now, we are just specifying it as a function that
-   goes from previous valuation to new one *)
-Parameter eval_transformer : Transformer -> ProgramState uint8 -> ProgramState uint8.
+From MyProject Require Export ListUtils.
 
 (* Apply binary operation *)
 Definition apply_bin_op (f : BinaryOp) (arg1 : uint8) (arg2 : uint8) : uint8 :=
@@ -99,6 +95,22 @@ Definition eval_match_action_rule (rule : MatchActionRule) (ps : ProgramState ui
   | Seq srule => eval_seq_rule_uint8 srule ps
   | Par prule => eval_par_rule_uint8 prule ps
   end.
+
+(* Function to evaluate a transformer, which is a list of match-action rules *)
+Definition eval_transformer_uint8 (t : Transformer) (ps : ProgramState uint8) : (ProgramState uint8) :=
+  (* lookup header against each of the match-action rules in t to see if there is a match *)
+  let match_results := List.map (fun rule =>
+                     match rule with 
+                       | Seq (SeqCtr match_pattern _) => eval_match_uint8 match_pattern ps
+                       | Par (ParCtr match_pattern _) => eval_match_uint8 match_pattern ps
+                     end) t in
+    (* Combine match results with the rules to find the first matching rule *)
+    let rules_with_match_results := List.combine match_results t in
+      let first_match := find_first_match rules_with_match_results in (* find_first_match is in ListUtils *)
+        match first_match with
+        | None => ps  (* no match, return unchanged state *)
+        | Some (rule) => eval_match_action_rule rule ps (* evaluate the rule and update state accordingly *)
+      end.
 
 Instance Semantics_uint8 : Semantics uint8 := {
   (* Function to lookup arg in program state *)

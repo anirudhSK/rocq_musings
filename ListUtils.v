@@ -1,4 +1,3 @@
-(* Create a list of 5 elements in the coq functional language *)
 Require Import List.
 Require Import Coq.Lists.List.
 Require Import Coq.Arith.EqNat.
@@ -6,11 +5,13 @@ Require Import Coq.Arith.PeanoNat.
 Import ListNotations.
 Require Import Coq.Logic.Classical_Prop.
 From Coq Require Import FunctionalExtensionality.
+Require Import Coq.Strings.String.
+Open Scope string_scope.
 
 (* Define a list of 5 elements *)
 Definition my_list : list nat := [1; 2; 3; 4; 5].
 
-Eval compute in (length my_list).
+Eval compute in (List.length my_list).
 
 (* Check if there are any duplicates in my_list.
    Use an existing library function directly if one exists. *)
@@ -19,6 +20,35 @@ Fixpoint has_duplicates {T : Type} (eqb : T -> T -> bool) (l : list T) : bool :=
     | x :: xs => if List.existsb (fun y => eqb y x) xs then true else has_duplicates eqb xs
     | [] => false
     end.
+
+
+(* Function to find first match given:
+   a list of pair,
+   each pair consists of a bool that says if there was a match or not and the element itself *)
+Fixpoint find_first_match {T : Set} (list_of_pair : list (bool*T)) : option T :=
+    match list_of_pair with
+    | [] => None                                       (* empty, return error *)
+    | (true,r) :: _ => Some r                          (* found a match, return the corresponding rule, ignore the rest (_) *)
+    | (false,_) :: rest => find_first_match rest (* continue searching *)
+    end.
+
+(* Create a few examples to test out find_first_match *)
+(* Use a string for the type T above *)
+Definition example_list_of_pair : list (bool * string) :=
+  [(false, "rule1"); (true, "rule2"); (false, "rule3")].
+Definition example_list_of_pair2 : list (bool * string) :=
+  [(true, "ruleA"); (false, "ruleB"); (true, "ruleC")].
+Definition example_list_of_pair3 : list (bool * string) :=
+  [(false, "ruleX"); (false, "ruleY"); (true, "ruleZ")].
+(* One example with all false *)
+Definition example_list_of_pair4 : list (bool * string) :=
+  [(false, "rule1"); (false, "rule2"); (false, "rule3")].
+
+(* Test the find_first_match function on all examples above *)
+Eval compute in (find_first_match example_list_of_pair). (* should return Some "rule2" *)
+Eval compute in (find_first_match example_list_of_pair2). (* should return Some "ruleA" *)
+Eval compute in (find_first_match example_list_of_pair3). (* should return Some "ruleZ" *)
+Eval compute in (find_first_match example_list_of_pair4). (* should return None *)
 
 Section ListUtilsLemmas.
    Context (T : Type).
