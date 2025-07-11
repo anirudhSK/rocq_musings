@@ -5,7 +5,10 @@ P4_FILE_FIRST="first.p4"
 P4_FILE_SECOND="second.p4"
 P4_COMPILER="./p4c/build/rocq"
 CONVERTER="convert.py"
-DEBUG=false
+DEBUG=true
+OUTPUT_FILE_FIRST="../first_generated.v"
+OUTPUT_FILE_SECOND="../second_generated.v"
+COMBINATION_FILE="../combine.v"
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
@@ -62,6 +65,13 @@ debug_echo() {
     fi
 }
 
+# Debug output function
+debug_section() {
+    if [ "$DEBUG" = true ]; then
+        echo -e "\n\n------------ $@ ------------\n\n"
+    fi
+}
+
 # Check if P4 file exists
 if [ ! -f "$P4_FILE_FIRST" ]; then
     echo "Error: P4 file '$P4_FILE_FIRST' not found" >&2
@@ -88,50 +98,55 @@ if [ ! -f "$CONVERTER" ]; then
     exit 1
 fi
 
+
+# Clean enviorment
+debug_section "Cleaning the enviorment"
+rm ../combine.v "$OUTPUT_FILE_FIRST" "$OUTPUT_FILE_SECOND" ../Makefile.conf ../.*.aux .lia.cache .output
+cd ..
+make clean
+rm Makefile
+cd translation
+
+
 # Compile first P4 file
-debug_echo "Compiling P4 file: $P4_FILE_FIRST"
+debug_section "Compiling first P4 file: $P4_FILE_FIRST"
 debug_echo "Using compiler: $P4_COMPILER"
 debug_echo "Using converter: $CONVERTER"
-
-OUTPUT_FILE="../first_generated.v"
-debug_echo "Output file: $OUTPUT_FILE"
-
+debug_echo "Output file: $OUTPUT_FILE_FIRST"
 debug_echo "Running P4 compiler..."
 
-(exec 2>/dev/null; "$P4_COMPILER" "$P4_FILE_FIRST" > "$OUTPUT_FILE") || true
+"$P4_COMPILER" "$P4_FILE_FIRST" > /dev/null # std.out already goes to the output file.
+mv output.v "$OUTPUT_FILE_FIRST"
 
 debug_echo "P4 compilation completed"
 
 
 # Compile second P4 file
-debug_echo "Compiling P4 file: $P4_FILE_SECOND"
-
-OUTPUT_FILE="../second_generated.v"
-debug_echo "Output file: $OUTPUT_FILE"
-
+debug_section "Compiling second P4 file: $P4_FILE_SECOND"
+debug_echo "Output file: $OUTPUT_FILE_SECOND"
 debug_echo "Running P4 compiler..."
 
-(exec 2>/dev/null; "$P4_COMPILER" "$P4_FILE_SECOND" > "$OUTPUT_FILE") || true
+"$P4_COMPILER" "$P4_FILE_SECOND" > /dev/null # std.out already goes to the output file.
+mv output.v "$OUTPUT_FILE_SECOND"
 
 debug_echo "P4 compilation completed"
 
+
 # Add combination file to main dir
-COMBINATION_FILE="../combine.v"
 cp ./combine.v $COMBINATION_FILE
 
+
 # Make coq files
-(exec 2>/dev/null;coq_makefile -f _CoqProject *.v -o Makefile > /dev/null)
-(exec 2>/dev/null; make -C ../ > /dev/null)
+debug_section "Make ROCQ"
+cd ..
+coq_makefile -f _CoqProject *.v -o Makefile
+make
+cd translation
 
 
 # Run coqc on the generated file and pipe stdout to converter
+debug_section "Run Python Script"
 debug_echo "Running coqc on $COMBINATION_FILE..."
-if [ "$DEBUG" = true ]; then
-    coqc -R .. MyProject  "$COMBINATION_FILE" 2>/dev/null | python3 "$CONVERTER" --debug
-else
-    coqc -R .. MyProject  "$COMBINATION_FILE" 2>/dev/null | python3 "$CONVERTER"
-fi
+coqc -R .. MyProject  "$COMBINATION_FILE" -exclude-dir translation | python3 "$CONVERTER" --debug
 
-if [ "$DEBUG" = true ]; then
-    echo "Conversion completed successfully"
-fi
+debug_echo "Conversion completed successfully"
