@@ -1,4 +1,5 @@
 #!/bin/bash
+set -e
 
 # Default values
 P4_FILE_FIRST="first.p4"
@@ -101,10 +102,11 @@ fi
 
 # Clean enviorment
 debug_section "Cleaning the enviorment"
-rm ../combine.v "$OUTPUT_FILE_FIRST" "$OUTPUT_FILE_SECOND" ../Makefile.conf ../.*.aux .lia.cache .output
+rm -f ../combine.v "$OUTPUT_FILE_FIRST" "$OUTPUT_FILE_SECOND" ../Makefile.conf ../.*.aux .lia.cache .output
 cd ..
 make clean
-rm Makefile
+rm  -f Makefile Makefile.conf
+rm -f .lia.cache
 cd translation
 
 
