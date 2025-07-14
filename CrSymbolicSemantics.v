@@ -4,6 +4,9 @@ From MyProject Require Import CrSemantics.
 From MyProject Require Import SmtExpr.
 Require Import ZArith.
 Require Import Coq.Strings.String.
+Require Import List.
+Require Import Coq.Lists.List.
+Import ListNotations.
 
 (* Convert FunctionArgument to SmtArithExpr *)
 Definition lookup_smt (arg : FunctionArgument) (ps : ProgramState SmtArithExpr) : SmtArithExpr :=
@@ -88,8 +91,8 @@ Definition eval_seq_rule_smt (srule : SeqRule) (ps : ProgramState SmtArithExpr) 
         (* First evaluate the match pattern by itself against the original state ps *)
         let condition := eval_match_smt match_pattern ps in
 
-          (* Second, evaluate all the hdr_ops contained in the action to get a new intermediate state ps' from ps *)
-          let ps' := eval_hdr_op_list_smt (action) ps in
+        (* Second, evaluate all the hdr_ops contained in the action to get a new intermediate state ps' from ps *)
+        let ps' := eval_hdr_op_list_smt (action) ps in
 
           (* Third, return the updated program state:
              ctrl_plane_map: same as what it was in the original state ps,
@@ -111,8 +114,8 @@ Definition eval_par_rule_smt (prule : ParRule) (ps : ProgramState SmtArithExpr) 
         (* First evaluate the match pattern by itself against the original state ps *)
         let condition := eval_match_smt match_pattern ps in
 
-          (* Second, evaluate all the hdr_ops contained in the action to get a new intermediate state ps' from ps *)
-          let ps' := eval_hdr_op_list_smt (proj1_sig action) ps in
+        (* Second, evaluate all the hdr_ops contained in the action to get a new intermediate state ps' from ps *)
+        let ps' := eval_hdr_op_list_smt (proj1_sig action) ps in
 
           (* Third, return the updated program state:
              ctrl_plane_map: same as what it was in the original state ps,
@@ -129,6 +132,30 @@ Definition eval_match_action_rule_smt (rule : MatchActionRule) (ps : ProgramStat
   | Seq srule => eval_seq_rule_smt srule ps
   | Par prule => eval_par_rule_smt prule ps
   end.
+
+Fixpoint switch_case_expr (cases : list (SmtBoolExpr * SmtArithExpr)) (default_case : SmtArithExpr) : SmtArithExpr :=
+  match cases with
+  | [] => default_case
+  | (cond, expr) :: rest =>
+      SmtConditional cond expr (switch_case_expr rest default_case)
+  end.
+
+Definition eval_transformer_smt (t : Transformer) (ps : ProgramState SmtArithExpr) : ProgramState SmtArithExpr :=
+  (* Compute match results for each match pattern (one embedded in each rule) *)
+  let match_results := List.map (fun rule =>
+                       match rule with 
+                        | Seq (SeqCtr match_pattern _) => eval_match_smt match_pattern ps
+                        | Par (ParCtr match_pattern _) => eval_match_smt match_pattern ps
+                       end) t in
+  (* get all future program states, one for each rule *)
+  let program_states := List.map (fun rule => eval_match_action_rule_smt rule ps) t in
+  (* map a header to all possible future exprs, one for each future state *)
+  let header_exprs   := fun h => List.map (fun ps => header_map ps h) program_states in
+  (* same as above, for state variables *)
+  let state_vars     := fun s => List.map (fun ps => state_var_map ps s) program_states in
+      {| ctrl_plane_map := ctrl_plane_map ps; (* leave this unchanged *)
+         header_map := fun h => switch_case_expr (List.combine match_results (header_exprs h)) (header_map ps h);
+         state_var_map := fun s => switch_case_expr (List.combine match_results (state_vars s)) (state_var_map ps s) |}.
 
 Instance Semantics_SmtArithExpr : Semantics SmtArithExpr := {
   (* Function to lookup arg in program state *)

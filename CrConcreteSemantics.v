@@ -106,7 +106,7 @@ Definition eval_transformer_uint8 (t : Transformer) (ps : ProgramState uint8) : 
                      end) t in
     (* Combine match results with the rules to find the first matching rule *)
     let rules_with_match_results := List.combine match_results t in
-      let first_match := find_first_match rules_with_match_results in (* find_first_match is in ListUtils *)
+    let first_match := find_first_match rules_with_match_results in (* find_first_match is in ListUtils *)
         match first_match with
         | None => ps  (* no match, return unchanged state *)
         | Some (rule) => eval_match_action_rule_uint8 rule ps (* evaluate the rule and update state accordingly *)
