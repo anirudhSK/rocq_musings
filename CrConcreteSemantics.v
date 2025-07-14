@@ -90,7 +90,7 @@ Definition eval_par_rule_uint8 (prule : ParRule) (ps : ProgramState uint8) : (Pr
 (* Function to evaluate a match-action rule,
    meaning header ops within an action are evaluated
    according to the type of the rule (sequential or parallel) *)
-Definition eval_match_action_rule (rule : MatchActionRule) (ps : ProgramState uint8) : (ProgramState uint8) :=
+Definition eval_match_action_rule_uint8 (rule : MatchActionRule) (ps : ProgramState uint8) : (ProgramState uint8) :=
   match rule with 
   | Seq srule => eval_seq_rule_uint8 srule ps
   | Par prule => eval_par_rule_uint8 prule ps
@@ -109,7 +109,7 @@ Definition eval_transformer_uint8 (t : Transformer) (ps : ProgramState uint8) : 
       let first_match := find_first_match rules_with_match_results in (* find_first_match is in ListUtils *)
         match first_match with
         | None => ps  (* no match, return unchanged state *)
-        | Some (rule) => eval_match_action_rule rule ps (* evaluate the rule and update state accordingly *)
+        | Some (rule) => eval_match_action_rule_uint8 rule ps (* evaluate the rule and update state accordingly *)
       end.
 
 Instance Semantics_uint8 : Semantics uint8 := {
