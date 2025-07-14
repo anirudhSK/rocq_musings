@@ -107,10 +107,27 @@ Definition eval_seq_rule_smt (srule : SeqRule) (ps : ProgramState SmtArithExpr) 
    these conditions are realized using subset types, that's why we need proj1_sig *)
 Definition eval_par_rule_smt (prule : ParRule) (ps : ProgramState SmtArithExpr) : (ProgramState SmtArithExpr) :=
   match prule with
-  | ParCtr match_pattern action =>  
-          List.fold_right (fun ho state => eval_hdr_op_assign_smt_conditional match_pattern ho state)
-          ps
-          (proj1_sig action)
+  | ParCtr match_pattern action =>
+        (* First evaluate the match pattern by itself against the original state ps *)
+        let condition := eval_match_smt match_pattern ps in
+
+          (* Second, evaluate all the hdr_ops contained in the action to get a new intermediate state ps' from ps *)
+          let ps' := eval_hdr_op_list_smt (proj1_sig action) ps in
+
+          (* Third, return the updated program state:
+             ctrl_plane_map: same as what it was in the original state ps,
+             header_map: for every header, its value is SmtConditional condition (value in ps') (value in ps)
+             state_map: similar to header_map *)
+
+          {| ctrl_plane_map := ctrl_plane_map ps;
+             header_map := fun h => SmtConditional condition (header_map ps' h) (header_map ps h);
+             state_var_map := fun s => SmtConditional condition (state_var_map ps' s) (state_var_map ps s) |}   
+  end.
+
+Definition eval_match_action_rule_smt (rule : MatchActionRule) (ps : ProgramState SmtArithExpr) : (ProgramState SmtArithExpr) :=
+  match rule with
+  | Seq srule => eval_seq_rule_smt srule ps
+  | Par prule => eval_par_rule_smt prule ps
   end.
 
 Instance Semantics_SmtArithExpr : Semantics SmtArithExpr := {
