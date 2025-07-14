@@ -1,0 +1,5 @@
+1. Add some axioms about interfacing with the environment. About the helper functions in particular.
+--> Think about helper functions as uninterpreted functions.
+--> Sequences of functions can't be proven correct with uninterpreted functions.
+2. Equivalence is one of the properties you might want: you may want to prove termination, safety, etc.
+3. Memory, aliasing, etc: using finite or partial maps indexing from nats to values (or symbolic values) and arithmetic on nats.
