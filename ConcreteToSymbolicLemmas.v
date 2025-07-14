@@ -172,6 +172,20 @@ Proof.
   f_equal; try assumption.
 Qed.
 
+Lemma program_state_equality_sym:
+      forall (ps1 ps2: ProgramState SmtArithExpr),
+        ctrl_plane_map ps1 = ctrl_plane_map ps2 ->
+        header_map ps1 = header_map ps2 ->
+        state_var_map  ps1 = state_var_map ps2 ->
+        ps1 = ps2.
+Proof.
+  intros ps1 ps2 Hctrl Hhdr Hstate.
+  destruct ps1 as [ctrl1 hdr1 state1].
+  destruct ps2 as [ctrl2 hdr2 state2].
+  simpl in *.
+  f_equal; try assumption.
+Qed.
+
 Lemma nothing_changed_state:
   forall s f target,
     eval_sym_state s f = 
@@ -272,6 +286,13 @@ Proof.
   destruct ho; simpl; try reflexivity.
 Qed.
 
+(* Effectively, ctrl plane doesn't change *)
+Lemma ctrl_plane_invariant2:
+  forall hol c1,
+  ctrl_plane_map (eval_hdr_op_list_uint8 hol c1) =
+  ctrl_plane_map c1.
+Proof.
+Admitted.
 
 Lemma commute_sym_vs_conc_helper_seq_par_rule :
   forall (mp: MatchPattern) (hol: list HdrOp) (f : SmtValuation)
@@ -362,5 +383,121 @@ Proof.
   - apply commute_sym_vs_conc_seq_rule.
   - apply commute_sym_vs_conc_par_rule.
 Qed.
-  
+
+Lemma one_rule_transformer_equals_ma_rule:
+  forall m c,
+         eval_transformer_uint8 [m] c = 
+         eval_match_action_rule_uint8 m c.
+Proof.
+  intros m c.
+  unfold eval_transformer_uint8.
+  unfold eval_match_action_rule_uint8.
+  destruct m as [sr | pr].
+  - simpl. destruct sr. destruct (eval_match_uint8 match_pattern c) eqn:des.
+    -- reflexivity.
+    -- simpl. rewrite des. reflexivity.
+  - simpl. destruct pr. destruct (eval_match_uint8 match_pattern c) eqn:des.
+    -- reflexivity.
+    -- simpl. rewrite des. reflexivity.
+Qed.
+
+Lemma one_rule_transformer_evals_to_ma_rule_smt:
+  forall m f s,
+         eval_sym_state (eval_transformer_smt [m] s) f =
+         eval_match_action_rule_uint8 m (eval_sym_state s f).
+Proof.
+  intros m f s.
+  unfold eval_transformer_smt.
+  unfold eval_match_action_rule_smt.
+  destruct m as [sr | pr].
+  - apply program_state_equality.
+    + apply functional_extensionality.
+      intros x.
+      simpl.
+      destruct sr as [mp hol].
+      simpl.
+      destruct (eval_match_uint8 mp (eval_sym_state s f)) eqn:des.
+      * rewrite ctrl_plane_invariant2.
+        reflexivity.
+      * reflexivity.
+    + apply functional_extensionality.
+      intros x.
+      simpl.
+      destruct sr as [mp hol].
+      simpl.
+      destruct (eval_match_uint8 mp (eval_sym_state s f)) eqn:des.
+      * rewrite commute_sym_vs_conc_match_pattern with (f := f) (s1 := s) in des; try reflexivity.
+        rewrite des.
+        rewrite commute_sym_vs_conc_hdr_op_list with (f := f) (s1 := s); try reflexivity.
+      * rewrite commute_sym_vs_conc_match_pattern with (f := f) (s1 := s) in des; try reflexivity.
+        rewrite des.
+        simpl. reflexivity.
+    + apply functional_extensionality.
+      intros x.
+      simpl.
+      destruct sr as [mp hol].
+      simpl.
+      destruct (eval_match_uint8 mp (eval_sym_state s f)) eqn:des.
+      * rewrite commute_sym_vs_conc_match_pattern with (f := f) (s1 := s) in des; try reflexivity.
+        rewrite des.
+        rewrite commute_sym_vs_conc_hdr_op_list with (f := f) (s1 := s); try reflexivity.
+      * rewrite commute_sym_vs_conc_match_pattern with (f := f) (s1 := s) in des; try reflexivity.
+        rewrite des.
+        simpl. reflexivity.
+  - apply program_state_equality.
+    + apply functional_extensionality.
+      intros x.
+      simpl.
+      destruct pr as [mp hol].
+      simpl.
+      destruct (eval_match_uint8 mp (eval_sym_state s f)) eqn:des.
+      * rewrite ctrl_plane_invariant2.
+        reflexivity.
+      * reflexivity.
+    + apply functional_extensionality.
+      intros x.
+      simpl.
+      destruct pr as [mp hol].
+      simpl.
+      destruct (eval_match_uint8 mp (eval_sym_state s f)) eqn:des.
+      * rewrite commute_sym_vs_conc_match_pattern with (f := f) (s1 := s) in des; try reflexivity.
+        rewrite des.
+        rewrite commute_sym_vs_conc_hdr_op_list with (f := f) (s1 := s); try reflexivity.
+      * rewrite commute_sym_vs_conc_match_pattern with (f := f) (s1 := s) in des; try reflexivity.
+        rewrite des.
+        simpl. reflexivity.
+    + apply functional_extensionality.
+      intros x.
+      simpl.
+      destruct pr as [mp hol].
+      simpl.
+      destruct (eval_match_uint8 mp (eval_sym_state s f)) eqn:des.
+      * rewrite commute_sym_vs_conc_match_pattern with (f := f) (s1 := s) in des; try reflexivity.
+        rewrite des.
+        rewrite commute_sym_vs_conc_hdr_op_list with (f := f) (s1 := s); try reflexivity.
+      * rewrite commute_sym_vs_conc_match_pattern with (f := f) (s1 := s) in des; try reflexivity.
+        rewrite des.
+        simpl. reflexivity.
+Qed.
+
+(* The transformer with one rule is equivalent to the match action rule *)
+Lemma transfomer_with_one_rule:
+  forall (m : MatchActionRule) (f : SmtValuation)
+         (s1 : ProgramState SmtArithExpr),
+  eval_transformer_uint8 [m] (eval_sym_state s1 f) = (* first concretize, and then interpret *)
+  eval_sym_state (eval_transformer_smt [m] s1) f. (* first interpret, and then concretize *)
+Proof.
+  intros m f s1.
+  rewrite one_rule_transformer_equals_ma_rule.
+  rewrite one_rule_transformer_evals_to_ma_rule_smt.
+  reflexivity.
+Qed.
+
+Lemma commute_sym_vs_conc_transfomer:
+  forall (t: Transformer) (f : SmtValuation)
+         (s1 : ProgramState SmtArithExpr),
+    eval_transformer_uint8 t (eval_sym_state s1 f) = (* first concretize, and then interpret *)
+    eval_sym_state (eval_transformer_smt t s1) f. (* first interpret, and then concretize *)
+Admitted.
+
 Print Assumptions commute_sym_vs_conc_seq_rule.
