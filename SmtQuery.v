@@ -276,7 +276,7 @@ Definition equivalence_checker
   (header_list : list Header) (state_var_list : list StateVar)
    :  SmtResult :=
   (* assume a starting symbolic state s*)
-  (* convert sr1 and sr2 to an equivalent SmtArithExpr, assuming s *)
+  (* convert sr1 and sr2 to an equivalent final SmtArithExpr, assuming a start state of s *)
   let s1 := eval_seq_rule_smt sr1 s in
   let s2 := eval_seq_rule_smt sr2 s in
   (* check if the headers and state vars are equivalent *)
