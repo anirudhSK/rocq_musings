@@ -272,16 +272,21 @@ Proof.
   destruct ho; simpl; try reflexivity.
 Qed.
 
-Lemma commute_sym_vs_conc_seq_rule :
-  forall (sr: SeqRule) (f : SmtValuation)
+
+Lemma commute_sym_vs_conc_helper_seq_par_rule :
+  forall (mp: MatchPattern) (hol: list HdrOp) (f : SmtValuation)
          (s1 : ProgramState SmtArithExpr),
-      eval_seq_rule_uint8 sr (eval_sym_state s1 f) = (* first concretize, and then interpret *)
-      eval_sym_state (eval_seq_rule_smt sr s1) f. (* first interpret, and then concretize *)
+    (if eval_match_uint8 mp (eval_sym_state s1 f)
+    then eval_hdr_op_list_uint8 hol (eval_sym_state s1 f)
+    else eval_sym_state s1 f) =
+    eval_sym_state {| ctrl_plane_map := ctrl_plane_map s1;
+                      header_map := fun h : Header => SmtConditional (eval_match_smt mp s1)
+                                                      (header_map (eval_hdr_op_list_smt hol s1) h) (header_map s1 h);
+                      state_var_map := fun s : StateVar => SmtConditional (eval_match_smt mp s1)
+                                                           (state_var_map (eval_hdr_op_list_smt hol s1) s) (state_var_map s1 s)
+                    |} f.
 Proof.
-  intros sr f s1.
-  destruct sr as [mp hol].
-  unfold eval_seq_rule_uint8.
-  unfold eval_seq_rule_smt.
+  intros mp hol f s1.
   apply program_state_equality.
   - apply functional_extensionality.
     intros x.
@@ -320,4 +325,42 @@ Proof.
       simpl. reflexivity.
 Qed.
 
+Lemma commute_sym_vs_conc_seq_rule :
+  forall (sr: SeqRule) (f : SmtValuation)
+         (s1 : ProgramState SmtArithExpr),
+      eval_seq_rule_uint8 sr (eval_sym_state s1 f) = (* first concretize, and then interpret *)
+      eval_sym_state (eval_seq_rule_smt sr s1) f. (* first interpret, and then concretize *)
+Proof.
+  intros sr f s1.
+  destruct sr as [mp hol].
+  unfold eval_seq_rule_uint8.
+  unfold eval_seq_rule_smt. 
+  apply commute_sym_vs_conc_helper_seq_par_rule.
+Qed.
+
+Lemma commute_sym_vs_conc_par_rule :
+  forall (pr: ParRule) (f : SmtValuation)
+         (s1 : ProgramState SmtArithExpr),
+      eval_par_rule_uint8 pr (eval_sym_state s1 f) = (* first concretize, and then interpret *)
+      eval_sym_state (eval_par_rule_smt pr s1) f. (* first interpret, and then concretize *)
+Proof.
+  intros pr f s1.
+  destruct pr as [mp hol].
+  unfold eval_par_rule_uint8.
+  unfold eval_par_rule_smt.
+  apply commute_sym_vs_conc_helper_seq_par_rule.
+Qed.
+
+Lemma commute_sym_vs_conc_ma_rule:
+  forall (ma : MatchActionRule) (f : SmtValuation)
+         (s1 : ProgramState SmtArithExpr),
+    eval_match_action_rule_uint8 ma (eval_sym_state s1 f) = (* first concretize, and then interpret *)
+    eval_sym_state (eval_match_action_rule_smt ma s1) f. (* first interpret, and then concretize *)
+Proof.
+  intros ma f s1.
+  destruct ma as [sr | pr].
+  - apply commute_sym_vs_conc_seq_rule.
+  - apply commute_sym_vs_conc_par_rule.
+Qed.
+  
 Print Assumptions commute_sym_vs_conc_seq_rule.
