@@ -542,8 +542,6 @@ Lemma ctrl_plane_invariant_transformer_intermediate:
     ctrl_plane_map (eval_transformer_uint8 t c).
 Proof.
   intros.
-  apply functional_extensionality.
-  intros.
   unfold eval_transformer_uint8.
   remember (a :: t) as full_list.
   remember (find_first_match (combine (get_match_results full_list c) full_list)) as outer_match.
@@ -568,8 +566,6 @@ Lemma commute_sym_vs_conc_transformer_ctrl_plane_map:
 Proof.
   intros.
   simpl.
-  apply functional_extensionality.
-  intros x.
   rewrite ctrl_plane_invariant_transformer.
   reflexivity.
 Qed.
