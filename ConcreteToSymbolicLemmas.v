@@ -276,7 +276,7 @@ Proof.
 Qed.
 
 (* Effectively, ctrl plane doesn't change *)
-Lemma ctrl_plane_invariant:
+Lemma ctrl_plane_invariant_hdr_op:
   forall (ho: HdrOp)
          (c1: ProgramState uint8),
   ctrl_plane_map (eval_hdr_op_assign_uint8 ho c1) =
@@ -287,12 +287,17 @@ Proof.
 Qed.
 
 (* Effectively, ctrl plane doesn't change *)
-Lemma ctrl_plane_invariant2:
+Lemma ctrl_plane_invariant_hdr_op_list:
   forall hol c1,
   ctrl_plane_map (eval_hdr_op_list_uint8 hol c1) =
   ctrl_plane_map c1.
 Proof.
-Admitted.
+  intros.
+  induction hol.
+  - reflexivity.
+  - simpl. rewrite <- IHhol.
+    apply ctrl_plane_invariant_hdr_op.
+Qed.
 
 Lemma commute_sym_vs_conc_helper_seq_par_rule :
   forall (mp: MatchPattern) (hol: list HdrOp) (f : SmtValuation)
@@ -317,7 +322,7 @@ Proof.
     + induction hol.
       * simpl. reflexivity.
       * simpl. rewrite <- IHhol.
-        rewrite ctrl_plane_invariant.
+        rewrite ctrl_plane_invariant_hdr_op.
         reflexivity. 
     + simpl. reflexivity.
   - apply functional_extensionality.
@@ -417,7 +422,7 @@ Proof.
       destruct sr as [mp hol].
       simpl.
       destruct (eval_match_uint8 mp (eval_sym_state s f)) eqn:des.
-      * rewrite ctrl_plane_invariant2.
+      * rewrite ctrl_plane_invariant_hdr_op_list.
         reflexivity.
       * reflexivity.
     + apply functional_extensionality.
@@ -451,7 +456,7 @@ Proof.
       destruct pr as [mp hol].
       simpl.
       destruct (eval_match_uint8 mp (eval_sym_state s f)) eqn:des.
-      * rewrite ctrl_plane_invariant2.
+      * rewrite ctrl_plane_invariant_hdr_op_list.
         reflexivity.
       * reflexivity.
     + apply functional_extensionality.
@@ -493,11 +498,106 @@ Proof.
   reflexivity.
 Qed.
 
+Lemma ctrl_plane_invariant_seq_rule:
+  forall s c,
+    ctrl_plane_map (eval_seq_rule_uint8 s c) =
+    ctrl_plane_map c.
+Proof.
+  intros.
+  unfold eval_seq_rule_uint8.
+  destruct s.
+  destruct (eval_match_uint8 match_pattern c).
+  apply ctrl_plane_invariant_hdr_op_list.
+  reflexivity.
+Qed.
+
+Lemma ctrl_plane_invariant_par_rule:
+  forall p c,
+    ctrl_plane_map (eval_par_rule_uint8 p c) =
+    ctrl_plane_map c.
+Proof.
+  intros.
+  unfold eval_par_rule_uint8.
+  destruct p.
+  destruct (eval_match_uint8 match_pattern c).
+  apply ctrl_plane_invariant_hdr_op_list.
+  reflexivity.
+Qed.
+
+Lemma ctrl_plane_invariant_ma_rule:
+  forall m c,
+    ctrl_plane_map (eval_match_action_rule_uint8 m c) =
+    ctrl_plane_map c.
+Proof.
+  intros.
+  unfold eval_match_action_rule_uint8.
+  destruct m.
+  - apply ctrl_plane_invariant_seq_rule.
+  - apply ctrl_plane_invariant_par_rule.
+Qed.
+
+Lemma ctrl_plane_invariant_transformer_intermediate:
+  forall a t c,
+    ctrl_plane_map (eval_transformer_uint8 (a :: t) c) =
+    ctrl_plane_map (eval_transformer_uint8 t c).
+Proof.
+  intros.
+  apply functional_extensionality.
+  intros.
+  unfold eval_transformer_uint8.
+  remember (a :: t) as full_list.
+  remember (find_first_match (combine (get_match_results full_list c) full_list)) as outer_match.
+  remember (find_first_match (combine (get_match_results t c) t)) as inner_match.
+  destruct (outer_match) eqn:des; destruct inner_match eqn:des2; try rewrite ctrl_plane_invariant_ma_rule; try reflexivity.
+  rewrite ctrl_plane_invariant_ma_rule. reflexivity.
+Qed.
+
+Lemma ctrl_plane_invariant_transformer:
+  forall c t,
+    ctrl_plane_map (eval_transformer_uint8 t c) = ctrl_plane_map c.
+Proof.
+  intros.
+  induction t.
+  - reflexivity.
+  - rewrite <- IHt. apply ctrl_plane_invariant_transformer_intermediate.
+Qed.
+
+Lemma commute_sym_vs_conc_transformer_ctrl_plane_map:
+  forall t f s1,
+    ctrl_plane_map (eval_transformer_uint8 t (eval_sym_state s1 f)) = ctrl_plane_map (eval_sym_state (eval_transformer_smt t s1) f).
+Proof.
+  intros.
+  simpl.
+  apply functional_extensionality.
+  intros x.
+  rewrite ctrl_plane_invariant_transformer.
+  reflexivity.
+Qed.
+
+Lemma commute_sym_vs_conc_transformer_header_map:
+  forall t f s1,
+    header_map (eval_transformer_uint8 t (eval_sym_state s1 f)) = header_map (eval_sym_state (eval_transformer_smt t s1) f).
+Admitted.
+
+Lemma commute_sym_vs_conc_transformer_state_var_map:
+  forall t f s1,
+    state_var_map (eval_transformer_uint8 t (eval_sym_state s1 f)) = state_var_map (eval_sym_state (eval_transformer_smt t s1) f).
+Admitted.
+
 Lemma commute_sym_vs_conc_transfomer:
   forall (t: Transformer) (f : SmtValuation)
          (s1 : ProgramState SmtArithExpr),
     eval_transformer_uint8 t (eval_sym_state s1 f) = (* first concretize, and then interpret *)
     eval_sym_state (eval_transformer_smt t s1) f. (* first interpret, and then concretize *)
-Admitted.
+Proof.
+  intros t f s1.
+  induction t as [| m rest IHrest].
+  - simpl. reflexivity.
+  - simpl.
+    apply program_state_equality.
+    -- apply commute_sym_vs_conc_transformer_ctrl_plane_map.
+    -- apply commute_sym_vs_conc_transformer_header_map.
+    -- apply commute_sym_vs_conc_transformer_state_var_map.
+Qed.
 
 Print Assumptions commute_sym_vs_conc_seq_rule.
