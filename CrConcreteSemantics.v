@@ -96,16 +96,18 @@ Definition eval_match_action_rule_uint8 (rule : MatchActionRule) (ps : ProgramSt
   | Par prule => eval_par_rule_uint8 prule ps
   end.
 
-(* Function to evaluate a transformer, which is a list of match-action rules *)
-Definition eval_transformer_uint8 (t : Transformer) (ps : ProgramState uint8) : (ProgramState uint8) :=
-  (* lookup header against each of the match-action rules in t to see if there is a match *)
-  let match_results := List.map (fun rule =>
+(* lookup header against each of the match-action rules in t to see if there is a match *)
+Definition get_match_results (t : Transformer) (ps : ProgramState uint8) : list bool :=
+  List.map (fun rule =>
                      match rule with 
                        | Seq (SeqCtr match_pattern _) => eval_match_uint8 match_pattern ps
                        | Par (ParCtr match_pattern _) => eval_match_uint8 match_pattern ps
-                     end) t in
+                     end) t.
+
+(* Function to evaluate a transformer, which is a list of match-action rules *)
+Definition eval_transformer_uint8 (t : Transformer) (ps : ProgramState uint8) : (ProgramState uint8) :=
     (* Combine match results with the rules to find the first matching rule *)
-    let rules_with_match_results := List.combine match_results t in
+    let rules_with_match_results := List.combine (get_match_results t ps) t in
     let first_match := find_first_match rules_with_match_results in (* find_first_match is in ListUtils *)
         match first_match with
         | None => ps  (* no match, return unchanged state *)
