@@ -1,6 +1,7 @@
 (* Write out semantics for bitvectors in SMT,
    show that a single hdr_op evaluation can be converted to the appropriate SMT formula in Z3 *)
 From MyProject Require Import CrIdentifiers.
+From MyProject Require Import CrProgramState.
 From Coq.Strings Require Import String.
 
 (* Note that these strings may or may not have a one-to-one correspondence with
@@ -61,3 +62,9 @@ with eval_smt_arith (e : SmtArithExpr) (v : SmtValuation) : uint8 :=
     | SmtBitDiv e1 e2 => divu (eval_smt_arith e1 v) (eval_smt_arith e2 v)
     | SmtBitMod e1 e2 => modu (eval_smt_arith e1 v) (eval_smt_arith e2 v)
     end.
+
+(* Apply SmtValuation f to every entry in the symbolic state across all 3 maps *)
+Definition eval_sym_state (s: ProgramState SmtArithExpr) (f : SmtValuation) : ProgramState uint8 :=
+  {| header_map := fun h => eval_smt_arith (header_map s h) f;
+     ctrl_plane_map := fun c => eval_smt_arith (ctrl_plane_map s c) f;
+     state_var_map := fun sv => eval_smt_arith (state_var_map s sv) f |}.

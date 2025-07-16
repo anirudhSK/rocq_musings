@@ -10,12 +10,8 @@ Require Import Coq.Lists.List.
 Import ListNotations.
 Require Import Coq.Bool.Bool.
 From Coq Require Import FunctionalExtensionality.
-
-(* Apply SmtValuation f to every entry in the symbolic state across all 3 maps *)
-Definition eval_sym_state (s: ProgramState SmtArithExpr) (f : SmtValuation) : ProgramState uint8 :=
-  {| header_map := fun h => eval_smt_arith (header_map s h) f;
-     ctrl_plane_map := fun c => eval_smt_arith (ctrl_plane_map s c) f;
-     state_var_map := fun sv => eval_smt_arith (state_var_map s sv) f |}.
+From MyProject Require Import HelperLemmas.
+From MyProject Require Import CtrlPlaneInvariants.
 
 (* Simpler lemma with no state update *)
 Lemma commute_sym_conc_expr:
@@ -158,84 +154,6 @@ Proof.
     -- rewrite andb_false_l. simpl. rewrite des. reflexivity.
 Qed.
 
-Lemma program_state_equality:
-      forall (ps1 ps2: ProgramState uint8),
-        ctrl_plane_map ps1 = ctrl_plane_map ps2 ->
-        header_map ps1 = header_map ps2 ->
-        state_var_map  ps1 = state_var_map ps2 ->
-        ps1 = ps2.
-Proof.
-  intros ps1 ps2 Hctrl Hhdr Hstate.
-  destruct ps1 as [ctrl1 hdr1 state1].
-  destruct ps2 as [ctrl2 hdr2 state2].
-  simpl in *.
-  f_equal; try assumption.
-Qed.
-
-Lemma program_state_equality_sym:
-      forall (ps1 ps2: ProgramState SmtArithExpr),
-        ctrl_plane_map ps1 = ctrl_plane_map ps2 ->
-        header_map ps1 = header_map ps2 ->
-        state_var_map  ps1 = state_var_map ps2 ->
-        ps1 = ps2.
-Proof.
-  intros ps1 ps2 Hctrl Hhdr Hstate.
-  destruct ps1 as [ctrl1 hdr1 state1].
-  destruct ps2 as [ctrl2 hdr2 state2].
-  simpl in *.
-  f_equal; try assumption.
-Qed.
-
-Lemma nothing_changed_state:
-  forall s f target,
-    eval_sym_state s f = 
-    update_state (eval_sym_state s f) target
-     (eval_smt_arith (state_var_map s target) f).
-Proof.
-  intros s f target.
-  destruct target.
-  unfold eval_sym_state.
-  apply program_state_equality; simpl; try reflexivity.
-  apply functional_extensionality.
-  intros x.
-  destruct x.
-  destruct (uid =? uid0)%positive eqn:des.
-  - apply Pos.eqb_eq in des.
-    rewrite des.
-    reflexivity.
-  - reflexivity.
-Qed.
-
-Lemma nothing_changed_hdr:
-  forall s f target,
-    eval_sym_state s f = 
-    update_hdr (eval_sym_state s f) target
-     (eval_smt_arith (header_map s target) f).
-Proof.
-  intros s f target.
-  destruct target.
-  unfold eval_sym_state.
-  apply program_state_equality; simpl; try reflexivity.
-  apply functional_extensionality.
-  intros x.
-  destruct x.
-  destruct (uid =? uid0)%positive eqn:des.
-  - apply Pos.eqb_eq in des.
-    rewrite des.
-    reflexivity.
-  - reflexivity.
-Qed.
-
-Lemma commute_lookup_eval:
-  forall (s : ProgramState SmtArithExpr) (f : SmtValuation)
-        arg,
-    lookup_uint8 arg (eval_sym_state s f) =
-    eval_smt_arith (lookup_smt arg s) f.
-Proof.
-  intros s f arg.
-  destruct arg; simpl; reflexivity.
-Qed.
-
 (* Same as above lemma, but for a HdrOp gated by a match pattern *)
 Lemma commute_sym_vs_conc_hdr_op_match_pattern :
   forall (ho: HdrOp) (mp: MatchPattern) (f : SmtValuation)
@@ -273,30 +191,6 @@ Proof.
     erewrite <- commute_sym_vs_conc_match_pattern; try reflexivity.
     rewrite des.
     apply nothing_changed_hdr.
-Qed.
-
-(* Effectively, ctrl plane doesn't change *)
-Lemma ctrl_plane_invariant_hdr_op:
-  forall (ho: HdrOp)
-         (c1: ProgramState uint8),
-  ctrl_plane_map (eval_hdr_op_assign_uint8 ho c1) =
-  ctrl_plane_map c1.
-Proof.
-  intros ho c1.
-  destruct ho; simpl; try reflexivity.
-Qed.
-
-(* Effectively, ctrl plane doesn't change *)
-Lemma ctrl_plane_invariant_hdr_op_list:
-  forall hol c1,
-  ctrl_plane_map (eval_hdr_op_list_uint8 hol c1) =
-  ctrl_plane_map c1.
-Proof.
-  intros.
-  induction hol.
-  - reflexivity.
-  - simpl. rewrite <- IHhol.
-    apply ctrl_plane_invariant_hdr_op.
 Qed.
 
 Lemma commute_sym_vs_conc_helper_seq_par_rule :
@@ -498,68 +392,6 @@ Proof.
   reflexivity.
 Qed.
 
-Lemma ctrl_plane_invariant_seq_rule:
-  forall s c,
-    ctrl_plane_map (eval_seq_rule_uint8 s c) =
-    ctrl_plane_map c.
-Proof.
-  intros.
-  unfold eval_seq_rule_uint8.
-  destruct s.
-  destruct (eval_match_uint8 match_pattern c).
-  apply ctrl_plane_invariant_hdr_op_list.
-  reflexivity.
-Qed.
-
-Lemma ctrl_plane_invariant_par_rule:
-  forall p c,
-    ctrl_plane_map (eval_par_rule_uint8 p c) =
-    ctrl_plane_map c.
-Proof.
-  intros.
-  unfold eval_par_rule_uint8.
-  destruct p.
-  destruct (eval_match_uint8 match_pattern c).
-  apply ctrl_plane_invariant_hdr_op_list.
-  reflexivity.
-Qed.
-
-Lemma ctrl_plane_invariant_ma_rule:
-  forall m c,
-    ctrl_plane_map (eval_match_action_rule_uint8 m c) =
-    ctrl_plane_map c.
-Proof.
-  intros.
-  unfold eval_match_action_rule_uint8.
-  destruct m.
-  - apply ctrl_plane_invariant_seq_rule.
-  - apply ctrl_plane_invariant_par_rule.
-Qed.
-
-Lemma ctrl_plane_invariant_transformer_intermediate:
-  forall a t c,
-    ctrl_plane_map (eval_transformer_uint8 (a :: t) c) =
-    ctrl_plane_map (eval_transformer_uint8 t c).
-Proof.
-  intros.
-  unfold eval_transformer_uint8.
-  remember (a :: t) as full_list.
-  remember (find_first_match (combine (get_match_results full_list c) full_list)) as outer_match.
-  remember (find_first_match (combine (get_match_results t c) t)) as inner_match.
-  destruct (outer_match) eqn:des; destruct inner_match eqn:des2; try rewrite ctrl_plane_invariant_ma_rule; try reflexivity.
-  rewrite ctrl_plane_invariant_ma_rule. reflexivity.
-Qed.
-
-Lemma ctrl_plane_invariant_transformer:
-  forall c t,
-    ctrl_plane_map (eval_transformer_uint8 t c) = ctrl_plane_map c.
-Proof.
-  intros.
-  induction t.
-  - reflexivity.
-  - rewrite <- IHt. apply ctrl_plane_invariant_transformer_intermediate.
-Qed.
-
 Lemma commute_sym_vs_conc_transformer_ctrl_plane_map:
   forall t f s1,
     ctrl_plane_map (eval_transformer_uint8 t (eval_sym_state s1 f)) = ctrl_plane_map (eval_sym_state (eval_transformer_smt t s1) f).
@@ -567,63 +399,6 @@ Proof.
   intros.
   simpl.
   rewrite ctrl_plane_invariant_transformer.
-  reflexivity.
-Qed.
-
-Lemma find_first_match_lemma:
-  forall {T : Set} (list_of_pair :  list (bool*T)),
-    None = find_first_match list_of_pair ->
-    forall x,
-    In x list_of_pair -> fst x = false.
-Proof.
-  intros.
-  induction list_of_pair as [| [b t] rest].
-  - simpl in H0. contradiction.
-  - simpl in H0. destruct H0 eqn:des.
-    + subst. simpl in H. destruct b.
-      * discriminate H.
-      * reflexivity.
-    + subst. simpl in H. destruct b.
-      * discriminate H.
-      * apply IHrest; assumption.
-Qed.
-
-Lemma find_first_match_lemma2:
-  forall {T : Set} (list_of_pair :  list (bool*T)) element,
-    Some element = find_first_match list_of_pair ->
-    In (true, element) list_of_pair.
-Proof.
-  intros.
-  induction list_of_pair as [| [b t] rest].
-  - simpl in H. discriminate H.
-  - simpl in H.
-    simpl.
-    destruct b.
-    -- inversion H. left. reflexivity.
-    -- right. apply IHrest.
-       assumption.
-Qed.
-
-Lemma header_map_ps :
-  forall s f h,
-    header_map (eval_sym_state s f) h =
-    eval_smt_arith (header_map s h) f.
-Proof.
-  intros.
-  unfold eval_sym_state.
-  simpl.
-  reflexivity.
-Qed.
-
-(* Create a lemma similar to header_map_ps but with state_var_map instead *)
-Lemma state_var_map_ps :
-  forall s f sv,
-    state_var_map (eval_sym_state s f) sv =
-    eval_smt_arith (state_var_map s sv) f.
-Proof.
-  intros.
-  unfold eval_sym_state.
-  simpl.
   reflexivity.
 Qed.
 
