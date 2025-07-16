@@ -570,15 +570,323 @@ Proof.
   reflexivity.
 Qed.
 
+Lemma find_first_match_lemma:
+  forall {T : Set} (list_of_pair :  list (bool*T)),
+    None = find_first_match list_of_pair ->
+    forall x,
+    In x list_of_pair -> fst x = false.
+Proof.
+  intros.
+  induction list_of_pair as [| [b t] rest].
+  - simpl in H0. contradiction.
+  - simpl in H0. destruct H0 eqn:des.
+    + subst. simpl in H. destruct b.
+      * discriminate H.
+      * reflexivity.
+    + subst. simpl in H. destruct b.
+      * discriminate H.
+      * apply IHrest; assumption.
+Qed.
+
+Lemma find_first_match_lemma2:
+  forall {T : Set} (list_of_pair :  list (bool*T)) element,
+    Some element = find_first_match list_of_pair ->
+    In (true, element) list_of_pair.
+Proof.
+  intros.
+  induction list_of_pair as [| [b t] rest].
+  - simpl in H. discriminate H.
+  - simpl in H.
+    simpl.
+    destruct b.
+    -- inversion H. left. reflexivity.
+    -- right. apply IHrest.
+       assumption.
+Qed.
+
+Lemma header_map_ps :
+  forall s f h,
+    header_map (eval_sym_state s f) h =
+    eval_smt_arith (header_map s h) f.
+Proof.
+  intros.
+  unfold eval_sym_state.
+  simpl.
+  reflexivity.
+Qed.
+
+(* Create a lemma similar to header_map_ps but with state_var_map instead *)
+Lemma state_var_map_ps :
+  forall s f sv,
+    state_var_map (eval_sym_state s f) sv =
+    eval_smt_arith (state_var_map s sv) f.
+Proof.
+  intros.
+  unfold eval_sym_state.
+  simpl.
+  reflexivity.
+Qed.
+
+Lemma switch_case_expr_some_match_lemma :
+  forall t f s1 h rule,
+    Some rule = find_first_match (combine (get_match_results t (eval_sym_state s1 f)) t) ->
+    header_map (eval_match_action_rule_uint8 rule (eval_sym_state s1 f)) h =
+    eval_smt_arith (switch_case_expr (combine (get_match_results_smt t s1)
+                                              (map (fun ps : ProgramState SmtArithExpr => header_map ps h)
+                                                   (map (fun rule : MatchActionRule => eval_match_action_rule_smt rule s1) t)))
+                                     (header_map s1 h)) f.
+Proof.
+  intros.
+  induction t.
+  - simpl.
+    simpl in H.
+    discriminate H.
+  - simpl.
+    destruct a; try destruct s; try destruct p.
+    --assert (In (true, rule)  (combine
+                               (get_match_results (Seq (SeqCtr match_pattern action) :: t) (eval_sym_state s1 f))
+                               (Seq (SeqCtr match_pattern action) :: t))).
+      { apply find_first_match_lemma2. assumption. }
+      simpl in H0.
+      destruct (eval_smt_bool (eval_match_smt match_pattern s1) f) eqn:des.
+      + rewrite <- commute_sym_vs_conc_match_pattern with (s1 := s1) (f := f) (c1 := eval_sym_state s1 f) in des; try reflexivity.
+        rewrite des in H0.
+        rewrite commute_sym_vs_conc_ma_rule.
+        simpl in H.
+        rewrite des in H.
+        inversion H.
+        apply header_map_ps.
+      + rewrite <- commute_sym_vs_conc_match_pattern with (s1 := s1) (f := f) (c1 := eval_sym_state s1 f) in des; try reflexivity.
+        rewrite des in H0.
+        rewrite commute_sym_vs_conc_ma_rule.
+        simpl in H.
+        rewrite des in H.
+        apply IHt in H.
+        rewrite <- commute_sym_vs_conc_ma_rule.
+        assumption.
+    --assert (In (true, rule)  (combine
+                               (get_match_results (Par (ParCtr match_pattern action) :: t) (eval_sym_state s1 f))
+                               (Par (ParCtr match_pattern action) :: t))).
+      { apply find_first_match_lemma2. assumption. }
+      simpl in H0.
+      destruct (eval_smt_bool (eval_match_smt match_pattern s1) f) eqn:des.
+      + rewrite <- commute_sym_vs_conc_match_pattern with (s1 := s1) (f := f) (c1 := eval_sym_state s1 f) in des; try reflexivity.
+        rewrite des in H0.
+        rewrite commute_sym_vs_conc_ma_rule.
+        simpl in H.
+        rewrite des in H.
+        inversion H.
+        apply header_map_ps.
+      + rewrite <- commute_sym_vs_conc_match_pattern with (s1 := s1) (f := f) (c1 := eval_sym_state s1 f) in des; try reflexivity.
+        rewrite des in H0.
+        rewrite commute_sym_vs_conc_ma_rule.
+        simpl in H.
+        rewrite des in H.
+        apply IHt in H.
+        rewrite <- commute_sym_vs_conc_ma_rule.
+        assumption.
+Qed.
+
+Lemma switch_case_expr_no_match_lemma :
+  forall t f s1 h,
+    None = find_first_match (combine (get_match_results t (eval_sym_state s1 f)) t) ->
+    eval_smt_arith (header_map s1 h) f =
+    eval_smt_arith (switch_case_expr  (combine (get_match_results_smt t s1)
+                                               (map (fun ps : ProgramState SmtArithExpr => header_map ps h)
+                                                    (map (fun rule : MatchActionRule => eval_match_action_rule_smt rule s1) t)))
+                                      (header_map s1 h)) f.
+Proof.
+  intros.
+  induction t.
+  - reflexivity.
+  - simpl.
+    destruct a; try destruct s; try destruct p.
+    --assert (forall x, In x (combine
+                               (get_match_results (Seq (SeqCtr match_pattern action) :: t) (eval_sym_state s1 f))
+                               (Seq (SeqCtr match_pattern action) :: t)) -> fst x = false).
+      {apply find_first_match_lemma. assumption. }
+      simpl in H0.
+      specialize (H0 (eval_match_uint8 match_pattern (eval_sym_state s1 f), Seq (SeqCtr match_pattern action)) ).
+      simpl in H0.
+      remember (eval_match_uint8 match_pattern (eval_sym_state s1 f), Seq (SeqCtr match_pattern action))  as tmp.
+      assert (H_premise : tmp = tmp \/ In tmp (combine (get_match_results t (eval_sym_state s1 f)) t)). { left. reflexivity. }
+      apply H0 in H_premise.
+      rewrite commute_sym_vs_conc_match_pattern with (s1 := s1) (f := f) in H_premise; try reflexivity.
+      rewrite H_premise.
+      simpl.
+      simpl in H.
+      rewrite commute_sym_vs_conc_match_pattern with (s1 := s1) (f := f) in H; try reflexivity.
+      rewrite H_premise in H.
+      apply IHt in H.
+      assumption.
+    --assert (forall x, In x (combine
+                               (get_match_results (Par (ParCtr match_pattern action) :: t) (eval_sym_state s1 f))
+                               (Par (ParCtr match_pattern action) :: t)) -> fst x = false).
+      {apply find_first_match_lemma. assumption. }
+      simpl in H0.
+      specialize (H0 (eval_match_uint8 match_pattern (eval_sym_state s1 f), Par (ParCtr match_pattern action)) ).
+      simpl in H0.
+      remember (eval_match_uint8 match_pattern (eval_sym_state s1 f), Par (ParCtr match_pattern action))  as tmp.
+      assert (H_premise : tmp = tmp \/ In tmp (combine (get_match_results t (eval_sym_state s1 f)) t)). { left. reflexivity. }
+      apply H0 in H_premise.
+      rewrite commute_sym_vs_conc_match_pattern with (s1 := s1) (f := f) in H_premise; try reflexivity.
+      rewrite H_premise.
+      simpl.
+      simpl in H.
+      rewrite commute_sym_vs_conc_match_pattern with (s1 := s1) (f := f) in H; try reflexivity.
+      rewrite H_premise in H.
+      apply IHt in H.
+      assumption.
+Qed.
+
+(* Create 2 lemmas similar to the switch_case lemmas above,
+   except with header_map replaced by state_var_map
+   The remaining aspects can be identical. *)
+Lemma switch_case_expr_some_match_state_var_lemma :
+  forall t f s1 sv rule,
+    Some rule = find_first_match (combine (get_match_results t (eval_sym_state s1 f)) t) ->
+    state_var_map (eval_match_action_rule_uint8 rule (eval_sym_state s1 f)) sv =
+    eval_smt_arith (switch_case_expr (combine (get_match_results_smt t s1)
+                                              (map (fun ps : ProgramState SmtArithExpr => state_var_map ps sv)
+                                                   (map (fun rule : MatchActionRule => eval_match_action_rule_smt rule s1) t)))
+                                     (state_var_map s1 sv)) f.
+Proof.
+  intros.
+  induction t.
+  - simpl.
+    simpl in H.
+    discriminate H.
+  - simpl.
+    destruct a; try destruct s; try destruct p.
+    --assert (In (true, rule)  (combine
+                               (get_match_results (Seq (SeqCtr match_pattern action) :: t) (eval_sym_state s1 f))
+                               (Seq (SeqCtr match_pattern action) :: t))).
+      { apply find_first_match_lemma2. assumption. }
+      simpl in H0.
+      destruct (eval_smt_bool (eval_match_smt match_pattern s1) f) eqn:des.
+      + rewrite <- commute_sym_vs_conc_match_pattern with (s1 := s1) (f := f) (c1 := eval_sym_state s1 f) in des; try reflexivity.
+        rewrite des in H0.
+        rewrite commute_sym_vs_conc_ma_rule.
+        simpl in H.
+        rewrite des in H.
+        inversion H.
+        apply state_var_map_ps.
+      + rewrite <- commute_sym_vs_conc_match_pattern with (s1 := s1) (f := f) (c1 := eval_sym_state s1 f) in des; try reflexivity.
+        rewrite des in H0.
+        rewrite commute_sym_vs_conc_ma_rule.
+        simpl in H.
+        rewrite des in H.
+        apply IHt in H.
+        rewrite <- commute_sym_vs_conc_ma_rule.
+        assumption.
+    --assert (In (true, rule)  (combine
+                               (get_match_results (Par (ParCtr match_pattern action) :: t) (eval_sym_state s1 f))
+                               (Par (ParCtr match_pattern action) :: t))).
+      { apply find_first_match_lemma2. assumption. }
+      simpl in H0.
+      destruct (eval_smt_bool (eval_match_smt match_pattern s1) f) eqn:des.
+      + rewrite <- commute_sym_vs_conc_match_pattern with (s1 := s1) (f := f) (c1 := eval_sym_state s1 f) in des; try reflexivity.
+        rewrite des in H0.
+        rewrite commute_sym_vs_conc_ma_rule.
+        simpl in H.
+        rewrite des in H.
+        inversion H.
+        apply state_var_map_ps.
+      + rewrite <- commute_sym_vs_conc_match_pattern with (s1 := s1) (f := f) (c1 := eval_sym_state s1 f) in des; try reflexivity.
+        rewrite des in H0.
+        rewrite commute_sym_vs_conc_ma_rule.
+        simpl in H.
+        rewrite des in H.
+        apply IHt in H.
+        rewrite <- commute_sym_vs_conc_ma_rule.
+        assumption.
+Qed.
+
+Lemma switch_case_expr_no_match_state_var_lemma :
+  forall t f s1 sv,
+    None = find_first_match (combine (get_match_results t (eval_sym_state s1 f)) t) ->
+    eval_smt_arith (state_var_map s1 sv) f =
+    eval_smt_arith (switch_case_expr  (combine (get_match_results_smt t s1)
+                                               (map (fun ps : ProgramState SmtArithExpr => state_var_map ps sv)
+                                                    (map (fun rule : MatchActionRule => eval_match_action_rule_smt rule s1) t)))
+                                      (state_var_map s1 sv)) f.
+Proof.
+  intros.
+  induction t.
+  - reflexivity. 
+  - simpl.
+    destruct a; try destruct s; try destruct p.
+    --assert (forall x, In x (combine
+                               (get_match_results (Seq (SeqCtr match_pattern action) :: t) (eval_sym_state s1 f))
+                               (Seq (SeqCtr match_pattern action) :: t)) -> fst x = false).
+      {apply find_first_match_lemma. assumption. }
+      simpl in H0.
+      specialize (H0 (eval_match_uint8 match_pattern (eval_sym_state s1 f), Seq (SeqCtr match_pattern action)) ).
+      simpl in H0.
+      remember (eval_match_uint8 match_pattern (eval_sym_state s1 f), Seq (SeqCtr match_pattern action))  as tmp.
+      assert (H_premise : tmp = tmp \/ In tmp (combine (get_match_results t (eval_sym_state s1 f)) t)). { left. reflexivity. }
+      apply H0 in H_premise.
+      rewrite commute_sym_vs_conc_match_pattern with (s1 := s1) (f := f) in H_premise; try reflexivity.
+      rewrite H_premise.
+      simpl.
+      simpl in H.
+      rewrite commute_sym_vs_conc_match_pattern with (s1 := s1) (f := f) in H; try reflexivity.
+      rewrite H_premise in H.
+      apply IHt in H.
+      assumption.
+    --assert (forall x, In x (combine
+                               (get_match_results (Par (ParCtr match_pattern action) :: t) (eval_sym_state s1 f))
+                               (Par (ParCtr match_pattern action) :: t)) -> fst x = false).
+      {apply find_first_match_lemma. assumption. }
+      simpl in H0.
+      specialize (H0 (eval_match_uint8 match_pattern (eval_sym_state s1 f ), Par (ParCtr match_pattern action)) ).
+      simpl in H0.
+      remember (eval_match_uint8 match_pattern (eval_sym_state s1 f), Par (ParCtr match_pattern action))  as tmp.
+      assert (H_premise : tmp = tmp \/ In tmp (combine (get_match_results t (eval_sym_state s1 f)) t)). { left. reflexivity. }
+      apply H0 in H_premise.
+      rewrite commute_sym_vs_conc_match_pattern with (s1 := s1) (f := f) in H_premise; try reflexivity.
+      rewrite H_premise.
+      simpl.
+      simpl in H.
+      rewrite commute_sym_vs_conc_match_pattern with (s1 := s1) (f := f) in H; try reflexivity.
+      rewrite H_premise in H.
+      apply IHt in H.
+      assumption.
+Qed.
+
 Lemma commute_sym_vs_conc_transformer_header_map:
   forall t f s1,
     header_map (eval_transformer_uint8 t (eval_sym_state s1 f)) = header_map (eval_sym_state (eval_transformer_smt t s1) f).
-Admitted.
+Proof.
+  intros.
+  simpl.
+  remember (map (fun rule : MatchActionRule => eval_match_action_rule_smt rule s1) t) as program_states.
+  apply functional_extensionality.
+  intro h.
+  remember (map (fun ps : ProgramState SmtArithExpr => header_map ps h) program_states) as header_exprs.
+  unfold eval_transformer_uint8.
+  remember (find_first_match (combine (get_match_results t (eval_sym_state s1 f)) t)) as concrete_match.
+  destruct concrete_match eqn:des.
+  - simpl. rewrite Heqheader_exprs. rewrite Heqprogram_states. apply switch_case_expr_some_match_lemma. assumption.
+  - simpl. rewrite Heqheader_exprs. rewrite Heqprogram_states. apply switch_case_expr_no_match_lemma. assumption.
+Qed.
 
 Lemma commute_sym_vs_conc_transformer_state_var_map:
   forall t f s1,
     state_var_map (eval_transformer_uint8 t (eval_sym_state s1 f)) = state_var_map (eval_sym_state (eval_transformer_smt t s1) f).
-Admitted.
+Proof.
+  intros.
+  simpl.
+  remember (map (fun rule : MatchActionRule => eval_match_action_rule_smt rule s1) t) as program_states.
+  apply functional_extensionality.
+  intro sv.
+  remember (map (fun ps : ProgramState SmtArithExpr => state_var_map ps sv) program_states) as state_var_exprs.
+  unfold eval_transformer_uint8.
+  remember (find_first_match (combine (get_match_results t (eval_sym_state s1 f)) t)) as concrete_match.
+  destruct concrete_match eqn:des.
+  - simpl. rewrite Heqstate_var_exprs. rewrite Heqprogram_states. apply switch_case_expr_some_match_state_var_lemma. assumption.
+  - simpl. rewrite Heqstate_var_exprs. rewrite Heqprogram_states. apply switch_case_expr_no_match_state_var_lemma. assumption.
+Qed.
 
 Lemma commute_sym_vs_conc_transfomer:
   forall (t: Transformer) (f : SmtValuation)
