@@ -140,13 +140,15 @@ Fixpoint switch_case_expr (cases : list (SmtBoolExpr * SmtArithExpr)) (default_c
       SmtConditional cond expr (switch_case_expr rest default_case)
   end.
 
-Definition eval_transformer_smt (t : Transformer) (ps : ProgramState SmtArithExpr) : ProgramState SmtArithExpr :=
-  (* Compute match results for each match pattern (one embedded in each rule) *)
-  let match_results := List.map (fun rule =>
+(* Compute match results for each match pattern (one embedded in each rule) *)
+Definition get_match_results_smt (t : Transformer) (ps : ProgramState SmtArithExpr) : list SmtBoolExpr :=
+  List.map (fun rule =>
                        match rule with 
                         | Seq (SeqCtr match_pattern _) => eval_match_smt match_pattern ps
                         | Par (ParCtr match_pattern _) => eval_match_smt match_pattern ps
-                       end) t in
+                       end) t.
+
+Definition eval_transformer_smt (t : Transformer) (ps : ProgramState SmtArithExpr) : ProgramState SmtArithExpr :=
   (* get all future program states, one for each rule *)
   let program_states := List.map (fun rule => eval_match_action_rule_smt rule ps) t in
   (* map a header to all possible future exprs, one for each future state *)
@@ -154,8 +156,8 @@ Definition eval_transformer_smt (t : Transformer) (ps : ProgramState SmtArithExp
   (* same as above, for state variables *)
   let state_vars     := fun s => List.map (fun ps => state_var_map ps s) program_states in
       {| ctrl_plane_map := ctrl_plane_map ps; (* leave this unchanged *)
-         header_map := fun h => switch_case_expr (List.combine match_results (header_exprs h)) (header_map ps h);
-         state_var_map := fun s => switch_case_expr (List.combine match_results (state_vars s)) (state_var_map ps s) |}.
+         header_map := fun h => switch_case_expr (List.combine (get_match_results_smt t ps) (header_exprs h)) (header_map ps h);
+         state_var_map := fun s => switch_case_expr (List.combine (get_match_results_smt t ps) (state_vars s)) (state_var_map ps s) |}.
 
 Instance Semantics_SmtArithExpr : Semantics SmtArithExpr := {
   (* Function to lookup arg in program state *)
