@@ -272,13 +272,13 @@ Qed.
 
 Definition equivalence_checker
   (s : ProgramState SmtArithExpr)
-  (sr1 : SeqRule) (sr2 : SeqRule)
+  (sr1 : MatchActionRule) (sr2 : MatchActionRule)
   (header_list : list Header) (state_var_list : list StateVar)
    :  SmtResult :=
   (* assume a starting symbolic state s*)
   (* convert sr1 and sr2 to an equivalent final SmtArithExpr, assuming a start state of s *)
-  let s1 := eval_seq_rule_smt sr1 s in
-  let s2 := eval_seq_rule_smt sr2 s in
+  let s1 := eval_match_action_rule_smt sr1 s in
+  let s2 := eval_match_action_rule_smt sr2 s in
   (* check if the headers and state vars are equivalent *)
   smt_query (check_headers_and_state_vars s1 s2 header_list state_var_list).
 
@@ -351,32 +351,32 @@ Qed.
 Lemma eval_smt_bool_lemma_hdr :
   forall sr1 sr2 s h f,
   eval_smt_bool
-(SmtBoolEq (header_map (eval_seq_rule_smt sr1 s) h)
-(header_map (eval_seq_rule_smt sr2 s) h)) f = true ->
-header_map (eval_seq_rule_uint8 sr1 (eval_sym_state s f)) h =
-header_map (eval_seq_rule_uint8 sr2 (eval_sym_state s f)) h.
+(SmtBoolEq (header_map (eval_match_action_rule_smt sr1 s) h)
+(header_map (eval_match_action_rule_smt sr2 s) h)) f = true ->
+header_map (eval_match_action_rule_uint8 sr1 (eval_sym_state s f)) h =
+header_map (eval_match_action_rule_uint8 sr2 (eval_sym_state s f)) h.
 Proof.
   intros sr1 sr2 s h f.
   intro H.
   apply smt_bool_eq_true in H.
-  rewrite commute_sym_vs_conc_seq_rule.
-  rewrite commute_sym_vs_conc_seq_rule.
+  rewrite commute_sym_vs_conc_ma_rule.
+  rewrite commute_sym_vs_conc_ma_rule.
   apply H.
 Qed.
 
 Lemma eval_smt_bool_lemma_state :
   forall sr1 sr2 s sv f,
   eval_smt_bool
-(SmtBoolEq (state_var_map (eval_seq_rule_smt sr1 s) sv)
-(state_var_map (eval_seq_rule_smt sr2 s) sv)) f = true ->
-state_var_map (eval_seq_rule_uint8 sr1 (eval_sym_state s f)) sv =
-state_var_map (eval_seq_rule_uint8 sr2 (eval_sym_state s f)) sv.
+(SmtBoolEq (state_var_map (eval_match_action_rule_smt sr1 s) sv)
+(state_var_map (eval_match_action_rule_smt sr2 s) sv)) f = true ->
+state_var_map (eval_match_action_rule_uint8 sr1 (eval_sym_state s f)) sv =
+state_var_map (eval_match_action_rule_uint8 sr2 (eval_sym_state s f)) sv.
 Proof.
   intros sr1 sr2 s sv f.
   intro H.
   apply smt_bool_eq_true in H.
-  rewrite commute_sym_vs_conc_seq_rule.
-  rewrite commute_sym_vs_conc_seq_rule.
+  rewrite commute_sym_vs_conc_ma_rule.
+  rewrite commute_sym_vs_conc_ma_rule.
   apply H.
 Qed.
 
@@ -385,8 +385,8 @@ Lemma equivalence_checker_sound :
   forall s sr1 sr2 header_list state_var_list f,
   equivalence_checker s sr1 sr2 header_list state_var_list = SmtUnsat ->
   let c  := eval_sym_state s f in
-  let c1 := eval_seq_rule_uint8 sr1 c in
-  let c2 := eval_seq_rule_uint8 sr2 c in
+  let c1 := eval_match_action_rule_uint8 sr1 c in
+  let c2 := eval_match_action_rule_uint8 sr2 c in
   (forall v, In v header_list ->
   (header_map c1 v) = (header_map c2 v)) /\
   (forall v, In v state_var_list ->
@@ -427,32 +427,32 @@ Qed.
 Lemma eval_smt_bool_lemma_hdr_false :
   forall sr1 sr2 s h f,
   eval_smt_bool
-(SmtBoolEq (header_map  (eval_seq_rule_smt sr1 s) h)
-(header_map  (eval_seq_rule_smt sr2 s) h)) f = false ->
-header_map (eval_seq_rule_uint8 sr1 (eval_sym_state s f)) h <>
-header_map (eval_seq_rule_uint8 sr2 (eval_sym_state s f)) h.
+(SmtBoolEq (header_map  (eval_match_action_rule_smt sr1 s) h)
+(header_map  (eval_match_action_rule_smt sr2 s) h)) f = false ->
+header_map (eval_match_action_rule_uint8 sr1 (eval_sym_state s f)) h <>
+header_map (eval_match_action_rule_uint8 sr2 (eval_sym_state s f)) h.
 Proof.
   intros sr1 sr2 s h f.
   intro H.
   apply smt_bool_eq_false in H.
-  rewrite commute_sym_vs_conc_seq_rule.
-  rewrite commute_sym_vs_conc_seq_rule.
+  rewrite commute_sym_vs_conc_ma_rule.
+  rewrite commute_sym_vs_conc_ma_rule.
   apply H.
 Qed.
 
 Lemma eval_smt_bool_lemma_state_false :
   forall sr1 sr2 s sv f,
   eval_smt_bool
-(SmtBoolEq (state_var_map  (eval_seq_rule_smt sr1 s) sv)
-(state_var_map  (eval_seq_rule_smt sr2 s) sv)) f = false ->
-state_var_map (eval_seq_rule_uint8 sr1 (eval_sym_state s f)) sv <>
-state_var_map (eval_seq_rule_uint8 sr2 (eval_sym_state s f)) sv.
+(SmtBoolEq (state_var_map  (eval_match_action_rule_smt sr1 s) sv)
+(state_var_map  (eval_match_action_rule_smt sr2 s) sv)) f = false ->
+state_var_map (eval_match_action_rule_uint8 sr1 (eval_sym_state s f)) sv <>
+state_var_map (eval_match_action_rule_uint8 sr2 (eval_sym_state s f)) sv.
 Proof.
   intros sr1 sr2 s sv f.
   intro H.
   apply smt_bool_eq_false in H.
-  rewrite commute_sym_vs_conc_seq_rule.
-  rewrite commute_sym_vs_conc_seq_rule.
+  rewrite commute_sym_vs_conc_ma_rule.
+  rewrite commute_sym_vs_conc_ma_rule.
   apply H.
 Qed.
 
@@ -461,8 +461,8 @@ Lemma equivalence_checker_complete :
   forall s sr1 sr2 header_list state_var_list f',
   equivalence_checker s sr1 sr2 header_list state_var_list = SmtSat f' ->
   let c' := eval_sym_state s f' in
-  let c1 := eval_seq_rule_uint8 sr1 c' in
-  let c2 := eval_seq_rule_uint8 sr2 c' in
+  let c1 := eval_match_action_rule_uint8 sr1 c' in
+  let c2 := eval_match_action_rule_uint8 sr2 c' in
   (exists v, In v header_list /\
   (header_map c1 v) <> (header_map c2 v)) \/
   (exists v, In v state_var_list /\
@@ -472,7 +472,7 @@ Proof.
   intro H.
   simpl.
   unfold equivalence_checker in H.
-  destruct (smt_query (check_headers_and_state_vars (eval_seq_rule_smt sr1 s) (eval_seq_rule_smt sr2 s) header_list state_var_list)) eqn:H_query.
+  destruct (smt_query (check_headers_and_state_vars (eval_match_action_rule_smt sr1 s) (eval_match_action_rule_smt sr2 s) header_list state_var_list)) eqn:H_query.
   - injection H as Heq.
     subst f'.
     apply smt_query_sound_some in H_query.
