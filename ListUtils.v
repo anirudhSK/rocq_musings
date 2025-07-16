@@ -11,7 +11,7 @@ Open Scope string_scope.
 (* Define a list of 5 elements *)
 Definition my_list : list nat := [1; 2; 3; 4; 5].
 
-Eval compute in (List.length my_list).
+(* Eval compute in (List.length my_list). *)
 
 (* Check if there are any duplicates in my_list.
    Use an existing library function directly if one exists. *)
@@ -45,10 +45,12 @@ Definition example_list_of_pair4 : list (bool * string) :=
   [(false, "rule1"); (false, "rule2"); (false, "rule3")].
 
 (* Test the find_first_match function on all examples above *)
+(*
 Eval compute in (find_first_match example_list_of_pair). (* should return Some "rule2" *)
 Eval compute in (find_first_match example_list_of_pair2). (* should return Some "ruleA" *)
 Eval compute in (find_first_match example_list_of_pair3). (* should return Some "ruleZ" *)
 Eval compute in (find_first_match example_list_of_pair4). (* should return None *)
+*)
 
 Section ListUtilsLemmas.
    Context (T : Type).
@@ -120,4 +122,4 @@ Section ListUtilsLemmas.
     Qed.
 End ListUtilsLemmas.
 
-Check has_duplicates_correct.
+(* Check has_duplicates_correct. *)

@@ -15,7 +15,7 @@ Record ProgramState (T : Type) := {
   state_var_map : StateVarMap T
 }.
 
-Check header_map.
+(* Check header_map. *)
 
 Arguments header_map {T} _ _.
 Arguments state_var_map {T} _ _.  
