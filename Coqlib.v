@@ -863,7 +863,7 @@ Proof.
   assert (X: rev l2 = rev l2' /\ rev l1 = rev l1').
   { apply list_append_injective_l.
     rewrite <- ! rev_app_distr. congruence.
-    rewrite ! rev_length; auto. }
+    rewrite ! length_rev; auto. }
   rewrite <- (rev_involutive l1), <- (rev_involutive l1'), <- (rev_involutive l2), <- (rev_involutive l2').
   intuition congruence.
 Qed.
