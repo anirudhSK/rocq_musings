@@ -9,7 +9,7 @@ Definition Parser : Type := list ParserState.
 
 (* An ExtractOp pulls out a Header starting at index Start and ending at index End *)
 Inductive ExtractOp : Type := 
-  | ExtractOpConstructor (h : Header) (start_index : nat) (end_index : nat).
+  | ExtractOpCtr (h : Header) (start_index : nat) (end_index : nat).
 
 (* A Transition is either:
    (1) an unconditional jump to another parser state
@@ -22,5 +22,5 @@ Inductive Transition : Type :=
 (* A ParserStateDef is a pair consisting of 
  (1) an ExtractOp in that state, AND
  (2) a Transition out of that state *)
-Inductive ParserStateDef : Type := 
-  | ParserStateDefConstructor (s : ParserState) (e : ExtractOp) (t: Transition).
+Inductive ParserState : Type := 
+  | ParserStateCtr (s : ParserState) (e : ExtractOp) (t: Transition).
