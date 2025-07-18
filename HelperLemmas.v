@@ -1,11 +1,11 @@
 (* Miscellaneous helper lemmas for ConcreteToSymbolicLemmas.v *)
 From MyProject Require Import CrTransformer.
 From MyProject Require Import CrIdentifiers.
-From MyProject Require Import CrConcreteSemantics.
+From MyProject Require Import CrConcreteSemanticsTransformer.
 From MyProject Require Import SmtExpr.
 Require Import ZArith.
 Require Import Coq.Lists.List.
-From MyProject Require Import CrSymbolicSemantics.
+From MyProject Require Import CrSymbolicSemanticsTransformer.
 From Coq Require Import FunctionalExtensionality.
 
 Lemma program_state_equality:

@@ -1,9 +1,9 @@
 (* Various helper lemmas showing ctrl plane maps don't change *)
 From MyProject Require Import CrTransformer.
 From MyProject Require Import CrIdentifiers.
-From MyProject Require Import CrConcreteSemantics.
+From MyProject Require Import CrConcreteSemanticsTransformer.
 From MyProject Require Import SmtExpr.
-From MyProject Require Import CrSymbolicSemantics.
+From MyProject Require Import CrSymbolicSemanticsTransformer.
 Require Import Coq.Lists.List.
 
 (* Effectively, ctrl plane doesn't change *)

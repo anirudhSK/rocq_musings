@@ -7,8 +7,8 @@ Import ListNotations.
 
 (* Import or define SeqRule and related types *)
 From MyProject Require Import CrTransformer. (* Or replace with the correct module *)
-From MyProject Require Import CrSymbolicSemantics.
-From MyProject Require Import CrConcreteSemantics.
+From MyProject Require Import CrSymbolicSemanticsTransformer.
+From MyProject Require Import CrConcreteSemanticsTransformer.
 From MyProject Require Import ConcreteToSymbolicLemmas.
 
 Inductive SmtResult : Type :=

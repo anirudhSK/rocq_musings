@@ -1,8 +1,8 @@
 From MyProject Require Import CrTransformer.
 From MyProject Require Import CrIdentifiers.
-From MyProject Require Import CrConcreteSemantics.
+From MyProject Require Import CrConcreteSemanticsTransformer.
 From MyProject Require Import SmtExpr.
-From MyProject Require Import CrSymbolicSemantics.
+From MyProject Require Import CrSymbolicSemanticsTransformer.
 Require Import ZArith.
 Require Import Coq.Strings.String.
 Local Open Scope string_scope.
