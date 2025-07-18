@@ -635,15 +635,13 @@ Lemma commute_sym_vs_conc_transformer_header_map:
 Proof.
   intros.
   simpl.
-  remember (map (fun rule : MatchActionRule => eval_match_action_rule_smt rule s1) t) as program_states.
   apply functional_extensionality.
   intro h.
-  remember (map (fun ps : ProgramState SmtArithExpr => header_map ps h) program_states) as header_exprs.
   unfold eval_transformer_uint8.
   remember (find_first_match (combine (get_match_results t (eval_sym_state s1 f)) t)) as concrete_match.
   destruct concrete_match eqn:des.
-  - simpl. rewrite Heqheader_exprs. rewrite Heqprogram_states. apply switch_case_expr_some_match_lemma. assumption.
-  - simpl. rewrite Heqheader_exprs. rewrite Heqprogram_states. apply switch_case_expr_no_match_lemma. assumption.
+  - simpl. apply switch_case_expr_some_match_lemma. assumption.
+  - simpl. apply switch_case_expr_no_match_lemma. assumption.
 Qed.
 
 Lemma commute_sym_vs_conc_transformer_state_var_map:
@@ -652,15 +650,13 @@ Lemma commute_sym_vs_conc_transformer_state_var_map:
 Proof.
   intros.
   simpl.
-  remember (map (fun rule : MatchActionRule => eval_match_action_rule_smt rule s1) t) as program_states.
   apply functional_extensionality.
   intro sv.
-  remember (map (fun ps : ProgramState SmtArithExpr => state_var_map ps sv) program_states) as state_var_exprs.
   unfold eval_transformer_uint8.
   remember (find_first_match (combine (get_match_results t (eval_sym_state s1 f)) t)) as concrete_match.
   destruct concrete_match eqn:des.
-  - simpl. rewrite Heqstate_var_exprs. rewrite Heqprogram_states. apply switch_case_expr_some_match_state_var_lemma. assumption.
-  - simpl. rewrite Heqstate_var_exprs. rewrite Heqprogram_states. apply switch_case_expr_no_match_state_var_lemma. assumption.
+  - simpl. apply switch_case_expr_some_match_state_var_lemma. assumption.
+  - simpl. apply switch_case_expr_no_match_state_var_lemma. assumption.
 Qed.
 
 Lemma commute_sym_vs_conc_transfomer:
