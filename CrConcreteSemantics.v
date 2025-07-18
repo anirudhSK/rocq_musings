@@ -4,7 +4,6 @@ Require Import List.
 Import ListNotations.
 Require Import Strings.String.
 From MyProject Require Export CrIdentifiers.
-From MyProject Require Export CrSemantics.
 From MyProject Require Export ListUtils.
 
 (* Apply binary operation *)
@@ -113,14 +112,3 @@ Definition eval_transformer_uint8 (t : Transformer) (ps : ProgramState uint8) : 
         | None => ps  (* no match, return unchanged state *)
         | Some (rule) => eval_match_action_rule_uint8 rule ps (* evaluate the rule and update state accordingly *)
       end.
-
-Instance Semantics_uint8 : Semantics uint8 := {
-  (* Function to lookup arg in program state *)
-  lookup_function_argument := lookup_uint8;
-  
-  (* Function to evaluate header operation expression *)
-  eval_hdr_op_expr := eval_hdr_op_expr_uint8;
-  
-  (* Function to update header or state variable in program state *)
-  eval_hdr_op_assign := eval_hdr_op_assign_uint8;
-}.

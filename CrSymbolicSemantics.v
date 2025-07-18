@@ -1,6 +1,5 @@
 From MyProject Require Import CrTransformer.
 From MyProject Require Import CrIdentifiers.
-From MyProject Require Import CrSemantics.
 From MyProject Require Import SmtExpr.
 Require Import ZArith.
 Require Import Coq.Strings.String.
@@ -158,14 +157,3 @@ Definition eval_transformer_smt (t : Transformer) (ps : ProgramState SmtArithExp
       {| ctrl_plane_map := ctrl_plane_map ps; (* leave this unchanged *)
          header_map := fun h => switch_case_expr (List.combine (get_match_results_smt t ps) (header_exprs h)) (header_map ps h);
          state_var_map := fun s => switch_case_expr (List.combine (get_match_results_smt t ps) (state_vars s)) (state_var_map ps s) |}.
-
-Instance Semantics_SmtArithExpr : Semantics SmtArithExpr := {
-  (* Function to lookup arg in program state *)
-  lookup_function_argument := lookup_smt;
-
-  (* Function to evaluate header operation expression *)
-  eval_hdr_op_expr := eval_hdr_op_expr_smt;
-
-  (* Function to update header or state variable in program state *)
-  eval_hdr_op_assign := eval_hdr_op_assign_smt;
-}.
