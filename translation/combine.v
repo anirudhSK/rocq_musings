@@ -16,14 +16,14 @@ header_map := fun _ => SmtConst (repr 0%Z);
 state_var_map := fun _ => SmtConst (repr 0%Z)
 |}.
 
-Definition headers_to_check : list Header := [first_generated.header_H; second_generated.header_H].
+Definition headers_to_check : list Header := [first_generated.h_a; second_generated.h_a].
 Definition state_vars_to_check : list StateVar := [].
 (* Construct the equivalence checker instance *)
 Definition my_equivalence_check : SmtResult :=
   equivalence_checker
       simplest_state       (* Starting symbolic state *)
-      first_generated.the_table_0_seq_rule          (* First rule *)
-      second_generated.the_table_0_seq_rule          (* Second rule (same) *)
+      first_generated.the_table_0_rule         (* First rule *)
+      second_generated.the_table_0_rule          (* Second rule (same) *)
       headers_to_check             
       state_vars_to_check.   
 
