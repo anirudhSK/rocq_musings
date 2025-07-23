@@ -40,7 +40,7 @@ Lemma nothing_changed_state:
   forall s f target,
     eval_sym_state s f = 
     update_state (eval_sym_state s f) target
-     (eval_smt_arith (state_var_map s target) f).
+     (eval_smt_arith (lookup_state s target) f).
 Proof.
   intros s f target.
   destruct target.
@@ -60,7 +60,7 @@ Lemma nothing_changed_hdr:
   forall s f target,
     eval_sym_state s f = 
     update_hdr (eval_sym_state s f) target
-     (eval_smt_arith (header_map s target) f).
+     (eval_smt_arith (lookup_hdr s target) f).
 Proof.
   intros s f target.
   destruct target.
@@ -123,8 +123,8 @@ Qed.
 
 Lemma header_map_ps :
   forall s f h,
-    header_map (eval_sym_state s f) h =
-    eval_smt_arith (header_map s h) f.
+    lookup_hdr (eval_sym_state s f) h =
+    eval_smt_arith (lookup_hdr s h) f.
 Proof.
   intros.
   unfold eval_sym_state.
@@ -135,8 +135,8 @@ Qed.
 (* Create a lemma similar to header_map_ps but with state_var_map instead *)
 Lemma state_var_map_ps :
   forall s f sv,
-    state_var_map (eval_sym_state s f) sv =
-    eval_smt_arith (state_var_map s sv) f.
+    lookup_state (eval_sym_state s f) sv =
+    eval_smt_arith (lookup_state s sv) f.
 Proof.
   intros.
   unfold eval_sym_state.

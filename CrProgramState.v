@@ -15,16 +15,23 @@ Record ProgramState (T : Type) := {
   state_var_map : StateVarMap T
 }.
 
-(* Check header_map. *)
-
 Arguments header_map {T} _ _.
 Arguments state_var_map {T} _ _.  
 Arguments ctrl_plane_map {T} _ _.
 
+Definition lookup_hdr {T : Type} (s: ProgramState T) (x: Header) : T :=
+  header_map s x.
+
+Definition lookup_state {T : Type} (s: ProgramState T) (x: StateVar) : T :=
+  state_var_map s x.
+
+Definition lookup_ctrl {T : Type} (s: ProgramState T) (x: CtrlPlaneConfigName) : T :=
+  ctrl_plane_map s x.
+
 Definition update_hdr {T : Type} (s: ProgramState T) (x: Header) (v: T) : ProgramState T :=
   {| ctrl_plane_map := ctrl_plane_map s;
      header_map :=  fun y => match x, y with
-            | HeaderCtr x_id, HeaderCtr y_id => if Pos.eqb x_id y_id then v else header_map s y
+            | HeaderCtr x_id, HeaderCtr y_id => if Pos.eqb x_id y_id then v else lookup_hdr s y
            end;
      state_var_map := state_var_map s|}.
 
@@ -32,5 +39,5 @@ Definition update_state {T : Type} (s: ProgramState T) (x: StateVar) (v: T) : Pr
   {| ctrl_plane_map := ctrl_plane_map s;
      header_map := header_map s;
      state_var_map := fun y => match x, y with
-            | StateVarCtr x_id, StateVarCtr y_id => if Pos.eqb x_id y_id then v else state_var_map s y
+            | StateVarCtr x_id, StateVarCtr y_id => if Pos.eqb x_id y_id then v else lookup_state s y
            end |}.

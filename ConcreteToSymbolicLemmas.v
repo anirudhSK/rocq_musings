@@ -112,13 +112,13 @@ Proof.
   simpl.
   rewrite andb_true_r.
   rewrite Hc1.
-  assert (H : header_map (eval_sym_state s1 f) h =
-              eval_smt_arith (header_map s1 h) f).
+  assert (H : lookup_hdr (eval_sym_state s1 f) h =
+              eval_smt_arith (lookup_hdr s1 h) f).
   { unfold eval_sym_state.
     simpl.
     reflexivity. }
   rewrite H.
-  destruct (eq (eval_smt_arith (header_map s1 h) f) v).
+  destruct (eq (eval_smt_arith (lookup_hdr s1 h) f) v).
   - reflexivity.
   - reflexivity.
 Qed.
@@ -149,7 +149,7 @@ Proof.
     destruct hv_pair as [h v].
     simpl.
     destruct (eval_match_smt rest s1); try reflexivity.
-    destruct (eq (eval_smt_arith (header_map s1 h) f) v) eqn:des.
+    destruct (eq (eval_smt_arith (lookup_hdr s1 h) f) v) eqn:des.
     -- rewrite andb_true_r. simpl. rewrite des. reflexivity.
     -- rewrite andb_false_l. simpl. rewrite des. reflexivity.
 Qed.
@@ -201,9 +201,9 @@ Lemma commute_sym_vs_conc_helper_seq_par_rule :
     else eval_sym_state s1 f) =
     eval_sym_state {| ctrl_plane_map := ctrl_plane_map s1;
                       header_map := fun h : Header => SmtConditional (eval_match_smt mp s1)
-                                                      (header_map (eval_hdr_op_list_smt hol s1) h) (header_map s1 h);
+                                                      (lookup_hdr (eval_hdr_op_list_smt hol s1) h) (lookup_hdr s1 h);
                       state_var_map := fun s : StateVar => SmtConditional (eval_match_smt mp s1)
-                                                           (state_var_map (eval_hdr_op_list_smt hol s1) s) (state_var_map s1 s)
+                                                           (lookup_state (eval_hdr_op_list_smt hol s1) s) (lookup_state s1 s)
                     |} f.
 Proof.
   intros mp hol f s1.
@@ -394,7 +394,8 @@ Qed.
 
 Lemma commute_sym_vs_conc_transformer_ctrl_plane_map:
   forall t f s1,
-    ctrl_plane_map (eval_transformer_uint8 t (eval_sym_state s1 f)) = ctrl_plane_map (eval_sym_state (eval_transformer_smt t s1) f).
+    lookup_ctrl (eval_transformer_uint8 t (eval_sym_state s1 f)) = 
+    lookup_ctrl (eval_sym_state (eval_transformer_smt t s1) f).
 Proof.
   intros.
   simpl.
@@ -405,11 +406,11 @@ Qed.
 Lemma switch_case_expr_some_match_lemma :
   forall t f s1 h rule,
     Some rule = find_first_match (combine (get_match_results t (eval_sym_state s1 f)) t) ->
-    header_map (eval_match_action_rule_uint8 rule (eval_sym_state s1 f)) h =
+    lookup_hdr (eval_match_action_rule_uint8 rule (eval_sym_state s1 f)) h =
     eval_smt_arith (switch_case_expr (combine (get_match_results_smt t s1)
-                                              (map (fun ps : ProgramState SmtArithExpr => header_map ps h)
+                                              (map (fun ps : ProgramState SmtArithExpr => lookup_hdr ps h)
                                                    (map (fun rule : MatchActionRule => eval_match_action_rule_smt rule s1) t)))
-                                     (header_map s1 h)) f.
+                                     (lookup_hdr s1 h)) f.
 Proof.
   intros.
   induction t.
@@ -465,11 +466,11 @@ Qed.
 Lemma switch_case_expr_no_match_lemma :
   forall t f s1 h,
     None = find_first_match (combine (get_match_results t (eval_sym_state s1 f)) t) ->
-    eval_smt_arith (header_map s1 h) f =
+    eval_smt_arith (lookup_hdr s1 h) f =
     eval_smt_arith (switch_case_expr  (combine (get_match_results_smt t s1)
-                                               (map (fun ps : ProgramState SmtArithExpr => header_map ps h)
+                                               (map (fun ps : ProgramState SmtArithExpr => lookup_hdr ps h)
                                                     (map (fun rule : MatchActionRule => eval_match_action_rule_smt rule s1) t)))
-                                      (header_map s1 h)) f.
+                                      (lookup_hdr s1 h)) f.
 Proof.
   intros.
   induction t.
@@ -515,16 +516,16 @@ Proof.
 Qed.
 
 (* Create 2 lemmas similar to the switch_case lemmas above,
-   except with header_map replaced by state_var_map
+   except with lookup_hdr replaced by lookup_state.
    The remaining aspects can be identical. *)
 Lemma switch_case_expr_some_match_state_var_lemma :
   forall t f s1 sv rule,
     Some rule = find_first_match (combine (get_match_results t (eval_sym_state s1 f)) t) ->
-    state_var_map (eval_match_action_rule_uint8 rule (eval_sym_state s1 f)) sv =
+    lookup_state (eval_match_action_rule_uint8 rule (eval_sym_state s1 f)) sv =
     eval_smt_arith (switch_case_expr (combine (get_match_results_smt t s1)
-                                              (map (fun ps : ProgramState SmtArithExpr => state_var_map ps sv)
+                                              (map (fun ps : ProgramState SmtArithExpr => lookup_state ps sv)
                                                    (map (fun rule : MatchActionRule => eval_match_action_rule_smt rule s1) t)))
-                                     (state_var_map s1 sv)) f.
+                                     (lookup_state s1 sv)) f.
 Proof.
   intros.
   induction t.
@@ -580,11 +581,11 @@ Qed.
 Lemma switch_case_expr_no_match_state_var_lemma :
   forall t f s1 sv,
     None = find_first_match (combine (get_match_results t (eval_sym_state s1 f)) t) ->
-    eval_smt_arith (state_var_map s1 sv) f =
+    eval_smt_arith (lookup_state s1 sv) f =
     eval_smt_arith (switch_case_expr  (combine (get_match_results_smt t s1)
-                                               (map (fun ps : ProgramState SmtArithExpr => state_var_map ps sv)
+                                               (map (fun ps : ProgramState SmtArithExpr => lookup_state ps sv)
                                                     (map (fun rule : MatchActionRule => eval_match_action_rule_smt rule s1) t)))
-                                      (state_var_map s1 sv)) f.
+                                      (lookup_state s1 sv)) f.
 Proof.
   intros.
   induction t.
@@ -631,7 +632,8 @@ Qed.
 
 Lemma commute_sym_vs_conc_transformer_header_map:
   forall t f s1,
-    header_map (eval_transformer_uint8 t (eval_sym_state s1 f)) = header_map (eval_sym_state (eval_transformer_smt t s1) f).
+    lookup_hdr (eval_transformer_uint8 t (eval_sym_state s1 f)) =
+    lookup_hdr (eval_sym_state (eval_transformer_smt t s1) f).
 Proof.
   intros.
   simpl.
@@ -646,7 +648,7 @@ Qed.
 
 Lemma commute_sym_vs_conc_transformer_state_var_map:
   forall t f s1,
-    state_var_map (eval_transformer_uint8 t (eval_sym_state s1 f)) = state_var_map (eval_sym_state (eval_transformer_smt t s1) f).
+    lookup_state (eval_transformer_uint8 t (eval_sym_state s1 f)) = lookup_state (eval_sym_state (eval_transformer_smt t s1) f).
 Proof.
   intros.
   simpl.

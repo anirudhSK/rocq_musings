@@ -10,10 +10,10 @@ Import ListNotations.
 (* Convert FunctionArgument to SmtArithExpr *)
 Definition lookup_smt (arg : FunctionArgument) (ps : ProgramState SmtArithExpr) : SmtArithExpr :=
   match arg with
-  | CtrlPlaneArg c => ctrl_plane_map ps c
-  | HeaderArg h    => header_map ps h
+  | CtrlPlaneArg c => lookup_ctrl ps c
+  | HeaderArg h    => lookup_hdr ps h
   | ConstantArg n  => SmtConst n
-  | StatefulArg s  => state_var_map ps s
+  | StatefulArg s  => lookup_state ps s
   end.
 
 (* Define the symbolic interpreter for header operation expressions *)
@@ -61,8 +61,8 @@ Definition eval_match_smt (match_pattern : MatchPattern) (ps : ProgramState SmtA
   (* Note that because SmtBoolAnd is associative and commutative, both fold_left and fold_right give the same answer. *)
   List.fold_right (fun '(h, v) acc =>
     match acc with
-    | SmtTrue => SmtBoolEq (header_map ps h) (SmtConst v)
-    | _ => SmtBoolAnd (SmtBoolEq (header_map ps h) (SmtConst v)) acc
+    | SmtTrue => SmtBoolEq (lookup_hdr ps h) (SmtConst v)
+    | _ => SmtBoolAnd (SmtBoolEq (lookup_hdr ps h) (SmtConst v)) acc
     end) SmtTrue match_pattern.
 
 (* Maybe there's an intermediate function that evaluates a *single* HdrOp conditionally? *)
@@ -74,11 +74,11 @@ Definition eval_hdr_op_assign_smt_conditional
     match ho with
     | StatefulOp _ _ _ target =>
         let op_output := SmtConditional condition (eval_hdr_op_expr_smt ho ps)
-                        (state_var_map ps target) in
+                        (lookup_state ps target) in
                         update_state ps target op_output
     | StatelessOp _ _ _ target =>
         let op_output := SmtConditional condition (eval_hdr_op_expr_smt ho ps)
-                        (header_map ps target) in
+                        (lookup_hdr ps target) in
                         update_hdr ps target op_output
     end.
 
@@ -99,8 +99,8 @@ Definition eval_seq_rule_smt (srule : SeqRule) (ps : ProgramState SmtArithExpr) 
              state_map: similar to header_map *)
 
           {| ctrl_plane_map := ctrl_plane_map ps;
-             header_map := fun h => SmtConditional condition (header_map ps' h) (header_map ps h);
-             state_var_map := fun s => SmtConditional condition (state_var_map ps' s) (state_var_map ps s) |}   
+             header_map := fun h => SmtConditional condition (lookup_hdr ps' h) (lookup_hdr ps h);
+             state_var_map := fun s => SmtConditional condition (lookup_state ps' s) (lookup_state ps s) |}   
   end.
 
 (* Function to evaluate a parallel match-action rule,
@@ -122,8 +122,8 @@ Definition eval_par_rule_smt (prule : ParRule) (ps : ProgramState SmtArithExpr) 
              state_map: similar to header_map *)
 
           {| ctrl_plane_map := ctrl_plane_map ps;
-             header_map := fun h => SmtConditional condition (header_map ps' h) (header_map ps h);
-             state_var_map := fun s => SmtConditional condition (state_var_map ps' s) (state_var_map ps s) |}   
+             header_map := fun h => SmtConditional condition (lookup_hdr ps' h) (lookup_hdr ps h);
+             state_var_map := fun s => SmtConditional condition (lookup_state ps' s) (lookup_state ps s) |}   
   end.
 
 Definition eval_match_action_rule_smt (rule : MatchActionRule) (ps : ProgramState SmtArithExpr) : (ProgramState SmtArithExpr) :=
@@ -151,9 +151,9 @@ Definition eval_transformer_smt (t : Transformer) (ps : ProgramState SmtArithExp
   (* get all future program states, one for each rule *)
   let program_states := List.map (fun rule => eval_match_action_rule_smt rule ps) t in
   (* map a header to all possible future exprs, one for each future state *)
-  let header_exprs   := fun h => List.map (fun ps => header_map ps h) program_states in
+  let header_exprs   := fun h => List.map (fun ps => lookup_hdr ps h) program_states in
   (* same as above, for state variables *)
-  let state_vars     := fun s => List.map (fun ps => state_var_map ps s) program_states in
+  let state_vars     := fun s => List.map (fun ps => lookup_state ps s) program_states in
       {| ctrl_plane_map := ctrl_plane_map ps; (* leave this unchanged *)
-         header_map := fun h => switch_case_expr (List.combine (get_match_results_smt t ps) (header_exprs h)) (header_map ps h);
-         state_var_map := fun s => switch_case_expr (List.combine (get_match_results_smt t ps) (state_vars s)) (state_var_map ps s) |}.
+         header_map := fun h => switch_case_expr (List.combine (get_match_results_smt t ps) (header_exprs h)) (lookup_hdr ps h);
+         state_var_map := fun s => switch_case_expr (List.combine (get_match_results_smt t ps) (state_vars s)) (lookup_state ps s) |}.
