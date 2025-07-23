@@ -33,6 +33,7 @@ Proof.
   simpl.
   unfold eval_sym_state.
   unfold update_state.
+  unfold program_state_mapper.
   f_equal.
   - apply functional_extensionality.
     simpl.
@@ -54,6 +55,7 @@ Proof.
   simpl.
   unfold eval_sym_state.
   unfold update_hdr.
+  unfold program_state_mapper.
   f_equal.
   - apply functional_extensionality.
     simpl.

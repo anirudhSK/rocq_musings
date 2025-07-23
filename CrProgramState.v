@@ -12,7 +12,7 @@ Definition CtrlPlaneConfigNameMap (T : Type) := CtrlPlaneConfigName -> T.
 Record ProgramState (T : Type) := {
   ctrl_plane_map : CtrlPlaneConfigNameMap T;
   header_map : HeaderMap T;
-  state_var_map : StateVarMap T
+  state_var_map : StateVarMap T;
 }.
 
 Arguments header_map {T} _ _.
@@ -27,6 +27,24 @@ Definition lookup_state {T : Type} (s: ProgramState T) (x: StateVar) : T :=
 
 Definition lookup_ctrl {T : Type} (s: ProgramState T) (x: CtrlPlaneConfigName) : T :=
   ctrl_plane_map s x.
+
+Definition program_state_mapper {T1 T2 : Type} (fc: T1 -> T2) (fh : T1 -> T2) (fs : T1 -> T2) (s: ProgramState T1) : ProgramState T2 :=
+  {| ctrl_plane_map := fun x => fc (lookup_ctrl s x);
+     header_map := fun x => fh (lookup_hdr s x);
+     state_var_map := fun x => fs (lookup_state s x) |}.
+Opaque program_state_mapper.
+
+Definition update_all_hdrs {T : Type} (s: ProgramState T) (fh: Header -> T) : ProgramState T :=
+  {| ctrl_plane_map := ctrl_plane_map s;
+     header_map := fun h => fh h;
+     state_var_map := state_var_map s |}.
+Opaque update_all_hdrs.
+
+Definition update_all_states {T : Type} (s: ProgramState T) (fs: StateVar -> T) : ProgramState T :=
+  {| ctrl_plane_map := ctrl_plane_map s;
+     header_map := header_map s;
+     state_var_map := fun sv => fs sv |}.
+Opaque update_all_states.
 
 Definition update_hdr {T : Type} (s: ProgramState T) (x: Header) (v: T) : ProgramState T :=
   {| ctrl_plane_map := ctrl_plane_map s;

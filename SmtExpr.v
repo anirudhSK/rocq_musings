@@ -65,6 +65,5 @@ with eval_smt_arith (e : SmtArithExpr) (v : SmtValuation) : uint8 :=
 
 (* Apply SmtValuation f to every entry in the symbolic state across all 3 maps *)
 Definition eval_sym_state (s: ProgramState SmtArithExpr) (f : SmtValuation) : ProgramState uint8 :=
-  {| header_map := fun h => eval_smt_arith (lookup_hdr s h) f;
-     ctrl_plane_map := fun c => eval_smt_arith (lookup_ctrl s c) f;
-     state_var_map := fun sv => eval_smt_arith (lookup_state s sv) f |}.
+   let sym_eval := fun e => eval_smt_arith e f in
+   program_state_mapper sym_eval sym_eval sym_eval s.
