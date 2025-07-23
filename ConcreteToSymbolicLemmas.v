@@ -12,6 +12,7 @@ Require Import Coq.Bool.Bool.
 From Coq Require Import FunctionalExtensionality.
 From MyProject Require Import HelperLemmas.
 From MyProject Require Import CtrlPlaneInvariants.
+From MyProject Require Import CtrlPlaneInvariantsSmt.
 
 (* Simpler lemma with no state update *)
 Lemma commute_sym_conc_expr:
@@ -20,7 +21,7 @@ Lemma commute_sym_conc_expr:
     eval_smt_arith (eval_hdr_op_expr_smt ho s) f.
 Proof.
   intros ho s f.
-  destruct ho, f0, arg1, arg2; simpl; try reflexivity.
+  destruct ho, f0, arg1, arg2; simpl; try repeat (rewrite commute_lookup_eval_ctrl); try reflexivity.
 Qed.
 
 Lemma commute_update_eval_state:
@@ -210,10 +211,7 @@ Lemma commute_sym_vs_conc_helper_seq_par_rule :
 Proof.
   intros mp hol f s1.
   apply program_state_equality.
-  - apply functional_extensionality.
-    intros x.
-    destruct x.
-    simpl.
+  - simpl.
     destruct (eval_match_uint8 mp (eval_sym_state s1 f)) eqn:des.
     + induction hol.
       * simpl. reflexivity.
@@ -312,10 +310,7 @@ Proof.
   unfold eval_match_action_rule_smt.
   destruct m as [sr | pr].
   - apply program_state_equality.
-    + apply functional_extensionality.
-      intros x.
-      simpl.
-      destruct sr as [mp hol].
+    + destruct sr as [mp hol].
       simpl.
       destruct (eval_match_uint8 mp (eval_sym_state s f)) eqn:des.
       * rewrite ctrl_plane_invariant_hdr_op_list.
@@ -346,10 +341,7 @@ Proof.
         rewrite des.
         simpl. reflexivity.
   - apply program_state_equality.
-    + apply functional_extensionality.
-      intros x.
-      simpl.
-      destruct pr as [mp hol].
+    + destruct pr as [mp hol].
       simpl.
       destruct (eval_match_uint8 mp (eval_sym_state s f)) eqn:des.
       * rewrite ctrl_plane_invariant_hdr_op_list.
@@ -391,17 +383,6 @@ Proof.
   intros m f s1.
   rewrite one_rule_transformer_equals_ma_rule.
   rewrite one_rule_transformer_evals_to_ma_rule_smt.
-  reflexivity.
-Qed.
-
-Lemma commute_sym_vs_conc_transformer_ctrl_plane_map:
-  forall t f s1,
-    lookup_ctrl (eval_transformer_uint8 t (eval_sym_state s1 f)) = 
-    lookup_ctrl (eval_sym_state (eval_transformer_smt t s1) f).
-Proof.
-  intros.
-  simpl.
-  rewrite ctrl_plane_invariant_transformer.
   reflexivity.
 Qed.
 
@@ -661,6 +642,18 @@ Proof.
   destruct concrete_match eqn:des.
   - simpl. apply switch_case_expr_some_match_state_var_lemma. assumption.
   - simpl. apply switch_case_expr_no_match_state_var_lemma. assumption.
+Qed.
+
+Lemma commute_sym_vs_conc_transformer_ctrl_plane_map:
+  forall t f s1,
+  ctrl_plane_map (eval_transformer_uint8 t (eval_sym_state s1 f)) =
+  ctrl_plane_map (eval_sym_state (eval_transformer_smt t s1) f).
+Proof.
+  intros t f s1.
+  rewrite ctrl_plane_invariant_transformer.
+  unfold eval_sym_state.
+  simpl.
+  reflexivity.
 Qed.
 
 Lemma commute_sym_vs_conc_transfomer:

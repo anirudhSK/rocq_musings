@@ -76,6 +76,15 @@ Proof.
   - reflexivity.
 Qed.
 
+Lemma commute_lookup_eval_ctrl:
+  forall c f s,
+  lookup_ctrl (eval_sym_state s f) c =
+  eval_smt_arith (lookup_ctrl s c) f.
+Proof.
+  intros.
+  apply PMap.gmap.
+Qed.
+
 Lemma commute_lookup_eval:
   forall (s : ProgramState SmtArithExpr) (f : SmtValuation)
         arg,
@@ -83,7 +92,8 @@ Lemma commute_lookup_eval:
     eval_smt_arith (lookup_smt arg s) f.
 Proof.
   intros s f arg.
-  destruct arg; simpl; reflexivity.
+  destruct arg; simpl; try reflexivity.
+  apply commute_lookup_eval_ctrl.
 Qed.
 
 
