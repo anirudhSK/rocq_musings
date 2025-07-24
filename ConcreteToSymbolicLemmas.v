@@ -12,7 +12,6 @@ Require Import Coq.Bool.Bool.
 From Coq Require Import FunctionalExtensionality.
 From MyProject Require Import HelperLemmas.
 From MyProject Require Import CtrlPlaneInvariants.
-From MyProject Require Import CtrlPlaneInvariantsSmt.
 
 (* Simpler lemma with no state update *)
 Lemma commute_sym_conc_expr:
