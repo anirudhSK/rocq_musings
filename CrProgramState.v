@@ -42,11 +42,13 @@ Definition update_all_hdrs {T : Type} (s: ProgramState T) (fh: Header -> T) : Pr
   {| ctrl_plane_map := ctrl_plane_map s;
      header_map := fun h => fh h;
      state_var_map := state_var_map s |}.
+Opaque update_all_hdrs.
 
 Definition update_all_states {T : Type} (s: ProgramState T) (fs: StateVar -> T) : ProgramState T :=
   {| ctrl_plane_map := ctrl_plane_map s;
      header_map := header_map s;
      state_var_map := fun sv => fs sv |}.
+Opaque update_all_states.
 
 Definition update_hdr {T : Type} (s: ProgramState T) (x: Header) (v: T) : ProgramState T :=
   {| ctrl_plane_map := ctrl_plane_map s;
@@ -54,6 +56,7 @@ Definition update_hdr {T : Type} (s: ProgramState T) (x: Header) (v: T) : Progra
             | HeaderCtr x_id, HeaderCtr y_id => if Pos.eqb x_id y_id then v else lookup_hdr s y
            end;
      state_var_map := state_var_map s|}.
+Opaque update_hdr.
 
 Definition update_state {T : Type} (s: ProgramState T) (x: StateVar) (v: T) : ProgramState T :=
   {| ctrl_plane_map := ctrl_plane_map s;
@@ -62,6 +65,3 @@ Definition update_state {T : Type} (s: ProgramState T) (x: StateVar) (v: T) : Pr
             | StateVarCtr x_id, StateVarCtr y_id => if Pos.eqb x_id y_id then v else lookup_state s y
            end |}.
 Opaque update_state.
-Opaque update_hdr.
-Opaque update_all_hdrs.
-Opaque update_all_states.
