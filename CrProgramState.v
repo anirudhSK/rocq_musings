@@ -30,7 +30,7 @@ Opaque lookup_state.
 
 Definition lookup_ctrl {T : Type} (s: ProgramState T) (x: CtrlPlaneConfigName) : T :=
   PMap.get (match x with | CtrlPlaneConfigNameCtr id => id end) (ctrl_plane_map s).
-Opaque lookup_ctrl.
+Global Opaque lookup_ctrl.
 
 Definition program_state_mapper {T1 T2 : Type} (fc: T1 -> T2) (fh : T1 -> T2) (fs : T1 -> T2) (s: ProgramState T1) : ProgramState T2 :=
   {| ctrl_plane_map := PMap.map fc (ctrl_plane_map s);

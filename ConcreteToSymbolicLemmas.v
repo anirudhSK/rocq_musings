@@ -20,7 +20,7 @@ Lemma commute_sym_conc_expr:
     eval_smt_arith (eval_hdr_op_expr_smt ho s) f.
 Proof.
   intros ho s f.
-  destruct ho, f0, arg1, arg2; simpl; try repeat (rewrite commute_lookup_eval_ctrl); try reflexivity.
+  destruct ho, f0, arg1, arg2; simpl; try repeat (rewrite PMapHelperLemmas.commute_lookup_eval_ctrl); try reflexivity.
 Qed.
 
 Lemma commute_update_eval_state:

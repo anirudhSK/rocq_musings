@@ -7,6 +7,7 @@ Require Import ZArith.
 Require Import Coq.Lists.List.
 From MyProject Require Import CrSymbolicSemanticsTransformer.
 From Coq Require Import FunctionalExtensionality.
+From MyProject Require Import PMapHelperLemmas.
 
 Lemma program_state_equality:
       forall (ps1 ps2: ProgramState uint8),
@@ -76,15 +77,6 @@ Proof.
   - reflexivity.
 Qed.
 
-Lemma commute_lookup_eval_ctrl:
-  forall c f s,
-  lookup_ctrl (eval_sym_state s f) c =
-  eval_smt_arith (lookup_ctrl s c) f.
-Proof.
-  intros.
-  apply PMap.gmap.
-Qed.
-
 Lemma commute_lookup_eval:
   forall (s : ProgramState SmtArithExpr) (f : SmtValuation)
         arg,
@@ -93,9 +85,8 @@ Lemma commute_lookup_eval:
 Proof.
   intros s f arg.
   destruct arg; simpl; try reflexivity.
-  apply commute_lookup_eval_ctrl.
+  apply PMapHelperLemmas.commute_lookup_eval_ctrl.
 Qed.
-
 
 Lemma find_first_match_lemma:
   forall {T : Set} (list_of_pair :  list (bool*T)),
