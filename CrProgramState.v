@@ -198,3 +198,5 @@ Qed.
 Global Opaque lookup_ctrl.
 Global Opaque update_hdr_map.
 Global Opaque update_state_map.
+Global Opaque update_hdr.
+Global Opaque update_state.
