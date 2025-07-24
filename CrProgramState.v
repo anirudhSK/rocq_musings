@@ -26,11 +26,9 @@ Definition lookup_hdr {T : Type} (s: ProgramState T) (x: Header) : T :=
 
 Definition lookup_state {T : Type} (s: ProgramState T) (x: StateVar) : T :=
   state_var_map s x.
-Opaque lookup_state.
 
 Definition lookup_ctrl {T : Type} (s: ProgramState T) (x: CtrlPlaneConfigName) : T :=
   PMap.get (match x with | CtrlPlaneConfigNameCtr id => id end) (ctrl_plane_map s).
-Global Opaque lookup_ctrl.
 
 Definition program_state_mapper {T1 T2 : Type} (fc: T1 -> T2) (fh : T1 -> T2) (fs : T1 -> T2) (s: ProgramState T1) : ProgramState T2 :=
   {| ctrl_plane_map := PMap.map fc (ctrl_plane_map s);
@@ -41,13 +39,11 @@ Definition update_all_hdrs {T : Type} (s: ProgramState T) (fh: Header -> T) : Pr
   {| ctrl_plane_map := ctrl_plane_map s;
      header_map := fun h => fh h;
      state_var_map := state_var_map s |}.
-Opaque update_all_hdrs.
 
 Definition update_all_states {T : Type} (s: ProgramState T) (fs: StateVar -> T) : ProgramState T :=
   {| ctrl_plane_map := ctrl_plane_map s;
      header_map := header_map s;
      state_var_map := fun sv => fs sv |}.
-Opaque update_all_states.
 
 (* Update the header map with a new value for a specific header *)
 Definition update_hdr_map {T : Type} (m: HeaderMap T) (x: Header) (v: T) : HeaderMap T :=
@@ -64,7 +60,6 @@ Definition update_state {T : Type} (s: ProgramState T) (x: StateVar) (v: T) : Pr
      state_var_map := fun y => match x, y with
             | StateVarCtr x_id, StateVarCtr y_id => if Pos.eqb x_id y_id then v else lookup_state s y
            end |}.
-Opaque update_state.
 
 Lemma commute_mapper_update_hdr:
   forall {T1} {T2} ps h v (func : T1 -> T2),
@@ -87,3 +82,6 @@ Proof.
   - reflexivity.
   - reflexivity.
 Qed.
+
+(* Mark definitions globally opaque below *)
+Global Opaque lookup_ctrl.
