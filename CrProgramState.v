@@ -62,38 +62,6 @@ Definition update_state {T : Type} (s: ProgramState T) (x: StateVar) (v: T) : Pr
             | StateVarCtr x_id, StateVarCtr y_id => if Pos.eqb x_id y_id then v else lookup_state s y
            end |}.
 Opaque update_state.
-
-Lemma ctrl_plane_invariant_update_hdr:
-  forall {T} (s: ProgramState T) (x: Header) (v: T),
-    ctrl_plane_map (update_hdr s x v) = ctrl_plane_map s.
-Proof.
-  intros.
-  unfold update_hdr.
-  destruct x; simpl; try reflexivity.
-Qed.
-
-Lemma ctrl_plane_invariant_update_hdrs:
-  forall {T} (s: ProgramState T) (f: Header -> T),
-    ctrl_plane_map (update_all_hdrs s f) = ctrl_plane_map s.
-Proof.
-  intros.
-  unfold update_all_hdrs.
-  simpl.
-  reflexivity.
-Qed.
-
-(* Same as above but for state vars *)
-
-Lemma ctrl_plane_invariant_update_states:
-  forall {T} (s: ProgramState T) (f: StateVar -> T),
-    ctrl_plane_map (update_all_states s f) = ctrl_plane_map s.
-Proof.
-  intros.
-  unfold update_all_states.
-  simpl.
-  reflexivity.
-Qed.
-
 Opaque update_hdr.
 Opaque update_all_hdrs.
 Opaque update_all_states.
