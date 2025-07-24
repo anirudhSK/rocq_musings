@@ -194,9 +194,48 @@ Proof.
   reflexivity.
 Qed.
 
+Lemma lookup_hdr_unchanged_by_update_all_states:
+  forall {T} fs (s1 : ProgramState T) (h : Header),
+    lookup_hdr s1 h = lookup_hdr (update_all_states s1 fs) h.
+Proof.
+  reflexivity.
+Qed.
+
+Lemma lookup_hdr_after_update_all_hdrs:
+  forall {T} (s1 : ProgramState T) (h : Header) (fh : Header -> T),
+    lookup_hdr (update_all_hdrs s1 fh) h = fh h.
+Proof.
+  reflexivity.
+Qed.
+
+(* Create mirror image versions of the two lemmas above with state and hdr interchanged *)
+Lemma lookup_state_unchanged_by_update_all_hdrs:
+  forall {T} fh (s1 : ProgramState T) (sv : StateVar),
+    lookup_state s1 sv = lookup_state (update_all_hdrs s1 fh) sv.
+Proof.
+  reflexivity.
+Qed.
+
+Lemma lookup_state_after_update_all_states:
+  forall {T} (s1 : ProgramState T) (sv : StateVar) (fs : StateVar -> T),
+    lookup_state (update_all_states s1 fs) sv = fs sv.
+Proof.
+  reflexivity.
+Qed.
+
+Lemma commute_state_hdr_updates:
+  forall {T} (s1 : ProgramState T) (fh : Header -> T) (fs : StateVar -> T),
+    update_all_hdrs (update_all_states s1 fs) fh =
+    update_all_states (update_all_hdrs s1 fh) fs.
+Proof.
+  reflexivity.
+Qed.
+
 (* Mark definitions globally opaque below *)
 Global Opaque lookup_ctrl.
 Global Opaque update_hdr_map.
 Global Opaque update_state_map.
 Global Opaque update_hdr.
 Global Opaque update_state.
+Global Opaque lookup_hdr.
+Global Opaque lookup_state.
