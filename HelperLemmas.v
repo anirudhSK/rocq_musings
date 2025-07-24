@@ -73,8 +73,12 @@ Proof.
   destruct (uid =? uid0)%positive eqn:des.
   - apply Pos.eqb_eq in des.
     rewrite des.
+    simpl.
+    assert (H : (uid0 =? uid0)%positive = true).
+    { apply Pos.eqb_eq. reflexivity. }
+    rewrite H.
     reflexivity.
-  - reflexivity.
+  - simpl. rewrite des. reflexivity.
 Qed.
 
 Lemma commute_lookup_eval:

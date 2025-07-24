@@ -2,6 +2,7 @@ From MyProject Require Export CrIdentifiers.
 From MyProject Require Export Maps.
 Require Import Strings.String.
 Require Import ZArith.
+From Coq Require Import FunctionalExtensionality.
 
 (* Current values for each of these identifiers as a map *)
 Definition HeaderMap (T : Type) := Header -> T.
@@ -22,7 +23,6 @@ Arguments ctrl_plane_map {T} _.
 
 Definition lookup_hdr {T : Type} (s: ProgramState T) (x: Header) : T :=
   header_map s x.
-Opaque lookup_hdr.
 
 Definition lookup_state {T : Type} (s: ProgramState T) (x: StateVar) : T :=
   state_var_map s x.
@@ -36,7 +36,6 @@ Definition program_state_mapper {T1 T2 : Type} (fc: T1 -> T2) (fh : T1 -> T2) (f
   {| ctrl_plane_map := PMap.map fc (ctrl_plane_map s);
      header_map := fun x => fh (lookup_hdr s x);
      state_var_map := fun x => fs (lookup_state s x) |}.
-Opaque program_state_mapper.
 
 Definition update_all_hdrs {T : Type} (s: ProgramState T) (fh: Header -> T) : ProgramState T :=
   {| ctrl_plane_map := ctrl_plane_map s;
@@ -50,13 +49,14 @@ Definition update_all_states {T : Type} (s: ProgramState T) (fs: StateVar -> T) 
      state_var_map := fun sv => fs sv |}.
 Opaque update_all_states.
 
+(* Update the header map with a new value for a specific header *)
+Definition update_hdr_map {T : Type} (m: HeaderMap T) (x: Header) (v: T) : HeaderMap T :=
+  fun y => match x, y with | HeaderCtr x_id, HeaderCtr y_id => if Pos.eqb x_id y_id then v else m y end.
+
 Definition update_hdr {T : Type} (s: ProgramState T) (x: Header) (v: T) : ProgramState T :=
   {| ctrl_plane_map := ctrl_plane_map s;
-     header_map :=  fun y => match x, y with
-            | HeaderCtr x_id, HeaderCtr y_id => if Pos.eqb x_id y_id then v else lookup_hdr s y
-           end;
+     header_map :=  update_hdr_map (header_map s) x v;
      state_var_map := state_var_map s|}.
-Opaque update_hdr.
 
 Definition update_state {T : Type} (s: ProgramState T) (x: StateVar) (v: T) : ProgramState T :=
   {| ctrl_plane_map := ctrl_plane_map s;
@@ -65,3 +65,25 @@ Definition update_state {T : Type} (s: ProgramState T) (x: StateVar) (v: T) : Pr
             | StateVarCtr x_id, StateVarCtr y_id => if Pos.eqb x_id y_id then v else lookup_state s y
            end |}.
 Opaque update_state.
+
+Lemma commute_mapper_update_hdr:
+  forall {T1} {T2} ps h v (func : T1 -> T2),
+  program_state_mapper func func func (update_hdr ps h v) =
+  update_hdr (program_state_mapper func func func ps) h (func v).
+Proof.
+  intros.
+  simpl.
+  unfold program_state_mapper.
+  unfold update_hdr.
+  f_equal.
+  simpl.
+  unfold lookup_hdr.
+  simpl.
+  apply functional_extensionality.
+  intros.
+  unfold update_hdr_map.
+  destruct h, x.
+  destruct (uid =? uid0)%positive eqn:des.
+  - reflexivity.
+  - reflexivity.
+Qed.

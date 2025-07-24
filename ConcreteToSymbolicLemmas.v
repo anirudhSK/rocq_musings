@@ -12,6 +12,7 @@ Require Import Coq.Bool.Bool.
 From Coq Require Import FunctionalExtensionality.
 From MyProject Require Import HelperLemmas.
 From MyProject Require Import CtrlPlaneInvariants.
+From MyProject Require Import CrProgramState.
 
 (* Simpler lemma with no state update *)
 Lemma commute_sym_conc_expr:
@@ -51,20 +52,10 @@ Lemma commute_update_eval_hdr:
     update_hdr (eval_sym_state s f) h (eval_smt_arith v f).
 Proof.
   intros s f h v.
-  destruct s as [con_ctrl con_hdr con_state].
-  simpl.
   unfold eval_sym_state.
-  unfold update_hdr.
-  unfold program_state_mapper.
-  f_equal.
-  - apply functional_extensionality.
-    simpl.
-    intros x.
-    destruct x.
-    destruct h.
-    destruct (Pos.eqb uid0 uid).
-    + reflexivity.
-    + reflexivity.
+  specialize (commute_mapper_update_hdr (T1 := SmtArithExpr) (T2 := uint8)).
+  intros.
+  apply H.
 Qed.
 
 (* for any symbolic state, symbolic valuation, and header operation, 
