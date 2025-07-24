@@ -182,12 +182,11 @@ Lemma commute_sym_vs_conc_helper_seq_par_rule :
     (if eval_match_uint8 mp (eval_sym_state s1 f)
     then eval_hdr_op_list_uint8 hol (eval_sym_state s1 f)
     else eval_sym_state s1 f) =
-    eval_sym_state {| ctrl_plane_map := ctrl_plane_map s1;
-                      header_map := fun h : Header => SmtConditional (eval_match_smt mp s1)
-                                                      (lookup_hdr (eval_hdr_op_list_smt hol s1) h) (lookup_hdr s1 h);
-                      state_var_map := fun s : StateVar => SmtConditional (eval_match_smt mp s1)
-                                                           (lookup_state (eval_hdr_op_list_smt hol s1) s) (lookup_state s1 s)
-                    |} f.
+    eval_sym_state (update_all_states
+                   (update_all_hdrs s1 (fun h => SmtConditional (eval_match_smt mp s1)
+                                                                (lookup_hdr (eval_hdr_op_list_smt hol s1) h) (lookup_hdr s1 h)))
+                   (fun s => SmtConditional (eval_match_smt mp s1)
+                             (lookup_state (eval_hdr_op_list_smt hol s1) s) (lookup_state s1 s))) f.
 Proof.
   intros mp hol f s1.
   apply program_state_equality.
