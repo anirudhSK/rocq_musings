@@ -8,57 +8,21 @@ Require Import Coq.Lists.List.
 From MyProject Require Import CrSymbolicSemanticsTransformer.
 From Coq Require Import FunctionalExtensionality.
 From MyProject Require Import PMapHelperLemmas.
-
-Lemma program_state_equality:
-      forall (ps1 ps2: ProgramState uint8),
-        ctrl_plane_map ps1 = ctrl_plane_map ps2 ->
-        header_map ps1 = header_map ps2 ->
-        state_var_map  ps1 = state_var_map ps2 ->
-        ps1 = ps2.
-Proof.
-  intros ps1 ps2 Hctrl Hhdr Hstate.
-  destruct ps1 as [ctrl1 hdr1 state1].
-  destruct ps2 as [ctrl2 hdr2 state2].
-  simpl in *.
-  f_equal; try assumption.
-Qed.
-
-Lemma program_state_equality_sym:
-      forall (ps1 ps2: ProgramState SmtArithExpr),
-        ctrl_plane_map ps1 = ctrl_plane_map ps2 ->
-        header_map ps1 = header_map ps2 ->
-        state_var_map  ps1 = state_var_map ps2 ->
-        ps1 = ps2.
-Proof.
-  intros ps1 ps2 Hctrl Hhdr Hstate.
-  destruct ps1 as [ctrl1 hdr1 state1].
-  destruct ps2 as [ctrl2 hdr2 state2].
-  simpl in *.
-  f_equal; try assumption.
-Qed.
+From MyProject Require Import CrProgramState.
 
 Lemma nothing_changed_state:
   forall s f target,
     eval_sym_state s f = 
-    update_state (eval_sym_state s f) target
-     (eval_smt_arith (lookup_state s target) f).
+    update_state (eval_sym_state s f) target (eval_smt_arith (lookup_state s target) f).
 Proof.
   intros s f target.
-  destruct target.
   unfold eval_sym_state.
-  apply program_state_equality; simpl; try reflexivity.
-  apply functional_extensionality.
-  intros x.
-  destruct x.
-  destruct (uid =? uid0)%positive eqn:des.
-  - apply Pos.eqb_eq in des.
-    rewrite des.
-    simpl.
-    assert (H : (uid0 =? uid0)%positive = true).
-    { apply Pos.eqb_eq. reflexivity. }
-    rewrite H.
-    reflexivity.
-  - simpl. rewrite des. reflexivity.
+  specialize (commute_mapper_update_state (T1 := SmtArithExpr) (T2 := uint8)).
+  intros.
+  specialize (H s target (lookup_state s target) (fun e : SmtArithExpr => eval_smt_arith e f)).
+  rewrite <- H.
+  rewrite update_lookup_inverses_state.
+  reflexivity.
 Qed.
 
 Lemma nothing_changed_hdr:
@@ -68,21 +32,13 @@ Lemma nothing_changed_hdr:
      (eval_smt_arith (lookup_hdr s target) f).
 Proof.
   intros s f target.
-  destruct target.
   unfold eval_sym_state.
-  apply program_state_equality; simpl; try reflexivity.
-  apply functional_extensionality.
-  intros x.
-  destruct x.
-  destruct (uid =? uid0)%positive eqn:des.
-  - apply Pos.eqb_eq in des.
-    rewrite des.
-    simpl.
-    assert (H : (uid0 =? uid0)%positive = true).
-    { apply Pos.eqb_eq. reflexivity. }
-    rewrite H.
-    reflexivity.
-  - simpl. rewrite des. reflexivity.
+  specialize (commute_mapper_update_hdr (T1 := SmtArithExpr) (T2 := uint8)).
+  intros.
+  specialize (H s target (lookup_hdr s target) (fun e : SmtArithExpr => eval_smt_arith e f)).
+  rewrite <- H.
+  rewrite update_lookup_inverses_hdr.
+  reflexivity.
 Qed.
 
 Lemma commute_lookup_eval:

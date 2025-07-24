@@ -21,14 +21,34 @@ Arguments header_map {T} _ _.
 Arguments state_var_map {T} _ _.  
 Arguments ctrl_plane_map {T} _.
 
+Definition lookup_hdr_map {T : Type} (m: HeaderMap T) (x: Header) : T :=
+  m x.
+
+Definition lookup_state_map {T : Type} (m: StateVarMap T) (x: StateVar) : T :=
+  m x.
+
 Definition lookup_hdr {T : Type} (s: ProgramState T) (x: Header) : T :=
-  header_map s x.
+  lookup_hdr_map (header_map s) x.
 
 Definition lookup_state {T : Type} (s: ProgramState T) (x: StateVar) : T :=
-  state_var_map s x.
+  lookup_state_map (state_var_map s) x.
 
 Definition lookup_ctrl {T : Type} (s: ProgramState T) (x: CtrlPlaneConfigName) : T :=
   PMap.get (match x with | CtrlPlaneConfigNameCtr id => id end) (ctrl_plane_map s).
+
+Lemma program_state_equality:
+      forall (ps1 ps2: ProgramState uint8),
+        ctrl_plane_map ps1 = ctrl_plane_map ps2 ->
+        header_map ps1 = header_map ps2 ->
+        state_var_map  ps1 = state_var_map ps2 ->
+        ps1 = ps2.
+Proof.
+  intros ps1 ps2 Hctrl Hhdr Hstate.
+  destruct ps1 as [ctrl1 hdr1 state1].
+  destruct ps2 as [ctrl2 hdr2 state2].
+  simpl in *.
+  f_equal; try assumption.
+Qed.
 
 Definition program_state_mapper {T1 T2 : Type} (fc: T1 -> T2) (fh : T1 -> T2) (fs : T1 -> T2) (s: ProgramState T1) : ProgramState T2 :=
   {| ctrl_plane_map := PMap.map fc (ctrl_plane_map s);
@@ -107,5 +127,74 @@ Proof.
   - reflexivity.
 Qed.
 
+Lemma update_lookup_inverses_state_map:
+  forall {T} (m : StateVarMap T) (target : StateVar),
+    (update_state_map m target (lookup_state_map m target)) = m.
+Proof.
+  intros.
+  unfold update_state_map.
+  unfold lookup_state_map.
+  simpl.
+  destruct target.
+  apply functional_extensionality.
+  intros.
+  destruct x.
+  destruct (uid =? uid0)%positive eqn:des.
+  - apply Pos.eqb_eq in des. rewrite des. reflexivity.
+  - reflexivity.
+Qed.
+
+Lemma update_lookup_inverses_state:
+  forall {T} (s : ProgramState T) (target : StateVar),
+    (update_state s target (lookup_state s target)) = s.
+Proof.
+  intros.
+  simpl.
+  unfold update_state.
+  unfold lookup_state.
+  simpl.
+  rewrite update_lookup_inverses_state_map.
+  simpl.
+  destruct s.
+  simpl. 
+  reflexivity.
+Qed.
+
+(* Do the same thing as state for hdrs: replicate both lemmas above *)
+Lemma update_lookup_inverses_hdr_map:
+  forall {T} (m : HeaderMap T) (target : Header),
+    (update_hdr_map m target (lookup_hdr_map m target)) = m.
+Proof.
+  intros.
+  unfold update_hdr_map.
+  unfold lookup_hdr_map.
+  simpl.
+  destruct target.
+  apply functional_extensionality.
+  intros.
+  destruct x.
+  destruct (uid =? uid0)%positive eqn:des.
+  - apply Pos.eqb_eq in des. rewrite des. reflexivity.
+  - reflexivity.
+Qed.
+
+Lemma update_lookup_inverses_hdr:
+  forall {T} (s : ProgramState T) (target : Header),
+    (update_hdr s target (lookup_hdr s target)) = s.
+Proof.
+  intros.
+  simpl.
+  unfold update_hdr.
+  unfold lookup_hdr.
+  simpl.
+  rewrite update_lookup_inverses_hdr_map.
+  simpl.
+  destruct s.
+  simpl.
+  reflexivity.
+Qed.
+
 (* Mark definitions globally opaque below *)
 Global Opaque lookup_ctrl.
+Global Opaque update_hdr_map.
+Global Opaque update_state_map.
