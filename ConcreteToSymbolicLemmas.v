@@ -29,21 +29,11 @@ Lemma commute_update_eval_state:
     eval_sym_state (update_state s sv v) f =
     update_state (eval_sym_state s f) sv (eval_smt_arith v f).
 Proof.
-  intros s f sv v.
-  destruct s as [con_ctrl con_hdr con_state].
-  simpl.
+  intros s f h v.
   unfold eval_sym_state.
-  unfold update_state.
-  unfold program_state_mapper.
-  f_equal.
-  - apply functional_extensionality.
-    simpl.
-    intros x.
-    destruct x.
-    destruct sv.
-    destruct (Pos.eqb uid0 uid).
-    + reflexivity.
-    + reflexivity.
+  specialize (commute_mapper_update_state (T1 := SmtArithExpr) (T2 := uint8)).
+  intros.
+  apply H.
 Qed.
 
 Lemma commute_update_eval_hdr:

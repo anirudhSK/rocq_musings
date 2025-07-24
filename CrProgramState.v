@@ -49,6 +49,10 @@ Definition update_all_states {T : Type} (s: ProgramState T) (fs: StateVar -> T) 
 Definition update_hdr_map {T : Type} (m: HeaderMap T) (x: Header) (v: T) : HeaderMap T :=
   fun y => match x, y with | HeaderCtr x_id, HeaderCtr y_id => if Pos.eqb x_id y_id then v else m y end.
 
+(* Same as above, but for state variables *)
+Definition update_state_map {T : Type} (m: StateVarMap T) (x: StateVar) (v: T) : StateVarMap T :=
+  fun y => match x, y with | StateVarCtr x_id, StateVarCtr y_id => if Pos.eqb x_id y_id then v else m y end.
+
 Definition update_hdr {T : Type} (s: ProgramState T) (x: Header) (v: T) : ProgramState T :=
   {| ctrl_plane_map := ctrl_plane_map s;
      header_map :=  update_hdr_map (header_map s) x v;
@@ -57,9 +61,7 @@ Definition update_hdr {T : Type} (s: ProgramState T) (x: Header) (v: T) : Progra
 Definition update_state {T : Type} (s: ProgramState T) (x: StateVar) (v: T) : ProgramState T :=
   {| ctrl_plane_map := ctrl_plane_map s;
      header_map := header_map s;
-     state_var_map := fun y => match x, y with
-            | StateVarCtr x_id, StateVarCtr y_id => if Pos.eqb x_id y_id then v else lookup_state s y
-           end |}.
+     state_var_map := update_state_map (state_var_map s) x v |}.
 
 Lemma commute_mapper_update_hdr:
   forall {T1} {T2} ps h v (func : T1 -> T2),
@@ -78,6 +80,28 @@ Proof.
   intros.
   unfold update_hdr_map.
   destruct h, x.
+  destruct (uid =? uid0)%positive eqn:des.
+  - reflexivity.
+  - reflexivity.
+Qed.
+
+Lemma commute_mapper_update_state:
+  forall {T1} {T2} ps sv v (func : T1 -> T2),
+  program_state_mapper func func func (update_state ps sv v) =
+  update_state (program_state_mapper func func func ps) sv (func v).
+Proof.
+  intros.
+  simpl.
+  unfold program_state_mapper.
+  unfold update_state.
+  f_equal.
+  simpl.
+  unfold lookup_state.
+  simpl.
+  apply functional_extensionality.
+  intros.
+  unfold update_state_map.
+  destruct sv, x.
   destruct (uid =? uid0)%positive eqn:des.
   - reflexivity.
   - reflexivity.
