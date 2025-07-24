@@ -286,6 +286,18 @@ Proof.
     -- simpl. rewrite des. reflexivity.
 Qed.
 
+Lemma eval_conditionals :
+  forall condexpr thenexpr elseexpr f,
+    eval_smt_bool condexpr f = true ->
+    eval_smt_arith (SmtConditional condexpr thenexpr elseexpr) f =
+    eval_smt_arith thenexpr f.
+Proof.
+  intros.
+  simpl.
+  rewrite H.
+  reflexivity.
+Qed.
+
 Lemma one_rule_transformer_evals_to_ma_rule_smt:
   forall m f s,
          eval_sym_state (eval_transformer_smt [m] s) f =
@@ -307,25 +319,29 @@ Proof.
       simpl.
       destruct sr as [mp hol].
       simpl.
-      destruct (eval_match_uint8 mp (eval_sym_state s f)) eqn:des.
-      * rewrite commute_sym_vs_conc_match_pattern with (f := f) (s1 := s) in des; try reflexivity.
-        rewrite des.
-        rewrite commute_sym_vs_conc_hdr_op_list with (f := f) (s1 := s); try reflexivity.
-      * rewrite commute_sym_vs_conc_match_pattern with (f := f) (s1 := s) in des; try reflexivity.
-        rewrite des.
-        simpl. reflexivity.
+      destruct (eval_match_uint8 mp (eval_sym_state s f)) eqn:des;
+      rewrite <- lookup_hdr_unchanged_by_update_all_states;
+      rewrite lookup_hdr_after_update_all_hdrs;
+      rewrite commute_sym_vs_conc_match_pattern with (f := f) (s1 := s) in des; try reflexivity;
+      rewrite <- commute_state_hdr_updates;
+      rewrite lookup_hdr_after_update_all_hdrs;
+      simpl; rewrite des.
+      * rewrite commute_sym_vs_conc_hdr_op_list with (f := f) (s1 := s); try reflexivity.
+      * reflexivity.
     + apply functional_extensionality.
       intros x.
       simpl.
       destruct sr as [mp hol].
       simpl.
-      destruct (eval_match_uint8 mp (eval_sym_state s f)) eqn:des.
-      * rewrite commute_sym_vs_conc_match_pattern with (f := f) (s1 := s) in des; try reflexivity.
-        rewrite des.
-        rewrite commute_sym_vs_conc_hdr_op_list with (f := f) (s1 := s); try reflexivity.
-      * rewrite commute_sym_vs_conc_match_pattern with (f := f) (s1 := s) in des; try reflexivity.
-        rewrite des.
-        simpl. reflexivity.
+      destruct (eval_match_uint8 mp (eval_sym_state s f)) eqn:des;
+      rewrite <- commute_state_hdr_updates;
+      rewrite <- lookup_state_unchanged_by_update_all_hdrs;
+      rewrite lookup_state_after_update_all_states;
+      rewrite commute_sym_vs_conc_match_pattern with (f := f) (s1 := s) in des; try reflexivity;
+      rewrite lookup_state_after_update_all_states;
+      simpl; rewrite des.
+      * rewrite commute_sym_vs_conc_hdr_op_list with (f := f) (s1 := s); try reflexivity.
+      * reflexivity.
   - apply program_state_equality.
     + destruct pr as [mp hol].
       simpl.
@@ -338,25 +354,29 @@ Proof.
       simpl.
       destruct pr as [mp hol].
       simpl.
-      destruct (eval_match_uint8 mp (eval_sym_state s f)) eqn:des.
-      * rewrite commute_sym_vs_conc_match_pattern with (f := f) (s1 := s) in des; try reflexivity.
-        rewrite des.
-        rewrite commute_sym_vs_conc_hdr_op_list with (f := f) (s1 := s); try reflexivity.
-      * rewrite commute_sym_vs_conc_match_pattern with (f := f) (s1 := s) in des; try reflexivity.
-        rewrite des.
-        simpl. reflexivity.
+      destruct (eval_match_uint8 mp (eval_sym_state s f)) eqn:des;
+      rewrite <- lookup_hdr_unchanged_by_update_all_states;
+      rewrite lookup_hdr_after_update_all_hdrs;
+      rewrite commute_sym_vs_conc_match_pattern with (f := f) (s1 := s) in des; try reflexivity;
+      rewrite <- commute_state_hdr_updates;
+      rewrite lookup_hdr_after_update_all_hdrs;
+      simpl; rewrite des.
+      * rewrite commute_sym_vs_conc_hdr_op_list with (f := f) (s1 := s); try reflexivity.
+      * reflexivity.
     + apply functional_extensionality.
       intros x.
       simpl.
       destruct pr as [mp hol].
       simpl.
-      destruct (eval_match_uint8 mp (eval_sym_state s f)) eqn:des.
-      * rewrite commute_sym_vs_conc_match_pattern with (f := f) (s1 := s) in des; try reflexivity.
-        rewrite des.
-        rewrite commute_sym_vs_conc_hdr_op_list with (f := f) (s1 := s); try reflexivity.
-      * rewrite commute_sym_vs_conc_match_pattern with (f := f) (s1 := s) in des; try reflexivity.
-        rewrite des.
-        simpl. reflexivity.
+      destruct (eval_match_uint8 mp (eval_sym_state s f)) eqn:des;
+      rewrite <- commute_state_hdr_updates;
+      rewrite <- lookup_state_unchanged_by_update_all_hdrs;
+      rewrite lookup_state_after_update_all_states;
+      rewrite commute_sym_vs_conc_match_pattern with (f := f) (s1 := s) in des; try reflexivity;
+      rewrite lookup_state_after_update_all_states;
+      simpl; rewrite des.
+      * rewrite commute_sym_vs_conc_hdr_op_list with (f := f) (s1 := s); try reflexivity.
+      * reflexivity.
 Qed.
 
 (* The transformer with one rule is equivalent to the match action rule *)
