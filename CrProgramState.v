@@ -255,3 +255,4 @@ Global Opaque update_hdr.
 Global Opaque update_state.
 Global Opaque lookup_hdr.
 Global Opaque lookup_state.
+Global Opaque program_state_mapper.

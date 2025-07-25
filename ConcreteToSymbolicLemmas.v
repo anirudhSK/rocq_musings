@@ -176,6 +176,7 @@ Proof.
     apply nothing_changed_hdr.
 Qed.
 
+Transparent program_state_mapper.
 Lemma commute_sym_vs_conc_helper_seq_par_rule :
   forall (mp: MatchPattern) (hol: list HdrOp) (f : SmtValuation)
          (s1 : ProgramState SmtArithExpr),
@@ -230,6 +231,7 @@ Proof.
     + rewrite commute_sym_vs_conc_hdr_op_list with (f := f) (s1 := s1) (c1 := eval_sym_state s1 f); reflexivity.
     + reflexivity.
 Qed.
+Global Opaque program_state_mapper.
 
 Lemma commute_sym_vs_conc_seq_rule :
   forall (sr: SeqRule) (f : SmtValuation)
@@ -298,6 +300,7 @@ Proof.
   reflexivity.
 Qed.
 
+Transparent program_state_mapper.
 Lemma one_rule_transformer_evals_to_ma_rule_smt:
   forall m f s,
          eval_sym_state (eval_transformer_smt [m] s) f =
@@ -378,6 +381,7 @@ Proof.
       * rewrite commute_sym_vs_conc_hdr_op_list with (f := f) (s1 := s); try reflexivity.
       * reflexivity.
 Qed.
+Global Opaque program_state_mapper.
 
 (* The transformer with one rule is equivalent to the match action rule *)
 Lemma transfomer_with_one_rule:
