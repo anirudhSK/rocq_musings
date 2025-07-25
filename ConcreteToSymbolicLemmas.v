@@ -619,7 +619,22 @@ Proof.
       assumption.
 Qed.
 
-Transparent lookup_hdr.
+Lemma hdr_transformer_helper:
+  forall t s1 h,
+     (lookup_hdr (eval_transformer_smt t s1) h) =
+     switch_case_expr
+     (combine (get_match_results_smt t s1)
+     (map (fun ps : ProgramState SmtArithExpr => lookup_hdr ps h)
+     (map (fun rule : MatchActionRule => eval_match_action_rule_smt rule s1) t)))
+     (lookup_hdr s1 h).
+Proof.
+  intros.
+  unfold eval_transformer_smt.
+  rewrite <- commute_state_hdr_updates.
+  rewrite lookup_hdr_after_update_all_hdrs.
+  reflexivity.
+Qed.
+
 Lemma commute_sym_vs_conc_transformer_header_map:
   forall t f s1,
     lookup_hdr (eval_transformer_uint8 t (eval_sym_state s1 f)) =
@@ -632,12 +647,31 @@ Proof.
   unfold eval_transformer_uint8.
   remember (find_first_match (combine (get_match_results t (eval_sym_state s1 f)) t)) as concrete_match.
   destruct concrete_match eqn:des.
-  - simpl. apply switch_case_expr_some_match_lemma. assumption.
-  - simpl. apply switch_case_expr_no_match_lemma. assumption.
+  - rewrite commute_lookup_eval_hdr. rewrite hdr_transformer_helper. apply switch_case_expr_some_match_lemma. assumption.
+  - assert(H0: lookup_hdr (eval_sym_state (eval_transformer_smt t s1) f) h =
+               eval_smt_arith (lookup_hdr (eval_transformer_smt t s1) h ) f).
+               { rewrite commute_lookup_eval_hdr. reflexivity. }
+    rewrite H0.
+    rewrite hdr_transformer_helper.
+    rewrite commute_lookup_eval_hdr.
+    apply switch_case_expr_no_match_lemma. assumption.
 Qed.
-Global Opaque lookup_hdr.
 
-Transparent lookup_state.
+Lemma state_transformer_helper:
+  forall t s1 h,
+     (lookup_state (eval_transformer_smt t s1) h) =
+     switch_case_expr
+     (combine (get_match_results_smt t s1)
+     (map (fun ps : ProgramState SmtArithExpr => lookup_state ps h)
+     (map (fun rule : MatchActionRule => eval_match_action_rule_smt rule s1) t)))
+     (lookup_state s1 h).
+Proof.
+  intros.
+  unfold eval_transformer_smt.
+  rewrite lookup_state_after_update_all_states.
+  reflexivity.
+Qed.
+
 Lemma commute_sym_vs_conc_transformer_state_var_map:
   forall t f s1,
     lookup_state (eval_transformer_uint8 t (eval_sym_state s1 f)) = lookup_state (eval_sym_state (eval_transformer_smt t s1) f).
@@ -649,10 +683,15 @@ Proof.
   unfold eval_transformer_uint8.
   remember (find_first_match (combine (get_match_results t (eval_sym_state s1 f)) t)) as concrete_match.
   destruct concrete_match eqn:des.
-  - simpl. apply switch_case_expr_some_match_state_var_lemma. assumption.
-  - simpl. apply switch_case_expr_no_match_state_var_lemma. assumption.
+  - rewrite commute_lookup_eval_state. rewrite state_transformer_helper. apply switch_case_expr_some_match_state_var_lemma. assumption.
+  - assert(H0: lookup_state (eval_sym_state (eval_transformer_smt t s1) f) sv =
+               eval_smt_arith (lookup_state (eval_transformer_smt t s1) sv ) f).
+               { rewrite commute_lookup_eval_state. reflexivity. }
+    rewrite H0.
+    rewrite state_transformer_helper.
+    rewrite commute_lookup_eval_state.
+    apply switch_case_expr_no_match_state_var_lemma. assumption.
 Qed.
-Global Opaque lookup_state.
 
 Lemma commute_sym_vs_conc_transformer_ctrl_plane_map:
   forall t f s1,
