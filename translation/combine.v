@@ -1,7 +1,8 @@
 From MyProject Require Import first_generated.
 From MyProject Require Import second_generated.
 From MyProject Require Import SmtExpr.
-(* From MyProject Require Import CrProgramState. *)
+From MyProject Require Import CrProgramState.
+From MyProject Require Import CrTransformer.
 Require Import ZArith.
 Require Import List.
 Import ListNotations.
@@ -18,12 +19,16 @@ state_var_map := fun _ => SmtConst (repr 0%Z)
 
 Definition headers_to_check : list Header := [first_generated.h_a; second_generated.h_a].
 Definition state_vars_to_check : list StateVar := [].
+
+Definition transformer_first: Transformer := [first_generated.the_table_0_rule].
+Definition transformer_second: Transformer := [second_generated.the_table_0_rule].
+
 (* Construct the equivalence checker instance *)
 Definition my_equivalence_check : SmtResult :=
   equivalence_checker
       simplest_state       (* Starting symbolic state *)
-      first_generated.the_table_0_rule         (* First rule *)
-      second_generated.the_table_0_rule          (* Second rule (same) *)
+      transformer_first         (* First rule *)
+      transformer_second          (* Second rule (same) *)
       headers_to_check             
       state_vars_to_check.   
 
