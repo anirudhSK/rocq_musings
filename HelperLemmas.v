@@ -41,7 +41,6 @@ Proof.
   reflexivity.
 Qed.
 
-Transparent lookup_state.
 Lemma commute_lookup_eval_state:
   forall (s : ProgramState SmtArithExpr) (f : SmtValuation)
         sv,
@@ -49,11 +48,12 @@ Lemma commute_lookup_eval_state:
     eval_smt_arith (lookup_state s sv) f.
 Proof.
   intros s f sv.
-  destruct sv; simpl; try reflexivity.
+  destruct sv.
+  unfold eval_sym_state.
+  rewrite commute_mapper_lookup_state.
+  reflexivity.
 Qed.
-Global Opaque lookup_state.
 
-Transparent lookup_hdr.
 Lemma commute_lookup_eval_hdr:
   forall (s : ProgramState SmtArithExpr) (f : SmtValuation)
         hv,
@@ -61,9 +61,11 @@ Lemma commute_lookup_eval_hdr:
     eval_smt_arith (lookup_hdr s hv) f.
 Proof.
   intros s f hv.
-  destruct hv; simpl; try reflexivity.
+  destruct hv.
+  unfold eval_sym_state.
+  rewrite commute_mapper_lookup_hdr.
+  reflexivity.
 Qed.
-Global Opaque lookup_hdr.
 
 Lemma commute_lookup_eval:
   forall (s : ProgramState SmtArithExpr) (f : SmtValuation)

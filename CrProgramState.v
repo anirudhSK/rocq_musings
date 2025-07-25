@@ -83,6 +83,22 @@ Definition update_state {T : Type} (s: ProgramState T) (x: StateVar) (v: T) : Pr
      header_map := header_map s;
      state_var_map := update_state_map (state_var_map s) x v |}.
 
+Lemma commute_mapper_lookup_state:
+  forall {T1} {T2} ps sv (func : T1 -> T2),
+  lookup_state (program_state_mapper func func func ps) sv =
+  func (lookup_state ps sv).
+Proof.
+  reflexivity.
+Qed.
+
+Lemma commute_mapper_lookup_hdr:
+  forall {T1} {T2} ps hv (func : T1 -> T2),
+  lookup_hdr (program_state_mapper func func func ps) hv =
+  func (lookup_hdr ps hv).
+Proof.
+  reflexivity.
+Qed.
+
 Lemma commute_mapper_update_hdr:
   forall {T1} {T2} ps h v (func : T1 -> T2),
   program_state_mapper func func func (update_hdr ps h v) =
