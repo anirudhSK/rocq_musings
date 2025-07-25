@@ -619,6 +619,7 @@ Proof.
       assumption.
 Qed.
 
+Transparent lookup_hdr.
 Lemma commute_sym_vs_conc_transformer_header_map:
   forall t f s1,
     lookup_hdr (eval_transformer_uint8 t (eval_sym_state s1 f)) =
@@ -634,7 +635,9 @@ Proof.
   - simpl. apply switch_case_expr_some_match_lemma. assumption.
   - simpl. apply switch_case_expr_no_match_lemma. assumption.
 Qed.
+Global Opaque lookup_hdr.
 
+Transparent lookup_state.
 Lemma commute_sym_vs_conc_transformer_state_var_map:
   forall t f s1,
     lookup_state (eval_transformer_uint8 t (eval_sym_state s1 f)) = lookup_state (eval_sym_state (eval_transformer_smt t s1) f).
@@ -649,6 +652,7 @@ Proof.
   - simpl. apply switch_case_expr_some_match_state_var_lemma. assumption.
   - simpl. apply switch_case_expr_no_match_state_var_lemma. assumption.
 Qed.
+Global Opaque lookup_state.
 
 Lemma commute_sym_vs_conc_transformer_ctrl_plane_map:
   forall t f s1,
