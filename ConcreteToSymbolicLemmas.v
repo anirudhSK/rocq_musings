@@ -176,7 +176,6 @@ Proof.
     apply nothing_changed_hdr.
 Qed.
 
-Transparent program_state_mapper.
 Lemma commute_sym_vs_conc_helper_seq_par_rule :
   forall (mp: MatchPattern) (hol: list HdrOp) (f : SmtValuation)
          (s1 : ProgramState SmtArithExpr),
@@ -195,16 +194,31 @@ Proof.
     destruct (eval_match_uint8 mp (eval_sym_state s1 f)) eqn:des.
     + induction hol.
       * simpl. reflexivity.
-      * simpl. rewrite <- IHhol.
-        rewrite ctrl_plane_invariant_hdr_op.
-        reflexivity. 
+      * simpl. rewrite ctrl_plane_invariant_hdr_op.
+        rewrite IHhol.
+        reflexivity.
     + simpl. reflexivity.
   - destruct (eval_match_uint8 mp (eval_sym_state s1 f)) eqn:des;
     unfold eval_sym_state;
     apply functional_extensionality;
     intros x;
     destruct x;
-    simpl;
+    remember (header_map
+(program_state_mapper (fun e : SmtArithExpr => eval_smt_arith e f)
+(fun e : SmtArithExpr => eval_smt_arith e f)
+(fun e : SmtArithExpr => eval_smt_arith e f)
+(update_all_states
+(update_all_hdrs s1
+(fun h : Header =>
+SmtConditional (eval_match_smt mp s1)
+(lookup_hdr (eval_hdr_op_list_smt hol s1) h)
+(lookup_hdr s1 h)))
+(fun s : StateVar =>
+SmtConditional (eval_match_smt mp s1)
+(lookup_state (eval_hdr_op_list_smt hol s1) s)
+(lookup_state s1 s)))) (HeaderCtr uid)) as tmp;
+    rewrite commute_mapper_lookup_hdr in Heqtmp;
+    rewrite Heqtmp;
     rewrite <- lookup_hdr_unchanged_by_update_all_states with (fs := (fun s : StateVar => SmtConditional (eval_match_smt mp s1) (lookup_state (eval_hdr_op_list_smt hol s1) s)
                                                                                                            (lookup_state s1 s)));
     simpl;
@@ -219,7 +233,24 @@ Proof.
     apply functional_extensionality;
     intros x;
     destruct x;
-    simpl;
+
+    remember (state_var_map
+(program_state_mapper (fun e : SmtArithExpr => eval_smt_arith e f)
+(fun e : SmtArithExpr => eval_smt_arith e f)
+(fun e : SmtArithExpr => eval_smt_arith e f)
+(update_all_states
+(update_all_hdrs s1
+(fun h : Header =>
+SmtConditional (eval_match_smt mp s1)
+(lookup_hdr (eval_hdr_op_list_smt hol s1) h)
+(lookup_hdr s1 h)))
+(fun s : StateVar =>
+SmtConditional (eval_match_smt mp s1)
+(lookup_state (eval_hdr_op_list_smt hol s1) s)
+(lookup_state s1 s)))) (StateVarCtr uid)) as tmp;
+    rewrite commute_mapper_lookup_state in Heqtmp;
+    rewrite Heqtmp;
+
     rewrite <- commute_state_hdr_updates;
     rewrite <- lookup_state_unchanged_by_update_all_hdrs with (fh := (fun h : Header => SmtConditional (eval_match_smt mp s1) (lookup_hdr (eval_hdr_op_list_smt hol s1) h)
                                                                                                            (lookup_hdr s1 h)));
@@ -231,7 +262,6 @@ Proof.
     + rewrite commute_sym_vs_conc_hdr_op_list with (f := f) (s1 := s1) (c1 := eval_sym_state s1 f); reflexivity.
     + reflexivity.
 Qed.
-Global Opaque program_state_mapper.
 
 Lemma commute_sym_vs_conc_seq_rule :
   forall (sr: SeqRule) (f : SmtValuation)
