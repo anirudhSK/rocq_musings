@@ -330,7 +330,6 @@ Proof.
   reflexivity.
 Qed.
 
-Transparent program_state_mapper.
 Lemma one_rule_transformer_evals_to_ma_rule_smt:
   forall m f s,
          eval_sym_state (eval_transformer_smt [m] s) f =
@@ -352,6 +351,8 @@ Proof.
       simpl.
       destruct sr as [mp hol].
       simpl.
+      rewrite <- header_map_lookup_hdr.
+      rewrite header_map_ps.
       destruct (eval_match_uint8 mp (eval_sym_state s f)) eqn:des;
       rewrite <- lookup_hdr_unchanged_by_update_all_states;
       rewrite lookup_hdr_after_update_all_hdrs;
@@ -366,6 +367,8 @@ Proof.
       simpl.
       destruct sr as [mp hol].
       simpl.
+      rewrite <- state_var_map_lookup_state.
+      rewrite state_var_map_ps.
       destruct (eval_match_uint8 mp (eval_sym_state s f)) eqn:des;
       rewrite <- commute_state_hdr_updates;
       rewrite <- lookup_state_unchanged_by_update_all_hdrs;
@@ -387,6 +390,8 @@ Proof.
       simpl.
       destruct pr as [mp hol].
       simpl.
+      rewrite <- header_map_lookup_hdr.
+      rewrite header_map_ps.
       destruct (eval_match_uint8 mp (eval_sym_state s f)) eqn:des;
       rewrite <- lookup_hdr_unchanged_by_update_all_states;
       rewrite lookup_hdr_after_update_all_hdrs;
@@ -401,6 +406,8 @@ Proof.
       simpl.
       destruct pr as [mp hol].
       simpl.
+      rewrite <- state_var_map_lookup_state.
+      rewrite state_var_map_ps.
       destruct (eval_match_uint8 mp (eval_sym_state s f)) eqn:des;
       rewrite <- commute_state_hdr_updates;
       rewrite <- lookup_state_unchanged_by_update_all_hdrs;
@@ -411,7 +418,6 @@ Proof.
       * rewrite commute_sym_vs_conc_hdr_op_list with (f := f) (s1 := s); try reflexivity.
       * reflexivity.
 Qed.
-Global Opaque program_state_mapper.
 
 (* The transformer with one rule is equivalent to the match action rule *)
 Lemma transfomer_with_one_rule:

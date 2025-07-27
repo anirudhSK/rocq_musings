@@ -247,6 +247,23 @@ Proof.
   reflexivity.
 Qed.
 
+Lemma header_map_lookup_hdr:
+  forall {T} (s : ProgramState T) (h : Header),
+    lookup_hdr s h = header_map s h.
+Proof.
+  intros.
+  reflexivity.
+Qed.
+
+(* Same as above, but for state_var *)
+Lemma state_var_map_lookup_state:
+  forall {T} (s : ProgramState T) (sv : StateVar),
+    lookup_state s sv = state_var_map s sv.
+Proof.
+  intros.
+  reflexivity.
+Qed.
+
 (* Mark definitions globally opaque below *)
 Global Opaque lookup_ctrl.
 Global Opaque update_hdr_map.

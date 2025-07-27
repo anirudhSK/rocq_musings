@@ -112,7 +112,7 @@ Proof.
        assumption.
 Qed.
 
-Lemma header_map_ps :
+Lemma header_map_ps : (*TODO: Should probably be called lookup_hdr_ps *)
   forall s f h,
     lookup_hdr (eval_sym_state s f) h =
     eval_smt_arith (lookup_hdr s h) f.
@@ -124,7 +124,7 @@ Proof.
 Qed.
 
 (* Create a lemma similar to header_map_ps but with state_var_map instead *)
-Lemma state_var_map_ps :
+Lemma state_var_map_ps : (* Same TODO as header_map_ps, bad naming *)
   forall s f sv,
     lookup_state (eval_sym_state s f) sv =
     eval_smt_arith (lookup_state s sv) f.
