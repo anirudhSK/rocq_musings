@@ -275,3 +275,5 @@ Global Opaque lookup_state.
 Global Opaque lookup_hdr_map.
 Global Opaque lookup_state_map.
 Global Opaque program_state_mapper.
+Global Opaque update_all_hdrs.
+Global Opaque update_all_states.
