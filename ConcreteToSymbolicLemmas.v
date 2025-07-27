@@ -203,7 +203,7 @@ Proof.
     apply functional_extensionality;
     intros x;
     destruct x;
-    remember (header_map
+    remember (header_map (* TODO: Ask Joe if there's a better way to capture this than remembering a complex application. *)
 (program_state_mapper (fun e : SmtArithExpr => eval_smt_arith e f)
 (fun e : SmtArithExpr => eval_smt_arith e f)
 (fun e : SmtArithExpr => eval_smt_arith e f)
