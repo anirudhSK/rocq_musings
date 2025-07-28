@@ -5,7 +5,7 @@ Require Import ZArith.
 From Coq Require Import FunctionalExtensionality.
 
 (* Current values for each of these identifiers as a map *)
-Definition HeaderMap (T : Type) := Header -> T.
+Definition HeaderMap (T : Type) := Header -> T. (* Maybe replace these with a generic Map type from Maps.v? *)
 Definition StateVarMap (T : Type) := StateVar -> T.
 Definition CtrlPlaneConfigNameMap (T : Type) := PMap.t T.
 
@@ -264,6 +264,30 @@ Proof.
   reflexivity.
 Qed.
 
+Lemma lookup_hdr_trivial:
+  forall {T} (s : ProgramState T) (h : Header),
+    lookup_hdr s h = lookup_hdr_map (header_map s) h.
+Proof.
+  intros.
+  reflexivity.
+Qed.
+
+Lemma lookup_state_trivial:
+  forall {T} (s : ProgramState T) (sv : StateVar),
+    lookup_state s sv = lookup_state_map (state_var_map s) sv.
+Proof.
+  intros.
+  reflexivity.
+Qed.
+
+(* Some axioms for convenience *)
+(* TODO: try to replace this with the extensionality lemma/theorem from the Maps.v library *)
+Axiom header_map_extensionality: forall {T} (map1 map2 : HeaderMap T),
+  (forall x, lookup_hdr_map map1 x = lookup_hdr_map map2 x) -> map1 = map2.
+
+Axiom state_var_map_extensionality: forall {T} (map1 map2 : StateVarMap T),
+  (forall x, lookup_state_map map1 x = lookup_state_map map2 x) -> map1 = map2.
+
 (* Mark definitions globally opaque below *)
 Global Opaque lookup_ctrl.
 Global Opaque update_hdr_map.
@@ -277,3 +301,6 @@ Global Opaque lookup_state_map.
 Global Opaque program_state_mapper.
 Global Opaque update_all_hdrs.
 Global Opaque update_all_states.
+Global Opaque HeaderMap.
+Global Opaque StateVarMap.
+Global Opaque CtrlPlaneConfigNameMap.
