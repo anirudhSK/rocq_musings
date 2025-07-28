@@ -232,8 +232,28 @@ Proof.
   intros.
   unfold update_hdr_map.
   unfold lookup_hdr_map.
-  simpl.
   destruct target.
+  unfold PMap.set.
+  destruct m.
+  simpl.
+  f_equal.
+  unfold "!!".
+  simpl.
+  destruct (t0 ! uid) eqn:des.
+  Check PTree.set.
+  apply PTree.extensionality.
+  intros.
+  rewrite PTree.gsspec.
+  destruct (Coqlib.peq i uid) eqn:des.
+  - rewrite e.
+    simpl.
+    rewrite e in des.
+    unfold "!!".
+    simpl.
+    destruct (t0 ! uid) eqn:des2.
+    + reflexivity.
+    + unfold "!" in des2. 
+  - reflexivity.
 Admitted.
 
 Lemma update_lookup_inverses_hdr:
