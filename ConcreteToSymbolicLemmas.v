@@ -679,20 +679,22 @@ Qed.
 
 Lemma commute_sym_vs_conc_transformer_header_map:
   forall t f s1,
-    lookup_hdr (eval_transformer_uint8 t (eval_sym_state s1 f)) =
-    lookup_hdr (eval_sym_state (eval_transformer_smt t s1) f).
+    header_map (eval_transformer_uint8 t (eval_sym_state s1 f)) =
+    header_map (eval_sym_state (eval_transformer_smt t s1) f).
 Proof.
   intros.
   simpl.
-  apply functional_extensionality.
+  apply header_map_extensionality.
   intro h.
   unfold eval_transformer_uint8.
   remember (find_first_match (combine (get_match_results t (eval_sym_state s1 f)) t)) as concrete_match.
   destruct concrete_match eqn:des.
-  - rewrite commute_lookup_eval_hdr. rewrite hdr_transformer_helper. apply switch_case_expr_some_match_lemma. assumption.
+  - repeat rewrite <- lookup_hdr_trivial.
+    rewrite commute_lookup_eval_hdr. rewrite hdr_transformer_helper. apply switch_case_expr_some_match_lemma. assumption.
   - assert(H0: lookup_hdr (eval_sym_state (eval_transformer_smt t s1) f) h =
                eval_smt_arith (lookup_hdr (eval_transformer_smt t s1) h ) f).
                { rewrite commute_lookup_eval_hdr. reflexivity. }
+    repeat rewrite <- lookup_hdr_trivial.
     rewrite H0.
     rewrite hdr_transformer_helper.
     rewrite commute_lookup_eval_hdr.
@@ -716,19 +718,21 @@ Qed.
 
 Lemma commute_sym_vs_conc_transformer_state_var_map:
   forall t f s1,
-    lookup_state (eval_transformer_uint8 t (eval_sym_state s1 f)) = lookup_state (eval_sym_state (eval_transformer_smt t s1) f).
+    state_var_map (eval_transformer_uint8 t (eval_sym_state s1 f)) = state_var_map (eval_sym_state (eval_transformer_smt t s1) f).
 Proof.
   intros.
   simpl.
-  apply functional_extensionality.
+  apply state_var_map_extensionality.
   intro sv.
   unfold eval_transformer_uint8.
   remember (find_first_match (combine (get_match_results t (eval_sym_state s1 f)) t)) as concrete_match.
   destruct concrete_match eqn:des.
-  - rewrite commute_lookup_eval_state. rewrite state_transformer_helper. apply switch_case_expr_some_match_state_var_lemma. assumption.
+  - repeat rewrite <- lookup_state_trivial.
+    rewrite commute_lookup_eval_state. rewrite state_transformer_helper. apply switch_case_expr_some_match_state_var_lemma. assumption.
   - assert(H0: lookup_state (eval_sym_state (eval_transformer_smt t s1) f) sv =
                eval_smt_arith (lookup_state (eval_transformer_smt t s1) sv ) f).
                { rewrite commute_lookup_eval_state. reflexivity. }
+    repeat rewrite <- lookup_state_trivial.
     rewrite H0.
     rewrite state_transformer_helper.
     rewrite commute_lookup_eval_state.
