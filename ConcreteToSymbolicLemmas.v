@@ -200,10 +200,10 @@ Proof.
     + simpl. reflexivity.
   - destruct (eval_match_uint8 mp (eval_sym_state s1 f)) eqn:des;
     unfold eval_sym_state;
-    apply functional_extensionality;
+    apply header_map_extensionality;
     intros x;
     destruct x;
-    remember (header_map (* TODO: Ask Joe if there's a better way to capture this than remembering a complex application. *)
+    remember (lookup_hdr_map (header_map (* TODO: Ask Joe if there's a better way to capture this than remembering a complex application. *)
 (program_state_mapper (fun e : SmtArithExpr => eval_smt_arith e f)
 (fun e : SmtArithExpr => eval_smt_arith e f)
 (fun e : SmtArithExpr => eval_smt_arith e f)
@@ -216,7 +216,8 @@ SmtConditional (eval_match_smt mp s1)
 (fun s : StateVar =>
 SmtConditional (eval_match_smt mp s1)
 (lookup_state (eval_hdr_op_list_smt hol s1) s)
-(lookup_state s1 s)))) (HeaderCtr uid)) as tmp;
+(lookup_state s1 s))))) (HeaderCtr uid)) as tmp;
+    rewrite <- lookup_hdr_trivial in Heqtmp;
     rewrite commute_mapper_lookup_hdr in Heqtmp;
     rewrite Heqtmp;
     rewrite <- lookup_hdr_unchanged_by_update_all_states with (fs := (fun s : StateVar => SmtConditional (eval_match_smt mp s1) (lookup_state (eval_hdr_op_list_smt hol s1) s)
@@ -227,7 +228,10 @@ SmtConditional (eval_match_smt mp s1)
     rewrite <- commute_sym_vs_conc_match_pattern with (c1 := eval_sym_state s1 f); try reflexivity;
     rewrite des.
     + rewrite commute_sym_vs_conc_hdr_op_list with (f := f) (s1 := s1) (c1 := eval_sym_state s1 f); reflexivity.
-    + reflexivity.
+    + Check update_all_states.  (* TODO: What does this output mean? *)
+      rewrite <- lookup_hdr_trivial.
+      rewrite commute_mapper_lookup_hdr.
+      reflexivity.
   - destruct (eval_match_uint8 mp (eval_sym_state s1 f)) eqn:des;
     unfold eval_sym_state;
     apply functional_extensionality;
