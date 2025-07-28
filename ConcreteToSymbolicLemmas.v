@@ -229,8 +229,6 @@ SmtConditional (eval_match_smt mp s1)
     rewrite des.
     + rewrite commute_sym_vs_conc_hdr_op_list with (f := f) (s1 := s1) (c1 := eval_sym_state s1 f); reflexivity.
     + Check update_all_states.  (* TODO: What does this output mean? *)
-      rewrite <- lookup_hdr_trivial.
-      rewrite commute_mapper_lookup_hdr.
       reflexivity.
   - destruct (eval_match_uint8 mp (eval_sym_state s1 f)) eqn:des;
     unfold eval_sym_state;
