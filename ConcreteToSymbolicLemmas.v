@@ -21,7 +21,10 @@ Lemma commute_sym_conc_expr:
     eval_smt_arith (eval_hdr_op_expr_smt ho s) f.
 Proof.
   intros ho s f.
-  destruct ho, f0, arg1, arg2; simpl; try repeat (rewrite PMapHelperLemmas.commute_lookup_eval_ctrl); try reflexivity.
+  destruct ho, f0, arg1, arg2; simpl;
+  try repeat (rewrite PMapHelperLemmas.commute_lookup_eval_ctrl); try reflexivity;
+  try repeat (rewrite PMapHelperLemmas.commute_lookup_eval_state); try reflexivity; (* TODO: How did this work before? *)
+  try repeat (rewrite PMapHelperLemmas.commute_lookup_eval_hdr); try reflexivity.
 Qed.
 
 Lemma commute_update_eval_state:
@@ -99,6 +102,7 @@ Proof.
               eval_smt_arith (lookup_hdr s1 h) f).
   { unfold eval_sym_state.
     simpl.
+    rewrite commute_mapper_lookup_hdr.
     reflexivity. }
   rewrite H.
   destruct (eq (eval_smt_arith (lookup_hdr s1 h) f) v).
@@ -227,8 +231,14 @@ SmtConditional (eval_match_smt mp s1)
     simpl;
     rewrite <- commute_sym_vs_conc_match_pattern with (c1 := eval_sym_state s1 f); try reflexivity;
     rewrite des.
-    + rewrite commute_sym_vs_conc_hdr_op_list with (f := f) (s1 := s1) (c1 := eval_sym_state s1 f); reflexivity.
-    + reflexivity.
+    + rewrite commute_sym_vs_conc_hdr_op_list with (f := f) (s1 := s1) (c1 := eval_sym_state s1 f); try reflexivity.
+      rewrite <- lookup_hdr_trivial.
+      unfold eval_sym_state.
+      rewrite commute_mapper_lookup_hdr.
+      reflexivity.
+    + rewrite <- lookup_hdr_trivial.
+      rewrite commute_mapper_lookup_hdr.
+      reflexivity.
   - destruct (eval_match_uint8 mp (eval_sym_state s1 f)) eqn:des;
     unfold eval_sym_state;
     apply state_var_map_extensionality;
@@ -261,8 +271,14 @@ SmtConditional (eval_match_smt mp s1)
     simpl;
     rewrite <- commute_sym_vs_conc_match_pattern with (c1 := eval_sym_state s1 f); try reflexivity;
     rewrite des.
-    + rewrite commute_sym_vs_conc_hdr_op_list with (f := f) (s1 := s1) (c1 := eval_sym_state s1 f); reflexivity.
-    + reflexivity.
+    + rewrite commute_sym_vs_conc_hdr_op_list with (f := f) (s1 := s1) (c1 := eval_sym_state s1 f); try reflexivity.
+      rewrite <- lookup_state_trivial.
+      unfold eval_sym_state.
+      rewrite commute_mapper_lookup_state.
+      reflexivity.
+    + rewrite <- lookup_state_trivial.
+      rewrite commute_mapper_lookup_state.
+      reflexivity.
 Qed.
 
 Lemma commute_sym_vs_conc_seq_rule :
@@ -363,7 +379,14 @@ Proof.
       rewrite lookup_hdr_after_update_all_hdrs;
       simpl; rewrite des.
       * rewrite commute_sym_vs_conc_hdr_op_list with (f := f) (s1 := s); try reflexivity.
-      * reflexivity.
+        rewrite <- lookup_hdr_trivial.
+        unfold eval_sym_state.
+        rewrite commute_mapper_lookup_hdr.
+        reflexivity.
+      * rewrite <- lookup_hdr_trivial.
+        unfold eval_sym_state.
+        rewrite commute_mapper_lookup_hdr.
+        reflexivity.
     + apply state_var_map_extensionality.
       intros x.
       simpl.
@@ -379,7 +402,14 @@ Proof.
       rewrite lookup_state_after_update_all_states;
       simpl; rewrite des.
       * rewrite commute_sym_vs_conc_hdr_op_list with (f := f) (s1 := s); try reflexivity.
-      * reflexivity.
+        rewrite <- lookup_state_trivial.
+        unfold eval_sym_state.
+        rewrite commute_mapper_lookup_state.
+        reflexivity.
+      * rewrite <- lookup_state_trivial.
+        unfold eval_sym_state.
+        rewrite commute_mapper_lookup_state.
+        reflexivity.
   - apply program_state_equality.
     + destruct pr as [mp hol].
       simpl.
@@ -402,7 +432,14 @@ Proof.
       rewrite lookup_hdr_after_update_all_hdrs;
       simpl; rewrite des.
       * rewrite commute_sym_vs_conc_hdr_op_list with (f := f) (s1 := s); try reflexivity.
-      * reflexivity.
+        rewrite <- lookup_hdr_trivial.
+        unfold eval_sym_state.
+        rewrite commute_mapper_lookup_hdr.
+        reflexivity.
+      * rewrite <- lookup_hdr_trivial.
+        unfold eval_sym_state.
+        rewrite commute_mapper_lookup_hdr.
+        reflexivity.
     + apply state_var_map_extensionality.
       intros x.
       simpl.
@@ -418,7 +455,14 @@ Proof.
       rewrite lookup_state_after_update_all_states;
       simpl; rewrite des.
       * rewrite commute_sym_vs_conc_hdr_op_list with (f := f) (s1 := s); try reflexivity.
-      * reflexivity.
+        rewrite <- lookup_state_trivial.
+        unfold eval_sym_state.
+        rewrite commute_mapper_lookup_state.
+        reflexivity.
+      * rewrite <- lookup_state_trivial.
+        unfold eval_sym_state.
+        rewrite commute_mapper_lookup_state.
+        reflexivity.
 Qed.
 
 (* The transformer with one rule is equivalent to the match action rule *)
@@ -759,7 +803,13 @@ Lemma commute_sym_vs_conc_transfomer:
 Proof.
   intros t f s1.
   induction t as [| m rest IHrest].
-  - simpl. reflexivity.
+  - simpl.
+    unfold eval_transformer_uint8.
+    simpl.
+    unfold eval_transformer_smt.
+    simpl.
+    rewrite program_state_unchanged.
+    reflexivity.
   - simpl.
     apply program_state_equality.
     -- apply commute_sym_vs_conc_transformer_ctrl_plane_map.

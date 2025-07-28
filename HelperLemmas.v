@@ -75,7 +75,9 @@ Lemma commute_lookup_eval:
 Proof.
   intros s f arg.
   destruct arg; simpl; try reflexivity.
-  apply PMapHelperLemmas.commute_lookup_eval_ctrl.
+  -- unfold eval_sym_state. rewrite commute_mapper_lookup_ctrl. reflexivity.
+  -- unfold eval_sym_state. rewrite commute_mapper_lookup_hdr. reflexivity.
+  -- unfold eval_sym_state. rewrite commute_mapper_lookup_state. reflexivity.
 Qed.
 
 Lemma find_first_match_lemma:
@@ -119,7 +121,7 @@ Lemma header_map_ps : (*TODO: Should probably be called lookup_hdr_ps *)
 Proof.
   intros.
   unfold eval_sym_state.
-  simpl.
+  rewrite commute_mapper_lookup_hdr.
   reflexivity.
 Qed.
 
@@ -131,6 +133,6 @@ Lemma state_var_map_ps : (* Same TODO as header_map_ps, bad naming *)
 Proof.
   intros.
   unfold eval_sym_state.
-  simpl.
+  rewrite commute_mapper_lookup_state.
   reflexivity.
 Qed.

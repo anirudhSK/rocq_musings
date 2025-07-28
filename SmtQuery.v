@@ -361,6 +361,9 @@ Proof.
   apply smt_bool_eq_true in H.
   rewrite commute_sym_vs_conc_transfomer.
   rewrite commute_sym_vs_conc_transfomer.
+  unfold eval_sym_state.
+  rewrite commute_mapper_lookup_hdr.
+  rewrite commute_mapper_lookup_hdr.
   apply H.
 Qed.
 
@@ -377,6 +380,9 @@ Proof.
   apply smt_bool_eq_true in H.
   rewrite commute_sym_vs_conc_transfomer.
   rewrite commute_sym_vs_conc_transfomer.
+  unfold eval_sym_state.
+  rewrite commute_mapper_lookup_state.
+  rewrite commute_mapper_lookup_state.
   apply H.
 Qed.
 
@@ -437,6 +443,9 @@ Proof.
   apply smt_bool_eq_false in H.
   rewrite commute_sym_vs_conc_transfomer.
   rewrite commute_sym_vs_conc_transfomer.
+  unfold eval_sym_state.
+  rewrite commute_mapper_lookup_hdr.
+  rewrite commute_mapper_lookup_hdr.
   apply H.
 Qed.
 
@@ -453,6 +462,9 @@ Proof.
   apply smt_bool_eq_false in H.
   rewrite commute_sym_vs_conc_transfomer.
   rewrite commute_sym_vs_conc_transfomer.
+  unfold eval_sym_state.
+  rewrite commute_mapper_lookup_state.
+  rewrite commute_mapper_lookup_state.
   apply H.
 Qed.
 

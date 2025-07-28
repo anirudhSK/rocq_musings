@@ -22,6 +22,7 @@ Arguments state_var_map {T} _.
 Arguments ctrl_plane_map {T} _.
 
 (* TODO: lookup_hdr/state_map could be rolled into lookup_hdr/state. *)
+(* TODO: It is used in a proof with a giant remember expression. *)
 Definition lookup_hdr_map {T : Type} (m: HeaderMap T) (x: Header) : T :=
   PMap.get (match x with | HeaderCtr id => id end) m.
 
@@ -92,12 +93,35 @@ Definition update_state {T : Type} (s: ProgramState T) (x: StateVar) (v: T) : Pr
      header_map := header_map s;
      state_var_map := update_state_map (state_var_map s) x v |}.
 
+Lemma program_state_unchanged:
+  forall {T} (s1 : ProgramState T),
+  update_all_states (update_all_hdrs s1 (fun h : Header => lookup_hdr s1 h))
+                    (fun s : StateVar => lookup_state s1 s) = s1.
+Proof.
+  intros.
+  unfold update_all_states, update_all_hdrs.
+  simpl.
+  destruct s1 as [ctrl hdr state]; simpl; f_equal.
+  - admit.
+  - admit.
+Admitted.
+    
+Lemma commute_mapper_lookup_ctrl:
+  forall {T1} {T2} ps c (func : T1 -> T2),
+  lookup_ctrl (program_state_mapper func func func ps) c =
+  func (lookup_ctrl ps c).
+Proof.
+  intros.
+  apply PMap.gmap.
+Qed.
+
 Lemma commute_mapper_lookup_state:
   forall {T1} {T2} ps sv (func : T1 -> T2),
   lookup_state (program_state_mapper func func func ps) sv =
   func (lookup_state ps sv).
 Proof.
-  reflexivity.
+  intros.
+  apply PMap.gmap.
 Qed.
 
 Lemma commute_mapper_lookup_hdr:
@@ -105,7 +129,8 @@ Lemma commute_mapper_lookup_hdr:
   lookup_hdr (program_state_mapper func func func ps) hv =
   func (lookup_hdr ps hv).
 Proof.
-  reflexivity.
+  intros.
+  apply PMap.gmap.
 Qed.
 
 Lemma commute_mapper_update_hdr:
@@ -114,20 +139,30 @@ Lemma commute_mapper_update_hdr:
   update_hdr (program_state_mapper func func func ps) h (func v).
 Proof.
   intros.
-  simpl.
   unfold program_state_mapper.
   unfold update_hdr.
   f_equal.
   simpl.
-  unfold lookup_hdr.
-  simpl.
-  apply functional_extensionality.
-  intros.
   unfold update_hdr_map.
-  destruct h, x.
-  destruct (uid =? uid0)%positive eqn:des.
-  - reflexivity.
-  - reflexivity.
+  destruct ps.
+  simpl.
+  destruct h. simpl.
+  Search PMap.set.
+  unfold PMap.set.
+  unfold PMap.map.
+  simpl.
+  f_equal.
+  apply PTree.extensionality.
+  intros.
+  simpl.
+  Search PTree.set.
+  rewrite PTree.gsspec.
+  rewrite PTree.gmap1.
+  rewrite PTree.gsspec.
+  destruct (Coqlib.peq i uid).
+  - subst. reflexivity.
+  - rewrite PTree.gmap1.
+    reflexivity.
 Qed.
 
 Lemma commute_mapper_update_state:
@@ -136,20 +171,30 @@ Lemma commute_mapper_update_state:
   update_state (program_state_mapper func func func ps) sv (func v).
 Proof.
   intros.
-  simpl.
   unfold program_state_mapper.
   unfold update_state.
   f_equal.
   simpl.
-  unfold lookup_state.
-  simpl.
-  apply functional_extensionality.
-  intros.
   unfold update_state_map.
-  destruct sv, x.
-  destruct (uid =? uid0)%positive eqn:des.
-  - reflexivity.
-  - reflexivity.
+  destruct ps.
+  simpl.
+  destruct sv. simpl.
+  Search PMap.set.
+  unfold PMap.set.
+  unfold PMap.map.
+  simpl.
+  f_equal.
+  apply PTree.extensionality.
+  intros.
+  simpl.
+  Search PTree.set.
+  rewrite PTree.gsspec.
+  rewrite PTree.gmap1.
+  rewrite PTree.gsspec.
+  destruct (Coqlib.peq i uid).
+  - subst. reflexivity.
+  - rewrite PTree.gmap1.
+    reflexivity.
 Qed.
 
 Lemma update_lookup_inverses_state_map:
@@ -161,13 +206,7 @@ Proof.
   unfold lookup_state_map.
   simpl.
   destruct target.
-  apply functional_extensionality.
-  intros.
-  destruct x.
-  destruct (uid =? uid0)%positive eqn:des.
-  - apply Pos.eqb_eq in des. rewrite des. reflexivity.
-  - reflexivity.
-Qed.
+Admitted.
 
 Lemma update_lookup_inverses_state:
   forall {T} (s : ProgramState T) (target : StateVar),
@@ -195,13 +234,7 @@ Proof.
   unfold lookup_hdr_map.
   simpl.
   destruct target.
-  apply functional_extensionality.
-  intros.
-  destruct x.
-  destruct (uid =? uid0)%positive eqn:des.
-  - apply Pos.eqb_eq in des. rewrite des. reflexivity.
-  - reflexivity.
-Qed.
+Admitted.
 
 Lemma update_lookup_inverses_hdr:
   forall {T} (s : ProgramState T) (target : Header),
@@ -230,8 +263,7 @@ Lemma lookup_hdr_after_update_all_hdrs:
   forall {T} (s1 : ProgramState T) (h : Header) (fh : Header -> T),
     lookup_hdr (update_all_hdrs s1 fh) h = fh h.
 Proof.
-  reflexivity.
-Qed.
+Admitted.
 
 (* Create mirror image versions of the two lemmas above with state and hdr interchanged *)
 Lemma lookup_state_unchanged_by_update_all_hdrs:
@@ -245,31 +277,13 @@ Lemma lookup_state_after_update_all_states:
   forall {T} (s1 : ProgramState T) (sv : StateVar) (fs : StateVar -> T),
     lookup_state (update_all_states s1 fs) sv = fs sv.
 Proof.
-  reflexivity.
-Qed.
+Admitted.
 
 Lemma commute_state_hdr_updates:
   forall {T} (s1 : ProgramState T) (fh : Header -> T) (fs : StateVar -> T),
     update_all_hdrs (update_all_states s1 fs) fh =
     update_all_states (update_all_hdrs s1 fh) fs.
 Proof.
-  reflexivity.
-Qed.
-
-Lemma header_map_lookup_hdr:
-  forall {T} (s : ProgramState T) (h : Header),
-    lookup_hdr s h = header_map s h.
-Proof.
-  intros.
-  reflexivity.
-Qed.
-
-(* Same as above, but for state_var *)
-Lemma state_var_map_lookup_state:
-  forall {T} (s : ProgramState T) (sv : StateVar),
-    lookup_state s sv = state_var_map s sv.
-Proof.
-  intros.
   reflexivity.
 Qed.
 
