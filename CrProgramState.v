@@ -5,8 +5,8 @@ Require Import ZArith.
 From Coq Require Import FunctionalExtensionality.
 
 (* Current values for each of these identifiers as a map *)
-Definition HeaderMap (T : Type) := Header -> T. (* Maybe replace these with a generic Map type from Maps.v? *)
-Definition StateVarMap (T : Type) := StateVar -> T.
+Definition HeaderMap (T : Type) := PMap.t T. (* Maybe replace these with a generic Map type from Maps.v? *)
+Definition StateVarMap (T : Type) := PMap.t T.
 Definition CtrlPlaneConfigNameMap (T : Type) := PMap.t T.
 
 (* The ProgramState is a record containing three maps:,
@@ -17,15 +17,16 @@ Record ProgramState (T : Type) := {
   state_var_map : StateVarMap T;
 }.
 
-Arguments header_map {T} _ _.
-Arguments state_var_map {T} _ _.  
+Arguments header_map {T} _.
+Arguments state_var_map {T} _.  
 Arguments ctrl_plane_map {T} _.
 
+(* TODO: lookup_hdr/state_map could be rolled into lookup_hdr/state. *)
 Definition lookup_hdr_map {T : Type} (m: HeaderMap T) (x: Header) : T :=
-  m x.
+  PMap.get (match x with | HeaderCtr id => id end) m.
 
 Definition lookup_state_map {T : Type} (m: StateVarMap T) (x: StateVar) : T :=
-  m x.
+  PMap.get (match x with | StateVarCtr id => id end) m.
 
 Definition lookup_hdr {T : Type} (s: ProgramState T) (x: Header) : T :=
   lookup_hdr_map (header_map s) x.
@@ -52,26 +53,34 @@ Qed.
 
 Definition program_state_mapper {T1 T2 : Type} (fc: T1 -> T2) (fh : T1 -> T2) (fs : T1 -> T2) (s: ProgramState T1) : ProgramState T2 :=
   {| ctrl_plane_map := PMap.map fc (ctrl_plane_map s);
-     header_map := fun x => fh (lookup_hdr s x);
-     state_var_map := fun x => fs (lookup_state s x) |}.
+     header_map := PMap.map fh (header_map s);
+     state_var_map := PMap.map fs (state_var_map s) |}.
+
+(* Function to go through all keys in a PMap, and set them to new values. *)
+Definition new_pmap_from_old {T: Type} (old_pmap : PMap.t T) (f : positive -> T): PMap.t T :=
+  List.fold_right
+    (fun x acc => PMap.set (fst x) (f (fst x)) acc) (* fst x returns the positive key, f (fst x) produces a new value from it *)
+    (PMap.init (fst old_pmap))                      (* keep the default value from the old_pmap *)
+    (PTree.elements (snd (old_pmap))).              (* PTree.elements returns a list of (key, value) pairs from the PMap *)
+    (*Note: old values, i.e., snd x is ignored.*)
 
 Definition update_all_hdrs {T : Type} (s: ProgramState T) (fh: Header -> T) : ProgramState T :=
   {| ctrl_plane_map := ctrl_plane_map s;
-     header_map := fun h => fh h;
+     header_map := new_pmap_from_old (header_map s) (fun pos => fh (HeaderCtr pos));
      state_var_map := state_var_map s |}.
 
 Definition update_all_states {T : Type} (s: ProgramState T) (fs: StateVar -> T) : ProgramState T :=
   {| ctrl_plane_map := ctrl_plane_map s;
      header_map := header_map s;
-     state_var_map := fun sv => fs sv |}.
+     state_var_map := new_pmap_from_old (state_var_map s) (fun pos => fs (StateVarCtr pos))|}.
 
 (* Update the header map with a new value for a specific header *)
 Definition update_hdr_map {T : Type} (m: HeaderMap T) (x: Header) (v: T) : HeaderMap T :=
-  fun y => match x, y with | HeaderCtr x_id, HeaderCtr y_id => if Pos.eqb x_id y_id then v else m y end.
+  PMap.set (match x with | HeaderCtr x_id => x_id end) v m.
 
 (* Same as above, but for state variables *)
 Definition update_state_map {T : Type} (m: StateVarMap T) (x: StateVar) (v: T) : StateVarMap T :=
-  fun y => match x, y with | StateVarCtr x_id, StateVarCtr y_id => if Pos.eqb x_id y_id then v else m y end.
+  PMap.set (match x with | StateVarCtr x_id => x_id end) v m.
 
 Definition update_hdr {T : Type} (s: ProgramState T) (x: Header) (v: T) : ProgramState T :=
   {| ctrl_plane_map := ctrl_plane_map s;
