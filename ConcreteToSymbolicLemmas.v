@@ -165,6 +165,7 @@ Proof.
     simpl.
     erewrite <- commute_sym_vs_conc_match_pattern; try reflexivity.
     rewrite des.
+    Check update_state.
     apply nothing_changed_state.
   - rewrite commute_update_eval_hdr.
     f_equal.

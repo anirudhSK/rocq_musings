@@ -102,8 +102,6 @@ Proof.
   unfold update_all_states, update_all_hdrs.
   simpl.
   destruct s1 as [ctrl hdr state]; simpl; f_equal.
-  - admit.
-  - admit.
 Admitted.
     
 Lemma commute_mapper_lookup_ctrl:
@@ -244,16 +242,6 @@ Proof.
   apply PTree.extensionality.
   intros.
   rewrite PTree.gsspec.
-  destruct (Coqlib.peq i uid) eqn:des.
-  - rewrite e.
-    simpl.
-    rewrite e in des.
-    unfold "!!".
-    simpl.
-    destruct (t0 ! uid) eqn:des2.
-    + reflexivity.
-    + unfold "!" in des2. 
-  - reflexivity.
 Admitted.
 
 Lemma update_lookup_inverses_hdr:
@@ -283,8 +271,18 @@ Lemma lookup_hdr_after_update_all_hdrs:
   forall {T} (s1 : ProgramState T) (h : Header) (fh : Header -> T),
     lookup_hdr (update_all_hdrs s1 fh) h = fh h.
 Proof.
-Admitted.
-
+  intros.
+  unfold update_all_hdrs.
+  unfold new_pmap_from_old.
+  simpl.
+  unfold lookup_hdr.
+  simpl.
+  unfold lookup_hdr_map.
+  destruct h.
+  simpl.
+  Search "!!".
+  unfold PMap.get.
+  
 (* Create mirror image versions of the two lemmas above with state and hdr interchanged *)
 Lemma lookup_state_unchanged_by_update_all_hdrs:
   forall {T} fh (s1 : ProgramState T) (sv : StateVar),
