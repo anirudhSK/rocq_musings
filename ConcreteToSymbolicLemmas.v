@@ -231,11 +231,11 @@ SmtConditional (eval_match_smt mp s1)
     + reflexivity.
   - destruct (eval_match_uint8 mp (eval_sym_state s1 f)) eqn:des;
     unfold eval_sym_state;
-    apply functional_extensionality;
+    apply state_var_map_extensionality;
     intros x;
     destruct x;
 
-    remember (state_var_map
+    remember (lookup_state_map (state_var_map
 (program_state_mapper (fun e : SmtArithExpr => eval_smt_arith e f)
 (fun e : SmtArithExpr => eval_smt_arith e f)
 (fun e : SmtArithExpr => eval_smt_arith e f)
@@ -248,7 +248,8 @@ SmtConditional (eval_match_smt mp s1)
 (fun s : StateVar =>
 SmtConditional (eval_match_smt mp s1)
 (lookup_state (eval_hdr_op_list_smt hol s1) s)
-(lookup_state s1 s)))) (StateVarCtr uid)) as tmp;
+(lookup_state s1 s))))) (StateVarCtr uid)) as tmp;
+    rewrite <- lookup_state_trivial in Heqtmp;
     rewrite commute_mapper_lookup_state in Heqtmp;
     rewrite Heqtmp;
 
@@ -347,12 +348,12 @@ Proof.
       * rewrite ctrl_plane_invariant_hdr_op_list.
         reflexivity.
       * reflexivity.
-    + apply functional_extensionality.
+    + apply header_map_extensionality.
       intros x.
       simpl.
       destruct sr as [mp hol].
       simpl.
-      rewrite <- header_map_lookup_hdr.
+      rewrite <- lookup_hdr_trivial.
       rewrite header_map_ps.
       destruct (eval_match_uint8 mp (eval_sym_state s f)) eqn:des;
       rewrite <- lookup_hdr_unchanged_by_update_all_states;
@@ -363,12 +364,12 @@ Proof.
       simpl; rewrite des.
       * rewrite commute_sym_vs_conc_hdr_op_list with (f := f) (s1 := s); try reflexivity.
       * reflexivity.
-    + apply functional_extensionality.
+    + apply state_var_map_extensionality.
       intros x.
       simpl.
       destruct sr as [mp hol].
       simpl.
-      rewrite <- state_var_map_lookup_state.
+      rewrite <- lookup_state_trivial.
       rewrite state_var_map_ps.
       destruct (eval_match_uint8 mp (eval_sym_state s f)) eqn:des;
       rewrite <- commute_state_hdr_updates;
@@ -386,12 +387,12 @@ Proof.
       * rewrite ctrl_plane_invariant_hdr_op_list.
         reflexivity.
       * reflexivity.
-    + apply functional_extensionality.
+    + apply header_map_extensionality.
       intros x.
       simpl.
       destruct pr as [mp hol].
       simpl.
-      rewrite <- header_map_lookup_hdr.
+      rewrite <- lookup_hdr_trivial.
       rewrite header_map_ps.
       destruct (eval_match_uint8 mp (eval_sym_state s f)) eqn:des;
       rewrite <- lookup_hdr_unchanged_by_update_all_states;
@@ -402,12 +403,12 @@ Proof.
       simpl; rewrite des.
       * rewrite commute_sym_vs_conc_hdr_op_list with (f := f) (s1 := s); try reflexivity.
       * reflexivity.
-    + apply functional_extensionality.
+    + apply state_var_map_extensionality.
       intros x.
       simpl.
       destruct pr as [mp hol].
       simpl.
-      rewrite <- state_var_map_lookup_state.
+      rewrite <- lookup_state_trivial.
       rewrite state_var_map_ps.
       destruct (eval_match_uint8 mp (eval_sym_state s f)) eqn:des;
       rewrite <- commute_state_hdr_updates;
