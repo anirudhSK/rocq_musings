@@ -38,6 +38,15 @@ Definition lookup_state {T : Type} (s: ProgramState T) (x: StateVar) : T :=
 Definition lookup_ctrl {T : Type} (s: ProgramState T) (x: CtrlPlaneConfigName) : T :=
   PMap.get (match x with | CtrlPlaneConfigNameCtr id => id end) (ctrl_plane_map s).
 
+
+(* Some axioms for convenience *)
+(* TODO: try to replace this with the extensionality lemma/theorem from the Maps.v library *)
+Axiom header_map_extensionality: forall {T} (map1 map2 : HeaderMap T),
+  (forall x, lookup_hdr_map map1 x = lookup_hdr_map map2 x) -> map1 = map2.
+
+Axiom state_var_map_extensionality: forall {T} (map1 map2 : StateVarMap T),
+  (forall x, lookup_state_map map1 x = lookup_state_map map2 x) -> map1 = map2.
+
 Lemma program_state_equality:
       forall (ps1 ps2: ProgramState uint8),
         ctrl_plane_map ps1 = ctrl_plane_map ps2 ->
@@ -204,7 +213,12 @@ Proof.
   unfold lookup_state_map.
   simpl.
   destruct target.
-Admitted.
+  apply state_var_map_extensionality.
+  intros x.
+  destruct x.
+  unfold lookup_state_map.
+  apply PMap.gsident.
+Qed.
 
 Lemma update_lookup_inverses_state:
   forall {T} (s : ProgramState T) (target : StateVar),
@@ -231,18 +245,12 @@ Proof.
   unfold update_hdr_map.
   unfold lookup_hdr_map.
   destruct target.
-  unfold PMap.set.
-  destruct m.
-  simpl.
-  f_equal.
-  unfold "!!".
-  simpl.
-  destruct (t0 ! uid) eqn:des.
-  Check PTree.set.
-  apply PTree.extensionality.
-  intros.
-  rewrite PTree.gsspec.
-Admitted.
+  apply header_map_extensionality.
+  intros x.
+  destruct x.
+  unfold lookup_hdr_map.
+  apply PMap.gsident.
+Qed.
 
 Lemma update_lookup_inverses_hdr:
   forall {T} (s : ProgramState T) (target : Header),
@@ -320,14 +328,6 @@ Proof.
   intros.
   reflexivity.
 Qed.
-
-(* Some axioms for convenience *)
-(* TODO: try to replace this with the extensionality lemma/theorem from the Maps.v library *)
-Axiom header_map_extensionality: forall {T} (map1 map2 : HeaderMap T),
-  (forall x, lookup_hdr_map map1 x = lookup_hdr_map map2 x) -> map1 = map2.
-
-Axiom state_var_map_extensionality: forall {T} (map1 map2 : StateVarMap T),
-  (forall x, lookup_state_map map1 x = lookup_state_map map2 x) -> map1 = map2.
 
 (* Mark definitions globally opaque below *)
 Global Opaque lookup_ctrl.
