@@ -39,13 +39,15 @@ Definition lookup_ctrl {T : Type} (s: ProgramState T) (x: CtrlPlaneConfigName) :
   PMap.get (match x with | CtrlPlaneConfigNameCtr id => id end) (ctrl_plane_map s).
 
 
-(* Some axioms for convenience *)
+(* Some lemmas for convenience *)
 (* TODO: try to replace this with the extensionality lemma/theorem from the Maps.v library *)
-Axiom header_map_extensionality: forall {T} (map1 map2 : HeaderMap T),
+Lemma header_map_extensionality: forall {T} (map1 map2 : HeaderMap T),
   (forall x, lookup_hdr_map map1 x = lookup_hdr_map map2 x) -> map1 = map2.
+Admitted.
 
-Axiom state_var_map_extensionality: forall {T} (map1 map2 : StateVarMap T),
+Lemma state_var_map_extensionality: forall {T} (map1 map2 : StateVarMap T),
   (forall x, lookup_state_map map1 x = lookup_state_map map2 x) -> map1 = map2.
+Admitted.
 
 Lemma program_state_equality:
       forall (ps1 ps2: ProgramState uint8),
@@ -106,11 +108,6 @@ Lemma program_state_unchanged:
   forall {T} (s1 : ProgramState T),
   update_all_states (update_all_hdrs s1 (fun h : Header => lookup_hdr s1 h))
                     (fun s : StateVar => lookup_state s1 s) = s1.
-Proof.
-  intros.
-  unfold update_all_states, update_all_hdrs.
-  simpl.
-  destruct s1 as [ctrl hdr state]; simpl; f_equal.
 Admitted.
     
 Lemma commute_mapper_lookup_ctrl:
@@ -154,7 +151,6 @@ Proof.
   destruct ps.
   simpl.
   destruct h. simpl.
-  Search PMap.set.
   unfold PMap.set.
   unfold PMap.map.
   simpl.
@@ -162,7 +158,6 @@ Proof.
   apply PTree.extensionality.
   intros.
   simpl.
-  Search PTree.set.
   rewrite PTree.gsspec.
   rewrite PTree.gmap1.
   rewrite PTree.gsspec.
@@ -186,7 +181,6 @@ Proof.
   destruct ps.
   simpl.
   destruct sv. simpl.
-  Search PMap.set.
   unfold PMap.set.
   unfold PMap.map.
   simpl.
@@ -194,7 +188,6 @@ Proof.
   apply PTree.extensionality.
   intros.
   simpl.
-  Search PTree.set.
   rewrite PTree.gsspec.
   rewrite PTree.gmap1.
   rewrite PTree.gsspec.
@@ -202,70 +195,6 @@ Proof.
   - subst. reflexivity.
   - rewrite PTree.gmap1.
     reflexivity.
-Qed.
-
-Lemma update_lookup_inverses_state_map:
-  forall {T} (m : StateVarMap T) (target : StateVar),
-    (update_state_map m target (lookup_state_map m target)) = m.
-Proof.
-  intros.
-  unfold update_state_map.
-  unfold lookup_state_map.
-  simpl.
-  destruct target.
-  apply state_var_map_extensionality.
-  intros x.
-  destruct x.
-  unfold lookup_state_map.
-  apply PMap.gsident.
-Qed.
-
-Lemma update_lookup_inverses_state:
-  forall {T} (s : ProgramState T) (target : StateVar),
-    (update_state s target (lookup_state s target)) = s.
-Proof.
-  intros.
-  simpl.
-  unfold update_state.
-  unfold lookup_state.
-  simpl.
-  rewrite update_lookup_inverses_state_map.
-  simpl.
-  destruct s.
-  simpl. 
-  reflexivity.
-Qed.
-
-(* Do the same thing as state for hdrs: replicate both lemmas above *)
-Lemma update_lookup_inverses_hdr_map:
-  forall {T} (m : HeaderMap T) (target : Header),
-    (update_hdr_map m target (lookup_hdr_map m target)) = m.
-Proof.
-  intros.
-  unfold update_hdr_map.
-  unfold lookup_hdr_map.
-  destruct target.
-  apply header_map_extensionality.
-  intros x.
-  destruct x.
-  unfold lookup_hdr_map.
-  apply PMap.gsident.
-Qed.
-
-Lemma update_lookup_inverses_hdr:
-  forall {T} (s : ProgramState T) (target : Header),
-    (update_hdr s target (lookup_hdr s target)) = s.
-Proof.
-  intros.
-  simpl.
-  unfold update_hdr.
-  unfold lookup_hdr.
-  simpl.
-  rewrite update_lookup_inverses_hdr_map.
-  simpl.
-  destruct s.
-  simpl.
-  reflexivity.
 Qed.
 
 Lemma lookup_hdr_unchanged_by_update_all_states:
@@ -278,18 +207,7 @@ Qed.
 Lemma lookup_hdr_after_update_all_hdrs:
   forall {T} (s1 : ProgramState T) (h : Header) (fh : Header -> T),
     lookup_hdr (update_all_hdrs s1 fh) h = fh h.
-Proof.
-  intros.
-  unfold update_all_hdrs.
-  unfold new_pmap_from_old.
-  simpl.
-  unfold lookup_hdr.
-  simpl.
-  unfold lookup_hdr_map.
-  destruct h.
-  simpl.
-  Search "!!".
-  unfold PMap.get.
+Admitted.
   
 (* Create mirror image versions of the two lemmas above with state and hdr interchanged *)
 Lemma lookup_state_unchanged_by_update_all_hdrs:
@@ -302,7 +220,6 @@ Qed.
 Lemma lookup_state_after_update_all_states:
   forall {T} (s1 : ProgramState T) (sv : StateVar) (fs : StateVar -> T),
     lookup_state (update_all_states s1 fs) sv = fs sv.
-Proof.
 Admitted.
 
 Lemma commute_state_hdr_updates:

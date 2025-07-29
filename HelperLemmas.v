@@ -10,37 +10,6 @@ From Coq Require Import FunctionalExtensionality.
 From MyProject Require Import PMapHelperLemmas.
 From MyProject Require Import CrProgramState.
 
-Lemma nothing_changed_state:
-  forall s f target,
-    eval_sym_state s f = 
-    update_state (eval_sym_state s f) target (eval_smt_arith (lookup_state s target) f).
-Proof.
-  intros s f target.
-  unfold eval_sym_state.
-  specialize (commute_mapper_update_state (T1 := SmtArithExpr) (T2 := uint8)).
-  intros.
-  specialize (H s target (lookup_state s target) (fun e : SmtArithExpr => eval_smt_arith e f)).
-  rewrite <- H.
-  rewrite update_lookup_inverses_state.
-  reflexivity.
-Qed.
-
-Lemma nothing_changed_hdr:
-  forall s f target,
-    eval_sym_state s f = 
-    update_hdr (eval_sym_state s f) target
-     (eval_smt_arith (lookup_hdr s target) f).
-Proof.
-  intros s f target.
-  unfold eval_sym_state.
-  specialize (commute_mapper_update_hdr (T1 := SmtArithExpr) (T2 := uint8)).
-  intros.
-  specialize (H s target (lookup_hdr s target) (fun e : SmtArithExpr => eval_smt_arith e f)).
-  rewrite <- H.
-  rewrite update_lookup_inverses_hdr.
-  reflexivity.
-Qed.
-
 Lemma commute_lookup_eval_state:
   forall (s : ProgramState SmtArithExpr) (f : SmtValuation)
         sv,

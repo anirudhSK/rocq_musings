@@ -141,46 +141,6 @@ Proof.
     -- rewrite andb_false_l. simpl. rewrite des. reflexivity.
 Qed.
 
-(* Same as above lemma, but for a HdrOp gated by a match pattern *)
-Lemma commute_sym_vs_conc_hdr_op_match_pattern :
-  forall (ho: HdrOp) (mp: MatchPattern) (f : SmtValuation)
-         (s1 : ProgramState SmtArithExpr),
-    eval_hdr_op_assign_uint8_conditional mp ho (eval_sym_state s1 f  )= (* first concretize, and then interpret *)
-    eval_sym_state (eval_hdr_op_assign_smt_conditional mp ho s1) f. (* first interpret, and then concretize *)
-Proof.
-  intros ho mp f s1.
-  unfold eval_hdr_op_assign_uint8_conditional.
-  unfold eval_hdr_op_assign_smt_conditional.
-  unfold eval_hdr_op_assign_uint8.
-  destruct ho;
-  destruct (eval_match_uint8 mp (eval_sym_state s1 f)) eqn:des.
-  - rewrite commute_update_eval_state.
-    f_equal.
-    simpl.
-    erewrite <- commute_sym_vs_conc_match_pattern.
-    rewrite des.
-    destruct f0; simpl; repeat (rewrite commute_lookup_eval); reflexivity. reflexivity.
-  - rewrite commute_update_eval_state.
-    f_equal.
-    simpl.
-    erewrite <- commute_sym_vs_conc_match_pattern; try reflexivity.
-    rewrite des.
-    Check update_state.
-    apply nothing_changed_state.
-  - rewrite commute_update_eval_hdr.
-    f_equal.
-    simpl.
-    erewrite <- commute_sym_vs_conc_match_pattern.
-    rewrite des.
-    destruct f0; simpl; repeat (rewrite commute_lookup_eval); reflexivity. reflexivity.
-  - rewrite commute_update_eval_hdr.
-    f_equal.
-    simpl.
-    erewrite <- commute_sym_vs_conc_match_pattern; try reflexivity.
-    rewrite des.
-    apply nothing_changed_hdr.
-Qed.
-
 Lemma commute_sym_vs_conc_helper_seq_par_rule :
   forall (mp: MatchPattern) (hol: list HdrOp) (f : SmtValuation)
          (s1 : ProgramState SmtArithExpr),
