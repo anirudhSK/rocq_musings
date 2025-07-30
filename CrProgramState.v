@@ -3,6 +3,8 @@ From MyProject Require Export Maps.
 Require Import Strings.String.
 Require Import ZArith.
 From Coq Require Import FunctionalExtensionality.
+Require Import Coq.Lists.List.
+Import ListNotations.
 
 (* Current values for each of these identifiers as a map *)
 Definition HeaderMap (T : Type) := PMap.t T. (* Maybe replace these with a generic Map type from Maps.v? *)
@@ -70,11 +72,9 @@ Definition program_state_mapper {T1 T2 : Type} (fc: T1 -> T2) (fh : T1 -> T2) (f
 
 (* Function to go through all keys in a PMap, and set them to new values. *)
 Definition new_pmap_from_old {T: Type} (old_pmap : PMap.t T) (f : positive -> T): PMap.t T :=
-  List.fold_right
-    (fun x acc => PMap.set (fst x) (f (fst x)) acc) (* fst x returns the positive key, f (fst x) produces a new value from it *)
-    (PMap.init (fst old_pmap))                      (* keep the default value from the old_pmap *)
-    (PTree.elements (snd (old_pmap))).              (* PTree.elements returns a list of (key, value) pairs from the PMap *)
-    (*Note: old values, i.e., snd x is ignored.*)
+  (fst old_pmap, (* The old default value *)
+   PTree.map (fun x _ => f x) (snd old_pmap) (* Take old tree (snd old_pmap) and map elements from it (x) via function (f) *)
+  ).
 
 Definition update_all_hdrs {T : Type} (s: ProgramState T) (fh: Header -> T) : ProgramState T :=
   {| ctrl_plane_map := ctrl_plane_map s;
@@ -104,29 +104,79 @@ Definition update_state {T : Type} (s: ProgramState T) (x: StateVar) (v: T) : Pr
      header_map := header_map s;
      state_var_map := update_state_map (state_var_map s) x v |}.
 
+Lemma cons_not_nil : forall A (x : A) (xs : list A),
+  ~ ((x :: xs) = nil).
+Proof.
+  intros.
+  simpl.
+  unfold "<>".
+  intros.
+  discriminate H.
+Qed.
+
+Lemma update_all_hdrs_lookup_unchanged:
+  forall {T} (s1 : ProgramState T),
+   update_all_hdrs s1 (fun h : Header => lookup_hdr s1 h) = s1.
+Proof.
+  intros.
+  destruct s1 as [ctrl hdr state].
+  unfold update_all_hdrs.
+  simpl.
+  f_equal; try reflexivity.
+  unfold lookup_hdr.
+  simpl.
+  unfold lookup_hdr_map.
+  unfold new_pmap_from_old.
+  simpl.
+  destruct hdr.
+  simpl.
+  f_equal.
+  apply PTree.extensionality.
+  intros.
+  rewrite PTree.gmap.
+  unfold Coqlib.option_map.
+  unfold PMap.get.
+  simpl.
+  destruct (t0 ! i) eqn:des; auto.
+Qed.
+
+(* Same lemma as above but for state *)
+Lemma update_all_states_lookup_unchanged:
+  forall {T} (s1 : ProgramState T),
+   update_all_states s1 (fun sv : StateVar => lookup_state s1 sv) = s1.
+Proof.
+  intros.
+  destruct s1 as [ctrl hdr state].
+  unfold update_all_states.
+  simpl.
+  f_equal; try reflexivity.
+  unfold lookup_state.
+  simpl.
+  unfold lookup_state_map.
+  unfold new_pmap_from_old.
+  simpl.
+  destruct state.
+  simpl.
+  f_equal.
+  apply PTree.extensionality.
+  intros.
+  rewrite PTree.gmap.
+  unfold Coqlib.option_map.
+  unfold PMap.get.
+  simpl.
+  destruct (t0 ! i) eqn:des; auto.
+Qed.
+
 Lemma program_state_unchanged:
   forall {T} (s1 : ProgramState T),
   update_all_states (update_all_hdrs s1 (fun h : Header => lookup_hdr s1 h))
                     (fun s : StateVar => lookup_state s1 s) = s1.
 Proof.
   intros.
-  destruct s1 as [ctrl hdr state].
-  unfold update_all_hdrs, update_all_states.
-  simpl.
-  f_equal; try reflexivity.
-  - unfold new_pmap_from_old.
-    simpl.
-    remember (PTree.elements (snd hdr)) as elems.
-    induction elems.
-    + simpl. simpl in Heqelems. destruct hdr.
-      simpl. simpl in Heqelems.
-      unfold PTree.elements in Heqelems.
-      destruct t0.
-      ++ simpl. unfold PMap.init.
-         reflexivity.
-      ++ simpl in Heqelems. unfold PMap.init.
-         unfold PTree.xelements' in Heqelems.
-         
+  rewrite update_all_hdrs_lookup_unchanged.
+  rewrite update_all_states_lookup_unchanged.
+  reflexivity.
+Qed.        
 
 Lemma commute_mapper_lookup_ctrl:
   forall {T1} {T2} ps c (func : T1 -> T2),
@@ -222,11 +272,36 @@ Proof.
   reflexivity.
 Qed.
 
+Definition is_header_in_map {T} (s1 : ProgramState T) (h : Header) :=
+  PTree.get (match h with | HeaderCtr id => id end) (snd (header_map s1)).
+
 Lemma lookup_hdr_after_update_all_hdrs:
   forall {T} (s1 : ProgramState T) (h : Header) (fh : Header -> T),
+    is_header_in_map s1 h <> None ->
     lookup_hdr (update_all_hdrs s1 fh) h = fh h.
-Admitted.
-  
+Proof.
+  intros.
+  unfold lookup_hdr.
+  unfold update_all_hdrs.
+  simpl.
+  unfold lookup_hdr_map.
+  unfold new_pmap_from_old.
+  simpl.
+  unfold is_header_in_map in H.
+  destruct (header_map s1) as [default hdr].
+  simpl.
+  f_equal.
+  unfold PMap.get.
+  simpl.
+  rewrite PTree.gmap.
+  unfold Coqlib.option_map.
+  destruct h.
+  simpl.
+  simpl in H.
+  destruct (hdr ! uid) eqn:des; auto.
+  congruence.
+Qed.
+
 (* Create mirror image versions of the two lemmas above with state and hdr interchanged *)
 Lemma lookup_state_unchanged_by_update_all_hdrs:
   forall {T} fh (s1 : ProgramState T) (sv : StateVar),
@@ -235,10 +310,35 @@ Proof.
   reflexivity.
 Qed.
 
+Definition is_state_in_map {T} (s1 : ProgramState T) (sv : StateVar) :=
+  PTree.get (match sv with | StateVarCtr id => id end) (snd (state_var_map s1)).
+
 Lemma lookup_state_after_update_all_states:
   forall {T} (s1 : ProgramState T) (sv : StateVar) (fs : StateVar -> T),
+    is_state_in_map s1 sv <> None ->
     lookup_state (update_all_states s1 fs) sv = fs sv.
-Admitted.
+Proof.
+  intros.
+  unfold lookup_state.
+  unfold update_all_states.
+  simpl.
+  unfold lookup_state_map.
+  unfold new_pmap_from_old.
+  simpl.
+  unfold is_state_in_map in H.
+  destruct (state_var_map s1) as [default sv_map].
+  simpl.
+  f_equal.
+  unfold PMap.get.
+  simpl.
+  rewrite PTree.gmap.
+  unfold Coqlib.option_map.
+  destruct sv.
+  simpl.
+  simpl in H.
+  destruct (sv_map ! uid) eqn:des; auto.
+  congruence.
+Qed.
 
 Lemma commute_state_hdr_updates:
   forall {T} (s1 : ProgramState T) (fh : Header -> T) (fs : StateVar -> T),
