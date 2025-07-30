@@ -108,8 +108,26 @@ Lemma program_state_unchanged:
   forall {T} (s1 : ProgramState T),
   update_all_states (update_all_hdrs s1 (fun h : Header => lookup_hdr s1 h))
                     (fun s : StateVar => lookup_state s1 s) = s1.
-Admitted.
-    
+Proof.
+  intros.
+  destruct s1 as [ctrl hdr state].
+  unfold update_all_hdrs, update_all_states.
+  simpl.
+  f_equal; try reflexivity.
+  - unfold new_pmap_from_old.
+    simpl.
+    remember (PTree.elements (snd hdr)) as elems.
+    induction elems.
+    + simpl. simpl in Heqelems. destruct hdr.
+      simpl. simpl in Heqelems.
+      unfold PTree.elements in Heqelems.
+      destruct t0.
+      ++ simpl. unfold PMap.init.
+         reflexivity.
+      ++ simpl in Heqelems. unfold PMap.init.
+         unfold PTree.xelements' in Heqelems.
+         
+
 Lemma commute_mapper_lookup_ctrl:
   forall {T1} {T2} ps c (func : T1 -> T2),
   lookup_ctrl (program_state_mapper func func func ps) c =
