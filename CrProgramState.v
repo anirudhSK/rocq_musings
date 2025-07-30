@@ -41,15 +41,38 @@ Definition lookup_ctrl {T : Type} (s: ProgramState T) (x: CtrlPlaneConfigName) :
   PMap.get (match x with | CtrlPlaneConfigNameCtr id => id end) (ctrl_plane_map s).
 
 
-(* Some lemmas for convenience *)
-(* TODO: try to replace this with the extensionality lemma/theorem from the Maps.v library *)
-Lemma header_map_extensionality: forall {T} (map1 map2 : HeaderMap T),
-  (forall x, lookup_hdr_map map1 x = lookup_hdr_map map2 x) -> map1 = map2.
-Admitted.
+Lemma header_map_extensionality:
+  forall {T} (m1 m2 : HeaderMap T),
+  (forall x, PTree.get x (snd m1) = PTree.get x (snd m2)) ->
+  fst m1 = fst m2 ->
+  m1 = m2.
+Proof.
+  intros.
+  destruct m1 as [default1 tree1].
+  simpl in H.
+  destruct m2 as [default2 tree2].
+  simpl in *.
+  f_equal; try assumption.
+  apply PTree.extensionality.
+  assumption.
+Qed.
 
-Lemma state_var_map_extensionality: forall {T} (map1 map2 : StateVarMap T),
-  (forall x, lookup_state_map map1 x = lookup_state_map map2 x) -> map1 = map2.
-Admitted.
+(* Same as above, but for state *)
+Lemma state_var_map_extensionality:
+  forall {T} (m1 m2 : StateVarMap T),
+  (forall x, PTree.get x (snd m1) = PTree.get x (snd m2)) ->
+  fst m1 = fst m2 ->
+  m1 = m2.
+Proof.
+  intros.
+  destruct m1 as [default1 tree1].
+  simpl in H.
+  destruct m2 as [default2 tree2].
+  simpl in *.
+  f_equal; try assumption.
+  apply PTree.extensionality.
+  assumption.
+Qed.
 
 Lemma program_state_equality:
       forall (ps1 ps2: ProgramState uint8),
