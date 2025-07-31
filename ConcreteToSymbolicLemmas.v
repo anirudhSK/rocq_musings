@@ -141,55 +141,115 @@ Proof.
     -- rewrite andb_false_l. simpl. rewrite des. reflexivity.
 Qed.
 
-Lemma commute_sym_vs_conc_helper_seq_par_rule :
+Lemma commute_sym_vs_conc_helper_seq_par_rule_hdr :
   forall (mp: MatchPattern) (hol: list HdrOp) (f : SmtValuation)
-         (s1 : ProgramState SmtArithExpr),
-    (if eval_match_uint8 mp (eval_sym_state s1 f)
+         (s1 : ProgramState SmtArithExpr) (h : Header),
+         is_header_in_ps s1 h <> None ->
+    lookup_hdr (if eval_match_uint8 mp (eval_sym_state s1 f)
     then eval_hdr_op_list_uint8 hol (eval_sym_state s1 f)
-    else eval_sym_state s1 f) =
-    eval_sym_state (update_all_states
+    else eval_sym_state s1 f) h =
+    lookup_hdr (eval_sym_state (update_all_states
                    (update_all_hdrs s1 (fun h => SmtConditional (eval_match_smt mp s1)
                                                                 (lookup_hdr (eval_hdr_op_list_smt hol s1) h) (lookup_hdr s1 h)))
                    (fun s => SmtConditional (eval_match_smt mp s1)
-                             (lookup_state (eval_hdr_op_list_smt hol s1) s) (lookup_state s1 s))) f.
+                             (lookup_state (eval_hdr_op_list_smt hol s1) s) (lookup_state s1 s))) f) h.
 Admitted.
 
-Lemma commute_sym_vs_conc_seq_rule :
+Lemma commute_sym_vs_conc_helper_seq_par_rule_sv :
+  forall (mp: MatchPattern) (hol: list HdrOp) (f : SmtValuation)
+         (s1 : ProgramState SmtArithExpr) (sv : StateVar),
+         is_state_var_in_ps s1 sv <> None ->
+    lookup_state (if eval_match_uint8 mp (eval_sym_state s1 f)
+    then eval_hdr_op_list_uint8 hol (eval_sym_state s1 f)
+    else eval_sym_state s1 f) sv =
+    lookup_state (eval_sym_state (update_all_states
+                   (update_all_hdrs s1 (fun h => SmtConditional (eval_match_smt mp s1)
+                                                                (lookup_hdr (eval_hdr_op_list_smt hol s1) h) (lookup_hdr s1 h)))
+                   (fun s => SmtConditional (eval_match_smt mp s1)
+                             (lookup_state (eval_hdr_op_list_smt hol s1) s) (lookup_state s1 s))) f) sv.
+Admitted.
+
+Lemma commute_sym_vs_conc_seq_rule_hdr :
   forall (sr: SeqRule) (f : SmtValuation)
-         (s1 : ProgramState SmtArithExpr),
-      eval_seq_rule_uint8 sr (eval_sym_state s1 f) = (* first concretize, and then interpret *)
-      eval_sym_state (eval_seq_rule_smt sr s1) f. (* first interpret, and then concretize *)
+         (s1 : ProgramState SmtArithExpr) (h : Header),
+      is_header_in_ps s1 h <> None ->
+      lookup_hdr (eval_seq_rule_uint8 sr (eval_sym_state s1 f)) h = (* first concretize, and then interpret *)
+      lookup_hdr (eval_sym_state (eval_seq_rule_smt sr s1) f) h. (* first interpret, and then concretize *)
 Proof.
-  intros sr f s1.
+  intros sr f s1 h Hh.
   destruct sr as [mp hol].
   unfold eval_seq_rule_uint8.
-  unfold eval_seq_rule_smt. 
-  apply commute_sym_vs_conc_helper_seq_par_rule.
+  unfold eval_seq_rule_smt.
+  apply commute_sym_vs_conc_helper_seq_par_rule_hdr. assumption.
 Qed.
 
-Lemma commute_sym_vs_conc_par_rule :
+Lemma commute_sym_vs_conc_par_rule_hdr :
   forall (pr: ParRule) (f : SmtValuation)
-         (s1 : ProgramState SmtArithExpr),
-      eval_par_rule_uint8 pr (eval_sym_state s1 f) = (* first concretize, and then interpret *)
-      eval_sym_state (eval_par_rule_smt pr s1) f. (* first interpret, and then concretize *)
+         (s1 : ProgramState SmtArithExpr) (h : Header),
+    is_header_in_ps s1 h <> None ->
+    lookup_hdr (eval_par_rule_uint8 pr (eval_sym_state s1 f)) h = (* first concretize, and then interpret *)
+    lookup_hdr (eval_sym_state (eval_par_rule_smt pr s1) f) h. (* first interpret, and then concretize *)
 Proof.
-  intros pr f s1.
+  intros pr f s1 h Hh.
   destruct pr as [mp hol].
   unfold eval_par_rule_uint8.
   unfold eval_par_rule_smt.
-  apply commute_sym_vs_conc_helper_seq_par_rule.
+  apply commute_sym_vs_conc_helper_seq_par_rule_hdr. assumption.
 Qed.
 
-Lemma commute_sym_vs_conc_ma_rule:
-  forall (ma : MatchActionRule) (f : SmtValuation)
-         (s1 : ProgramState SmtArithExpr),
-    eval_match_action_rule_uint8 ma (eval_sym_state s1 f) = (* first concretize, and then interpret *)
-    eval_sym_state (eval_match_action_rule_smt ma s1) f. (* first interpret, and then concretize *)
+(* Same as above two lemmas but for state variables *)
+Lemma commute_sym_vs_conc_seq_rule_sv :
+  forall (sr: SeqRule) (f : SmtValuation)
+         (s1 : ProgramState SmtArithExpr) (sv : StateVar),
+    is_state_var_in_ps s1 sv <> None ->
+    lookup_state (eval_seq_rule_uint8 sr (eval_sym_state s1 f)) sv = (* first concretize, and then interpret *)
+    lookup_state (eval_sym_state (eval_seq_rule_smt sr s1) f) sv. (* first interpret, and then concretize *)
 Proof.
-  intros ma f s1.
+  intros sr f s1 sv Hsv.
+  destruct sr as [mp hol].
+  unfold eval_seq_rule_uint8.
+  unfold eval_seq_rule_smt.
+  apply commute_sym_vs_conc_helper_seq_par_rule_sv. assumption.
+Qed.
+
+Lemma commute_sym_vs_conc_par_rule_sv :
+  forall (pr: ParRule) (f : SmtValuation)
+         (s1 : ProgramState SmtArithExpr) (sv : StateVar),
+    is_state_var_in_ps s1 sv <> None ->
+    lookup_state (eval_par_rule_uint8 pr (eval_sym_state s1 f)) sv = (* first concretize, and then interpret *)
+    lookup_state (eval_sym_state (eval_par_rule_smt pr s1) f) sv. (* first interpret, and then concretize *)
+Proof.
+  intros pr f s1 sv Hsv.
+  destruct pr as [mp hol].
+  unfold eval_par_rule_uint8.
+  unfold eval_par_rule_smt.
+  apply commute_sym_vs_conc_helper_seq_par_rule_sv. assumption.
+Qed.
+
+Lemma commute_sym_vs_conc_ma_rule_hdr:
+  forall (ma : MatchActionRule) (f : SmtValuation)
+         (s1 : ProgramState SmtArithExpr) (h: Header),
+    is_header_in_ps s1 h <> None ->
+    lookup_hdr (eval_match_action_rule_uint8 ma (eval_sym_state s1 f)) h = (* first concretize, and then interpret *)
+    lookup_hdr (eval_sym_state (eval_match_action_rule_smt ma s1) f) h. (* first interpret, and then concretize *)
+Proof.
+  intros ma f s1 h Hh.
   destruct ma as [sr | pr].
-  - apply commute_sym_vs_conc_seq_rule.
-  - apply commute_sym_vs_conc_par_rule.
+  - apply commute_sym_vs_conc_seq_rule_hdr. assumption.
+  - apply commute_sym_vs_conc_par_rule_hdr. assumption.
+Qed.
+
+Lemma commute_sym_vs_conc_ma_rule_sv:
+  forall (ma : MatchActionRule) (f : SmtValuation)
+         (s1 : ProgramState SmtArithExpr) (sv: StateVar),
+    is_state_var_in_ps s1 sv <> None ->
+    lookup_state (eval_match_action_rule_uint8 ma (eval_sym_state s1 f)) sv = (* first concretize, and then interpret *)
+    lookup_state (eval_sym_state (eval_match_action_rule_smt ma s1) f) sv. (* first interpret, and then concretize *)
+Proof.
+  intros ma f s1 sv Hsv.
+  destruct ma as [sr | pr].
+  - apply commute_sym_vs_conc_seq_rule_sv. assumption.
+  - apply commute_sym_vs_conc_par_rule_sv. assumption.
 Qed.
 
 Lemma one_rule_transformer_equals_ma_rule:
@@ -246,19 +306,19 @@ Proof.
       destruct (eval_smt_bool (eval_match_smt match_pattern s1) f) eqn:des.
       + rewrite <- commute_sym_vs_conc_match_pattern with (s1 := s1) (f := f) (c1 := eval_sym_state s1 f) in des; try reflexivity.
         rewrite des in H0.
-        rewrite commute_sym_vs_conc_ma_rule.
+        rewrite commute_sym_vs_conc_ma_rule_hdr.
         simpl in H.
         rewrite des in H.
         inversion H.
-        apply header_map_ps.
+        apply header_map_ps. assumption.
       + rewrite <- commute_sym_vs_conc_match_pattern with (s1 := s1) (f := f) (c1 := eval_sym_state s1 f) in des; try reflexivity.
         rewrite des in H0.
-        rewrite commute_sym_vs_conc_ma_rule.
+        rewrite commute_sym_vs_conc_ma_rule_hdr.
         simpl in H.
         rewrite des in H.
         apply IHt in H.
-        rewrite <- commute_sym_vs_conc_ma_rule.
-        assumption.
+        rewrite <- commute_sym_vs_conc_ma_rule_hdr.
+        assumption. assumption. assumption.
     --assert (In (true, rule)  (combine
                                (get_match_results (Par (ParCtr match_pattern action) :: t) (eval_sym_state s1 f))
                                (Par (ParCtr match_pattern action) :: t))).
@@ -267,19 +327,19 @@ Proof.
       destruct (eval_smt_bool (eval_match_smt match_pattern s1) f) eqn:des.
       + rewrite <- commute_sym_vs_conc_match_pattern with (s1 := s1) (f := f) (c1 := eval_sym_state s1 f) in des; try reflexivity.
         rewrite des in H0.
-        rewrite commute_sym_vs_conc_ma_rule.
+        rewrite commute_sym_vs_conc_ma_rule_hdr.
         simpl in H.
         rewrite des in H.
         inversion H.
-        apply header_map_ps.
+        apply header_map_ps. assumption.
       + rewrite <- commute_sym_vs_conc_match_pattern with (s1 := s1) (f := f) (c1 := eval_sym_state s1 f) in des; try reflexivity.
         rewrite des in H0.
-        rewrite commute_sym_vs_conc_ma_rule.
+        rewrite commute_sym_vs_conc_ma_rule_hdr.
         simpl in H.
         rewrite des in H.
         apply IHt in H.
-        rewrite <- commute_sym_vs_conc_ma_rule.
-        assumption.
+        rewrite <- commute_sym_vs_conc_ma_rule_hdr.
+        assumption. assumption. assumption.
 Qed.
 
 Lemma switch_case_expr_no_match_lemma :
@@ -363,19 +423,20 @@ Proof.
       destruct (eval_smt_bool (eval_match_smt match_pattern s1) f) eqn:des.
       + rewrite <- commute_sym_vs_conc_match_pattern with (s1 := s1) (f := f) (c1 := eval_sym_state s1 f) in des; try reflexivity.
         rewrite des in H0.
-        rewrite commute_sym_vs_conc_ma_rule.
+        rewrite commute_sym_vs_conc_ma_rule_sv.
         simpl in H.
         rewrite des in H.
         inversion H.
         apply state_var_map_ps.
+        assumption.
       + rewrite <- commute_sym_vs_conc_match_pattern with (s1 := s1) (f := f) (c1 := eval_sym_state s1 f) in des; try reflexivity.
         rewrite des in H0.
-        rewrite commute_sym_vs_conc_ma_rule.
+        rewrite commute_sym_vs_conc_ma_rule_sv.
         simpl in H.
         rewrite des in H.
         apply IHt in H.
-        rewrite <- commute_sym_vs_conc_ma_rule.
-        assumption.
+        rewrite <- commute_sym_vs_conc_ma_rule_sv.
+        assumption. assumption. assumption.
     --assert (In (true, rule)  (combine
                                (get_match_results (Par (ParCtr match_pattern action) :: t) (eval_sym_state s1 f))
                                (Par (ParCtr match_pattern action) :: t))).
@@ -384,19 +445,20 @@ Proof.
       destruct (eval_smt_bool (eval_match_smt match_pattern s1) f) eqn:des.
       + rewrite <- commute_sym_vs_conc_match_pattern with (s1 := s1) (f := f) (c1 := eval_sym_state s1 f) in des; try reflexivity.
         rewrite des in H0.
-        rewrite commute_sym_vs_conc_ma_rule.
+        rewrite commute_sym_vs_conc_ma_rule_sv.
         simpl in H.
         rewrite des in H.
         inversion H.
         apply state_var_map_ps.
+        assumption.
       + rewrite <- commute_sym_vs_conc_match_pattern with (s1 := s1) (f := f) (c1 := eval_sym_state s1 f) in des; try reflexivity.
         rewrite des in H0.
-        rewrite commute_sym_vs_conc_ma_rule.
+        rewrite commute_sym_vs_conc_ma_rule_sv.
         simpl in H.
         rewrite des in H.
         apply IHt in H.
-        rewrite <- commute_sym_vs_conc_ma_rule.
-        assumption.
+        rewrite <- commute_sym_vs_conc_ma_rule_sv.
+        assumption. assumption. assumption.
 Qed.
 
 Lemma switch_case_expr_no_match_state_var_lemma :
