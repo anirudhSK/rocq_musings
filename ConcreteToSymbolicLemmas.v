@@ -153,7 +153,26 @@ Lemma commute_sym_vs_conc_helper_seq_par_rule_hdr :
                                                                 (lookup_hdr (eval_hdr_op_list_smt hol s1) h) (lookup_hdr s1 h)))
                    (fun s => SmtConditional (eval_match_smt mp s1)
                              (lookup_state (eval_hdr_op_list_smt hol s1) s) (lookup_state s1 s))) f) h.
-Admitted.
+Proof.
+  intros mp hol f s1 h Hh.
+  unfold eval_sym_state at 4.
+  rewrite commute_mapper_lookup_hdr.
+  rewrite <- commute_state_hdr_updates.
+  rewrite lookup_hdr_after_update_all_hdrs.
+  -- destruct (eval_match_uint8 mp (eval_sym_state s1 f)) eqn:Hmatch.
+     + simpl.
+       rewrite <- commute_sym_vs_conc_match_pattern with (c1 := eval_sym_state s1 f); auto.
+       rewrite Hmatch.
+       rewrite commute_sym_vs_conc_hdr_op_list with (f := f) (s1 := s1); auto.
+       rewrite commute_lookup_eval_hdr.
+       reflexivity.
+     + simpl.
+       rewrite <- commute_sym_vs_conc_match_pattern with (c1 := eval_sym_state s1 f); auto.
+       rewrite Hmatch.
+       rewrite commute_lookup_eval_hdr.
+       reflexivity.
+  -- rewrite is_header_in_ps_after_update_all_states. assumption.
+Qed.
 
 Lemma commute_sym_vs_conc_helper_seq_par_rule_sv :
   forall (mp: MatchPattern) (hol: list HdrOp) (f : SmtValuation)
@@ -167,7 +186,25 @@ Lemma commute_sym_vs_conc_helper_seq_par_rule_sv :
                                                                 (lookup_hdr (eval_hdr_op_list_smt hol s1) h) (lookup_hdr s1 h)))
                    (fun s => SmtConditional (eval_match_smt mp s1)
                              (lookup_state (eval_hdr_op_list_smt hol s1) s) (lookup_state s1 s))) f) sv.
-Admitted.
+Proof.
+  intros mp hol f s1 sv Hsv.
+  unfold eval_sym_state at 4.
+  rewrite commute_mapper_lookup_state.
+  rewrite lookup_state_after_update_all_states.
+  -- destruct (eval_match_uint8 mp (eval_sym_state s1 f)) eqn:Hmatch.
+     + simpl.
+       rewrite <- commute_sym_vs_conc_match_pattern with (c1 := eval_sym_state s1 f); auto.
+       rewrite Hmatch.
+       rewrite commute_sym_vs_conc_hdr_op_list with (f := f) (s1 := s1); auto.
+       rewrite commute_lookup_eval_state.
+       reflexivity.
+     + simpl.
+       rewrite <- commute_sym_vs_conc_match_pattern with (c1 := eval_sym_state s1 f); auto.
+       rewrite Hmatch.
+       rewrite commute_lookup_eval_state.
+       reflexivity.
+  -- rewrite is_state_var_in_ps_after_update_all_hdrs. assumption.
+Qed.
 
 Lemma commute_sym_vs_conc_seq_rule_hdr :
   forall (sr: SeqRule) (f : SmtValuation)
