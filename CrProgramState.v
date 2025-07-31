@@ -40,40 +40,6 @@ Definition lookup_state {T : Type} (s: ProgramState T) (x: StateVar) : T :=
 Definition lookup_ctrl {T : Type} (s: ProgramState T) (x: CtrlPlaneConfigName) : T :=
   PMap.get (match x with | CtrlPlaneConfigNameCtr id => id end) (ctrl_plane_map s).
 
-
-Lemma header_map_extensionality:
-  forall {T} (m1 m2 : HeaderMap T),
-  (forall x, PTree.get x (snd m1) = PTree.get x (snd m2)) ->
-  fst m1 = fst m2 ->
-  m1 = m2.
-Proof.
-  intros.
-  destruct m1 as [default1 tree1].
-  simpl in H.
-  destruct m2 as [default2 tree2].
-  simpl in *.
-  f_equal; try assumption.
-  apply PTree.extensionality.
-  assumption.
-Qed.
-
-(* Same as above, but for state *)
-Lemma state_var_map_extensionality:
-  forall {T} (m1 m2 : StateVarMap T),
-  (forall x, PTree.get x (snd m1) = PTree.get x (snd m2)) ->
-  fst m1 = fst m2 ->
-  m1 = m2.
-Proof.
-  intros.
-  destruct m1 as [default1 tree1].
-  simpl in H.
-  destruct m2 as [default2 tree2].
-  simpl in *.
-  f_equal; try assumption.
-  apply PTree.extensionality.
-  assumption.
-Qed.
-
 Lemma program_state_equality:
       forall (ps1 ps2: ProgramState uint8),
         ctrl_plane_map ps1 = ctrl_plane_map ps2 ->
@@ -295,12 +261,12 @@ Proof.
   reflexivity.
 Qed.
 
-Definition is_header_in_map {T} (s1 : ProgramState T) (h : Header) :=
+Definition is_header_in_ps {T} (s1 : ProgramState T) (h : Header) :=
   PTree.get (match h with | HeaderCtr id => id end) (snd (header_map s1)).
 
 Lemma lookup_hdr_after_update_all_hdrs:
   forall {T} (s1 : ProgramState T) (h : Header) (fh : Header -> T),
-    is_header_in_map s1 h <> None ->
+    is_header_in_ps s1 h <> None ->
     lookup_hdr (update_all_hdrs s1 fh) h = fh h.
 Proof.
   intros.
@@ -310,7 +276,7 @@ Proof.
   unfold lookup_hdr_map.
   unfold new_pmap_from_old.
   simpl.
-  unfold is_header_in_map in H.
+  unfold is_header_in_ps in H.
   destruct (header_map s1) as [default hdr].
   simpl.
   f_equal.
@@ -333,12 +299,12 @@ Proof.
   reflexivity.
 Qed.
 
-Definition is_state_in_map {T} (s1 : ProgramState T) (sv : StateVar) :=
+Definition is_state_var_in_ps {T} (s1 : ProgramState T) (sv : StateVar) :=
   PTree.get (match sv with | StateVarCtr id => id end) (snd (state_var_map s1)).
 
 Lemma lookup_state_after_update_all_states:
   forall {T} (s1 : ProgramState T) (sv : StateVar) (fs : StateVar -> T),
-    is_state_in_map s1 sv <> None ->
+    is_state_var_in_ps s1 sv <> None ->
     lookup_state (update_all_states s1 fs) sv = fs sv.
 Proof.
   intros.
@@ -348,7 +314,7 @@ Proof.
   unfold lookup_state_map.
   unfold new_pmap_from_old.
   simpl.
-  unfold is_state_in_map in H.
+  unfold is_state_var_in_ps in H.
   destruct (state_var_map s1) as [default sv_map].
   simpl.
   f_equal.
@@ -382,6 +348,24 @@ Qed.
 Lemma lookup_state_trivial:
   forall {T} (s : ProgramState T) (sv : StateVar),
     lookup_state s sv = lookup_state_map (state_var_map s) sv.
+Proof.
+  intros.
+  reflexivity.
+Qed.
+
+(* is_header_in_ps is preserved across update_all_states *)
+Lemma is_header_in_ps_after_update_all_states:
+  forall {T} (s1 : ProgramState T) (h : Header) (fs : StateVar -> T),
+    is_header_in_ps (update_all_states s1 fs) h = is_header_in_ps s1 h.
+Proof.
+  intros.
+  reflexivity.
+Qed.
+
+(* is_state_var_in_ps is preserved across update_all_hdrs *)
+Lemma is_state_var_in_ps_after_update_all_hdrs:
+  forall {T} (s1 : ProgramState T) (sv : StateVar) (fh : Header -> T),
+    is_state_var_in_ps (update_all_hdrs s1 fh) sv = is_state_var_in_ps s1 sv.
 Proof.
   intros.
   reflexivity.

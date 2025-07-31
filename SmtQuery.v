@@ -350,6 +350,7 @@ Qed.
 
 Lemma eval_smt_bool_lemma_hdr :
   forall t1 t2 s h f,
+  is_header_in_ps s h <> None ->
   eval_smt_bool
 (SmtBoolEq (lookup_hdr (eval_transformer_smt t1 s) h)
 (lookup_hdr (eval_transformer_smt t2 s) h)) f = true ->
@@ -358,17 +359,20 @@ lookup_hdr (eval_transformer_uint8 t2 (eval_sym_state s f)) h.
 Proof.
   intros t1 t2 s h f.
   intro H.
-  apply smt_bool_eq_true in H.
-  rewrite commute_sym_vs_conc_transfomer.
-  rewrite commute_sym_vs_conc_transfomer.
+  intros H_eq.
+  apply smt_bool_eq_true in H_eq.
+  rewrite commute_sym_vs_conc_transfomer_hdr.
+  rewrite commute_sym_vs_conc_transfomer_hdr.
   unfold eval_sym_state.
   rewrite commute_mapper_lookup_hdr.
   rewrite commute_mapper_lookup_hdr.
-  apply H.
+  apply H_eq.
+  assumption. assumption.
 Qed.
 
 Lemma eval_smt_bool_lemma_state :
   forall t1 t2 s sv f,
+  is_state_var_in_ps s sv <> None ->
   eval_smt_bool
 (SmtBoolEq (lookup_state (eval_transformer_smt t1 s) sv)
 (lookup_state (eval_transformer_smt t2 s) sv)) f = true ->
@@ -377,18 +381,22 @@ lookup_state (eval_transformer_uint8 t2 (eval_sym_state s f)) sv.
 Proof.
   intros t1 t2 s sv f.
   intro H.
-  apply smt_bool_eq_true in H.
-  rewrite commute_sym_vs_conc_transfomer.
-  rewrite commute_sym_vs_conc_transfomer.
+  intros H_eq.
+  apply smt_bool_eq_true in H_eq.
+  rewrite commute_sym_vs_conc_transfomer_sv.
+  rewrite commute_sym_vs_conc_transfomer_sv.
   unfold eval_sym_state.
   rewrite commute_mapper_lookup_state.
   rewrite commute_mapper_lookup_state.
-  apply H.
+  apply H_eq.
+  assumption. assumption.
 Qed.
 
 (* Soundness lemma about equivalence_checker conditional on the axioms above *)
 Lemma equivalence_checker_sound :
   forall s t1 t2 header_list state_var_list f,
+  (forall v, In v header_list -> is_header_in_ps s v <> None) ->
+  (forall v, In v state_var_list -> is_state_var_in_ps s v <> None) ->
   equivalence_checker s t1 t2 header_list state_var_list = SmtUnsat ->
   let c  := eval_sym_state s f in
   let c1 := eval_transformer_uint8 t1 c in
@@ -399,6 +407,8 @@ Lemma equivalence_checker_sound :
   (lookup_state c1 v) = (lookup_state c2 v)).
 Proof.
   intros s t1 t2 header_list state_var_list f.
+  intro H1.
+  intro H2.
   intro H.
   simpl.
   unfold equivalence_checker in H.
@@ -408,13 +418,15 @@ Proof.
      destruct H_complete as [H_header H_state_var].
      clear H_state_var. (* declutter *)
      specialize (H_header h H_in).
-     apply eval_smt_bool_lemma_hdr. assumption.
+     apply eval_smt_bool_lemma_hdr.
+     specialize (H1 h H_in). assumption. assumption.
   -- specialize (smt_query_sound_none _ H f) as H_complete.
      apply check_headers_and_state_vars_false in H_complete.
      destruct H_complete as [H_header H_state_var].
      clear H_header. (* declutter *)
      specialize (H_state_var h H_in).
-     apply eval_smt_bool_lemma_state. assumption.
+     apply eval_smt_bool_lemma_state.
+     specialize (H2 h H_in). assumption. assumption.
 Qed.
 
 Print Assumptions equivalence_checker_sound.
@@ -432,6 +444,7 @@ Qed.
 
 Lemma eval_smt_bool_lemma_hdr_false :
   forall t1 t2 s h f,
+  is_header_in_ps s h <> None ->
   eval_smt_bool
 (SmtBoolEq (lookup_hdr (eval_transformer_smt t1 s) h)
 (lookup_hdr (eval_transformer_smt t2 s) h)) f = false ->
@@ -439,18 +452,21 @@ lookup_hdr (eval_transformer_uint8 t1 (eval_sym_state s f)) h <>
 lookup_hdr (eval_transformer_uint8 t2 (eval_sym_state s f)) h.
 Proof.
   intros t1 t2 s h f.
+  intro H1.
   intro H.
   apply smt_bool_eq_false in H.
-  rewrite commute_sym_vs_conc_transfomer.
-  rewrite commute_sym_vs_conc_transfomer.
+  rewrite commute_sym_vs_conc_transfomer_hdr.
+  rewrite commute_sym_vs_conc_transfomer_hdr.
   unfold eval_sym_state.
   rewrite commute_mapper_lookup_hdr.
   rewrite commute_mapper_lookup_hdr.
   apply H.
+  assumption. assumption.
 Qed.
 
 Lemma eval_smt_bool_lemma_state_false :
   forall t1 t2 s sv f,
+  is_state_var_in_ps s sv <> None ->
   eval_smt_bool
 (SmtBoolEq (lookup_state (eval_transformer_smt t1 s) sv)
 (lookup_state (eval_transformer_smt t2 s) sv)) f = false ->
@@ -458,19 +474,23 @@ lookup_state (eval_transformer_uint8 t1 (eval_sym_state s f)) sv <>
 lookup_state (eval_transformer_uint8 t2 (eval_sym_state s f)) sv.
 Proof.
   intros t1 t2 s sv f.
+  intro H1.
   intro H.
   apply smt_bool_eq_false in H.
-  rewrite commute_sym_vs_conc_transfomer.
-  rewrite commute_sym_vs_conc_transfomer.
+  rewrite commute_sym_vs_conc_transfomer_sv.
+  rewrite commute_sym_vs_conc_transfomer_sv.
   unfold eval_sym_state.
   rewrite commute_mapper_lookup_state.
   rewrite commute_mapper_lookup_state.
   apply H.
+  assumption. assumption.
 Qed.
 
 (* Completeness lemma about equivalence_checker conditional on the axioms above *)
 Lemma equivalence_checker_complete :
   forall s t1 t2 header_list state_var_list f',
+  (forall v, In v header_list -> is_header_in_ps s v <> None) ->
+  (forall v, In v state_var_list -> is_state_var_in_ps s v <> None) ->
   equivalence_checker s t1 t2 header_list state_var_list = SmtSat f' ->
   let c' := eval_sym_state s f' in
   let c1 := eval_transformer_uint8 t1 c' in
@@ -481,6 +501,8 @@ Lemma equivalence_checker_complete :
   (lookup_state c1 v) <> (lookup_state c2 v)).
 Proof.
   intros s t1 t2 header_list state_var_list f'.
+  intro Hh.
+  intro Hsv.
   intro H.
   simpl.
   unfold equivalence_checker in H.
@@ -492,13 +514,15 @@ Proof.
     destruct H_query as [H_header | H_state_var].
     -- destruct H_header as [h Hw].
        destruct Hw.
-       pose proof (eval_smt_bool_lemma_hdr_false t1 t2 s h f H0) as H_neq.
+       specialize (Hh h H).
+       pose proof (eval_smt_bool_lemma_hdr_false t1 t2 s h f Hh H0) as H_neq.
        left.
        exists h.
        split; assumption.
     -- destruct H_state_var as [sv Hw].
        destruct Hw.
-       pose proof (eval_smt_bool_lemma_state_false t1 t2 s sv f H0) as H_neq.
+       specialize (Hsv sv H).
+       pose proof (eval_smt_bool_lemma_state_false t1 t2 s sv f Hsv H0) as H_neq.
        right.
        exists sv.
        split; assumption.
