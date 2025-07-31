@@ -104,7 +104,11 @@ fi
 debug_section "Cleaning the enviorment"
 rm -f ../combine.v "$OUTPUT_FILE_FIRST" "$OUTPUT_FILE_SECOND" ../Makefile.conf ../.*.aux .lia.cache .output
 cd ..
-make clean
+
+if [  -f Makefile ]; then
+    make clean
+fi
+
 rm  -f Makefile Makefile.conf
 rm -f .lia.cache
 cd translation

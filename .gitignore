@@ -8,6 +8,6 @@ Makefile
 *.Makefile.d
 .lia.cache
 .DS_Store
-first_generated.v
-second_generated.v
+/first_generated.v
+/second_generated.v
 /combine.v
