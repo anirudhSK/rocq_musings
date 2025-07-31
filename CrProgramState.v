@@ -387,3 +387,6 @@ Global Opaque update_all_states.
 Global Opaque HeaderMap.
 Global Opaque StateVarMap.
 Global Opaque CtrlPlaneConfigNameMap.
+Global Opaque new_pmap_from_old.
+Global Opaque is_header_in_ps.
+Global Opaque is_state_var_in_ps.
