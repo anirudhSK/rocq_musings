@@ -291,6 +291,16 @@ Proof.
   apply mkint_eq; auto.
 Qed.
 
+Definition equivalence_checker_cr_dsl
+  (s : ProgramState SmtArithExpr)
+  (p1: CaracaraProgram) (p2: CaracaraProgram)
+  : SmtResult :=
+  (* assume a starting symbolic state s *)
+  (* convert p1 and p2 to an equivalent final SmtArithExpr, assuming a start state of s *)
+  match p1, p2 with
+   | CaracaraProgramDef _ header_list1 state_var_list1
+  
+
 (* TODO: Not sure if this lemma uses law of excluded middle or not?
    What about the intro Heq step? *)
 Lemma uint8_neq_from_unsigned : forall (v1 v2 : uint8),
