@@ -1,4 +1,6 @@
 From MyProject Require Import SmtExpr.
+From MyProject Require Import CrDsl.
+From MyProject Require Import CrIdentifiers.
 Require Import Classical.
 Require Import Coq.Lists.List.
 Require Import Coq.Bool.Bool.
@@ -291,8 +293,25 @@ Proof.
   apply mkint_eq; auto.
 Qed.
 
-(* TODO: Not sure if this lemma uses law of excluded middle or not?
-   What about the intro Heq step? *)
+Definition equivalence_checker_cr_dsl (s : ProgramState SmtArithExpr) (p1: CaracaraProgram) (p2: CaracaraProgram)
+  : bool := 
+  (* assume a starting symbolic state s *)
+  (* convert p1 and p2 to an equivalent final SmtArithExpr, assuming a start state of s *)
+  match p1, p2 with
+   | CaracaraProgramDef h1 s1 c1 t1, CaracaraProgramDef h2 s2 c2 t2 => 
+      if hdr_list_equal h1 h2 then
+        if state_list_equal s1 s2 then
+          match (equivalence_checker s t1 t2 h1 s1) with
+          | SmtUnsat => true  (* if it is unsatisfiable, then all state vars and headers are equal *)
+          | SmtSat _ => false (* if it is satisfiable, then some state var or header is not equal *)
+          | SmtUnknown => false (* if it is unknown, we assume it is not equal *)
+          end
+        else
+          false
+      else
+        false
+  end.
+
 Lemma uint8_neq_from_unsigned : forall (v1 v2 : uint8),
   unsigned v1 <> unsigned v2 -> v1 <> v2.
 Proof.
@@ -393,6 +412,8 @@ Proof.
 Qed.
 
 (* Soundness lemma about equivalence_checker conditional on the axioms above *)
+(* TODO: Joe said both equivalence checker lemmas should be named soundness lemmas,
+         rather than completness. Resolve this item.*)
 Lemma equivalence_checker_sound :
   forall s t1 t2 header_list state_var_list f,
   (forall v, In v header_list -> is_header_in_ps s v <> None) ->
