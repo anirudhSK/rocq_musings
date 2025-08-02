@@ -371,6 +371,14 @@ Proof.
   reflexivity.
 Qed.
 
+Definition get_all_headers {T : Type} (s: ProgramState T) : list Header :=
+  List.map (fun '(key, value) => HeaderCtr key)
+           (PTree.elements (snd (header_map s))).
+
+Definition get_all_state_vars {T : Type} (s: ProgramState T) : list StateVar :=
+  List.map (fun '(key, value) => StateVarCtr key)
+           (PTree.elements (snd (state_var_map s))).
+
 (* Mark definitions globally opaque below *)
 Global Opaque lookup_ctrl.
 Global Opaque update_hdr_map.
@@ -390,3 +398,5 @@ Global Opaque CtrlPlaneConfigNameMap.
 Global Opaque new_pmap_from_old.
 Global Opaque is_header_in_ps.
 Global Opaque is_state_var_in_ps.
+Global Opaque get_all_headers.
+Global Opaque get_all_state_vars.
