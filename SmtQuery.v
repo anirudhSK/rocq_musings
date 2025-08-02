@@ -412,6 +412,8 @@ Proof.
 Qed.
 
 (* Soundness lemma about equivalence_checker conditional on the axioms above *)
+(* TODO: Joe said both equivalence checker lemmas should be named soundness lemmas,
+         rather than completness. Resolve this item.*)
 Lemma equivalence_checker_sound :
   forall s t1 t2 header_list state_var_list f,
   (forall v, In v header_list -> is_header_in_ps s v <> None) ->
