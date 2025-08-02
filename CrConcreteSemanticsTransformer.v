@@ -1,5 +1,6 @@
 (* Provide semantics for a Transformer by providing an evaluation function *)
 From MyProject Require Export CrTransformer.
+From MyProject Require Export CrDsl.
 Require Import List.
 Import ListNotations.
 Require Import Strings.String.
@@ -112,3 +113,10 @@ Definition eval_transformer_uint8 (t : Transformer) (ps : ProgramState uint8) : 
         | None => ps  (* no match, return unchanged state *)
         | Some (rule) => eval_match_action_rule_uint8 rule ps (* evaluate the rule and update state accordingly *)
       end.
+
+(* Function to evaluate a Caracara program *)
+Definition eval_cr_program_uint8 (p : CaracaraProgram) (ps : ProgramState uint8) : (ProgramState uint8) :=
+  match p with
+  | CaracaraProgramDef _ _ _ t => eval_transformer_uint8 t ps
+  (* TODO: Maybe do something with the various lists of headers, states, and ctrls *)
+  end.

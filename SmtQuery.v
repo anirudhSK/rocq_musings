@@ -551,4 +551,32 @@ Proof.
   - discriminate H.
 Qed.
 
+(* old lemma for reference
+Lemma equivalence_checker_sound :
+  forall s t1 t2 header_list state_var_list f,
+  (forall v, In v header_list -> is_header_in_ps s v <> None) ->
+  (forall v, In v state_var_list -> is_state_var_in_ps s v <> None) ->
+  equivalence_checker s t1 t2 header_list state_var_list = SmtUnsat ->
+  let c  := eval_sym_state s f in
+  let c1 := eval_transformer_uint8 t1 c in
+  let c2 := eval_transformer_uint8 t2 c in
+  (forall v, In v header_list ->
+  (lookup_hdr c1 v) = (lookup_hdr c2 v)) /\
+  (forall v, In v state_var_list ->
+  (lookup_state c1 v) = (lookup_state c2 v)).
+*)
+
+(* Soundness lemma for equivalence_checker_cr_dsl *)
+Lemma equivalence_checker_cr_sound :
+  forall s p1 p2 f,
+  equivalence_checker_cr_dsl s p1 p2 = true ->
+  let c  := eval_sym_state s f in
+  let c1 := eval_cr_program_uint8 p1 c in 
+  let c2 := eval_cr_program_uint8 p2 c in
+  (forall v, In v (get_all_headers c1) -> (* every header in c1 *)
+  (In v (get_all_headers c2)) /\                (* must be in c2 *)
+  (lookup_hdr c1 v) = (lookup_hdr c2 v)).     (* and their values must be equal *)
+Admitted.
+  (* TODO: and similar for state *)
+
 Print Assumptions equivalence_checker_complete.
