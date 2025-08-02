@@ -59,3 +59,12 @@ Definition ctrl_plane_config_name_equal (cc1 cc2 : CtrlPlaneConfigName) :=
     match cc1, cc2 with
             | CtrlPlaneConfigNameCtr xid, CtrlPlaneConfigNameCtr yid => Pos.eqb xid yid
     end.
+
+Definition hdr_list_equal (h1 : list Header) (h2 : list Header) :=
+  andb (List.forallb (fun '(x, y) => header_equal x y) (List.combine h1 h2)) (* every pair has equal elements *)
+       (Nat.eqb (List.length h1) (List.length h2)).                          (* both lists have same number of elements *)
+
+(* Generate same definitions as above but for state variables *)
+Definition state_list_equal (s1 : list StateVar) (s2 : list StateVar) :=
+  andb (List.forallb (fun '(x, y) => state_var_equal x y) (List.combine s1 s2))
+       (Nat.eqb (List.length s1) (List.length s2)).

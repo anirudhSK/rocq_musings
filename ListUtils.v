@@ -21,7 +21,6 @@ Fixpoint has_duplicates {T : Type} (eqb : T -> T -> bool) (l : list T) : bool :=
     | [] => false
     end.
 
-
 (* Function to find first match given:
    a list of pair,
    each pair consists of a bool that says if there was a match or not and the element itself *)

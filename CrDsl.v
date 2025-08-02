@@ -13,7 +13,7 @@ Require Import Coq.Bool.Bool.
 Require Import ZArith.
 
 (* A Module has a module name and either a parser or transformer definition *)
-Inductive Module : Type := 
+Inductive CrModule : Type := 
   | ParserModule (m : ModuleName) (p : Parser)
   | TransformerModule (m : ModuleName) (t : Transformer).
 
@@ -24,70 +24,50 @@ Inductive Connection : Type :=
 
 Inductive CaracaraProgram : Type := 
   | CaracaraProgramDef : 
-      list ParserState -> 
       list Header -> 
       list StateVar -> 
-      list ModuleName -> 
-      list FunctionName -> 
-      list ConnectionName -> 
       list CtrlPlaneConfigName -> 
-      list Module -> 
-      list Connection -> 
+      Transformer -> (* TODO: Currently just a single transformer *)
+                     (* TODO: Generalize to list of transformers with
+                              connections between them specified by a list of type (list Connection) *)
       CaracaraProgram.
 
 Definition check_for_duplicate_identifiers (program : CaracaraProgram) : bool :=
   match program with
-  | CaracaraProgramDef p h s m f c cc _ _ =>
-      has_duplicates parser_state_equal p ||
+  | CaracaraProgramDef h s c _ =>
       has_duplicates header_equal h ||
       has_duplicates state_var_equal s ||
-      has_duplicates module_name_equal m ||
-      has_duplicates function_name_equal f ||
-      has_duplicates connection_name_equal c ||
-      has_duplicates ctrl_plane_config_name_equal cc
+      has_duplicates ctrl_plane_config_name_equal c
   end.
 
-  (* No duplicates in Caracara Program *)
-  Definition CaracaraNoDup (p : CaracaraProgram) : Prop :=
+(* No duplicates in Caracara Program *)
+Definition CaracaraNoDup (p : CaracaraProgram) : Prop :=
   match p with
-  | CaracaraProgramDef ps hs svs mns fns cns cpns _ _  =>
-      NoDup ps /\ NoDup hs /\ NoDup svs /\ NoDup mns /\
-      NoDup fns /\ NoDup cns /\ NoDup cpns
+  | CaracaraProgramDef h s c _ =>
+      NoDup h /\ NoDup s /\ NoDup c
   end.
 
-  (* Check if any of the identifier lists in the CR program has duplicates.
-     Use the check_for_duplicate_identifiers function above.
-     If it returns false, it implies there are no duplicates. *)
+(* Check if any of the identifier lists in the CR program has duplicates.
+   Use the check_for_duplicate_identifiers function above.
+   If it returns false, it implies there are no duplicates. *)
 Lemma check_for_duplicates_in_cr_program :
     forall (p : CaracaraProgram),
       check_for_duplicate_identifiers (p) = false ->
-        CaracaraNoDup p.
+      CaracaraNoDup p.
 Proof.
     intros p.
     intros H.
     destruct p.
     unfold CaracaraNoDup.
     simpl in H.
-    apply orb_false_iff in H as [H' H7].
-    apply orb_false_iff in H' as [H'' H6].
-    apply orb_false_iff in H'' as [H''' H5].
-    apply orb_false_iff in H''' as [H'''' H4].
-    apply orb_false_iff in H'''' as [H''''' H3].
-    apply orb_false_iff in H''''' as [H1 H2].
-    (* Now H'''''' is the first, H2 is the second, ..., H7 is the last *)
+    apply orb_false_iff in H as [H' H3].
+    apply orb_false_iff in H' as [H'' H2].
+    (* Now H'' is the first, H2 is the second, H3 is the last *)
     repeat split.
-    - apply has_duplicates_correct with (eqb := parser_state_equal);
-      intros; try destruct a; try destruct b; simpl; try apply Pos.eqb_refl; try apply Pos.eqb_sym; try apply H1.
     - apply has_duplicates_correct with (eqb := header_equal);
-      intros; try destruct a; try destruct b; simpl; try apply Pos.eqb_refl; try apply Pos.eqb_sym; try apply H2.
+      intros; try destruct a; try destruct b; simpl; try apply Pos.eqb_refl; try apply Pos.eqb_sym; try apply H''.
     - apply has_duplicates_correct with (eqb := state_var_equal);
-      intros; try destruct a; try destruct b; simpl; try apply Pos.eqb_refl; try apply Pos.eqb_sym; try apply H3.
-    - apply has_duplicates_correct with (eqb := module_name_equal);
-      intros; try destruct a; try destruct b; simpl; try apply Pos.eqb_refl; try apply Pos.eqb_sym; try apply H4.
-    - apply has_duplicates_correct with (eqb := function_name_equal);
-      intros; try destruct a; try destruct b; simpl; try apply Pos.eqb_refl; try apply Pos.eqb_sym; try apply H5.
-    - apply has_duplicates_correct with (eqb := connection_name_equal);
-      intros; try destruct a; try destruct b; simpl; try apply Pos.eqb_refl; try apply Pos.eqb_sym; try apply H6.
+      intros; try destruct a; try destruct b; simpl; try apply Pos.eqb_refl; try apply Pos.eqb_sym; try apply H2.
     - apply has_duplicates_correct with (eqb := ctrl_plane_config_name_equal);
-      intros; try destruct a; try destruct b; simpl; try apply Pos.eqb_refl; try apply Pos.eqb_sym; try apply H7.
+      intros; try destruct a; try destruct b; simpl; try apply Pos.eqb_refl; try apply Pos.eqb_sym; try apply H3.
 Qed.
