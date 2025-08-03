@@ -383,6 +383,38 @@ Definition get_all_state_vars_from_ps {T : Type} (s: ProgramState T) : list Stat
   List.map (fun '(key, value) => StateVarCtr key)
            (PTree.elements (snd (state_var_map s))).
 
+Definition init_concrete_state (c : list CtrlPlaneConfigName) (h : list Header) (s: list StateVar) :
+  ConcreteState :=
+  {| ctrl_plane_map :=  (Uninitialized uint8,
+                        PTree_Properties.of_list
+                        (List.map (fun x => (match x with | CtrlPlaneConfigNameCtr x_id => x_id end, Uninitialized uint8)) c));
+     header_map     :=  (Uninitialized uint8,
+                        PTree_Properties.of_list
+                        (List.map (fun x => (match x with | HeaderCtr x_id => x_id end, Uninitialized uint8)) h));
+     state_var_map  :=  (Uninitialized uint8,
+                        PTree_Properties.of_list
+                        (List.map (fun x => (match x with | StateVarCtr x_id => x_id end, Uninitialized uint8)) s));|}.
+
+(* Convert positive to string *)
+Fixpoint pos_to_string (p : positive) : string :=
+  match p with
+  | xH => "1"
+  | xO p' => String.append (pos_to_string p') "0"
+  | xI p' => String.append (pos_to_string p') "1"
+  end.
+
+Definition init_symbolic_state (c : list CtrlPlaneConfigName) (h : list Header) (s: list StateVar) :
+  SymbolicState :=
+  {| ctrl_plane_map :=  (SmtArithVar "rndstring", (*TODO: Need better default, but think this doesn't matter *)
+                        PTree_Properties.of_list
+                        (List.map (fun x => let var := match x with | CtrlPlaneConfigNameCtr x_id => x_id end in (var,  SmtArithVar (pos_to_string var))) c));
+     header_map     :=  (SmtArithVar "rndstring", (*TODO: Need better default, but think this doesn't matter *)
+                        PTree_Properties.of_list
+                        (List.map (fun x => let var := match x with | HeaderCtr x_id => x_id end in (var, SmtArithVar (pos_to_string var))) h));
+     state_var_map  :=  (SmtArithVar "rndstring", (*TODO: Need better default, but think this doesn't matter *)
+                        PTree_Properties.of_list
+                        (List.map (fun x => let var := match x with | StateVarCtr x_id => x_id end in (var, SmtArithVar (pos_to_string var))) s));|}.
+
 (* Mark definitions globally opaque below *)
 Global Opaque lookup_ctrl.
 Global Opaque update_hdr_map.
