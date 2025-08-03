@@ -14,6 +14,10 @@ Inductive FunctionName : Type := FunctionNameCtr (uid : positive).
 Inductive ConnectionName : Type := ConnectionNameCtr (uid : positive).
 Inductive CtrlPlaneConfigName : Type := CtrlPlaneConfigNameCtr (uid : positive).
 
+Inductive InitStatus (A: Type) : Type :=
+  | Uninitialized : InitStatus A
+  | Initialized : A -> InitStatus A.
+
 (* Equality check functions for the identifiers above *)
 Definition parser_state_equal (p1 p2 : ParserState) :=
     match p1, p2 with

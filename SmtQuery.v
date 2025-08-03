@@ -37,7 +37,7 @@ Axiom smt_query_sound_none : forall e,
 (* Need to look at all variables within s1 and s2,
    which means we need to iterate through header_list and state_var_list *)
 (* function that given 2 states and a list of headers and state vars, asserts that each header/state var is the same across the two states *)
-Definition check_headers_and_state_vars (s1 s2 : ProgramState SmtArithExpr)
+Definition check_headers_and_state_vars (s1 s2 : SymbolicState)
   (header_list : list Header) (state_var_list : list StateVar)
   : SmtBoolExpr :=
   SmtBoolNot(
@@ -273,7 +273,7 @@ Proof.
 Qed.
 
 Definition equivalence_checker
-  (s : ProgramState SmtArithExpr)
+  (s : SymbolicState)
   (t1 : Transformer) (t2 : Transformer)
   (header_list : list Header) (state_var_list : list StateVar)
    :  SmtResult :=
@@ -293,7 +293,7 @@ Proof.
   apply mkint_eq; auto.
 Qed.
 
-Definition equivalence_checker_cr_dsl (s : ProgramState SmtArithExpr) (p1: CaracaraProgram) (p2: CaracaraProgram)
+Definition equivalence_checker_cr_dsl (s : SymbolicState) (p1: CaracaraProgram) (p2: CaracaraProgram)
   : bool := 
   (* assume a starting symbolic state s *)
   (* convert p1 and p2 to an equivalent final SmtArithExpr, assuming a start state of s *)
@@ -573,8 +573,8 @@ Lemma equivalence_checker_cr_sound :
   let c  := eval_sym_state s f in
   let c1 := eval_cr_program_uint8 p1 c in 
   let c2 := eval_cr_program_uint8 p2 c in
-  (forall v, In v (get_all_headers c1) -> (* every header in c1 *)
-  (In v (get_all_headers c2)) /\                (* must be in c2 *)
+  (forall v, In v (get_all_headers_from_ps c1) -> (* every header in c1 *)
+  (In v (get_all_headers_from_ps c2)) /\                (* must be in c2 *)
   (lookup_hdr c1 v) = (lookup_hdr c2 v)).     (* and their values must be equal *)
 Admitted.
   (* TODO: and similar for state *)

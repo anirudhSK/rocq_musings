@@ -20,7 +20,7 @@ Definition apply_bin_op (f : BinaryOp) (arg1 : uint8) (arg2 : uint8) : uint8 :=
   | ModOp => Integers.modu arg1 arg2
   end.
 
-Definition lookup_uint8 (arg : FunctionArgument) (ps : ProgramState uint8) : uint8 :=
+Definition lookup_uint8 (arg : FunctionArgument) (ps : ConcreteState) : uint8 :=
   match arg with
   | CtrlPlaneArg c => lookup_ctrl ps c
   | HeaderArg h    => lookup_hdr ps h
@@ -28,13 +28,13 @@ Definition lookup_uint8 (arg : FunctionArgument) (ps : ProgramState uint8) : uin
   | StatefulArg s  => lookup_state ps s
   end.
 
-Definition eval_hdr_op_expr_uint8 (op : HdrOp) (ps : ProgramState uint8) : uint8 :=
+Definition eval_hdr_op_expr_uint8 (op : HdrOp) (ps : ConcreteState) : uint8 :=
   match op with
   | StatefulOp f arg1 arg2 _ => apply_bin_op f (lookup_uint8 arg1 ps) (lookup_uint8 arg2 ps)
   | StatelessOp f arg1 arg2 _ => apply_bin_op f (lookup_uint8 arg1 ps) (lookup_uint8 arg2 ps)
   end.
 
-Definition eval_hdr_op_assign_uint8 (op : HdrOp) (ps: ProgramState uint8) : ProgramState uint8 :=
+Definition eval_hdr_op_assign_uint8 (op : HdrOp) (ps: ConcreteState) : ConcreteState :=
   match op with
   | StatefulOp f arg1 arg2 target =>
         let op_output := eval_hdr_op_expr_uint8 op ps in update_state ps target op_output
@@ -42,21 +42,21 @@ Definition eval_hdr_op_assign_uint8 (op : HdrOp) (ps: ProgramState uint8) : Prog
         let op_output := eval_hdr_op_expr_uint8 op ps in update_hdr ps target op_output
   end.
 
-Definition eval_match_uint8 (match_pattern : MatchPattern) (ps : ProgramState uint8) : bool :=
+Definition eval_match_uint8 (match_pattern : MatchPattern) (ps : ConcreteState) : bool :=
   (* For every list element, check if the Header's current value (determined by ps) equals the uint8 *)
   List.forallb (fun '(h, v) => eq (lookup_hdr ps h) v) match_pattern.
 
 (* Define evaluation over a list of HdrOp *)
 (* Note we are evaluating the list from right to left (fold_right) because it simplifies proving. *)
-Definition eval_hdr_op_list_uint8 (hol : list HdrOp) (ps : ProgramState uint8) : ProgramState uint8 :=
+Definition eval_hdr_op_list_uint8 (hol : list HdrOp) (ps : ConcreteState) : ConcreteState :=
   List.fold_right (fun op acc => eval_hdr_op_assign_uint8 op acc) ps hol.
 
 (* Evalaute a single HdrOp conditionally based on a match_pattern *)
 Definition eval_hdr_op_assign_uint8_conditional
   (match_pattern : MatchPattern)
   (ho : HdrOp)
-  (ps : ProgramState uint8)
-  : ProgramState uint8 :=
+  (ps : ConcreteState)
+  : ConcreteState :=
   if eval_match_uint8 match_pattern ps then
     eval_hdr_op_assign_uint8 ho ps
   else
@@ -64,7 +64,7 @@ Definition eval_hdr_op_assign_uint8_conditional
  
 (* Function to evaluate a sequential match-action rule,
    meaning header ops within an action are evaluated sequentially *)
-Definition eval_seq_rule_uint8 (srule : SeqRule) (ps : ProgramState uint8) : (ProgramState uint8) :=
+Definition eval_seq_rule_uint8 (srule : SeqRule) (ps : ConcreteState) : (ConcreteState) :=
   match srule with
   | SeqCtr match_pattern action =>
       if (eval_match_uint8 match_pattern ps) then
@@ -78,7 +78,7 @@ Definition eval_seq_rule_uint8 (srule : SeqRule) (ps : ProgramState uint8) : (Pr
 (* This is identical to eval_seq_rule,
    except that the action is a list with some conditions: the targets are all unique
    these conditions are realized using subset types, that's why we need proj1_sig *)
-Definition eval_par_rule_uint8 (prule : ParRule) (ps : ProgramState uint8) : (ProgramState uint8) :=
+Definition eval_par_rule_uint8 (prule : ParRule) (ps : ConcreteState) : (ConcreteState) :=
   match prule with
   | ParCtr match_pattern action =>
       if (eval_match_uint8 match_pattern ps) then
@@ -90,14 +90,14 @@ Definition eval_par_rule_uint8 (prule : ParRule) (ps : ProgramState uint8) : (Pr
 (* Function to evaluate a match-action rule,
    meaning header ops within an action are evaluated
    according to the type of the rule (sequential or parallel) *)
-Definition eval_match_action_rule_uint8 (rule : MatchActionRule) (ps : ProgramState uint8) : (ProgramState uint8) :=
+Definition eval_match_action_rule_uint8 (rule : MatchActionRule) (ps : ConcreteState) : (ConcreteState) :=
   match rule with 
   | Seq srule => eval_seq_rule_uint8 srule ps
   | Par prule => eval_par_rule_uint8 prule ps
   end.
 
 (* lookup header against each of the match-action rules in t to see if there is a match *)
-Definition get_match_results (t : Transformer) (ps : ProgramState uint8) : list bool :=
+Definition get_match_results (t : Transformer) (ps : ConcreteState) : list bool :=
   List.map (fun rule =>
                      match rule with 
                        | Seq (SeqCtr match_pattern _) => eval_match_uint8 match_pattern ps
@@ -105,7 +105,7 @@ Definition get_match_results (t : Transformer) (ps : ProgramState uint8) : list 
                      end) t.
 
 (* Function to evaluate a transformer, which is a list of match-action rules *)
-Definition eval_transformer_uint8 (t : Transformer) (ps : ProgramState uint8) : (ProgramState uint8) :=
+Definition eval_transformer_uint8 (t : Transformer) (ps : ConcreteState) : (ConcreteState) :=
     (* Combine match results with the rules to find the first matching rule *)
     let rules_with_match_results := List.combine (get_match_results t ps) t in
     let first_match := find_first_match rules_with_match_results in (* find_first_match is in ListUtils *)
@@ -115,7 +115,7 @@ Definition eval_transformer_uint8 (t : Transformer) (ps : ProgramState uint8) : 
       end.
 
 (* Function to evaluate a Caracara program *)
-Definition eval_cr_program_uint8 (p : CaracaraProgram) (ps : ProgramState uint8) : (ProgramState uint8) :=
+Definition eval_cr_program_uint8 (p : CaracaraProgram) (ps : ConcreteState) : (ConcreteState) :=
   match p with
   | CaracaraProgramDef _ _ _ t => eval_transformer_uint8 t ps
   (* TODO: Maybe do something with the various lists of headers, states, and ctrls *)

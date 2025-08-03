@@ -1,5 +1,6 @@
 From MyProject Require Import CrTransformer.
 From MyProject Require Import CrIdentifiers.
+From MyProject Require Import CrProgramState.
 From MyProject Require Import SmtExpr.
 Require Import ZArith.
 Require Import Coq.Strings.String.
@@ -8,7 +9,7 @@ Require Import Coq.Lists.List.
 Import ListNotations.
 
 (* Convert FunctionArgument to SmtArithExpr *)
-Definition lookup_smt (arg : FunctionArgument) (ps : ProgramState SmtArithExpr) : SmtArithExpr :=
+Definition lookup_smt (arg : FunctionArgument) (ps : SymbolicState) : SmtArithExpr :=
   match arg with
   | CtrlPlaneArg c => lookup_ctrl ps c
   | HeaderArg h    => lookup_hdr ps h
@@ -17,7 +18,7 @@ Definition lookup_smt (arg : FunctionArgument) (ps : ProgramState SmtArithExpr) 
   end.
 
 (* Define the symbolic interpreter for header operation expressions *)
-Definition eval_hdr_op_expr_smt (h : HdrOp) (ps : ProgramState SmtArithExpr) : SmtArithExpr :=
+Definition eval_hdr_op_expr_smt (h : HdrOp) (ps : SymbolicState) : SmtArithExpr :=
     match h with
     | StatefulOp f arg1 arg2 _ =>
        match f with 
@@ -43,7 +44,12 @@ Definition eval_hdr_op_expr_smt (h : HdrOp) (ps : ProgramState SmtArithExpr) : S
        end
     end.
 
-Definition eval_hdr_op_assign_smt (ho : HdrOp) (ps: ProgramState SmtArithExpr) : ProgramState SmtArithExpr :=
+(* Apply SmtValuation f to every entry in the symbolic state across all 3 maps *)
+Definition eval_sym_state (s: SymbolicState) (f : SmtValuation) : ConcreteState :=
+   let sym_eval := fun e => eval_smt_arith e f in
+   program_state_mapper sym_eval sym_eval sym_eval s.
+
+Definition eval_hdr_op_assign_smt (ho : HdrOp) (ps: SymbolicState) : SymbolicState :=
     match ho with
     | StatefulOp f arg1 arg2 target =>
         let op_output := eval_hdr_op_expr_smt ho ps in update_state ps target op_output
@@ -53,10 +59,10 @@ Definition eval_hdr_op_assign_smt (ho : HdrOp) (ps: ProgramState SmtArithExpr) :
 
 (* Define evaluation over a list of HdrOp *)
 (* Note we are evaluating the list from right to left (fold_right) because it simplifies proving. *)
-Definition eval_hdr_op_list_smt (hol : list HdrOp) (ps : ProgramState SmtArithExpr) : ProgramState SmtArithExpr :=
+Definition eval_hdr_op_list_smt (hol : list HdrOp) (ps : SymbolicState) : SymbolicState :=
   List.fold_right (fun op acc => eval_hdr_op_assign_smt op acc) ps hol.
 
-Definition eval_match_smt (match_pattern : MatchPattern) (ps : ProgramState SmtArithExpr) : SmtBoolExpr :=
+Definition eval_match_smt (match_pattern : MatchPattern) (ps : SymbolicState) : SmtBoolExpr :=
   (* For every list element, check if the Header's current value (determined by ps) equals the uint8 *)
   (* Note that because SmtBoolAnd is associative and commutative, both fold_left and fold_right give the same answer. *)
   List.fold_right (fun '(h, v) acc =>
@@ -68,8 +74,8 @@ Definition eval_match_smt (match_pattern : MatchPattern) (ps : ProgramState SmtA
 (* Maybe there's an intermediate function that evaluates a *single* HdrOp conditionally? *)
 Definition eval_hdr_op_assign_smt_conditional
   (match_condition : MatchPattern)
-  (ho : HdrOp) (ps: ProgramState SmtArithExpr) 
-  : ProgramState SmtArithExpr :=
+  (ho : HdrOp) (ps: SymbolicState) 
+  : SymbolicState :=
   let condition := eval_match_smt match_condition ps in
     match ho with
     | StatefulOp _ _ _ target =>
@@ -84,7 +90,7 @@ Definition eval_hdr_op_assign_smt_conditional
 
 (* Function to evaluate a sequential match-action rule,
    meaning header ops within an action are evaluated sequentially *)
-Definition eval_seq_rule_smt (srule : SeqRule) (ps : ProgramState SmtArithExpr) : (ProgramState SmtArithExpr) :=
+Definition eval_seq_rule_smt (srule : SeqRule) (ps : SymbolicState) : (SymbolicState) :=
   match srule with
   | SeqCtr match_pattern action =>
         (* First evaluate the match pattern by itself against the original state ps *)
@@ -106,7 +112,7 @@ Definition eval_seq_rule_smt (srule : SeqRule) (ps : ProgramState SmtArithExpr) 
    meaning header ops within an action are evaluated in parallel.
    This is identical to eval_seq_rule, except that the action is a list with some conditions: the targets are all unique
    these conditions are realized using subset types, that's why we need proj1_sig *)
-Definition eval_par_rule_smt (prule : ParRule) (ps : ProgramState SmtArithExpr) : (ProgramState SmtArithExpr) :=
+Definition eval_par_rule_smt (prule : ParRule) (ps : SymbolicState) : (SymbolicState) :=
   match prule with
   | ParCtr match_pattern action =>
         (* First evaluate the match pattern by itself against the original state ps *)
@@ -124,7 +130,7 @@ Definition eval_par_rule_smt (prule : ParRule) (ps : ProgramState SmtArithExpr) 
             (fun s => SmtConditional condition (lookup_state ps' s) (lookup_state ps s))
   end.
 
-Definition eval_match_action_rule_smt (rule : MatchActionRule) (ps : ProgramState SmtArithExpr) : (ProgramState SmtArithExpr) :=
+Definition eval_match_action_rule_smt (rule : MatchActionRule) (ps : SymbolicState) : (SymbolicState) :=
   match rule with
   | Seq srule => eval_seq_rule_smt srule ps
   | Par prule => eval_par_rule_smt prule ps
@@ -138,14 +144,14 @@ Fixpoint switch_case_expr (cases : list (SmtBoolExpr * SmtArithExpr)) (default_c
   end.
 
 (* Compute match results for each match pattern (one embedded in each rule) *)
-Definition get_match_results_smt (t : Transformer) (ps : ProgramState SmtArithExpr) : list SmtBoolExpr :=
+Definition get_match_results_smt (t : Transformer) (ps : SymbolicState) : list SmtBoolExpr :=
   List.map (fun rule =>
                        match rule with 
                         | Seq (SeqCtr match_pattern _) => eval_match_smt match_pattern ps
                         | Par (ParCtr match_pattern _) => eval_match_smt match_pattern ps
                        end) t.
 
-Definition eval_transformer_smt (t : Transformer) (ps : ProgramState SmtArithExpr) : ProgramState SmtArithExpr :=
+Definition eval_transformer_smt (t : Transformer) (ps : SymbolicState) : SymbolicState :=
   (* get all future program states, one for each rule *)
   let program_states := List.map (fun rule => eval_match_action_rule_smt rule ps) t in
   (* map a header to all possible future exprs, one for each future state *)

@@ -9,7 +9,7 @@ Require Import Coq.Lists.List.
 (* Effectively, ctrl plane doesn't change *)
 Lemma ctrl_plane_invariant_hdr_op:
   forall (ho: HdrOp)
-         (c1: ProgramState uint8),
+         (c1: ConcreteState),
   ctrl_plane_map (eval_hdr_op_assign_uint8 ho c1) =
   ctrl_plane_map c1.
 Proof.

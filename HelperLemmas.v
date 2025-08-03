@@ -11,7 +11,7 @@ From MyProject Require Import PMapHelperLemmas.
 From MyProject Require Import CrProgramState.
 
 Lemma commute_lookup_eval_state:
-  forall (s : ProgramState SmtArithExpr) (f : SmtValuation)
+  forall (s : SymbolicState) (f : SmtValuation)
         sv,
     lookup_state (eval_sym_state s f) sv =
     eval_smt_arith (lookup_state s sv) f.
@@ -24,7 +24,7 @@ Proof.
 Qed.
 
 Lemma commute_lookup_eval_hdr:
-  forall (s : ProgramState SmtArithExpr) (f : SmtValuation)
+  forall (s : SymbolicState) (f : SmtValuation)
         hv,
     lookup_hdr (eval_sym_state s f) hv =
     eval_smt_arith (lookup_hdr s hv) f.
@@ -37,7 +37,7 @@ Proof.
 Qed.
 
 Lemma commute_lookup_eval:
-  forall (s : ProgramState SmtArithExpr) (f : SmtValuation)
+  forall (s : SymbolicState) (f : SmtValuation)
         arg,
     lookup_uint8 arg (eval_sym_state s f) =
     eval_smt_arith (lookup_smt arg s) f.

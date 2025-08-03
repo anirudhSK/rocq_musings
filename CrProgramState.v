@@ -1,4 +1,5 @@
 From MyProject Require Export CrIdentifiers.
+From MyProject Require Export SmtExpr.
 From MyProject Require Export Maps.
 Require Import Strings.String.
 Require Import ZArith.
@@ -23,6 +24,9 @@ Arguments header_map {T} _.
 Arguments state_var_map {T} _.  
 Arguments ctrl_plane_map {T} _.
 
+Definition ConcreteState := ProgramState uint8.
+Definition SymbolicState := ProgramState SmtArithExpr.
+
 (* TODO: lookup_hdr/state_map could be rolled into lookup_hdr/state. *)
 (* TODO: It is used in a proof with a giant remember expression. *)
 Definition lookup_hdr_map {T : Type} (m: HeaderMap T) (x: Header) : T :=
@@ -41,7 +45,7 @@ Definition lookup_ctrl {T : Type} (s: ProgramState T) (x: CtrlPlaneConfigName) :
   PMap.get (match x with | CtrlPlaneConfigNameCtr id => id end) (ctrl_plane_map s).
 
 Lemma program_state_equality:
-      forall (ps1 ps2: ProgramState uint8),
+      forall (ps1 ps2: ConcreteState),
         ctrl_plane_map ps1 = ctrl_plane_map ps2 ->
         header_map ps1 = header_map ps2 ->
         state_var_map  ps1 = state_var_map ps2 ->
@@ -371,11 +375,11 @@ Proof.
   reflexivity.
 Qed.
 
-Definition get_all_headers {T : Type} (s: ProgramState T) : list Header :=
+Definition get_all_headers_from_ps {T : Type} (s: ProgramState T) : list Header :=
   List.map (fun '(key, value) => HeaderCtr key)
            (PTree.elements (snd (header_map s))).
 
-Definition get_all_state_vars {T : Type} (s: ProgramState T) : list StateVar :=
+Definition get_all_state_vars_from_ps {T : Type} (s: ProgramState T) : list StateVar :=
   List.map (fun '(key, value) => StateVarCtr key)
            (PTree.elements (snd (state_var_map s))).
 
@@ -398,5 +402,5 @@ Global Opaque CtrlPlaneConfigNameMap.
 Global Opaque new_pmap_from_old.
 Global Opaque is_header_in_ps.
 Global Opaque is_state_var_in_ps.
-Global Opaque get_all_headers.
-Global Opaque get_all_state_vars.
+Global Opaque get_all_headers_from_ps.
+Global Opaque get_all_state_vars_from_ps.
