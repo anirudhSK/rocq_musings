@@ -39,7 +39,7 @@ Qed.
 Lemma commute_lookup_eval:
   forall (s : SymbolicState) (f : SmtValuation)
         arg,
-    lookup_uint8 arg (eval_sym_state s f) =
+    lookup_concrete arg (eval_sym_state s f) =
     eval_smt_arith (lookup_smt arg s) f.
 Proof.
   intros s f arg.

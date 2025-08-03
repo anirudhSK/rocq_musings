@@ -10,7 +10,7 @@ Require Import Coq.Lists.List.
 Lemma ctrl_plane_invariant_hdr_op:
   forall (ho: HdrOp)
          (c1: ConcreteState),
-  ctrl_plane_map (eval_hdr_op_assign_uint8 ho c1) =
+  ctrl_plane_map (eval_hdr_op_assign_concrete ho c1) =
   ctrl_plane_map c1.
 Proof.
   intros ho c1.
@@ -20,7 +20,7 @@ Qed.
 (* Effectively, ctrl plane doesn't change *)
 Lemma ctrl_plane_invariant_hdr_op_list:
   forall hol c1,
-  ctrl_plane_map (eval_hdr_op_list_uint8 hol c1) =
+  ctrl_plane_map (eval_hdr_op_list_concrete hol c1) =
   ctrl_plane_map c1.
 Proof.
   intros.
@@ -33,37 +33,37 @@ Qed.
 
 Lemma ctrl_plane_invariant_seq_rule:
   forall s c,
-    ctrl_plane_map (eval_seq_rule_uint8 s c) =
+    ctrl_plane_map (eval_seq_rule_concrete s c) =
     ctrl_plane_map c.
 Proof.
   intros.
-  unfold eval_seq_rule_uint8.
+  unfold eval_seq_rule_concrete.
   destruct s.
-  destruct (eval_match_uint8 match_pattern c).
+  destruct (eval_match_concrete match_pattern c).
   apply ctrl_plane_invariant_hdr_op_list.
   reflexivity.
 Qed.
 
 Lemma ctrl_plane_invariant_par_rule:
   forall p c,
-    ctrl_plane_map (eval_par_rule_uint8 p c) =
+    ctrl_plane_map (eval_par_rule_concrete p c) =
     ctrl_plane_map c.
 Proof.
   intros.
-  unfold eval_par_rule_uint8.
+  unfold eval_par_rule_concrete.
   destruct p.
-  destruct (eval_match_uint8 match_pattern c).
+  destruct (eval_match_concrete match_pattern c).
   apply ctrl_plane_invariant_hdr_op_list.
   reflexivity.
 Qed.
 
 Lemma ctrl_plane_invariant_ma_rule:
   forall m c,
-    ctrl_plane_map (eval_match_action_rule_uint8 m c) =
+    ctrl_plane_map (eval_match_action_rule_concrete m c) =
     ctrl_plane_map c.
 Proof.
   intros.
-  unfold eval_match_action_rule_uint8.
+  unfold eval_match_action_rule_concrete.
   destruct m.
   - apply ctrl_plane_invariant_seq_rule.
   - apply ctrl_plane_invariant_par_rule.
@@ -71,11 +71,11 @@ Qed.
 
 Lemma ctrl_plane_invariant_transformer_intermediate:
   forall a t c,
-    ctrl_plane_map (eval_transformer_uint8 (a :: t) c) =
-    ctrl_plane_map (eval_transformer_uint8 t c).
+    ctrl_plane_map (eval_transformer_concrete (a :: t) c) =
+    ctrl_plane_map (eval_transformer_concrete t c).
 Proof.
   intros.
-  unfold eval_transformer_uint8.
+  unfold eval_transformer_concrete.
   remember (a :: t) as full_list.
   remember (find_first_match (combine (get_match_results full_list c) full_list)) as outer_match.
   remember (find_first_match (combine (get_match_results t c) t)) as inner_match.
@@ -85,7 +85,7 @@ Qed.
 
 Lemma ctrl_plane_invariant_transformer:
   forall c t,
-    ctrl_plane_map (eval_transformer_uint8 t c) = ctrl_plane_map c.
+    ctrl_plane_map (eval_transformer_concrete t c) = ctrl_plane_map c.
 Proof.
   intros.
   induction t.

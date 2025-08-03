@@ -17,7 +17,7 @@ From MyProject Require Import CrProgramState.
 (* Simpler lemma with no state update *)
 Lemma commute_sym_conc_expr:
   forall (ho: HdrOp) (s : SymbolicState) (f : SmtValuation),
-    eval_hdr_op_expr_uint8 ho (eval_sym_state s f) =
+    eval_hdr_op_expr_concrete ho (eval_sym_state s f) =
     eval_smt_arith (eval_hdr_op_expr_smt ho s) f.
 Proof.
   intros ho s f.
@@ -56,11 +56,11 @@ Qed.
   evaluating and then concretizing *)
 Lemma commute_sym_conc_assign:
   forall (ho : HdrOp) (s : SymbolicState) (f : SmtValuation),
-     eval_hdr_op_assign_uint8 ho (eval_sym_state s f) =
+     eval_hdr_op_assign_concrete ho (eval_sym_state s f) =
       eval_sym_state (eval_hdr_op_assign_smt ho s) f.
 Proof.
   intros ho s f.
-  unfold eval_hdr_op_assign_uint8.
+  unfold eval_hdr_op_assign_concrete.
   unfold eval_hdr_op_assign_smt.
   rewrite commute_sym_conc_expr.
   destruct ho, f0, arg1, arg2, s; simpl; try rewrite commute_update_eval_state; simpl; try reflexivity;
@@ -72,7 +72,7 @@ Lemma commute_sym_vs_conc_hdr_op_list :
          (s1 : SymbolicState)
          (c1 : ConcreteState),
     c1 = eval_sym_state s1 f ->
-    eval_hdr_op_list_uint8 hol c1 = (* first concretize, and then interpret *) 
+    eval_hdr_op_list_concrete hol c1 = (* first concretize, and then interpret *) 
     eval_sym_state (eval_hdr_op_list_smt hol s1) f.    (* first interpret, and then concretize *)
 Proof.
   intros hol f s1 c1 Hc1.
@@ -90,7 +90,7 @@ Lemma commute_sym_vs_conc_match_cond :
          (s1 : SymbolicState)
          (c1 : ConcreteState),
     c1 = eval_sym_state s1 f ->
-    eval_match_uint8 [hv_pair] c1 = (* first concretize, and then interpret *)
+    eval_match_concrete [hv_pair] c1 = (* first concretize, and then interpret *)
     eval_smt_bool (eval_match_smt [hv_pair] s1) f. (* first interpret, and then concretize *)
 Proof.
   intros hv_pair f s1 c1 Hc1.
@@ -117,14 +117,14 @@ Lemma commute_sym_vs_conc_match_pattern :
          (s1 : SymbolicState)
          (c1 : ConcreteState),
     c1 = eval_sym_state s1 f ->
-    eval_match_uint8 mp c1 = (* first concretize, and then interpret *)
+    eval_match_concrete mp c1 = (* first concretize, and then interpret *)
     eval_smt_bool (eval_match_smt mp s1) f. (* first interpret , and then concretize *)
 Proof.
   intros mp f s1 c1 Hc1.
   induction mp as [| hv_pair rest IHrest].
   - simpl. reflexivity.
-  - assert (H1 : eval_match_uint8 (hv_pair :: rest) c1 =
-                 eval_match_uint8 [hv_pair] c1 && eval_match_uint8 rest c1).
+  - assert (H1 : eval_match_concrete (hv_pair :: rest) c1 =
+                 eval_match_concrete [hv_pair] c1 && eval_match_concrete rest c1).
     { simpl. rewrite andb_true_r. reflexivity. } 
     rewrite H1.
     assert (H3 : eval_smt_bool (SmtBoolAnd (eval_match_smt [hv_pair] s1) (eval_match_smt rest s1)) f
@@ -145,8 +145,8 @@ Lemma commute_sym_vs_conc_helper_seq_par_rule_hdr :
   forall (mp: MatchPattern) (hol: list HdrOp) (f : SmtValuation)
          (s1 : SymbolicState) (h : Header),
          is_header_in_ps s1 h <> None ->
-    lookup_hdr (if eval_match_uint8 mp (eval_sym_state s1 f)
-    then eval_hdr_op_list_uint8 hol (eval_sym_state s1 f)
+    lookup_hdr (if eval_match_concrete mp (eval_sym_state s1 f)
+    then eval_hdr_op_list_concrete hol (eval_sym_state s1 f)
     else eval_sym_state s1 f) h =
     lookup_hdr (eval_sym_state (update_all_states
                    (update_all_hdrs s1 (fun h => SmtConditional (eval_match_smt mp s1)
@@ -159,7 +159,7 @@ Proof.
   rewrite commute_mapper_lookup_hdr.
   rewrite <- commute_state_hdr_updates.
   rewrite lookup_hdr_after_update_all_hdrs.
-  -- destruct (eval_match_uint8 mp (eval_sym_state s1 f)) eqn:Hmatch.
+  -- destruct (eval_match_concrete mp (eval_sym_state s1 f)) eqn:Hmatch.
      + simpl.
        rewrite <- commute_sym_vs_conc_match_pattern with (c1 := eval_sym_state s1 f); auto.
        rewrite Hmatch.
@@ -178,8 +178,8 @@ Lemma commute_sym_vs_conc_helper_seq_par_rule_sv :
   forall (mp: MatchPattern) (hol: list HdrOp) (f : SmtValuation)
          (s1 : SymbolicState) (sv : StateVar),
          is_state_var_in_ps s1 sv <> None ->
-    lookup_state (if eval_match_uint8 mp (eval_sym_state s1 f)
-    then eval_hdr_op_list_uint8 hol (eval_sym_state s1 f)
+    lookup_state (if eval_match_concrete mp (eval_sym_state s1 f)
+    then eval_hdr_op_list_concrete hol (eval_sym_state s1 f)
     else eval_sym_state s1 f) sv =
     lookup_state (eval_sym_state (update_all_states
                    (update_all_hdrs s1 (fun h => SmtConditional (eval_match_smt mp s1)
@@ -191,7 +191,7 @@ Proof.
   unfold eval_sym_state at 4.
   rewrite commute_mapper_lookup_state.
   rewrite lookup_state_after_update_all_states.
-  -- destruct (eval_match_uint8 mp (eval_sym_state s1 f)) eqn:Hmatch.
+  -- destruct (eval_match_concrete mp (eval_sym_state s1 f)) eqn:Hmatch.
      + simpl.
        rewrite <- commute_sym_vs_conc_match_pattern with (c1 := eval_sym_state s1 f); auto.
        rewrite Hmatch.
@@ -210,12 +210,12 @@ Lemma commute_sym_vs_conc_seq_rule_hdr :
   forall (sr: SeqRule) (f : SmtValuation)
          (s1 : SymbolicState) (h : Header),
       is_header_in_ps s1 h <> None ->
-      lookup_hdr (eval_seq_rule_uint8 sr (eval_sym_state s1 f)) h = (* first concretize, and then interpret *)
+      lookup_hdr (eval_seq_rule_concrete sr (eval_sym_state s1 f)) h = (* first concretize, and then interpret *)
       lookup_hdr (eval_sym_state (eval_seq_rule_smt sr s1) f) h. (* first interpret, and then concretize *)
 Proof.
   intros sr f s1 h Hh.
   destruct sr as [mp hol].
-  unfold eval_seq_rule_uint8.
+  unfold eval_seq_rule_concrete.
   unfold eval_seq_rule_smt.
   apply commute_sym_vs_conc_helper_seq_par_rule_hdr. assumption.
 Qed.
@@ -224,12 +224,12 @@ Lemma commute_sym_vs_conc_par_rule_hdr :
   forall (pr: ParRule) (f : SmtValuation)
          (s1 : SymbolicState) (h : Header),
     is_header_in_ps s1 h <> None ->
-    lookup_hdr (eval_par_rule_uint8 pr (eval_sym_state s1 f)) h = (* first concretize, and then interpret *)
+    lookup_hdr (eval_par_rule_concrete pr (eval_sym_state s1 f)) h = (* first concretize, and then interpret *)
     lookup_hdr (eval_sym_state (eval_par_rule_smt pr s1) f) h. (* first interpret, and then concretize *)
 Proof.
   intros pr f s1 h Hh.
   destruct pr as [mp hol].
-  unfold eval_par_rule_uint8.
+  unfold eval_par_rule_concrete.
   unfold eval_par_rule_smt.
   apply commute_sym_vs_conc_helper_seq_par_rule_hdr. assumption.
 Qed.
@@ -239,12 +239,12 @@ Lemma commute_sym_vs_conc_seq_rule_sv :
   forall (sr: SeqRule) (f : SmtValuation)
          (s1 : SymbolicState) (sv : StateVar),
     is_state_var_in_ps s1 sv <> None ->
-    lookup_state (eval_seq_rule_uint8 sr (eval_sym_state s1 f)) sv = (* first concretize, and then interpret *)
+    lookup_state (eval_seq_rule_concrete sr (eval_sym_state s1 f)) sv = (* first concretize, and then interpret *)
     lookup_state (eval_sym_state (eval_seq_rule_smt sr s1) f) sv. (* first interpret, and then concretize *)
 Proof.
   intros sr f s1 sv Hsv.
   destruct sr as [mp hol].
-  unfold eval_seq_rule_uint8.
+  unfold eval_seq_rule_concrete.
   unfold eval_seq_rule_smt.
   apply commute_sym_vs_conc_helper_seq_par_rule_sv. assumption.
 Qed.
@@ -253,12 +253,12 @@ Lemma commute_sym_vs_conc_par_rule_sv :
   forall (pr: ParRule) (f : SmtValuation)
          (s1 : SymbolicState) (sv : StateVar),
     is_state_var_in_ps s1 sv <> None ->
-    lookup_state (eval_par_rule_uint8 pr (eval_sym_state s1 f)) sv = (* first concretize, and then interpret *)
+    lookup_state (eval_par_rule_concrete pr (eval_sym_state s1 f)) sv = (* first concretize, and then interpret *)
     lookup_state (eval_sym_state (eval_par_rule_smt pr s1) f) sv. (* first interpret, and then concretize *)
 Proof.
   intros pr f s1 sv Hsv.
   destruct pr as [mp hol].
-  unfold eval_par_rule_uint8.
+  unfold eval_par_rule_concrete.
   unfold eval_par_rule_smt.
   apply commute_sym_vs_conc_helper_seq_par_rule_sv. assumption.
 Qed.
@@ -267,7 +267,7 @@ Lemma commute_sym_vs_conc_ma_rule_hdr:
   forall (ma : MatchActionRule) (f : SmtValuation)
          (s1 : SymbolicState) (h: Header),
     is_header_in_ps s1 h <> None ->
-    lookup_hdr (eval_match_action_rule_uint8 ma (eval_sym_state s1 f)) h = (* first concretize, and then interpret *)
+    lookup_hdr (eval_match_action_rule_concrete ma (eval_sym_state s1 f)) h = (* first concretize, and then interpret *)
     lookup_hdr (eval_sym_state (eval_match_action_rule_smt ma s1) f) h. (* first interpret, and then concretize *)
 Proof.
   intros ma f s1 h Hh.
@@ -280,7 +280,7 @@ Lemma commute_sym_vs_conc_ma_rule_sv:
   forall (ma : MatchActionRule) (f : SmtValuation)
          (s1 : SymbolicState) (sv: StateVar),
     is_state_var_in_ps s1 sv <> None ->
-    lookup_state (eval_match_action_rule_uint8 ma (eval_sym_state s1 f)) sv = (* first concretize, and then interpret *)
+    lookup_state (eval_match_action_rule_concrete ma (eval_sym_state s1 f)) sv = (* first concretize, and then interpret *)
     lookup_state (eval_sym_state (eval_match_action_rule_smt ma s1) f) sv. (* first interpret, and then concretize *)
 Proof.
   intros ma f s1 sv Hsv.
@@ -291,17 +291,17 @@ Qed.
 
 Lemma one_rule_transformer_equals_ma_rule:
   forall m c,
-         eval_transformer_uint8 [m] c = 
-         eval_match_action_rule_uint8 m c.
+         eval_transformer_concrete [m] c = 
+         eval_match_action_rule_concrete m c.
 Proof.
   intros m c.
-  unfold eval_transformer_uint8.
-  unfold eval_match_action_rule_uint8.
+  unfold eval_transformer_concrete.
+  unfold eval_match_action_rule_concrete.
   destruct m as [sr | pr].
-  - simpl. destruct sr. destruct (eval_match_uint8 match_pattern c) eqn:des.
+  - simpl. destruct sr. destruct (eval_match_concrete match_pattern c) eqn:des.
     -- reflexivity.
     -- simpl. rewrite des. reflexivity.
-  - simpl. destruct pr. destruct (eval_match_uint8 match_pattern c) eqn:des.
+  - simpl. destruct pr. destruct (eval_match_concrete match_pattern c) eqn:des.
     -- reflexivity.
     -- simpl. rewrite des. reflexivity.
 Qed.
@@ -322,7 +322,7 @@ Lemma switch_case_expr_some_match_lemma :
   forall t f s1 h rule,
     is_header_in_ps s1 h <> None ->
     Some rule = find_first_match (combine (get_match_results t (eval_sym_state s1 f)) t) ->
-    lookup_hdr (eval_match_action_rule_uint8 rule (eval_sym_state s1 f)) h =
+    lookup_hdr (eval_match_action_rule_concrete rule (eval_sym_state s1 f)) h =
     eval_smt_arith (switch_case_expr (combine (get_match_results_smt t s1)
                                               (map (fun ps : SymbolicState => lookup_hdr ps h)
                                                    (map (fun rule : MatchActionRule => eval_match_action_rule_smt rule s1) t)))
@@ -399,9 +399,9 @@ Proof.
                                (Seq (SeqCtr match_pattern action) :: t)) -> fst x = false).
       {apply find_first_match_lemma. assumption. }
       simpl in H0.
-      specialize (H0 (eval_match_uint8 match_pattern (eval_sym_state s1 f), Seq (SeqCtr match_pattern action)) ).
+      specialize (H0 (eval_match_concrete match_pattern (eval_sym_state s1 f), Seq (SeqCtr match_pattern action)) ).
       simpl in H0.
-      remember (eval_match_uint8 match_pattern (eval_sym_state s1 f), Seq (SeqCtr match_pattern action))  as tmp.
+      remember (eval_match_concrete match_pattern (eval_sym_state s1 f), Seq (SeqCtr match_pattern action))  as tmp.
       assert (H_premise : tmp = tmp \/ In tmp (combine (get_match_results t (eval_sym_state s1 f)) t)). { left. reflexivity. }
       apply H0 in H_premise.
       rewrite commute_sym_vs_conc_match_pattern with (s1 := s1) (f := f) in H_premise; try reflexivity.
@@ -417,9 +417,9 @@ Proof.
                                (Par (ParCtr match_pattern action) :: t)) -> fst x = false).
       {apply find_first_match_lemma. assumption. }
       simpl in H0.
-      specialize (H0 (eval_match_uint8 match_pattern (eval_sym_state s1 f), Par (ParCtr match_pattern action)) ).
+      specialize (H0 (eval_match_concrete match_pattern (eval_sym_state s1 f), Par (ParCtr match_pattern action)) ).
       simpl in H0.
-      remember (eval_match_uint8 match_pattern (eval_sym_state s1 f), Par (ParCtr match_pattern action))  as tmp.
+      remember (eval_match_concrete match_pattern (eval_sym_state s1 f), Par (ParCtr match_pattern action))  as tmp.
       assert (H_premise : tmp = tmp \/ In tmp (combine (get_match_results t (eval_sym_state s1 f)) t)). { left. reflexivity. }
       apply H0 in H_premise.
       rewrite commute_sym_vs_conc_match_pattern with (s1 := s1) (f := f) in H_premise; try reflexivity.
@@ -439,7 +439,7 @@ Lemma switch_case_expr_some_match_state_var_lemma :
   forall t f s1 sv rule,
     is_state_var_in_ps s1 sv <> None ->
     Some rule = find_first_match (combine (get_match_results t (eval_sym_state s1 f)) t) ->
-    lookup_state (eval_match_action_rule_uint8 rule (eval_sym_state s1 f)) sv =
+    lookup_state (eval_match_action_rule_concrete rule (eval_sym_state s1 f)) sv =
     eval_smt_arith (switch_case_expr (combine (get_match_results_smt t s1)
                                               (map (fun ps : SymbolicState => lookup_state ps sv)
                                                    (map (fun rule : MatchActionRule => eval_match_action_rule_smt rule s1) t)))
@@ -518,9 +518,9 @@ Proof.
                                (Seq (SeqCtr match_pattern action) :: t)) -> fst x = false).
       {apply find_first_match_lemma. assumption. }
       simpl in H0.
-      specialize (H0 (eval_match_uint8 match_pattern (eval_sym_state s1 f), Seq (SeqCtr match_pattern action)) ).
+      specialize (H0 (eval_match_concrete match_pattern (eval_sym_state s1 f), Seq (SeqCtr match_pattern action)) ).
       simpl in H0.
-      remember (eval_match_uint8 match_pattern (eval_sym_state s1 f), Seq (SeqCtr match_pattern action))  as tmp.
+      remember (eval_match_concrete match_pattern (eval_sym_state s1 f), Seq (SeqCtr match_pattern action))  as tmp.
       assert (H_premise : tmp = tmp \/ In tmp (combine (get_match_results t (eval_sym_state s1 f)) t)). { left. reflexivity. }
       apply H0 in H_premise.
       rewrite commute_sym_vs_conc_match_pattern with (s1 := s1) (f := f) in H_premise; try reflexivity.
@@ -536,9 +536,9 @@ Proof.
                                (Par (ParCtr match_pattern action) :: t)) -> fst x = false).
       {apply find_first_match_lemma. assumption. }
       simpl in H0.
-      specialize (H0 (eval_match_uint8 match_pattern (eval_sym_state s1 f ), Par (ParCtr match_pattern action)) ).
+      specialize (H0 (eval_match_concrete match_pattern (eval_sym_state s1 f ), Par (ParCtr match_pattern action)) ).
       simpl in H0.
-      remember (eval_match_uint8 match_pattern (eval_sym_state s1 f), Par (ParCtr match_pattern action))  as tmp.
+      remember (eval_match_concrete match_pattern (eval_sym_state s1 f), Par (ParCtr match_pattern action))  as tmp.
       assert (H_premise : tmp = tmp \/ In tmp (combine (get_match_results t (eval_sym_state s1 f)) t)). { left. reflexivity. }
       apply H0 in H_premise.
       rewrite commute_sym_vs_conc_match_pattern with (s1 := s1) (f := f) in H_premise; try reflexivity.
@@ -573,12 +573,12 @@ Qed.
 Lemma commute_sym_vs_conc_transformer_header_map:
   forall t f s1 h,
     is_header_in_ps s1 h <> None ->
-    lookup_hdr (eval_transformer_uint8 t (eval_sym_state s1 f)) h = (* TODO: Can use some notation for lookup_hdr *)
+    lookup_hdr (eval_transformer_concrete t (eval_sym_state s1 f)) h = (* TODO: Can use some notation for lookup_hdr *)
     lookup_hdr (eval_sym_state (eval_transformer_smt t s1) f) h.
 Proof.
   intros.
   simpl.
-  unfold eval_transformer_uint8.
+  unfold eval_transformer_concrete.
   remember (find_first_match (combine (get_match_results t (eval_sym_state s1 f)) t)) as concrete_match.
   destruct concrete_match eqn:des.
   - repeat rewrite <- lookup_hdr_trivial.
@@ -614,12 +614,12 @@ Qed.
 Lemma commute_sym_vs_conc_transformer_state_var_map:
   forall t f s1 sv,
     is_state_var_in_ps s1 sv <> None ->
-    lookup_state (eval_transformer_uint8 t (eval_sym_state s1 f)) sv = (* first concretize, and then interpret *)
+    lookup_state (eval_transformer_concrete t (eval_sym_state s1 f)) sv = (* first concretize, and then interpret *)
     lookup_state (eval_sym_state (eval_transformer_smt t s1) f) sv. (* first interpret, and then concretize *)
 Proof.
   intros.
   simpl.
-  unfold eval_transformer_uint8.
+  unfold eval_transformer_concrete.
   remember (find_first_match (combine (get_match_results t (eval_sym_state s1 f)) t)) as concrete_match.
   destruct concrete_match eqn:des.
   - repeat rewrite <- lookup_state_trivial.
@@ -636,7 +636,7 @@ Qed.
 
 Lemma commute_sym_vs_conc_transformer_ctrl_plane_map:
   forall t f s1,
-  ctrl_plane_map (eval_transformer_uint8 t (eval_sym_state s1 f)) =
+  ctrl_plane_map (eval_transformer_concrete t (eval_sym_state s1 f)) =
   ctrl_plane_map (eval_sym_state (eval_transformer_smt t s1) f).
 Proof.
   intros t f s1.
@@ -651,13 +651,13 @@ Lemma commute_sym_vs_conc_transfomer_hdr:
          (s1 : SymbolicState)
          (h : Header),
     is_header_in_ps s1 h <> None ->
-    lookup_hdr (eval_transformer_uint8 t (eval_sym_state s1 f)) h = (* first concretize, and then interpret *)
+    lookup_hdr (eval_transformer_concrete t (eval_sym_state s1 f)) h = (* first concretize, and then interpret *)
     lookup_hdr (eval_sym_state (eval_transformer_smt t s1) f) h. (* first interpret, and then concretize *)
 Proof.
   intros t f s1 h.
   induction t as [| m rest IHrest].
   - simpl.
-    unfold eval_transformer_uint8.
+    unfold eval_transformer_concrete.
     simpl.
     unfold eval_transformer_smt.
     simpl.
@@ -672,13 +672,13 @@ Lemma commute_sym_vs_conc_transfomer_sv:
          (s1 : SymbolicState)
          (sv : StateVar),
     is_state_var_in_ps s1 sv <> None ->
-    lookup_state (eval_transformer_uint8 t (eval_sym_state s1 f)) sv = (* first concretize, and then interpret *)
+    lookup_state (eval_transformer_concrete t (eval_sym_state s1 f)) sv = (* first concretize, and then interpret *)
     lookup_state (eval_sym_state (eval_transformer_smt t s1) f) sv. (* first interpret, and then concretize *)
 Proof.
   intros t f s1 sv.
   induction t as [| m rest IHrest].
   - simpl.
-    unfold eval_transformer_uint8.
+    unfold eval_transformer_concrete.
     simpl.
     unfold eval_transformer_smt.
     simpl.

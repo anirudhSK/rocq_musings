@@ -373,8 +373,8 @@ Lemma eval_smt_bool_lemma_hdr :
   eval_smt_bool
 (SmtBoolEq (lookup_hdr (eval_transformer_smt t1 s) h)
 (lookup_hdr (eval_transformer_smt t2 s) h)) f = true ->
-lookup_hdr (eval_transformer_uint8 t1 (eval_sym_state s f)) h =
-lookup_hdr (eval_transformer_uint8 t2 (eval_sym_state s f)) h.
+lookup_hdr (eval_transformer_concrete t1 (eval_sym_state s f)) h =
+lookup_hdr (eval_transformer_concrete t2 (eval_sym_state s f)) h.
 Proof.
   intros t1 t2 s h f.
   intro H.
@@ -395,8 +395,8 @@ Lemma eval_smt_bool_lemma_state :
   eval_smt_bool
 (SmtBoolEq (lookup_state (eval_transformer_smt t1 s) sv)
 (lookup_state (eval_transformer_smt t2 s) sv)) f = true ->
-lookup_state (eval_transformer_uint8 t1 (eval_sym_state s f)) sv =
-lookup_state (eval_transformer_uint8 t2 (eval_sym_state s f)) sv.
+lookup_state (eval_transformer_concrete t1 (eval_sym_state s f)) sv =
+lookup_state (eval_transformer_concrete t2 (eval_sym_state s f)) sv.
 Proof.
   intros t1 t2 s sv f.
   intro H.
@@ -420,8 +420,8 @@ Lemma equivalence_checker_sound :
   (forall v, In v state_var_list -> is_state_var_in_ps s v <> None) ->
   equivalence_checker s t1 t2 header_list state_var_list = SmtUnsat ->
   let c  := eval_sym_state s f in
-  let c1 := eval_transformer_uint8 t1 c in
-  let c2 := eval_transformer_uint8 t2 c in
+  let c1 := eval_transformer_concrete t1 c in
+  let c2 := eval_transformer_concrete t2 c in
   (forall v, In v header_list ->
   (lookup_hdr c1 v) = (lookup_hdr c2 v)) /\
   (forall v, In v state_var_list ->
@@ -469,8 +469,8 @@ Lemma eval_smt_bool_lemma_hdr_false :
   eval_smt_bool
 (SmtBoolEq (lookup_hdr (eval_transformer_smt t1 s) h)
 (lookup_hdr (eval_transformer_smt t2 s) h)) f = false ->
-lookup_hdr (eval_transformer_uint8 t1 (eval_sym_state s f)) h <>
-lookup_hdr (eval_transformer_uint8 t2 (eval_sym_state s f)) h.
+lookup_hdr (eval_transformer_concrete t1 (eval_sym_state s f)) h <>
+lookup_hdr (eval_transformer_concrete t2 (eval_sym_state s f)) h.
 Proof.
   intros t1 t2 s h f.
   intro H1.
@@ -491,8 +491,8 @@ Lemma eval_smt_bool_lemma_state_false :
   eval_smt_bool
 (SmtBoolEq (lookup_state (eval_transformer_smt t1 s) sv)
 (lookup_state (eval_transformer_smt t2 s) sv)) f = false ->
-lookup_state (eval_transformer_uint8 t1 (eval_sym_state s f)) sv <>
-lookup_state (eval_transformer_uint8 t2 (eval_sym_state s f)) sv.
+lookup_state (eval_transformer_concrete t1 (eval_sym_state s f)) sv <>
+lookup_state (eval_transformer_concrete t2 (eval_sym_state s f)) sv.
 Proof.
   intros t1 t2 s sv f.
   intro H1.
@@ -514,8 +514,8 @@ Lemma equivalence_checker_complete :
   (forall v, In v state_var_list -> is_state_var_in_ps s v <> None) ->
   equivalence_checker s t1 t2 header_list state_var_list = SmtSat f' ->
   let c' := eval_sym_state s f' in
-  let c1 := eval_transformer_uint8 t1 c' in
-  let c2 := eval_transformer_uint8 t2 c' in
+  let c1 := eval_transformer_concrete t1 c' in
+  let c2 := eval_transformer_concrete t2 c' in
   (exists v, In v header_list /\
   (lookup_hdr c1 v) <> (lookup_hdr c2 v)) \/
   (exists v, In v state_var_list /\
@@ -558,8 +558,8 @@ Lemma equivalence_checker_sound :
   (forall v, In v state_var_list -> is_state_var_in_ps s v <> None) ->
   equivalence_checker s t1 t2 header_list state_var_list = SmtUnsat ->
   let c  := eval_sym_state s f in
-  let c1 := eval_transformer_uint8 t1 c in
-  let c2 := eval_transformer_uint8 t2 c in
+  let c1 := eval_transformer_concrete t1 c in
+  let c2 := eval_transformer_concrete t2 c in
   (forall v, In v header_list ->
   (lookup_hdr c1 v) = (lookup_hdr c2 v)) /\
   (forall v, In v state_var_list ->
@@ -571,8 +571,8 @@ Lemma equivalence_checker_cr_sound :
   forall s p1 p2 f,
   equivalence_checker_cr_dsl s p1 p2 = true ->
   let c  := eval_sym_state s f in
-  let c1 := eval_cr_program_uint8 p1 c in 
-  let c2 := eval_cr_program_uint8 p2 c in
+  let c1 := eval_cr_program_concrete p1 c in 
+  let c2 := eval_cr_program_concrete p2 c in
   (forall v, In v (get_all_headers_from_ps c1) -> (* every header in c1 *)
   (In v (get_all_headers_from_ps c2)) /\                (* must be in c2 *)
   (lookup_hdr c1 v) = (lookup_hdr c2 v)).     (* and their values must be equal *)
