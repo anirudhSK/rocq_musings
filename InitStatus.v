@@ -70,29 +70,6 @@ Definition not (x : InitStatus uint8) : InitStatus uint8 :=
   | Uninitialized => Uninitialized uint8
   end.
 
-(* Maybe move this to MyInts.v *)
-Lemma uint8_eq_from_unsigned : forall (v1 v2 : uint8),
-  unsigned v1 = unsigned v2 -> v1 = v2.
-Proof.
-  intros v1 v2 H.
-  destruct v1 as [val1 range1].
-  destruct v2 as [val2 range2].
-  apply mkint_eq; auto.
-Qed.
-
-Lemma uint8_neq_from_unsigned : forall (v1 v2 : uint8),
-  unsigned v1 <> unsigned v2 -> v1 <> v2.
-Proof.
-  intros v1 v2 H.
-  destruct v1 as [val1 range1].
-  destruct v2 as [val2 range2].
-  simpl in H.
-  intro Heq.
-  injection Heq as H_val_eq.
-  apply H.
-  assumption.
-Qed.
-
 Lemma concrete_if_else : forall v1 v2,
   ((if initstatus_uint8_equal v1 v2 then true else false) = true)->
   v1 = v2.
