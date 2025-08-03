@@ -1,9 +1,8 @@
 Require Import Strings.String.
 From MyProject Require Export Integers.
+From MyProject Require Import MyInts.
+From MyProject Require Export InitStatus.
 Require Import ZArith.
-
-(* Various kinds of fixed-bit-width integers *)
-Definition uint8 := @bit_int 8.
 
 (* Define the different types of identifiers in the Caracara DSL *)
 Inductive ParserState : Type := ParserStateCtr (uid : positive).
@@ -13,10 +12,6 @@ Inductive ModuleName : Type := ModuleNameCtr (uid : positive).
 Inductive FunctionName : Type := FunctionNameCtr (uid : positive).
 Inductive ConnectionName : Type := ConnectionNameCtr (uid : positive).
 Inductive CtrlPlaneConfigName : Type := CtrlPlaneConfigNameCtr (uid : positive).
-
-Inductive InitStatus (A: Type) : Type :=
-  | Uninitialized : InitStatus A
-  | Initialized : A -> InitStatus A.
 
 (* Equality check functions for the identifiers above *)
 Definition parser_state_equal (p1 p2 : ParserState) :=

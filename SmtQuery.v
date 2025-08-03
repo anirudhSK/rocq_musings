@@ -1,6 +1,7 @@
 From MyProject Require Import SmtExpr.
 From MyProject Require Import CrDsl.
 From MyProject Require Import CrIdentifiers.
+From MyProject Require Import InitStatus.
 Require Import Classical.
 Require Import Coq.Lists.List.
 Require Import Coq.Bool.Bool.
@@ -284,15 +285,6 @@ Definition equivalence_checker
   (* check if the headers and state vars are equivalent *)
   smt_query (check_headers_and_state_vars s1 s2 header_list state_var_list).
 
-Lemma uint8_eq_from_unsigned : forall (v1 v2 : uint8),
-  unsigned v1 = unsigned v2 -> v1 = v2.
-Proof.
-  intros v1 v2 H.
-  destruct v1 as [val1 range1].
-  destruct v2 as [val2 range2].
-  apply mkint_eq; auto.
-Qed.
-
 Definition equivalence_checker_cr_dsl (s : SymbolicState) (p1: CaracaraProgram) (p2: CaracaraProgram)
   : bool := 
   (* assume a starting symbolic state s *)
@@ -311,58 +303,14 @@ Definition equivalence_checker_cr_dsl (s : SymbolicState) (p1: CaracaraProgram) 
       else
         false
   end.
-
-Lemma uint8_neq_from_unsigned : forall (v1 v2 : uint8),
-  unsigned v1 <> unsigned v2 -> v1 <> v2.
-Proof.
-  intros v1 v2 H.
-  destruct v1 as [val1 range1].
-  destruct v2 as [val2 range2].
-  simpl in H.
-  intro Heq.
-  injection Heq as H_val_eq.
-  apply H.
-  assumption.
-Qed.
-
-Lemma uint8_if_else : forall (v1 v2 : uint8),
-  ((if eq v1 v2 then true else false) = true)->
-  v1 = v2.
-Proof.
-  intros v1 v2 H.
-  destruct (eq v1 v2) eqn:Ex.
-  -- unfold eq in Ex.
-     unfold Rocqlib.zeq in Ex.
-     destruct (Z.eq_dec (unsigned v1) (unsigned v2)) as [Heq|Hneq].
-     ++ apply uint8_eq_from_unsigned. assumption.
-     ++ exfalso. congruence.
-  -- exfalso. congruence.
-Qed.
-
-Lemma uint8_if_else2 : forall (v1 v2 : uint8),
-  ((if eq v1 v2 then true else false) = false)->
-  v1 <> v2.
-Proof.
-  intros v1 v2 H.
-  destruct (eq v1 v2) eqn:Ex.
-  -- unfold eq in Ex.
-     unfold Rocqlib.zeq in Ex.
-     destruct (Z.eq_dec (unsigned v1) (unsigned v2)) as [Heq|Hneq].
-     ++ exfalso. congruence.
-     ++ apply uint8_neq_from_unsigned. assumption.
-  -- unfold eq in Ex.
-     destruct (Rocqlib.zeq (unsigned v1) (unsigned v2)) eqn:Ex2.
-     ++ exfalso. congruence.
-     ++ apply uint8_neq_from_unsigned. assumption.
-Qed.
-        
+       
 Lemma smt_bool_eq_true : forall e1 e2 f,
   eval_smt_bool (SmtBoolEq e1 e2) f = true -> 
   eval_smt_arith e1 f = eval_smt_arith e2 f.
 Proof.
   intros e1 e2 f H.
   destruct (eval_smt_bool (SmtBoolEq e1 e2) f) eqn:Ex1.
-  -- destruct e1, e2; apply uint8_if_else in Ex1;
+  -- destruct e1, e2; apply concrete_if_else in Ex1;
      try unfold eval_smt_arith; try assumption.
   -- exfalso. congruence.
 Qed.
@@ -459,7 +407,7 @@ Proof.
   intros e1 e2 f H.
   destruct (eval_smt_bool (SmtBoolEq e1 e2) f) eqn:Ex1.
   -- exfalso. congruence.
-  -- destruct e1, e2; apply uint8_if_else2 in Ex1;
+  -- destruct e1, e2; apply concrete_if_else2 in Ex1;
      try unfold eval_smt_arith; try assumption.
 Qed.
 

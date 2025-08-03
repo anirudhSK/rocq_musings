@@ -24,7 +24,7 @@ Arguments header_map {T} _.
 Arguments state_var_map {T} _.  
 Arguments ctrl_plane_map {T} _.
 
-Definition ConcreteState := ProgramState uint8.
+Definition ConcreteState := ProgramState (InitStatus uint8).
 Definition SymbolicState := ProgramState SmtArithExpr.
 
 (* TODO: lookup_hdr/state_map could be rolled into lookup_hdr/state. *)
