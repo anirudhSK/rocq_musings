@@ -10,8 +10,8 @@ Require Import Coq.Lists.List.
 Lemma ctrl_plane_invariant_hdr_op:
   forall (ho: HdrOp)
          (c1: ConcreteState),
-  ctrl_plane_map (eval_hdr_op_assign_concrete ho c1) =
-  ctrl_plane_map c1.
+  ctrl_map (eval_hdr_op_assign_concrete ho c1) =
+  ctrl_map c1.
 Proof.
   intros ho c1.
   destruct ho; simpl; try reflexivity.
@@ -20,8 +20,8 @@ Qed.
 (* Effectively, ctrl plane doesn't change *)
 Lemma ctrl_plane_invariant_hdr_op_list:
   forall hol c1,
-  ctrl_plane_map (eval_hdr_op_list_concrete hol c1) =
-  ctrl_plane_map c1.
+  ctrl_map (eval_hdr_op_list_concrete hol c1) =
+  ctrl_map c1.
 Proof.
   intros.
   induction hol.
@@ -33,8 +33,8 @@ Qed.
 
 Lemma ctrl_plane_invariant_seq_rule:
   forall s c,
-    ctrl_plane_map (eval_seq_rule_concrete s c) =
-    ctrl_plane_map c.
+    ctrl_map (eval_seq_rule_concrete s c) =
+    ctrl_map c.
 Proof.
   intros.
   unfold eval_seq_rule_concrete.
@@ -46,8 +46,8 @@ Qed.
 
 Lemma ctrl_plane_invariant_par_rule:
   forall p c,
-    ctrl_plane_map (eval_par_rule_concrete p c) =
-    ctrl_plane_map c.
+    ctrl_map (eval_par_rule_concrete p c) =
+    ctrl_map c.
 Proof.
   intros.
   unfold eval_par_rule_concrete.
@@ -59,8 +59,8 @@ Qed.
 
 Lemma ctrl_plane_invariant_ma_rule:
   forall m c,
-    ctrl_plane_map (eval_match_action_rule_concrete m c) =
-    ctrl_plane_map c.
+    ctrl_map (eval_match_action_rule_concrete m c) =
+    ctrl_map c.
 Proof.
   intros.
   unfold eval_match_action_rule_concrete.
@@ -71,8 +71,8 @@ Qed.
 
 Lemma ctrl_plane_invariant_transformer_intermediate:
   forall a t c,
-    ctrl_plane_map (eval_transformer_concrete (a :: t) c) =
-    ctrl_plane_map (eval_transformer_concrete t c).
+    ctrl_map (eval_transformer_concrete (a :: t) c) =
+    ctrl_map (eval_transformer_concrete t c).
 Proof.
   intros.
   unfold eval_transformer_concrete.
@@ -85,7 +85,7 @@ Qed.
 
 Lemma ctrl_plane_invariant_transformer:
   forall c t,
-    ctrl_plane_map (eval_transformer_concrete t c) = ctrl_plane_map c.
+    ctrl_map (eval_transformer_concrete t c) = ctrl_map c.
 Proof.
   intros.
   induction t.

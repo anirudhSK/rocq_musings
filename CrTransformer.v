@@ -15,10 +15,10 @@ Inductive TransformerType : Type :=
   | Parallel.
 
 Inductive FunctionArgument :=
-  | CtrlPlaneArg (c : CtrlPlaneConfigName)
+  | CtrlPlaneArg (c : Ctrl)
   | HeaderArg (h : Header)
   | ConstantArg (n : uint8)
-  | StatefulArg (s : StateVar).
+  | StatefulArg (s : State).
 
 (* A BinaryOp takes two uint8 arguments and returns another uint8 *)
 Inductive BinaryOp :=
@@ -33,7 +33,7 @@ Inductive BinaryOp :=
 
 (* Define the header operations *)
 Inductive HdrOp :=
-  | StatefulOp  (f : BinaryOp) (arg1 : FunctionArgument) (arg2 : FunctionArgument) (target : StateVar)
+  | StatefulOp  (f : BinaryOp) (arg1 : FunctionArgument) (arg2 : FunctionArgument) (target : State)
   | StatelessOp (f : BinaryOp) (arg1 : FunctionArgument) (arg2 : FunctionArgument) (target : Header).
 
 (* Define MatchPattern as a list of header, pattern pairs,
@@ -45,14 +45,14 @@ Inductive SeqRule :=
   | SeqCtr (match_pattern : MatchPattern) (action : list HdrOp).
 
 (* Extract targets out of a HdrOp *)
-Definition extract_targets (op : HdrOp) : (list StateVar) * (list Header) := 
+Definition extract_targets (op : HdrOp) : (list State) * (list Header) := 
   match op with
   | StatefulOp _ _ _ target => ([target], [])
   | StatelessOp _ _ _ target => ([], [target])
   end.
 
 (* Extract all targets from a list of HdrOps *)
-Definition extract_all_targets (ops : list HdrOp) : (list StateVar) * (list Header) :=
+Definition extract_all_targets (ops : list HdrOp) : (list State) * (list Header) :=
   List.fold_left (fun acc op => 
     let (state_vars, headers) := extract_targets op in
     (state_vars ++ fst acc, headers ++ snd acc)) ops ([], []).

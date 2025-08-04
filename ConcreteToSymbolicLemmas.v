@@ -28,7 +28,7 @@ Proof.
 Qed.
 
 Lemma commute_update_eval_state:
-  forall (s : SymbolicState) (f : SmtValuation) (sv : StateVar) (v : SmtArithExpr),
+  forall (s : SymbolicState) (f : SmtValuation) (sv : State) (v : SmtArithExpr),
     eval_sym_state (update_state s sv v) f =
     update_state (eval_sym_state s f) sv (eval_smt_arith v f).
 Proof.
@@ -176,7 +176,7 @@ Qed.
 
 Lemma commute_sym_vs_conc_helper_seq_par_rule_sv :
   forall (mp: MatchPattern) (hol: list HdrOp) (f : SmtValuation)
-         (s1 : SymbolicState) (sv : StateVar),
+         (s1 : SymbolicState) (sv : State),
          is_state_var_in_ps s1 sv <> None ->
     lookup_state (if eval_match_concrete mp (eval_sym_state s1 f)
     then eval_hdr_op_list_concrete hol (eval_sym_state s1 f)
@@ -237,7 +237,7 @@ Qed.
 (* Same as above two lemmas but for state variables *)
 Lemma commute_sym_vs_conc_seq_rule_sv :
   forall (sr: SeqRule) (f : SmtValuation)
-         (s1 : SymbolicState) (sv : StateVar),
+         (s1 : SymbolicState) (sv : State),
     is_state_var_in_ps s1 sv <> None ->
     lookup_state (eval_seq_rule_concrete sr (eval_sym_state s1 f)) sv = (* first concretize, and then interpret *)
     lookup_state (eval_sym_state (eval_seq_rule_smt sr s1) f) sv. (* first interpret, and then concretize *)
@@ -251,7 +251,7 @@ Qed.
 
 Lemma commute_sym_vs_conc_par_rule_sv :
   forall (pr: ParRule) (f : SmtValuation)
-         (s1 : SymbolicState) (sv : StateVar),
+         (s1 : SymbolicState) (sv : State),
     is_state_var_in_ps s1 sv <> None ->
     lookup_state (eval_par_rule_concrete pr (eval_sym_state s1 f)) sv = (* first concretize, and then interpret *)
     lookup_state (eval_sym_state (eval_par_rule_smt pr s1) f) sv. (* first interpret, and then concretize *)
@@ -278,7 +278,7 @@ Qed.
 
 Lemma commute_sym_vs_conc_ma_rule_sv:
   forall (ma : MatchActionRule) (f : SmtValuation)
-         (s1 : SymbolicState) (sv: StateVar),
+         (s1 : SymbolicState) (sv: State),
     is_state_var_in_ps s1 sv <> None ->
     lookup_state (eval_match_action_rule_concrete ma (eval_sym_state s1 f)) sv = (* first concretize, and then interpret *)
     lookup_state (eval_sym_state (eval_match_action_rule_smt ma s1) f) sv. (* first interpret, and then concretize *)
@@ -634,10 +634,10 @@ Proof.
     apply switch_case_expr_no_match_state_var_lemma. assumption. assumption. assumption. (* TODO: This seems kind of brittle. *)
 Qed.
 
-Lemma commute_sym_vs_conc_transformer_ctrl_plane_map:
+Lemma commute_sym_vs_conc_transformer_ctrl_map:
   forall t f s1,
-  ctrl_plane_map (eval_transformer_concrete t (eval_sym_state s1 f)) =
-  ctrl_plane_map (eval_sym_state (eval_transformer_smt t s1) f).
+  ctrl_map (eval_transformer_concrete t (eval_sym_state s1 f)) =
+  ctrl_map (eval_sym_state (eval_transformer_smt t s1) f).
 Proof.
   intros t f s1.
   rewrite ctrl_plane_invariant_transformer.
@@ -670,7 +670,7 @@ Qed.
 Lemma commute_sym_vs_conc_transfomer_sv:
   forall (t: Transformer) (f : SmtValuation)
          (s1 : SymbolicState)
-         (sv : StateVar),
+         (sv : State),
     is_state_var_in_ps s1 sv <> None ->
     lookup_state (eval_transformer_concrete t (eval_sym_state s1 f)) sv = (* first concretize, and then interpret *)
     lookup_state (eval_sym_state (eval_transformer_smt t s1) f) sv. (* first interpret, and then concretize *)

@@ -7,11 +7,11 @@ Require Import ZArith.
 (* Define the different types of identifiers in the Caracara DSL *)
 Inductive ParserState : Type := ParserStateCtr (uid : positive).
 Inductive Header : Type := HeaderCtr (uid : positive).
-Inductive StateVar : Type := StateVarCtr (uid : positive).
+Inductive State : Type := StateCtr (uid : positive).
 Inductive ModuleName : Type := ModuleNameCtr (uid : positive).
 Inductive FunctionName : Type := FunctionNameCtr (uid : positive).
 Inductive ConnectionName : Type := ConnectionNameCtr (uid : positive).
-Inductive CtrlPlaneConfigName : Type := CtrlPlaneConfigNameCtr (uid : positive).
+Inductive Ctrl : Type := CtrlCtr (uid : positive).
 
 (* Equality check functions for the identifiers above *)
 Definition parser_state_equal (p1 p2 : ParserState) :=
@@ -29,10 +29,10 @@ Definition header_equal (h1 h2 : Header) :=
             | HeaderCtr xid, HeaderCtr yid => Pos.eqb xid yid
     end.
 
-(* Do the same thing as parser_state_equal for StateVar *)
-Definition state_var_equal (sv1 sv2 : StateVar) :=
+(* Do the same thing as parser_state_equal for State *)
+Definition state_equal (sv1 sv2 : State) :=
     match sv1, sv2 with
-            | StateVarCtr xid, StateVarCtr yid => Pos.eqb xid yid
+            | StateCtr xid, StateCtr yid => Pos.eqb xid yid
     end.
 
 (* Do the same thing as parser_state_equal for ModuleName *)
@@ -53,10 +53,10 @@ Definition connection_name_equal (c1 c2 : ConnectionName) :=
             | ConnectionNameCtr xid, ConnectionNameCtr yid => Pos.eqb xid yid
     end.
 
-(* Do the same thing as parser_state_equal for CtrlPlaneConfigName *)
-Definition ctrl_plane_config_name_equal (cc1 cc2 : CtrlPlaneConfigName) :=
+(* Do the same thing as parser_state_equal for Ctrl *)
+Definition ctrl_equal (cc1 cc2 : Ctrl) :=
     match cc1, cc2 with
-            | CtrlPlaneConfigNameCtr xid, CtrlPlaneConfigNameCtr yid => Pos.eqb xid yid
+            | CtrlCtr xid, CtrlCtr yid => Pos.eqb xid yid
     end.
 
 Definition hdr_list_equal (h1 : list Header) (h2 : list Header) :=
@@ -64,6 +64,6 @@ Definition hdr_list_equal (h1 : list Header) (h2 : list Header) :=
        (Nat.eqb (List.length h1) (List.length h2)).                          (* both lists have same number of elements *)
 
 (* Generate same definitions as above but for state variables *)
-Definition state_list_equal (s1 : list StateVar) (s2 : list StateVar) :=
-  andb (List.forallb (fun '(x, y) => state_var_equal x y) (List.combine s1 s2))
+Definition state_list_equal (s1 : list State) (s2 : list State) :=
+  andb (List.forallb (fun '(x, y) => state_equal x y) (List.combine s1 s2))
        (Nat.eqb (List.length s1) (List.length s2)).

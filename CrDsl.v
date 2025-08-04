@@ -25,8 +25,8 @@ Inductive Connection : Type :=
 Inductive CaracaraProgram : Type := 
   | CaracaraProgramDef : 
       list Header -> 
-      list StateVar -> 
-      list CtrlPlaneConfigName -> 
+      list State -> 
+      list Ctrl -> 
       Transformer -> (* TODO: Currently just a single transformer *)
                      (* TODO: Generalize to list of transformers with
                               connections between them specified by a list of type (list Connection) *)
@@ -36,8 +36,8 @@ Definition check_for_duplicate_identifiers (program : CaracaraProgram) : bool :=
   match program with
   | CaracaraProgramDef h s c _ =>
       has_duplicates header_equal h ||
-      has_duplicates state_var_equal s ||
-      has_duplicates ctrl_plane_config_name_equal c
+      has_duplicates state_equal s ||
+      has_duplicates ctrl_equal c
   end.
 
 (* No duplicates in Caracara Program *)
@@ -66,8 +66,8 @@ Proof.
     repeat split.
     - apply has_duplicates_correct with (eqb := header_equal);
       intros; try destruct a; try destruct b; simpl; try apply Pos.eqb_refl; try apply Pos.eqb_sym; try apply H''.
-    - apply has_duplicates_correct with (eqb := state_var_equal);
+    - apply has_duplicates_correct with (eqb := state_equal);
       intros; try destruct a; try destruct b; simpl; try apply Pos.eqb_refl; try apply Pos.eqb_sym; try apply H2.
-    - apply has_duplicates_correct with (eqb := ctrl_plane_config_name_equal);
+    - apply has_duplicates_correct with (eqb := ctrl_equal);
       intros; try destruct a; try destruct b; simpl; try apply Pos.eqb_refl; try apply Pos.eqb_sym; try apply H3.
 Qed.

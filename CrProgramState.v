@@ -9,20 +9,20 @@ Import ListNotations.
 
 (* Current values for each of these identifiers as a map *)
 Definition HeaderMap (T : Type) := PMap.t T. (* Maybe replace these with a generic Map type from Maps.v? *)
-Definition StateVarMap (T : Type) := PMap.t T.
-Definition CtrlPlaneConfigNameMap (T : Type) := PMap.t T.
+Definition StateMap (T : Type) := PMap.t T.
+Definition CtrlMap (T : Type) := PMap.t T.
 
 (* The ProgramState is a record containing three maps:,
    one each for mapping headers/statevars/ctrlplaneconfigs to their current values *)
 Record ProgramState (T : Type) := {
-  ctrl_plane_map : CtrlPlaneConfigNameMap T;
+  ctrl_map : CtrlMap T;
   header_map : HeaderMap T;
-  state_var_map : StateVarMap T;
+  state_map : StateMap T;
 }.
 
 Arguments header_map {T} _.
-Arguments state_var_map {T} _.  
-Arguments ctrl_plane_map {T} _.
+Arguments state_map {T} _.  
+Arguments ctrl_map {T} _.
 
 Definition ConcreteState := ProgramState (InitStatus uint8).
 Definition SymbolicState := ProgramState SmtArithExpr.
@@ -32,23 +32,23 @@ Definition SymbolicState := ProgramState SmtArithExpr.
 Definition lookup_hdr_map {T : Type} (m: HeaderMap T) (x: Header) : T :=
   PMap.get (match x with | HeaderCtr id => id end) m.
 
-Definition lookup_state_map {T : Type} (m: StateVarMap T) (x: StateVar) : T :=
-  PMap.get (match x with | StateVarCtr id => id end) m.
+Definition lookup_state_map {T : Type} (m: StateMap T) (x: State) : T :=
+  PMap.get (match x with | StateCtr id => id end) m.
 
 Definition lookup_hdr {T : Type} (s: ProgramState T) (x: Header) : T :=
   lookup_hdr_map (header_map s) x.
 
-Definition lookup_state {T : Type} (s: ProgramState T) (x: StateVar) : T :=
-  lookup_state_map (state_var_map s) x.
+Definition lookup_state {T : Type} (s: ProgramState T) (x: State) : T :=
+  lookup_state_map (state_map s) x.
 
-Definition lookup_ctrl {T : Type} (s: ProgramState T) (x: CtrlPlaneConfigName) : T :=
-  PMap.get (match x with | CtrlPlaneConfigNameCtr id => id end) (ctrl_plane_map s).
+Definition lookup_ctrl {T : Type} (s: ProgramState T) (x: Ctrl) : T :=
+  PMap.get (match x with | CtrlCtr id => id end) (ctrl_map s).
 
 Lemma program_state_equality:
       forall (ps1 ps2: ConcreteState),
-        ctrl_plane_map ps1 = ctrl_plane_map ps2 ->
+        ctrl_map ps1 = ctrl_map ps2 ->
         header_map ps1 = header_map ps2 ->
-        state_var_map  ps1 = state_var_map ps2 ->
+        state_map  ps1 = state_map ps2 ->
         ps1 = ps2.
 Proof.
   intros ps1 ps2 Hctrl Hhdr Hstate.
@@ -59,9 +59,9 @@ Proof.
 Qed.
 
 Definition program_state_mapper {T1 T2 : Type} (fc: T1 -> T2) (fh : T1 -> T2) (fs : T1 -> T2) (s: ProgramState T1) : ProgramState T2 :=
-  {| ctrl_plane_map := PMap.map fc (ctrl_plane_map s);
+  {| ctrl_map := PMap.map fc (ctrl_map s);
      header_map := PMap.map fh (header_map s);
-     state_var_map := PMap.map fs (state_var_map s) |}.
+     state_map := PMap.map fs (state_map s) |}.
 
 (* Function to go through all keys in a PMap, and set them to new values. *)
 Definition new_pmap_from_old {T: Type} (old_pmap : PMap.t T) (f : positive -> T): PMap.t T :=
@@ -70,32 +70,32 @@ Definition new_pmap_from_old {T: Type} (old_pmap : PMap.t T) (f : positive -> T)
   ).
 
 Definition update_all_hdrs {T : Type} (s: ProgramState T) (fh: Header -> T) : ProgramState T :=
-  {| ctrl_plane_map := ctrl_plane_map s;
+  {| ctrl_map := ctrl_map s;
      header_map := new_pmap_from_old (header_map s) (fun pos => fh (HeaderCtr pos));
-     state_var_map := state_var_map s |}.
+     state_map := state_map s |}.
 
-Definition update_all_states {T : Type} (s: ProgramState T) (fs: StateVar -> T) : ProgramState T :=
-  {| ctrl_plane_map := ctrl_plane_map s;
+Definition update_all_states {T : Type} (s: ProgramState T) (fs: State -> T) : ProgramState T :=
+  {| ctrl_map := ctrl_map s;
      header_map := header_map s;
-     state_var_map := new_pmap_from_old (state_var_map s) (fun pos => fs (StateVarCtr pos))|}.
+     state_map := new_pmap_from_old (state_map s) (fun pos => fs (StateCtr pos))|}.
 
 (* Update the header map with a new value for a specific header *)
 Definition update_hdr_map {T : Type} (m: HeaderMap T) (x: Header) (v: T) : HeaderMap T :=
   PMap.set (match x with | HeaderCtr x_id => x_id end) v m.
 
 (* Same as above, but for state variables *)
-Definition update_state_map {T : Type} (m: StateVarMap T) (x: StateVar) (v: T) : StateVarMap T :=
-  PMap.set (match x with | StateVarCtr x_id => x_id end) v m.
+Definition update_state_map {T : Type} (m: StateMap T) (x: State) (v: T) : StateMap T :=
+  PMap.set (match x with | StateCtr x_id => x_id end) v m.
 
 Definition update_hdr {T : Type} (s: ProgramState T) (x: Header) (v: T) : ProgramState T :=
-  {| ctrl_plane_map := ctrl_plane_map s;
+  {|ctrl_map :=ctrl_map s;
      header_map :=  update_hdr_map (header_map s) x v;
-     state_var_map := state_var_map s|}.
+     state_map := state_map s|}.
 
-Definition update_state {T : Type} (s: ProgramState T) (x: StateVar) (v: T) : ProgramState T :=
-  {| ctrl_plane_map := ctrl_plane_map s;
+Definition update_state {T : Type} (s: ProgramState T) (x: State) (v: T) : ProgramState T :=
+  {|ctrl_map :=ctrl_map s;
      header_map := header_map s;
-     state_var_map := update_state_map (state_var_map s) x v |}.
+     state_map := update_state_map (state_map s) x v |}.
 
 Lemma cons_not_nil : forall A (x : A) (xs : list A),
   ~ ((x :: xs) = nil).
@@ -136,7 +136,7 @@ Qed.
 (* Same lemma as above but for state *)
 Lemma update_all_states_lookup_unchanged:
   forall {T} (s1 : ProgramState T),
-   update_all_states s1 (fun sv : StateVar => lookup_state s1 sv) = s1.
+   update_all_states s1 (fun sv : State => lookup_state s1 sv) = s1.
 Proof.
   intros.
   destruct s1 as [ctrl hdr state].
@@ -163,7 +163,7 @@ Qed.
 Lemma program_state_unchanged:
   forall {T} (s1 : ProgramState T),
   update_all_states (update_all_hdrs s1 (fun h : Header => lookup_hdr s1 h))
-                    (fun s : StateVar => lookup_state s1 s) = s1.
+                    (fun s : State => lookup_state s1 s) = s1.
 Proof.
   intros.
   rewrite update_all_hdrs_lookup_unchanged.
@@ -297,17 +297,17 @@ Qed.
 
 (* Create mirror image versions of the two lemmas above with state and hdr interchanged *)
 Lemma lookup_state_unchanged_by_update_all_hdrs:
-  forall {T} fh (s1 : ProgramState T) (sv : StateVar),
+  forall {T} fh (s1 : ProgramState T) (sv : State),
     lookup_state s1 sv = lookup_state (update_all_hdrs s1 fh) sv.
 Proof.
   reflexivity.
 Qed.
 
-Definition is_state_var_in_ps {T} (s1 : ProgramState T) (sv : StateVar) :=
-  PTree.get (match sv with | StateVarCtr id => id end) (snd (state_var_map s1)).
+Definition is_state_var_in_ps {T} (s1 : ProgramState T) (sv : State) :=
+  PTree.get (match sv with | StateCtr id => id end) (snd (state_map s1)).
 
 Lemma lookup_state_after_update_all_states:
-  forall {T} (s1 : ProgramState T) (sv : StateVar) (fs : StateVar -> T),
+  forall {T} (s1 : ProgramState T) (sv : State) (fs : State -> T),
     is_state_var_in_ps s1 sv <> None ->
     lookup_state (update_all_states s1 fs) sv = fs sv.
 Proof.
@@ -319,7 +319,7 @@ Proof.
   unfold new_pmap_from_old.
   simpl.
   unfold is_state_var_in_ps in H.
-  destruct (state_var_map s1) as [default sv_map].
+  destruct (state_map s1) as [default sv_map].
   simpl.
   f_equal.
   unfold PMap.get.
@@ -334,7 +334,7 @@ Proof.
 Qed.
 
 Lemma commute_state_hdr_updates:
-  forall {T} (s1 : ProgramState T) (fh : Header -> T) (fs : StateVar -> T),
+  forall {T} (s1 : ProgramState T) (fh : Header -> T) (fs : State -> T),
     update_all_hdrs (update_all_states s1 fs) fh =
     update_all_states (update_all_hdrs s1 fh) fs.
 Proof.
@@ -350,8 +350,8 @@ Proof.
 Qed.
 
 Lemma lookup_state_trivial:
-  forall {T} (s : ProgramState T) (sv : StateVar),
-    lookup_state s sv = lookup_state_map (state_var_map s) sv.
+  forall {T} (s : ProgramState T) (sv : State),
+    lookup_state s sv = lookup_state_map (state_map s) sv.
 Proof.
   intros.
   reflexivity.
@@ -359,7 +359,7 @@ Qed.
 
 (* is_header_in_ps is preserved across update_all_states *)
 Lemma is_header_in_ps_after_update_all_states:
-  forall {T} (s1 : ProgramState T) (h : Header) (fs : StateVar -> T),
+  forall {T} (s1 : ProgramState T) (h : Header) (fs : State -> T),
     is_header_in_ps (update_all_states s1 fs) h = is_header_in_ps s1 h.
 Proof.
   intros.
@@ -368,7 +368,7 @@ Qed.
 
 (* is_state_var_in_ps is preserved across update_all_hdrs *)
 Lemma is_state_var_in_ps_after_update_all_hdrs:
-  forall {T} (s1 : ProgramState T) (sv : StateVar) (fh : Header -> T),
+  forall {T} (s1 : ProgramState T) (sv : State) (fh : Header -> T),
     is_state_var_in_ps (update_all_hdrs s1 fh) sv = is_state_var_in_ps s1 sv.
 Proof.
   intros.
@@ -379,21 +379,21 @@ Definition get_all_headers_from_ps {T : Type} (s: ProgramState T) : list Header 
   List.map (fun '(key, value) => HeaderCtr key)
            (PTree.elements (snd (header_map s))).
 
-Definition get_all_state_vars_from_ps {T : Type} (s: ProgramState T) : list StateVar :=
-  List.map (fun '(key, value) => StateVarCtr key)
-           (PTree.elements (snd (state_var_map s))).
+Definition get_all_state_vars_from_ps {T : Type} (s: ProgramState T) : list State :=
+  List.map (fun '(key, value) => StateCtr key)
+           (PTree.elements (snd (state_map s))).
 
-Definition init_concrete_state (c : list CtrlPlaneConfigName) (h : list Header) (s: list StateVar) :
+Definition init_concrete_state (c : list Ctrl) (h : list Header) (s: list State) :
   ConcreteState :=
-  {| ctrl_plane_map :=  (Uninitialized uint8,
+  {|ctrl_map :=  (Uninitialized uint8,
                         PTree_Properties.of_list
-                        (List.map (fun x => (match x with | CtrlPlaneConfigNameCtr x_id => x_id end, Uninitialized uint8)) c));
+                        (List.map (fun x => (match x with | CtrlCtr x_id => x_id end, Uninitialized uint8)) c));
      header_map     :=  (Uninitialized uint8,
                         PTree_Properties.of_list
                         (List.map (fun x => (match x with | HeaderCtr x_id => x_id end, Uninitialized uint8)) h));
-     state_var_map  :=  (Uninitialized uint8,
+     state_map  :=  (Uninitialized uint8,
                         PTree_Properties.of_list
-                        (List.map (fun x => (match x with | StateVarCtr x_id => x_id end, Uninitialized uint8)) s));|}.
+                        (List.map (fun x => (match x with | StateCtr x_id => x_id end, Uninitialized uint8)) s));|}.
 
 (* Convert positive to string *)
 Fixpoint pos_to_string (p : positive) : string :=
@@ -403,17 +403,17 @@ Fixpoint pos_to_string (p : positive) : string :=
   | xI p' => String.append (pos_to_string p') "1"
   end.
 
-Definition init_symbolic_state (c : list CtrlPlaneConfigName) (h : list Header) (s: list StateVar) :
+Definition init_symbolic_state (c : list Ctrl) (h : list Header) (s: list State) :
   SymbolicState :=
-  {| ctrl_plane_map :=  (SmtArithVar "rndstring", (*TODO: Need better default, but think this doesn't matter *)
+  {|ctrl_map :=  (SmtArithVar "rndstring", (*TODO: Need better default, but think this doesn't matter *)
                         PTree_Properties.of_list
-                        (List.map (fun x => let var := match x with | CtrlPlaneConfigNameCtr x_id => x_id end in (var,  SmtArithVar (pos_to_string var))) c));
+                        (List.map (fun x => let var := match x with | CtrlCtr x_id => x_id end in (var,  SmtArithVar (pos_to_string var))) c));
      header_map     :=  (SmtArithVar "rndstring", (*TODO: Need better default, but think this doesn't matter *)
                         PTree_Properties.of_list
                         (List.map (fun x => let var := match x with | HeaderCtr x_id => x_id end in (var, SmtArithVar (pos_to_string var))) h));
-     state_var_map  :=  (SmtArithVar "rndstring", (*TODO: Need better default, but think this doesn't matter *)
+     state_map  :=  (SmtArithVar "rndstring", (*TODO: Need better default, but think this doesn't matter *)
                         PTree_Properties.of_list
-                        (List.map (fun x => let var := match x with | StateVarCtr x_id => x_id end in (var, SmtArithVar (pos_to_string var))) s));|}.
+                        (List.map (fun x => let var := match x with | StateCtr x_id => x_id end in (var, SmtArithVar (pos_to_string var))) s));|}.
 
 (* Mark definitions globally opaque below *)
 Global Opaque lookup_ctrl.
@@ -429,8 +429,8 @@ Global Opaque program_state_mapper.
 Global Opaque update_all_hdrs.
 Global Opaque update_all_states.
 Global Opaque HeaderMap.
-Global Opaque StateVarMap.
-Global Opaque CtrlPlaneConfigNameMap.
+Global Opaque StateMap.
+Global Opaque CtrlMap.
 Global Opaque new_pmap_from_old.
 Global Opaque is_header_in_ps.
 Global Opaque is_state_var_in_ps.

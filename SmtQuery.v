@@ -39,7 +39,7 @@ Axiom smt_query_sound_none : forall e,
    which means we need to iterate through header_list and state_var_list *)
 (* function that given 2 states and a list of headers and state vars, asserts that each header/state var is the same across the two states *)
 Definition check_headers_and_state_vars (s1 s2 : SymbolicState)
-  (header_list : list Header) (state_var_list : list StateVar)
+  (header_list : list Header) (state_var_list : list State)
   : SmtBoolExpr :=
   SmtBoolNot(
   SmtBoolAnd (List.fold_right (fun h acc => SmtBoolAnd acc (SmtBoolEq (lookup_hdr s1 h) (lookup_hdr s2 h))) 
@@ -103,7 +103,7 @@ Qed.
 Lemma SmtBoolConjunction_true_state_var:
   forall s1 s2 state_var_list f,
   eval_smt_bool (fold_right 
-    (fun (sv : StateVar) (acc : SmtBoolExpr) =>
+    (fun (sv :State) (acc : SmtBoolExpr) =>
           SmtBoolAnd acc
           (SmtBoolEq (lookup_state s1 sv)
           (lookup_state s2 sv))) SmtTrue state_var_list) f =
@@ -158,7 +158,7 @@ Qed.
 Lemma SmtBoolConjunction_false_state_var:
   forall s1 s2 state_var_list f,
   eval_smt_bool (fold_right 
-    (fun (sv : StateVar) (acc : SmtBoolExpr) =>
+    (fun (sv :State) (acc : SmtBoolExpr) =>
           SmtBoolAnd acc
           (SmtBoolEq (lookup_state s1 sv)
           (lookup_state s2 sv))) SmtTrue state_var_list) f =
@@ -205,7 +205,7 @@ Qed.
 
 (* Same lemma as above but for state var list *)
 Lemma forallb_in_state_var_list :
-  forall (f : StateVar -> bool) (l : list StateVar),
+  forall (f :State -> bool) (l : list State),
   forallb f l = true ->
   forall x, In x l -> f x = true.
 Proof.
@@ -246,7 +246,7 @@ Lemma check_headers_and_state_vars_true:
   eval_smt_bool(check_headers_and_state_vars s1 s2 header_list state_var_list) f = true ->
   (exists h : Header, In h header_list /\
                       eval_smt_bool (SmtBoolEq (lookup_hdr s1 h) (lookup_hdr s2 h)) f = false) \/
-  (exists sv : StateVar, In sv state_var_list /\
+  (exists sv :State, In sv state_var_list /\
                       eval_smt_bool (SmtBoolEq (lookup_state s1 sv) (lookup_state s2 sv)) f = false).
 Proof.
   intros s1 s2 header_list state_var_list f H.
@@ -276,7 +276,7 @@ Qed.
 Definition equivalence_checker
   (s : SymbolicState)
   (t1 : Transformer) (t2 : Transformer)
-  (header_list : list Header) (state_var_list : list StateVar)
+  (header_list : list Header) (state_var_list : list State)
    :  SmtResult :=
   (* assume a starting symbolic state s*)
   (* convert t1 and t2 to an equivalent final SmtArithExpr, assuming a start state of s *)
