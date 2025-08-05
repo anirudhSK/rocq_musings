@@ -1,5 +1,6 @@
 (* Provide semantics for a Transformer by providing an evaluation function *)
 From MyProject Require Export CrTransformer.
+From MyProject Require Export CrProgramState.
 From MyProject Require Export CrDsl.
 Require Import List.
 Import ListNotations.

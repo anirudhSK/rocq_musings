@@ -6,7 +6,6 @@ Require Import ZArith.
 Import ListNotations.
 Require Import Strings.String.
 From MyProject Require Export CrIdentifiers.
-From MyProject Require Export CrProgramState.
 From MyProject Require Export NoDupLists.
 
 (* A transformer is either a sequential or a parallel transformer *)

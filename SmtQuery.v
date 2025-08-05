@@ -6,6 +6,7 @@ Require Import Classical.
 Require Import Coq.Lists.List.
 Require Import Coq.Bool.Bool.
 Require Import Coq.ZArith.ZArith.
+From Coq Require Import FunctionalExtensionality.
 Import ListNotations.
 
 (* Import or define SeqRule and related types *)
@@ -285,19 +286,21 @@ Definition equivalence_checker
   (* check if the headers and state vars are equivalent *)
   smt_query (check_headers_and_state_vars s1 s2 header_list state_var_list).
 
-Definition equivalence_checker_cr_dsl (s : SymbolicState) (p1: CaracaraProgram) (p2: CaracaraProgram)
+Definition equivalence_checker_cr_dsl (p1: CaracaraProgram) (p2: CaracaraProgram)
   : bool := 
-  (* assume a starting symbolic state s *)
-  (* convert p1 and p2 to an equivalent final SmtArithExpr, assuming a start state of s *)
   match p1, p2 with
    | CaracaraProgramDef h1 s1 c1 t1, CaracaraProgramDef h2 s2 c2 t2 => 
       if hdr_list_equal h1 h2 then
         if state_list_equal s1 s2 then
-          match (equivalence_checker s t1 t2 h1 s1) with
-          | SmtUnsat => true  (* if it is unsatisfiable, then all state vars and headers are equal *)
-          | SmtSat _ => false (* if it is satisfiable, then some state var or header is not equal *)
-          | SmtUnknown => false (* if it is unknown, we assume it is not equal *)
-          end
+          if ctrl_list_equal c1 c2 then
+            match (equivalence_checker (init_symbolic_state p1) t1 t2 h1 s1) with
+            (* TODO: Maybe equivalence_checker should take c as argument too? *)
+            | SmtUnsat => true  (* if it is unsatisfiable, then all state vars and headers are equal *)
+            | SmtSat _ => false (* if it is satisfiable, then some state var or header is not equal *)
+            | SmtUnknown => false (* if it is unknown, we assume it is not equal *)
+            end
+          else
+            false
         else
           false
       else
@@ -514,17 +517,193 @@ Lemma equivalence_checker_sound :
   (lookup_state c1 v) = (lookup_state c2 v)).
 *)
 
+(*
+  (In v (get_all_headers_from_ps c1) /\             (* must be in c1 *)
+  (In v (get_all_headers_from_ps c2)) /\            (* must be in c2 *)
+*)
+
+(* Transform: map f list where f returns pairs *)
+(* Into: (map (fun x => fst (f x)) list, map (fun x => snd (f x)) list) *)
+
+Lemma map_pair_split : forall (A B C : Type) (f : A -> B * C) (l : list A),
+  map f l = combine (map (fun x => fst (f x)) l) (map (fun x => snd (f x)) l).
+Proof.
+  intros A B C f l.
+  induction l as [|a l' IH].
+  - reflexivity.
+  - simpl. f_equal.
+    + destruct (f a). reflexivity.
+    + apply IH.
+Qed.
+
+Definition unzip_paired_list (l : list (positive * SmtArithExpr)) : list positive :=
+  map fst l.
+
+Lemma ptree_of_list_lemma : forall {T} {V} (l : list T) (key_fn : T -> positive) (val_fn : T -> V) (uid : positive),
+    In uid (map key_fn l) ->
+    In uid (map fst (PTree.elements (PTree_Properties.of_list (combine (map key_fn l) (map val_fn l))))).
+Proof.
+  intros.
+  induction l as [|x xs IH].
+  - simpl in *. exfalso. congruence.
+  - simpl in *.  admit.
+Admitted.
+
+Lemma init_symbolic_state_nodep_t : forall h s c t1 t2,
+  init_symbolic_state (CaracaraProgramDef h s c t1) =
+  init_symbolic_state (CaracaraProgramDef h s c t2).
+Proof.
+  intros h s c t1 t2.
+  unfold init_symbolic_state.
+  f_equal.
+Qed.
+
 (* Soundness lemma for equivalence_checker_cr_dsl *)
 Lemma equivalence_checker_cr_sound :
-  forall s p1 p2 f,
-  equivalence_checker_cr_dsl s p1 p2 = true ->
-  let c  := eval_sym_state s f in
-  let c1 := eval_cr_program_concrete p1 c in 
-  let c2 := eval_cr_program_concrete p2 c in
-  (forall v, In v (get_all_headers_from_ps c1) -> (* every header in c1 *)
-  (In v (get_all_headers_from_ps c2)) /\                (* must be in c2 *)
-  (lookup_hdr c1 v) = (lookup_hdr c2 v)).     (* and their values must be equal *)
-Admitted.
-  (* TODO: and similar for state *)
+  forall p1 p2 f,
+  equivalence_checker_cr_dsl p1 p2 = true ->
+  let c1_i  := eval_sym_state (init_symbolic_state p1) f in (* Get a sym state out of p1' headers, ctrls, and state *)
+  let c2_i  := eval_sym_state (init_symbolic_state p2) f in (* Do the same for p2 *)
+  let t1 := get_transformer_from_prog p1 in
+  let t2 := get_transformer_from_prog p2 in
+  let c1 := eval_transformer_concrete t1 c1_i in
+  let c2 := eval_transformer_concrete t2 c2_i in
+  (forall v, In v (get_headers_from_prog p1) ->    (* every header in p1 *)
+  (In v (get_headers_from_prog p2)) /\             (* must be in p2 *)
+  (lookup_hdr c1 v) = (lookup_hdr c2 v)).          (* and their final values must be equal *)
+Proof.
+  intros p1 p2 f H.
+  unfold equivalence_checker_cr_dsl in H.
+  destruct p1 as [h1 s1 c1 t1] eqn:desp1,
+           p2 as [h2 s2 c2 t2] eqn:desp2; simpl in H.
+  destruct
+  (hdr_list_equal h1 h2) eqn:H_hdr_eq,
+  (state_list_equal s1 s2) eqn:H_state_eq,
+  (ctrl_list_equal c1 c2) eqn:H_ctrl_eq in H; simpl in H; try (exfalso; congruence).
+  intros.
+  simpl in H0. (* TODO: May want to remove these *)
+  split.
+  - apply hdr_list_equal_lemma in H_hdr_eq.
+    rewrite H_hdr_eq in H0.
+    assumption.
+  - destruct (equivalence_checker (init_symbolic_state (CaracaraProgramDef h1 s1 c1
+t1)) t1 t2 h1 s1) eqn:H_eq; try (exfalso; congruence).
+    apply equivalence_checker_sound with (f := f) in H_eq.
+    + apply H_eq in H0.
+      unfold c0.
+      unfold c3.
+      unfold c1_i.
+      unfold c2_i.
+      simpl.
+      unfold t0.
+      unfold t3.
+      simpl.
+      apply state_list_equal_lemma in H_state_eq.
+      apply hdr_list_equal_lemma in H_hdr_eq.
+      apply ctrl_list_equal_lemma in H_ctrl_eq.
+      rewrite <- H_hdr_eq.
+      rewrite <- H_state_eq.
+      rewrite <- H_ctrl_eq.
+      rewrite init_symbolic_state_nodep_t with (t2 := t2) in H0 at 2.
+      assumption.
+    + intros.
+      apply is_header_in_ps_lemma.
+      unfold init_symbolic_state.
+      Transparent get_all_headers_from_ps.
+      unfold get_all_headers_from_ps.
+      simpl.
+      clear H0.
+      clear v.
+      destruct v0.
+      simpl.
+      rewrite map_pair_split.
+      simpl.
+      remember (fun x : Header =>
+      SmtArithVar
+      (pos_to_string match x with
+      | HeaderCtr x_id => x_id
+      end)) as val_fn.
+            remember (fun x : Header => match x with
+      | HeaderCtr x_id => x_id
+      end)  as key_fn.
+      assert (H_tmp : In uid
+      (unzip_paired_list (PTree.elements
+      (PTree_Properties.of_list
+      (combine
+      (map key_fn h1) (map val_fn h1)))))).
+      { unfold unzip_paired_list.
+        apply in_map with (f := key_fn) in H1.
+        apply ptree_of_list_lemma; try assumption.
+        rewrite Heqkey_fn in H1.
+        rewrite <- Heqkey_fn in H1.
+        assumption.
+      }
+      unfold unzip_paired_list in H_tmp.
+      unfold fst in H_tmp.
+      simpl in H_tmp.
+      apply in_map with (f := fun x => HeaderCtr x) in H_tmp.
+      rewrite map_map in H_tmp.
+      simpl in H_tmp.
+      assert(H_tmp2 :
+             (fun '(key, _) => HeaderCtr key)
+             =
+             (fun x : positive * SmtArithExpr => HeaderCtr (let (x0, _) := x in x0))).
+      { apply functional_extensionality.
+        intros.
+        simpl.
+        destruct x. 
+        reflexivity. }
+      rewrite H_tmp2.
+      assumption.
+    + intros. (* Similar to above, easy to fill in *)
+      apply is_state_in_ps_lemma.
+      unfold init_symbolic_state.
+      Transparent get_all_states_from_ps.
+      unfold get_all_states_from_ps.
+      simpl.
+      clear H0.
+      clear v.
+      destruct v0.
+      simpl.
+      rewrite map_pair_split.
+      simpl.
+      remember (fun x : State =>
+      SmtArithVar
+      (pos_to_string match x with
+      | StateCtr x_id => x_id
+      end)) as val_fn.
+            remember (fun x : State => match x with
+      | StateCtr x_id => x_id
+      end)  as key_fn.
+      assert (H_tmp : In uid
+      (unzip_paired_list (PTree.elements
+      (PTree_Properties.of_list
+      (combine
+      (map key_fn s1) (map val_fn s1)))))).
+      { unfold unzip_paired_list.
+        apply in_map with (f := key_fn) in H1.
+        apply ptree_of_list_lemma; try assumption.
+        rewrite Heqkey_fn in H1.
+        rewrite <- Heqkey_fn in H1.
+        assumption.
+      }
+      unfold unzip_paired_list in H_tmp.
+      unfold fst in H_tmp.
+      simpl in H_tmp.
+      apply in_map with (f := fun x => StateCtr x) in H_tmp.
+      rewrite map_map in H_tmp.
+      simpl in H_tmp.
+      assert(H_tmp2 :
+             (fun '(key, _) => StateCtr key)
+             =
+             (fun x : positive * SmtArithExpr => StateCtr (let (x0, _) := x in x0))).
+      { apply functional_extensionality.
+        intros.
+        simpl.
+        destruct x. 
+        reflexivity. }
+      rewrite H_tmp2.
+      assumption.
+Qed.
 
 Print Assumptions equivalence_checker_complete.

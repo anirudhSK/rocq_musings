@@ -32,6 +32,27 @@ Inductive CaracaraProgram : Type :=
                               connections between them specified by a list of type (list Connection) *)
       CaracaraProgram.
 
+Definition get_headers_from_prog (p : CaracaraProgram) : list Header :=
+  match p with
+  | CaracaraProgramDef h _ _ _ => h
+  end.
+
+Definition get_states_from_prog (p : CaracaraProgram) : list State :=
+  match p with
+  | CaracaraProgramDef _ s _ _ => s
+  end.
+
+Definition get_ctrls_from_prog (p : CaracaraProgram) : list Ctrl :=
+  match p with
+  | CaracaraProgramDef _ _ c _ => c
+  end.
+
+Definition get_transformer_from_prog (p : CaracaraProgram) : Transformer :=
+  match p with
+  | CaracaraProgramDef _ _ _ t => t
+  end.
+
+(* Check for duplicate identifiers in the header, state, and control lists *)
 Definition check_for_duplicate_identifiers (program : CaracaraProgram) : bool :=
   match program with
   | CaracaraProgramDef h s c _ =>

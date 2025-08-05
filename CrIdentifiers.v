@@ -3,6 +3,7 @@ From MyProject Require Export Integers.
 From MyProject Require Import MyInts.
 From MyProject Require Export InitStatus.
 Require Import ZArith.
+Require Import Bool.
 
 (* Define the different types of identifiers in the Caracara DSL *)
 Inductive ParserState : Type := ParserStateCtr (uid : positive).
@@ -63,7 +64,45 @@ Definition hdr_list_equal (h1 : list Header) (h2 : list Header) :=
   andb (List.forallb (fun '(x, y) => header_equal x y) (List.combine h1 h2)) (* every pair has equal elements *)
        (Nat.eqb (List.length h1) (List.length h2)).                          (* both lists have same number of elements *)
 
-(* Generate same definitions as above but for state variables *)
+(* Same as above for state list and ctrl list *)
 Definition state_list_equal (s1 : list State) (s2 : list State) :=
-  andb (List.forallb (fun '(x, y) => state_equal x y) (List.combine s1 s2))
-       (Nat.eqb (List.length s1) (List.length s2)).
+        andb (List.forallb (fun '(x, y) => state_equal x y) (List.combine s1 s2))
+                         (Nat.eqb (List.length s1) (List.length s2)).
+
+Definition ctrl_list_equal (c1 : list Ctrl) (c2 : list Ctrl) :=
+        andb (List.forallb (fun '(x, y) => ctrl_equal x y) (List.combine c1 c2))
+                         (Nat.eqb (List.length c1) (List.length c2)).
+       
+Lemma state_list_equal_lemma:
+  forall s1 s2,
+  state_list_equal s1 s2 = true ->
+  s1 = s2.
+Admitted.
+
+Lemma ctrl_list_equal_lemma:
+  forall c1 c2,
+  ctrl_list_equal c1 c2 = true ->
+  c1 = c2.
+Admitted.
+
+Lemma hdr_list_equal_lemma:
+  forall h1 h2,
+  hdr_list_equal h1 h2 = true ->
+  h1 = h2.
+Proof.
+  intros.
+  unfold hdr_list_equal in H.
+  induction h1, h2; simpl in H.
+  - reflexivity.
+  - exfalso. congruence.
+  - exfalso. congruence.
+  - destruct a eqn:desa, h eqn:desh; simpl in *.
+    destruct (uid =? uid0)%positive in H; simpl.
+    -- rewrite andb_true_l in H.
+       rewrite <- desa in *.
+       rewrite <- desh in *.
+       Check List.combine.
+       unfold List.combine in IHh1; simpl in IHh1.
+       admit.
+    -- rewrite andb_false_l in H. exfalso. congruence.
+Admitted.

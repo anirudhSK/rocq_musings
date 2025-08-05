@@ -1,6 +1,8 @@
 From MyProject Require Export CrIdentifiers.
 From MyProject Require Export SmtExpr.
 From MyProject Require Export Maps.
+From MyProject Require Export CrDsl.
+From MyProject Require Export UtilLemmas.
 Require Import Strings.String.
 Require Import ZArith.
 From Coq Require Import FunctionalExtensionality.
@@ -379,12 +381,68 @@ Definition get_all_headers_from_ps {T : Type} (s: ProgramState T) : list Header 
   List.map (fun '(key, value) => HeaderCtr key)
            (PTree.elements (snd (header_map s))).
 
-Definition get_all_state_vars_from_ps {T : Type} (s: ProgramState T) : list State :=
+Definition get_all_states_from_ps {T : Type} (s: ProgramState T) : list State :=
   List.map (fun '(key, value) => StateCtr key)
            (PTree.elements (snd (state_map s))).
 
-Definition init_concrete_state (c : list Ctrl) (h : list Header) (s: list State) :
-  ConcreteState :=
+Lemma is_header_in_ps_lemma :
+  forall {T} (s1 : ProgramState T) (h : Header),
+    In h (get_all_headers_from_ps s1) ->
+    is_header_in_ps s1 h <> None.
+    (* TODO: Need to ask Joe about <> None *)
+Proof.
+  intros.
+  destruct s1 as [ctrl hdr state].
+  unfold get_all_headers_from_ps in H.
+  unfold is_header_in_ps.
+  simpl in *.
+  destruct hdr as [default hdr_map].
+  simpl in *.
+  apply in_map_iff in H.
+  simpl in H.
+  destruct H. (* TODO: ask Joe, seems to extract witness *)
+  destruct x.
+  destruct h.
+  destruct H.
+  injection H as H_eq.
+  rewrite <- H_eq.
+  Check PTree.elements_complete.
+  apply some_is_not_none with (x := t).
+  apply PTree.elements_complete.
+  assumption.
+Qed.
+
+(* Same as above lemma, but for state *)
+Lemma is_state_in_ps_lemma :
+  forall {T} (s1 : ProgramState T) (sv : State),
+    In sv (get_all_states_from_ps s1) ->
+    is_state_var_in_ps s1 sv <> None.
+Proof.
+  intros.
+  destruct s1 as [ctrl hdr state].
+  unfold get_all_states_from_ps in H.
+  unfold is_state_var_in_ps.
+  simpl in *.
+  destruct state as [default state_map].
+  simpl in *.
+  apply in_map_iff in H.
+  simpl in H.
+  destruct H. (* TODO: ask Joe, seems to extract witness *)
+  destruct x.
+  destruct sv.
+  destruct H.
+  injection H as H_eq.
+  rewrite <- H_eq.
+  Check PTree.elements_complete.
+  apply some_is_not_none with (x := t).
+  apply PTree.elements_complete.
+  assumption.
+Qed.
+
+Definition init_concrete_state (p : CaracaraProgram) : ConcreteState :=
+  let h := get_headers_from_prog p in
+  let s := get_states_from_prog p in
+  let c := get_ctrls_from_prog p in
   {|ctrl_map :=  (Uninitialized uint8,
                         PTree_Properties.of_list
                         (List.map (fun x => (match x with | CtrlCtr x_id => x_id end, Uninitialized uint8)) c));
@@ -403,8 +461,10 @@ Fixpoint pos_to_string (p : positive) : string :=
   | xI p' => String.append (pos_to_string p') "1"
   end.
 
-Definition init_symbolic_state (c : list Ctrl) (h : list Header) (s: list State) :
-  SymbolicState :=
+Definition init_symbolic_state (p: CaracaraProgram) : SymbolicState :=
+  let h := get_headers_from_prog p in
+  let s := get_states_from_prog p in
+  let c := get_ctrls_from_prog p in
   {|ctrl_map :=  (SmtArithVar "rndstring", (*TODO: Need better default, but think this doesn't matter *)
                         PTree_Properties.of_list
                         (List.map (fun x => let var := match x with | CtrlCtr x_id => x_id end in (var,  SmtArithVar (pos_to_string var))) c));
@@ -435,4 +495,4 @@ Global Opaque new_pmap_from_old.
 Global Opaque is_header_in_ps.
 Global Opaque is_state_var_in_ps.
 Global Opaque get_all_headers_from_ps.
-Global Opaque get_all_state_vars_from_ps.
+Global Opaque get_all_states_from_ps.
