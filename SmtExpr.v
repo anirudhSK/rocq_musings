@@ -61,3 +61,4 @@ with eval_smt_arith (e : SmtArithExpr) (v : SmtValuation) : (InitStatus uint8) :
     | SmtBitDiv e1 e2 => InitStatus.divu (eval_smt_arith e1 v) (eval_smt_arith e2 v)
     | SmtBitMod e1 e2 => InitStatus.modu (eval_smt_arith e1 v) (eval_smt_arith e2 v)
     end.
+(* InitStatus: might be unnecessary and error prone because Z3 may not map 1-to-1 to this. *)
