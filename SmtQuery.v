@@ -536,18 +536,136 @@ Proof.
     + apply IH.
 Qed.
 
-Definition unzip_paired_list (l : list (positive * SmtArithExpr)) : list positive :=
-  map fst l.
+Definition unzip_paired_list_hdr (l : list (positive * SmtArithExpr)) : list Header :=
+  map (fun x => HeaderCtr (fst x)) l.
 
-Lemma ptree_of_list_lemma : forall {T} {V} (l : list T) (key_fn : T -> positive) (val_fn : T -> V) (uid : positive),
-    In uid (map key_fn l) ->
-    In uid (map fst (PTree.elements (PTree_Properties.of_list (combine (map key_fn l) (map val_fn l))))).
+Lemma helper1 :
+  forall (l : list Header) (key_fn : Header -> positive) (val_fn : Header -> SmtArithExpr) (h : Header),
+  In h l ->
+  In (key_fn h, val_fn h) (combine (map key_fn l) (map val_fn l)).
 Proof.
+  intros l key_fn val_fn h H_in.
+  induction l as [|h' t IH].
+  - simpl in H_in. exfalso. congruence.
+  - simpl.
+    simpl in H_in.
+    destruct H_in.
+    -- left. rewrite H. reflexivity.
+    -- right. apply IH. assumption.
+Qed.
+
+(* Same as helper1 but for state *)
+Lemma helper1_state :
+  forall (l : list State) (key_fn : State -> positive) (val_fn : State -> SmtArithExpr) (sv : State),
+  In sv l ->
+  In (key_fn sv, val_fn sv) (combine (map key_fn l) (map val_fn l)).
+Proof.
+  intros l key_fn val_fn sv H_in.
+  induction l as [|sv' t IH].
+  - simpl in H_in. exfalso. congruence.
+  - simpl.
+    simpl in H_in.
+    destruct H_in.
+    -- left. rewrite H. reflexivity.
+    -- right. apply IH. assumption.
+Qed.
+
+Lemma map_combine2:
+   forall {T V K} (l : list T) (val_fn : T -> V) (key_fn : T -> K),
+    (map fst (combine (map key_fn l) (map val_fn l))) =
+    (map key_fn l).
+Proof.
+  intros T V K l val_fn key_fn.
+  induction l as [|x t IH].
+  - reflexivity.
+  - simpl. f_equal. apply IH.
+Qed.
+
+Lemma ptree_of_list_lemma_hdr :
+    forall (l : list Header) (val_fn : Header -> SmtArithExpr) (h: Header),
+    Coqlib.list_norepet l ->
+    In h l ->
+    In h (map (fun '(key, _) => HeaderCtr key)    
+     (PTree.elements (PTree_Properties.of_list (combine (map (fun h => match h with | HeaderCtr x => x end) l) (map val_fn l))))).
+Proof.
+  intros l val_fn h H' H. (* apply in_map with (f := fun pos => (pos, key_fn) in H. *)
+  generalize H as H_in.
+  apply helper1 with (key_fn := (fun h => match h with | HeaderCtr x => x end)) (val_fn := val_fn) in H.
   intros.
-  induction l as [|x xs IH].
-  - simpl in *. exfalso. congruence.
-  - simpl in *.  admit.
-Admitted.
+  destruct h.
+  remember (fun '(key, _) => HeaderCtr key) as f.
+  Search List.map In.
+  assert(H_tmp: HeaderCtr uid =
+         f (uid, val_fn (HeaderCtr uid))).
+  { rewrite Heqf. reflexivity. }
+  rewrite H_tmp.
+  apply in_map with (f := f) (x := (uid, val_fn (HeaderCtr uid))) (l := (PTree.elements
+  (PTree_Properties.of_list (combine (map (fun h => match h with | HeaderCtr x => x end) l) (map val_fn l))))).
+  remember (uid, val_fn (HeaderCtr uid)) as pair_val.
+  remember (combine (map (fun h : Header => match h with
+    | HeaderCtr x => x
+  end) l) (map val_fn l)) as l_combined.
+  rewrite Heqpair_val in *.
+  apply PTree.elements_correct with (m := PTree_Properties.of_list l_combined).
+  apply PTree_Properties.of_list_norepet.
+  - rewrite Heql_combined.
+    simpl.
+    Search List.map List.combine.
+    rewrite map_combine2.
+    apply Coqlib.list_map_norepet.
+    -- assumption.
+    -- intros.
+       destruct x.
+       destruct y.
+       intro H_contra.
+       apply H2.
+       f_equal.
+       assumption.
+  - assumption.
+Qed.
+
+(* Same as ptree_of_list_lemma_hdr, but for state *)
+Lemma ptree_of_list_lemma_state :
+  forall (l : list State) (val_fn : State -> SmtArithExpr) (sv: State),
+  Coqlib.list_norepet l ->
+  In sv l ->
+  In sv (map (fun '(key, _) => StateCtr key)    
+   (PTree.elements (PTree_Properties.of_list (combine (map (fun sv => match sv with | StateCtr x => x end) l) (map val_fn l))))).
+Proof.
+  intros l val_fn sv H' H. (* apply in_map with (f := fun pos => (pos, key_fn) in H. *)
+  generalize H as H_in.
+  apply helper1_state with (key_fn := (fun sv => match sv with | StateCtr x => x end)) (val_fn := val_fn) in H.
+  intros.
+  destruct sv.
+  remember (fun '(key, _) => StateCtr key) as f.
+  Search List.map In.
+  assert(H_tmp: StateCtr uid =
+     f (uid, val_fn (StateCtr uid))).
+  { rewrite Heqf. reflexivity. }
+  rewrite H_tmp.
+  apply in_map with (f := f) (x := (uid, val_fn (StateCtr uid))) (l := (PTree.elements
+  (PTree_Properties.of_list (combine (map (fun sv : State => match sv with
+  | StateCtr x => x
+  end) l) (map val_fn l))))).
+  remember (uid, val_fn (StateCtr uid)) as pair_val.
+  remember (combine (map (fun sv : State => match sv with | StateCtr x => x end) l) (map val_fn l)) as l_combined.
+  rewrite Heqpair_val in *.
+  apply PTree.elements_correct with (m := PTree_Properties.of_list l_combined).
+  apply PTree_Properties.of_list_norepet.
+  - rewrite Heql_combined.
+  simpl.
+  rewrite map_combine2.
+  apply Coqlib.list_map_norepet.
+  -- assumption.
+  -- intros.
+     destruct x.
+     destruct y.
+     intro H_contra.
+     apply H2.
+     f_equal.
+     assumption.
+  - assumption.
+Qed.
 
 Lemma init_symbolic_state_nodep_t : forall h s c t1 t2,
   init_symbolic_state (CaracaraProgramDef h s c t1) =
@@ -568,9 +686,11 @@ Lemma equivalence_checker_cr_sound :
   let t2 := get_transformer_from_prog p2 in
   let c1 := eval_transformer_concrete t1 c1_i in
   let c2 := eval_transformer_concrete t2 c2_i in
-  (forall v, In v (get_headers_from_prog p1) ->    (* every header in p1 *)
-  (In v (get_headers_from_prog p2)) /\             (* must be in p2 *)
-  (lookup_hdr c1 v) = (lookup_hdr c2 v)).          (* and their final values must be equal *)
+  (Coqlib.list_norepet (get_headers_from_prog p1)) ->(* if p1 has no duplicate headers *)
+  (Coqlib.list_norepet (get_states_from_prog p1)) -> (* and if p1 has no duplicate state vars *)
+  (forall v, In v (get_headers_from_prog p1) ->      (* then, every header in p1 *)
+  (In v (get_headers_from_prog p2)) /\               (* must be in p2 *)
+  (lookup_hdr c1 v) = (lookup_hdr c2 v)).            (* and their final values must be equal *)
 Proof.
   intros p1 p2 f H.
   unfold equivalence_checker_cr_dsl in H.
@@ -581,15 +701,15 @@ Proof.
   (state_list_equal s1 s2) eqn:H_state_eq,
   (ctrl_list_equal c1 c2) eqn:H_ctrl_eq in H; simpl in H; try (exfalso; congruence).
   intros.
-  simpl in H0. (* TODO: May want to remove these *)
+  simpl in H2. (* TODO: May want to remove these *)
   split.
   - apply hdr_list_equal_lemma in H_hdr_eq.
-    rewrite H_hdr_eq in H0.
+    rewrite H_hdr_eq in H2.
     assumption.
   - destruct (equivalence_checker (init_symbolic_state (CaracaraProgramDef h1 s1 c1
 t1)) t1 t2 h1 s1) eqn:H_eq; try (exfalso; congruence).
     apply equivalence_checker_sound with (f := f) in H_eq.
-    + apply H_eq in H0.
+    + apply H_eq in H2.
       unfold c0.
       unfold c3.
       unfold c1_i.
@@ -604,7 +724,7 @@ t1)) t1 t2 h1 s1) eqn:H_eq; try (exfalso; congruence).
       rewrite <- H_hdr_eq.
       rewrite <- H_state_eq.
       rewrite <- H_ctrl_eq.
-      rewrite init_symbolic_state_nodep_t with (t2 := t2) in H0 at 2.
+      rewrite init_symbolic_state_nodep_t with (t2 := t2) in H2 at 2.
       assumption.
     + intros.
       apply is_header_in_ps_lemma.
@@ -612,98 +732,23 @@ t1)) t1 t2 h1 s1) eqn:H_eq; try (exfalso; congruence).
       Transparent get_all_headers_from_ps.
       unfold get_all_headers_from_ps.
       simpl.
-      clear H0.
-      clear v.
-      destruct v0.
-      simpl.
       rewrite map_pair_split.
       simpl.
-      remember (fun x : Header =>
-      SmtArithVar
-      (pos_to_string match x with
-      | HeaderCtr x_id => x_id
-      end)) as val_fn.
-            remember (fun x : Header => match x with
-      | HeaderCtr x_id => x_id
-      end)  as key_fn.
-      assert (H_tmp : In uid
-      (unzip_paired_list (PTree.elements
-      (PTree_Properties.of_list
-      (combine
-      (map key_fn h1) (map val_fn h1)))))).
-      { unfold unzip_paired_list.
-        apply in_map with (f := key_fn) in H1.
-        apply ptree_of_list_lemma; try assumption.
-        rewrite Heqkey_fn in H1.
-        rewrite <- Heqkey_fn in H1.
-        assumption.
-      }
-      unfold unzip_paired_list in H_tmp.
-      unfold fst in H_tmp.
-      simpl in H_tmp.
-      apply in_map with (f := fun x => HeaderCtr x) in H_tmp.
-      rewrite map_map in H_tmp.
-      simpl in H_tmp.
-      assert(H_tmp2 :
-             (fun '(key, _) => HeaderCtr key)
-             =
-             (fun x : positive * SmtArithExpr => HeaderCtr (let (x0, _) := x in x0))).
-      { apply functional_extensionality.
-        intros.
-        simpl.
-        destruct x. 
-        reflexivity. }
-      rewrite H_tmp2.
-      assumption.
-    + intros. (* Similar to above, easy to fill in *)
+      apply ptree_of_list_lemma_hdr.
+      simpl in H0.
+      assumption. assumption.
+    + intros.
       apply is_state_in_ps_lemma.
       unfold init_symbolic_state.
       Transparent get_all_states_from_ps.
       unfold get_all_states_from_ps.
       simpl.
-      clear H0.
-      clear v.
-      destruct v0.
-      simpl.
       rewrite map_pair_split.
       simpl.
-      remember (fun x : State =>
-      SmtArithVar
-      (pos_to_string match x with
-      | StateCtr x_id => x_id
-      end)) as val_fn.
-            remember (fun x : State => match x with
-      | StateCtr x_id => x_id
-      end)  as key_fn.
-      assert (H_tmp : In uid
-      (unzip_paired_list (PTree.elements
-      (PTree_Properties.of_list
-      (combine
-      (map key_fn s1) (map val_fn s1)))))).
-      { unfold unzip_paired_list.
-        apply in_map with (f := key_fn) in H1.
-        apply ptree_of_list_lemma; try assumption.
-        rewrite Heqkey_fn in H1.
-        rewrite <- Heqkey_fn in H1.
-        assumption.
-      }
-      unfold unzip_paired_list in H_tmp.
-      unfold fst in H_tmp.
-      simpl in H_tmp.
-      apply in_map with (f := fun x => StateCtr x) in H_tmp.
-      rewrite map_map in H_tmp.
-      simpl in H_tmp.
-      assert(H_tmp2 :
-             (fun '(key, _) => StateCtr key)
-             =
-             (fun x : positive * SmtArithExpr => StateCtr (let (x0, _) := x in x0))).
-      { apply functional_extensionality.
-        intros.
-        simpl.
-        destruct x. 
-        reflexivity. }
-      rewrite H_tmp2.
+      apply ptree_of_list_lemma_state.
+      assumption.
       assumption.
 Qed.
 
 Print Assumptions equivalence_checker_complete.
+Print Assumptions equivalence_checker_cr_sound.
