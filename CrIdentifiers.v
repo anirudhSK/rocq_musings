@@ -4,6 +4,8 @@ From MyProject Require Import MyInts.
 From MyProject Require Export InitStatus.
 Require Import ZArith.
 Require Import Bool.
+Require Import List.
+Import ListNotations.
 
 (* Define the different types of identifiers in the Caracara DSL *)
 Inductive ParserState : Type := ParserStateCtr (uid : positive).
@@ -60,49 +62,106 @@ Definition ctrl_equal (cc1 cc2 : Ctrl) :=
             | CtrlCtr xid, CtrlCtr yid => Pos.eqb xid yid
     end.
 
-Definition hdr_list_equal (h1 : list Header) (h2 : list Header) :=
-  andb (List.forallb (fun '(x, y) => header_equal x y) (List.combine h1 h2)) (* every pair has equal elements *)
-       (Nat.eqb (List.length h1) (List.length h2)).                          (* both lists have same number of elements *)
+Lemma header_equal_lemma :
+  forall h1 h2,
+  header_equal h1 h2 = true ->
+  h1 = h2.
+Proof.
+  intros h1 h2 H.
+  destruct h1, h2; simpl in H; try congruence.
+  apply Pos.eqb_eq in H. subst. reflexivity.
+Qed.
 
-(* Same as above for state list and ctrl list *)
-Definition state_list_equal (s1 : list State) (s2 : list State) :=
-        andb (List.forallb (fun '(x, y) => state_equal x y) (List.combine s1 s2))
-                         (Nat.eqb (List.length s1) (List.length s2)).
-
-Definition ctrl_list_equal (c1 : list Ctrl) (c2 : list Ctrl) :=
-        andb (List.forallb (fun '(x, y) => ctrl_equal x y) (List.combine c1 c2))
-                         (Nat.eqb (List.length c1) (List.length c2)).
+Fixpoint hdr_list_equal (h1 : list Header) (h2 : list Header) :=
+  match h1, h2 with
+  | nil, nil => true
+  | h::y, h'::y' => andb (header_equal h h') (hdr_list_equal y y')
+  | _, _ => false
+  end.
        
-Lemma state_list_equal_lemma:
-  forall s1 s2,
-  state_list_equal s1 s2 = true ->
-  s1 = s2.
-Admitted.
-
-Lemma ctrl_list_equal_lemma:
-  forall c1 c2,
-  ctrl_list_equal c1 c2 = true ->
-  c1 = c2.
-Admitted.
-
 Lemma hdr_list_equal_lemma:
   forall h1 h2,
   hdr_list_equal h1 h2 = true ->
   h1 = h2.
 Proof.
-  intros.
-  unfold hdr_list_equal in H.
-  induction h1, h2; simpl in H.
-  - reflexivity.
-  - exfalso. congruence.
-  - exfalso. congruence.
-  - destruct a eqn:desa, h eqn:desh; simpl in *.
-    destruct (uid =? uid0)%positive in H; simpl.
-    -- rewrite andb_true_l in H.
-       rewrite <- desa in *.
-       rewrite <- desh in *.
-       Check List.combine.
-       unfold List.combine in IHh1; simpl in IHh1.
-       admit.
-    -- rewrite andb_false_l in H. exfalso. congruence.
-Admitted.
+  intros h1.
+  induction h1 as [|h1' h1''].
+  - destruct h2; simpl; congruence.
+  - destruct h2 as [|h2' h2''].
+    + simpl. congruence.
+    + intros H. simpl in H.
+      rewrite andb_true_iff in H. destruct H as [H1 H2].
+      apply header_equal_lemma in H1. subst. f_equal.
+      apply IHh1''.
+      assumption.
+Qed.
+
+Lemma state_equal_lemma :
+  forall s1 s2,
+  state_equal s1 s2 = true ->
+  s1 = s2.
+Proof.
+  intros s1 s2 H.
+  destruct s1, s2; simpl in H; try congruence.
+  apply Pos.eqb_eq in H. subst. reflexivity.
+Qed.
+
+(* Do the same thing as above
+   for state_list and ctrl_list (including the lemmas)*)
+Fixpoint state_list_equal (s1 : list State) (s2 : list State) :=
+  match s1, s2 with
+  | nil, nil => true
+  | s::y, s'::y' => andb (state_equal s s') (state_list_equal y y')
+  | _, _ => false
+  end. 
+
+Lemma state_list_equal_lemma:
+  forall s1 s2,
+  state_list_equal s1 s2 = true ->
+  s1 = s2.
+Proof.
+  intros s1.
+  induction s1 as [|s1' s1''].
+  - destruct s2; simpl; congruence.
+  - destruct s2 as [|s2' s2''].
+    + simpl. congruence.
+    + intros H. simpl in H.
+      rewrite andb_true_iff in H. destruct H as [H1 H2].
+      apply state_equal_lemma in H1. subst. f_equal.
+      apply IHs1''.
+      assumption.
+Qed.
+
+Fixpoint ctrl_list_equal (c1 : list Ctrl) (c2 : list Ctrl) :=
+  match c1, c2 with
+  | nil, nil => true
+  | c::y, c'::y' => andb (ctrl_equal c c') (ctrl_list_equal y y')
+  | _, _ => false
+  end.
+
+Lemma ctrl_equal_lemma :
+  forall c1 c2,
+  ctrl_equal c1 c2 = true ->
+  c1 = c2.
+Proof.
+  intros c1 c2 H.
+  destruct c1, c2; simpl in H; try congruence.
+  apply Pos.eqb_eq in H. subst. reflexivity.
+Qed.
+
+Lemma ctrl_list_equal_lemma:
+  forall c1 c2,
+  ctrl_list_equal c1 c2 = true ->
+  c1 = c2.
+Proof.
+  intros c1.
+  induction c1 as [|c1' c1''].
+  - destruct c2; simpl; congruence.
+  - destruct c2 as [|c2' c2''].
+    + simpl. congruence.
+    + intros H. simpl in H.
+      rewrite andb_true_iff in H. destruct H as [H1 H2].
+      apply ctrl_equal_lemma in H1. subst. f_equal.
+      apply IHc1''.
+      assumption.
+Qed.
