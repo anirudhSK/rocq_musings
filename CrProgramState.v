@@ -385,6 +385,10 @@ Definition get_all_states_from_ps {T : Type} (s: ProgramState T) : list State :=
   List.map (fun '(key, value) => StateCtr key)
            (PTree.elements (snd (state_map s))).
 
+Definition get_all_ctrls_from_ps {T : Type} (s: ProgramState T) : list Ctrl :=
+  List.map (fun '(key, value) => CtrlCtr key)
+           (PTree.elements (snd (ctrl_map s))).
+
 Lemma is_header_in_ps_lemma :
   forall {T} (s1 : ProgramState T) (h : Header),
     In h (get_all_headers_from_ps s1) ->
@@ -472,6 +476,12 @@ Definition init_symbolic_state (p: CaracaraProgram) : SymbolicState :=
      state_map  :=  (SmtArithVar "rndstring", (*TODO: Need better default, but think this doesn't matter *)
                         PTree_Properties.of_list
                         (List.map (fun x => let var := match x with | StateCtr x_id => x_id end in (var, SmtArithVar (pos_to_string var))) s));|}.
+
+Definition is_init_concrete_state (p : CaracaraProgram) (ps : ConcreteState) : Prop :=
+  forall h sv c,
+    (In h (get_headers_from_prog p) <-> In h (get_all_headers_from_ps ps)) /\
+    (In sv (get_states_from_prog p) <-> In sv (get_all_states_from_ps ps)) /\
+    (In c (get_ctrls_from_prog p) <-> In c (get_all_ctrls_from_ps ps)).
 
 (* Mark definitions globally opaque below *)
 Global Opaque lookup_ctrl.
