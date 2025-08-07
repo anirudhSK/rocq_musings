@@ -683,8 +683,7 @@ Lemma equivalence_checker_cr_sound :
   let t2 := get_transformer_from_prog p2 in
   let c1 := eval_transformer_concrete t1 c1_i in
   let c2 := eval_transformer_concrete t2 c2_i in
-  (Coqlib.list_norepet (get_headers_from_prog p1)) ->(* if p1 has no duplicate headers *)
-  (Coqlib.list_norepet (get_states_from_prog p1)) -> (* and if p1 has no duplicate state vars *)
+  well_formed_program p1 ->                          (* p1 is well-formed *)
   (forall v, In v (get_headers_from_prog p1) ->      (* then, every header in p1 *)
   (In v (get_headers_from_prog p2)) /\               (* must be in p2 *)
   (lookup_hdr c1 v) = (lookup_hdr c2 v)).            (* and their final values must be equal *)
@@ -698,15 +697,15 @@ Proof.
   (state_list_equal s1 s2) eqn:H_state_eq,
   (ctrl_list_equal c1 c2) eqn:H_ctrl_eq in H; simpl in H; try (exfalso; congruence).
   intros.
-  simpl in H2. (* TODO: May want to remove these *)
+  simpl in H1. (* TODO: May want to remove these *)
   split.
   - apply hdr_list_equal_lemma in H_hdr_eq.
-    rewrite H_hdr_eq in H2.
+    rewrite H_hdr_eq in H1.
     assumption.
   - destruct (equivalence_checker (init_symbolic_state (CaracaraProgramDef h1 s1 c1
 t1)) t1 t2 h1 s1) eqn:H_eq; try (exfalso; congruence).
     apply equivalence_checker_sound with (f := f) in H_eq.
-    + apply H_eq in H2.
+    + apply H_eq in H1.
       unfold c0.
       unfold c3.
       unfold c1_i.
@@ -721,7 +720,7 @@ t1)) t1 t2 h1 s1) eqn:H_eq; try (exfalso; congruence).
       rewrite <- H_hdr_eq.
       rewrite <- H_state_eq.
       rewrite <- H_ctrl_eq.
-      rewrite init_symbolic_state_nodep_t with (t2 := t2) in H2 at 2.
+      rewrite init_symbolic_state_nodep_t with (t2 := t2) in H1 at 2.
       assumption.
     + intros.
       apply is_header_in_ps_lemma.
@@ -733,6 +732,7 @@ t1)) t1 t2 h1 s1) eqn:H_eq; try (exfalso; congruence).
       simpl.
       apply ptree_of_list_lemma_hdr.
       simpl in H0.
+      destruct H0.
       assumption. assumption.
     + intros.
       apply is_state_in_ps_lemma.
@@ -743,6 +743,9 @@ t1)) t1 t2 h1 s1) eqn:H_eq; try (exfalso; congruence).
       rewrite map_pair_split.
       simpl.
       apply ptree_of_list_lemma_state.
+      simpl in H0.
+      destruct H0.
+      destruct H3.
       assumption.
       assumption.
 Qed.
