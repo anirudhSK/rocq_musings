@@ -7,11 +7,7 @@ Require Import Coq.Logic.Classical_Prop.
 From Coq Require Import FunctionalExtensionality.
 Require Import Coq.Strings.String.
 Open Scope string_scope.
-
-(* Define a list of 5 elements *)
-Definition my_list : list nat := [1; 2; 3; 4; 5].
-
-(* Eval compute in (List.length my_list). *)
+From MyProject Require Import Coqlib.
 
 (* Check if there are any duplicates in my_list.
    Use an existing library function directly if one exists. *)
@@ -94,7 +90,7 @@ Section ListUtilsLemmas.
 
     (* Theorem stating that has_duplicates returning false implies a duplicate free list *)
     Theorem has_duplicates_correct : forall (l : list T),
-        has_duplicates eqb l = false -> NoDup l.
+        has_duplicates eqb l = false -> Coqlib.list_norepet l.
     Proof.
         intros l H.
         induction l.

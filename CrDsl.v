@@ -9,6 +9,7 @@ From MyProject Require Export CrIdentifiers.
 From MyProject Require Export CrParser.
 From MyProject Require Export CrTransformer.
 From MyProject Require Export ListUtils.
+From MyProject Require Export Coqlib.
 Require Import Coq.Bool.Bool.
 Require Import ZArith.
 
@@ -62,10 +63,10 @@ Definition check_for_duplicate_identifiers (program : CaracaraProgram) : bool :=
   end.
 
 (* No duplicates in Caracara Program *)
-Definition CaracaraNoDup (p : CaracaraProgram) : Prop :=
+Definition well_formed_program (p : CaracaraProgram) : Prop :=
   match p with
   | CaracaraProgramDef h s c _ =>
-      NoDup h /\ NoDup s /\ NoDup c
+      Coqlib.list_norepet h /\ Coqlib.list_norepet s /\ Coqlib.list_norepet c
   end.
 
 (* Check if any of the identifier lists in the CR program has duplicates.
@@ -74,12 +75,12 @@ Definition CaracaraNoDup (p : CaracaraProgram) : Prop :=
 Lemma check_for_duplicates_in_cr_program :
     forall (p : CaracaraProgram),
       check_for_duplicate_identifiers (p) = false ->
-      CaracaraNoDup p.
+      well_formed_program p.
 Proof.
     intros p.
     intros H.
     destruct p.
-    unfold CaracaraNoDup.
+    unfold well_formed_program.
     simpl in H.
     apply orb_false_iff in H as [H' H3].
     apply orb_false_iff in H' as [H'' H2].
