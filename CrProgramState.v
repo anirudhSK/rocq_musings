@@ -477,7 +477,7 @@ Definition init_symbolic_state (p: CaracaraProgram) : SymbolicState :=
                         PTree_Properties.of_list
                         (List.map (fun x => let var := match x with | StateCtr x_id => x_id end in (var, SmtArithVar (pos_to_string var))) s));|}.
 
-Definition is_init_concrete_state (p : CaracaraProgram) (ps : ConcreteState) : Prop :=
+Definition is_init_state {T} (p : CaracaraProgram) (ps : ProgramState T) : Prop :=
   forall h sv c,
     (In h (get_headers_from_prog p) <-> In h (get_all_headers_from_ps ps)) /\
     (In sv (get_states_from_prog p) <-> In sv (get_all_states_from_ps ps)) /\
