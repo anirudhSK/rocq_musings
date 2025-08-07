@@ -406,7 +406,6 @@ Proof.
   destruct H.
   injection H as H_eq.
   rewrite <- H_eq.
-  Check PTree.elements_complete.
   apply some_is_not_none with (x := t).
   apply PTree.elements_complete.
   assumption.
@@ -433,7 +432,6 @@ Proof.
   destruct H.
   injection H as H_eq.
   rewrite <- H_eq.
-  Check PTree.elements_complete.
   apply some_is_not_none with (x := t).
   apply PTree.elements_complete.
   assumption.
