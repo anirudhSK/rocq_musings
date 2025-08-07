@@ -594,7 +594,6 @@ Proof.
   intros.
   destruct h.
   remember (fun '(key, _) => HeaderCtr key) as f.
-  Search List.map In.
   assert(H_tmp: HeaderCtr uid =
          f (uid, val_fn (HeaderCtr uid))).
   { rewrite Heqf. reflexivity. }
@@ -610,7 +609,6 @@ Proof.
   apply PTree_Properties.of_list_norepet.
   - rewrite Heql_combined.
     simpl.
-    Search List.map List.combine.
     rewrite map_combine2.
     apply Coqlib.list_map_norepet.
     -- assumption.
@@ -638,7 +636,6 @@ Proof.
   intros.
   destruct sv.
   remember (fun '(key, _) => StateCtr key) as f.
-  Search List.map In.
   assert(H_tmp: StateCtr uid =
      f (uid, val_fn (StateCtr uid))).
   { rewrite Heqf. reflexivity. }
