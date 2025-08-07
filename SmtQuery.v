@@ -312,10 +312,11 @@ Lemma smt_bool_eq_true : forall e1 e2 f,
   eval_smt_arith e1 f = eval_smt_arith e2 f.
 Proof.
   intros e1 e2 f H.
-  destruct (eval_smt_bool (SmtBoolEq e1 e2) f) eqn:Ex1.
-  -- destruct e1, e2; apply concrete_if_else in Ex1;
-     try unfold eval_smt_arith; try assumption.
-  -- exfalso. congruence.
+  simpl in H.
+  generalize (Integers.eq_spec (eval_smt_arith e1 f) (eval_smt_arith e2 f)).
+  destruct (eq (eval_smt_arith e1 f) (eval_smt_arith e2 f)) eqn:Heq.
+  - intros H_spec. exact H_spec.
+  - intros H_spec. discriminate H.
 Qed.
 
 Lemma eval_smt_bool_lemma_hdr :
@@ -336,7 +337,7 @@ Proof.
   unfold eval_sym_state.
   rewrite commute_mapper_lookup_hdr.
   rewrite commute_mapper_lookup_hdr.
-  apply H_eq.
+  f_equal. apply H_eq.
   assumption. assumption.
 Qed.
 
@@ -358,7 +359,7 @@ Proof.
   unfold eval_sym_state.
   rewrite commute_mapper_lookup_state.
   rewrite commute_mapper_lookup_state.
-  apply H_eq.
+  f_equal. apply H_eq.
   assumption. assumption.
 Qed.
 
@@ -408,10 +409,11 @@ Lemma smt_bool_eq_false : forall e1 e2 f,
   eval_smt_arith e1 f <> eval_smt_arith e2 f.
 Proof.
   intros e1 e2 f H.
-  destruct (eval_smt_bool (SmtBoolEq e1 e2) f) eqn:Ex1.
-  -- exfalso. congruence.
-  -- destruct e1, e2; apply concrete_if_else2 in Ex1;
-     try unfold eval_smt_arith; try assumption.
+  simpl in H.
+  generalize (Integers.eq_spec (eval_smt_arith e1 f) (eval_smt_arith e2 f)).
+  destruct (eq (eval_smt_arith e1 f) (eval_smt_arith e2 f)) eqn:Heq.
+  - intros H_spec. discriminate H.
+  - intros H_spec. exact H_spec.
 Qed.
 
 Lemma eval_smt_bool_lemma_hdr_false :
@@ -432,7 +434,9 @@ Proof.
   unfold eval_sym_state.
   rewrite commute_mapper_lookup_hdr.
   rewrite commute_mapper_lookup_hdr.
-  apply H.
+  intro Hcontra.
+  injection Hcontra as H_eq.
+  contradiction (H H_eq).
   assumption. assumption.
 Qed.
 
@@ -454,7 +458,9 @@ Proof.
   unfold eval_sym_state.
   rewrite commute_mapper_lookup_state.
   rewrite commute_mapper_lookup_state.
-  apply H.
+  intro Hcontra.
+  injection Hcontra as H_eq.
+  contradiction (H H_eq).
   assumption. assumption.
 Qed.
 

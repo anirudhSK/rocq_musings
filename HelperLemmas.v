@@ -14,7 +14,7 @@ Lemma commute_lookup_eval_state:
   forall (s : SymbolicState) (f : SmtValuation)
         sv,
     lookup_state (eval_sym_state s f) sv =
-    eval_smt_arith (lookup_state s sv) f.
+    Initialized uint8 (eval_smt_arith (lookup_state s sv) f).
 Proof.
   intros s f sv.
   destruct sv.
@@ -27,7 +27,7 @@ Lemma commute_lookup_eval_hdr:
   forall (s : SymbolicState) (f : SmtValuation)
         hv,
     lookup_hdr (eval_sym_state s f) hv =
-    eval_smt_arith (lookup_hdr s hv) f.
+    Initialized uint8 (eval_smt_arith (lookup_hdr s hv) f).
 Proof.
   intros s f hv.
   destruct hv.
@@ -40,7 +40,7 @@ Lemma commute_lookup_eval:
   forall (s : SymbolicState) (f : SmtValuation)
         arg,
     lookup_concrete arg (eval_sym_state s f) =
-    eval_smt_arith (lookup_smt arg s) f.
+    Initialized uint8 (eval_smt_arith (lookup_smt arg s) f).
 Proof.
   intros s f arg.
   destruct arg; simpl; try reflexivity.
@@ -86,7 +86,7 @@ Qed.
 Lemma header_map_ps : (*TODO: Should probably be called lookup_hdr_ps *)
   forall s f h,
     lookup_hdr (eval_sym_state s f) h =
-    eval_smt_arith (lookup_hdr s h) f.
+    Initialized uint8 (eval_smt_arith (lookup_hdr s h) f).
 Proof.
   intros.
   unfold eval_sym_state.
@@ -98,7 +98,7 @@ Qed.
 Lemma state_var_map_ps : (* Same TODO as header_map_ps, bad naming *)
   forall s f sv,
     lookup_state (eval_sym_state s f) sv =
-    eval_smt_arith (lookup_state s sv) f.
+    Initialized uint8 (eval_smt_arith (lookup_state s sv) f).
 Proof.
   intros.
   unfold eval_sym_state.

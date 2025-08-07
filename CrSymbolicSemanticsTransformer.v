@@ -46,7 +46,7 @@ Definition eval_hdr_op_expr_smt (h : HdrOp) (ps : SymbolicState) : SmtArithExpr 
 
 (* Apply SmtValuation f to every entry in the symbolic state across all 3 maps *)
 Definition eval_sym_state (s: SymbolicState) (f : SmtValuation) : ConcreteState :=
-   let sym_eval := fun e => eval_smt_arith e f in
+   let sym_eval := fun e => Initialized uint8 (eval_smt_arith e f) in
    program_state_mapper sym_eval sym_eval sym_eval s.
 
 Definition eval_hdr_op_assign_smt (ho : HdrOp) (ps: SymbolicState) : SymbolicState :=

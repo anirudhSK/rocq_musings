@@ -2,6 +2,11 @@ From MyProject Require Export Integers.
 From MyProject Require Export MyInts.
 Require Import ZArith.
 
+(* Record type that wraps around a base type T *)
+Record ConcreteValue (T : Type) : Type := {
+  value : T
+}.
+
 Inductive InitStatus (A: Type) : Type :=
   | Uninitialized : InitStatus A
   | Initialized : A -> InitStatus A.
