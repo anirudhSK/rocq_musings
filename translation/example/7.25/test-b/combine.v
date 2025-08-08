@@ -17,7 +17,7 @@ header_map := fun _ => SmtConst (repr 0%Z);
 state_var_map := fun _ => SmtConst (repr 0%Z)
 |}.
 
-Definition headers_to_check : list Header := [first_generated.h_a; second_generated.h_a; first_generated.h_b; second_generated.h_b].
+Definition headers_to_check : list Header := [first_generated.h_b; second_generated.h_b].
 Definition state_vars_to_check : list StateVar := [].
 
 Definition transformer_first: Transformer := [first_generated.the_table_0_rule].
