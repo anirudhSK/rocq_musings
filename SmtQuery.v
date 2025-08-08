@@ -398,16 +398,20 @@ Proof.
   f_equal.
 Qed.
 
+(*   is_init_state p1 s /\ is_init_state p2 s ->        (* s is a valid initial symbolic state for both p1 AND p2 *)
+ *)
+(* let c := eval_sym_state s f in                     (* Get a concrete state from s *) *)
+
 (* Soundness lemma for equivalence_checker_cr_dsl *)
 Lemma equivalence_checker_cr_sound :
-  forall p1 p2 f s,
+  forall p1 p2 f,
   equivalence_checker_cr_dsl p1 p2 = true ->
-  is_init_state p1 s /\ is_init_state p2 s ->        (* s is a valid initial symbolic state for both p1 AND p2 *)
-  let c := eval_sym_state s f in                     (* Get a concrete state from s *)
+  let c1_i  := eval_sym_state (init_symbolic_state p1) f in (* Get a sym state out of p1' headers, ctrls, and state *)
+  let c2_i  := eval_sym_state (init_symbolic_state p2) f in (* Do the same for p2 *)
   let t1 := get_transformer_from_prog p1 in
   let t2 := get_transformer_from_prog p2 in
-  let c1 := eval_transformer_concrete t1 c in
-  let c2 := eval_transformer_concrete t2 c in
+  let c1 := eval_transformer_concrete t1 c1_i in
+  let c2 := eval_transformer_concrete t2 c2_i in
   well_formed_program p1 ->                          (* p1 is well-formed *)
   (forall v, In v (get_headers_from_prog p1) ->      (* then, every header in p1 *)
   (In v (get_headers_from_prog p2)) /\               (* must be in p2 *)
