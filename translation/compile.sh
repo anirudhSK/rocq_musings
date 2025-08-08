@@ -106,7 +106,7 @@ rm -f ../combine.v "$OUTPUT_FILE_FIRST" "$OUTPUT_FILE_SECOND" ../Makefile.conf .
 cd ..
 make clean
 rm  -f Makefile Makefile.conf
-rm -f .lia.cache
+rm -f .lia.cache coqc_output.txt
 cd translation
 
 

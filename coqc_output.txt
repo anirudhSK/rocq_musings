@@ -1,0 +1,3140 @@
+     = smt_query
+         (SmtBoolNot
+            (SmtBoolAnd
+               (SmtBoolAnd
+                  (SmtBoolAnd
+                     (SmtBoolAnd
+                        (SmtBoolAnd SmtTrue
+                           (SmtBoolEq
+                              (lookup_hdr
+                                 (update_all_states
+                                    (update_all_hdrs
+                                       {|
+                                         ctrl_map :=
+                                           (SmtConst
+                                              {|
+                                                intval := 0;
+                                                intrange :=
+                                                 Z_mod_modulus_range' 0
+                                              |}, PTree.Empty);
+                                         header_map :=
+                                           (SmtConst
+                                              {|
+                                                intval := 0;
+                                                intrange :=
+                                                 Z_mod_modulus_range' 0
+                                              |}, PTree.Empty);
+                                         state_map :=
+                                           (SmtConst
+                                              {|
+                                                intval := 0;
+                                                intrange :=
+                                                 Z_mod_modulus_range' 0
+                                              |}, PTree.Empty)
+                                       |}
+                                       (fun h : Header =>
+                                        SmtConditional SmtTrue
+                                          (lookup_hdr
+                                             (update_all_states
+                                                (update_all_hdrs
+                                                 {|
+                                                 ctrl_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 header_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 state_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty)
+                                                 |}
+                                                 (fun h0 : Header =>
+                                                 SmtConditional SmtTrue
+                                                 (lookup_hdr
+                                                 (update_hdr
+                                                 {|
+                                                 ctrl_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 header_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 state_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty)
+                                                 |} (HeaderCtr 2)
+                                                 (SmtBitAdd
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 1;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 1
+                                                 |})
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}))) h0)
+                                                 (lookup_hdr
+                                                 {|
+                                                 ctrl_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 header_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 state_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty)
+                                                 |} h0)))
+                                                (fun s : State =>
+                                                 SmtConditional SmtTrue
+                                                 (lookup_state
+                                                 (update_hdr
+                                                 {|
+                                                 ctrl_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 header_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 state_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty)
+                                                 |} (HeaderCtr 2)
+                                                 (SmtBitAdd
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 1;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 1
+                                                 |})
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}))) s)
+                                                 (lookup_state
+                                                 {|
+                                                 ctrl_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 header_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 state_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty)
+                                                 |} s))) h)
+                                          (lookup_hdr
+                                             {|
+                                               ctrl_map :=
+                                                 (
+                                                 SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                               header_map :=
+                                                 (
+                                                 SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                               state_map :=
+                                                 (
+                                                 SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty)
+                                             |} h)))
+                                    (fun s : State =>
+                                     SmtConditional SmtTrue
+                                       (lookup_state
+                                          (update_all_states
+                                             (update_all_hdrs
+                                                {|
+                                                 ctrl_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 header_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 state_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty)
+                                                |}
+                                                (fun h : Header =>
+                                                 SmtConditional SmtTrue
+                                                 (lookup_hdr
+                                                 (update_hdr
+                                                 {|
+                                                 ctrl_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 header_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 state_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty)
+                                                 |} (HeaderCtr 2)
+                                                 (SmtBitAdd
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 1;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 1
+                                                 |})
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}))) h)
+                                                 (lookup_hdr
+                                                 {|
+                                                 ctrl_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 header_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 state_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty)
+                                                 |} h)))
+                                             (fun s0 : State =>
+                                              SmtConditional SmtTrue
+                                                (lookup_state
+                                                 (update_hdr
+                                                 {|
+                                                 ctrl_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 header_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 state_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty)
+                                                 |} (HeaderCtr 2)
+                                                 (SmtBitAdd
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 1;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 1
+                                                 |})
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}))) s0)
+                                                (lookup_state
+                                                 {|
+                                                 ctrl_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 header_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 state_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty)
+                                                 |} s0))) s)
+                                       (lookup_state
+                                          {|
+                                            ctrl_map :=
+                                              (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                            header_map :=
+                                              (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                            state_map :=
+                                              (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty)
+                                          |} s))) 
+                                 (HeaderCtr 2))
+                              (lookup_hdr
+                                 (update_all_states
+                                    (update_all_hdrs
+                                       {|
+                                         ctrl_map :=
+                                           (SmtConst
+                                              {|
+                                                intval := 0;
+                                                intrange :=
+                                                 Z_mod_modulus_range' 0
+                                              |}, PTree.Empty);
+                                         header_map :=
+                                           (SmtConst
+                                              {|
+                                                intval := 0;
+                                                intrange :=
+                                                 Z_mod_modulus_range' 0
+                                              |}, PTree.Empty);
+                                         state_map :=
+                                           (SmtConst
+                                              {|
+                                                intval := 0;
+                                                intrange :=
+                                                 Z_mod_modulus_range' 0
+                                              |}, PTree.Empty)
+                                       |}
+                                       (fun h : Header =>
+                                        SmtConditional SmtTrue
+                                          (lookup_hdr
+                                             (update_all_states
+                                                (update_all_hdrs
+                                                 {|
+                                                 ctrl_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 header_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 state_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty)
+                                                 |}
+                                                 (fun h0 : Header =>
+                                                 SmtConditional SmtTrue
+                                                 (lookup_hdr
+                                                 (update_hdr
+                                                 {|
+                                                 ctrl_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 header_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 state_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty)
+                                                 |} (HeaderCtr 2)
+                                                 (SmtBitAdd
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 1;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 1
+                                                 |})
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}))) h0)
+                                                 (lookup_hdr
+                                                 {|
+                                                 ctrl_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 header_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 state_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty)
+                                                 |} h0)))
+                                                (fun s : State =>
+                                                 SmtConditional SmtTrue
+                                                 (lookup_state
+                                                 (update_hdr
+                                                 {|
+                                                 ctrl_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 header_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 state_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty)
+                                                 |} (HeaderCtr 2)
+                                                 (SmtBitAdd
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 1;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 1
+                                                 |})
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}))) s)
+                                                 (lookup_state
+                                                 {|
+                                                 ctrl_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 header_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 state_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty)
+                                                 |} s))) h)
+                                          (lookup_hdr
+                                             {|
+                                               ctrl_map :=
+                                                 (
+                                                 SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                               header_map :=
+                                                 (
+                                                 SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                               state_map :=
+                                                 (
+                                                 SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty)
+                                             |} h)))
+                                    (fun s : State =>
+                                     SmtConditional SmtTrue
+                                       (lookup_state
+                                          (update_all_states
+                                             (update_all_hdrs
+                                                {|
+                                                 ctrl_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 header_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 state_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty)
+                                                |}
+                                                (fun h : Header =>
+                                                 SmtConditional SmtTrue
+                                                 (lookup_hdr
+                                                 (update_hdr
+                                                 {|
+                                                 ctrl_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 header_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 state_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty)
+                                                 |} (HeaderCtr 2)
+                                                 (SmtBitAdd
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 1;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 1
+                                                 |})
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}))) h)
+                                                 (lookup_hdr
+                                                 {|
+                                                 ctrl_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 header_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 state_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty)
+                                                 |} h)))
+                                             (fun s0 : State =>
+                                              SmtConditional SmtTrue
+                                                (lookup_state
+                                                 (update_hdr
+                                                 {|
+                                                 ctrl_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 header_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 state_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty)
+                                                 |} (HeaderCtr 2)
+                                                 (SmtBitAdd
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 1;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 1
+                                                 |})
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}))) s0)
+                                                (lookup_state
+                                                 {|
+                                                 ctrl_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 header_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 state_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty)
+                                                 |} s0))) s)
+                                       (lookup_state
+                                          {|
+                                            ctrl_map :=
+                                              (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                            header_map :=
+                                              (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                            state_map :=
+                                              (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty)
+                                          |} s))) 
+                                 (HeaderCtr 2))))
+                        (SmtBoolEq
+                           (lookup_hdr
+                              (update_all_states
+                                 (update_all_hdrs
+                                    {|
+                                      ctrl_map :=
+                                        (SmtConst
+                                           {|
+                                             intval := 0;
+                                             intrange :=
+                                               Z_mod_modulus_range' 0
+                                           |}, PTree.Empty);
+                                      header_map :=
+                                        (SmtConst
+                                           {|
+                                             intval := 0;
+                                             intrange :=
+                                               Z_mod_modulus_range' 0
+                                           |}, PTree.Empty);
+                                      state_map :=
+                                        (SmtConst
+                                           {|
+                                             intval := 0;
+                                             intrange :=
+                                               Z_mod_modulus_range' 0
+                                           |}, PTree.Empty)
+                                    |}
+                                    (fun h : Header =>
+                                     SmtConditional SmtTrue
+                                       (lookup_hdr
+                                          (update_all_states
+                                             (update_all_hdrs
+                                                {|
+                                                 ctrl_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 header_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 state_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty)
+                                                |}
+                                                (fun h0 : Header =>
+                                                 SmtConditional SmtTrue
+                                                 (lookup_hdr
+                                                 (update_hdr
+                                                 {|
+                                                 ctrl_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 header_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 state_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty)
+                                                 |} (HeaderCtr 2)
+                                                 (SmtBitAdd
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 1;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 1
+                                                 |})
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}))) h0)
+                                                 (lookup_hdr
+                                                 {|
+                                                 ctrl_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 header_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 state_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty)
+                                                 |} h0)))
+                                             (fun s : State =>
+                                              SmtConditional SmtTrue
+                                                (lookup_state
+                                                 (update_hdr
+                                                 {|
+                                                 ctrl_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 header_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 state_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty)
+                                                 |} (HeaderCtr 2)
+                                                 (SmtBitAdd
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 1;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 1
+                                                 |})
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}))) s)
+                                                (lookup_state
+                                                 {|
+                                                 ctrl_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 header_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 state_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty)
+                                                 |} s))) h)
+                                       (lookup_hdr
+                                          {|
+                                            ctrl_map :=
+                                              (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                            header_map :=
+                                              (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                            state_map :=
+                                              (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty)
+                                          |} h)))
+                                 (fun s : State =>
+                                  SmtConditional SmtTrue
+                                    (lookup_state
+                                       (update_all_states
+                                          (update_all_hdrs
+                                             {|
+                                               ctrl_map :=
+                                                 (
+                                                 SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                               header_map :=
+                                                 (
+                                                 SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                               state_map :=
+                                                 (
+                                                 SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty)
+                                             |}
+                                             (fun h : Header =>
+                                              SmtConditional SmtTrue
+                                                (lookup_hdr
+                                                 (update_hdr
+                                                 {|
+                                                 ctrl_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 header_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 state_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty)
+                                                 |} (HeaderCtr 2)
+                                                 (SmtBitAdd
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 1;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 1
+                                                 |})
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}))) h)
+                                                (lookup_hdr
+                                                 {|
+                                                 ctrl_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 header_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 state_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty)
+                                                 |} h)))
+                                          (fun s0 : State =>
+                                           SmtConditional SmtTrue
+                                             (lookup_state
+                                                (update_hdr
+                                                 {|
+                                                 ctrl_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 header_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 state_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty)
+                                                 |} 
+                                                 (HeaderCtr 2)
+                                                 (SmtBitAdd
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 1;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 1
+                                                 |})
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}))) s0)
+                                             (lookup_state
+                                                {|
+                                                 ctrl_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 header_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 state_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty)
+                                                |} s0))) s)
+                                    (lookup_state
+                                       {|
+                                         ctrl_map :=
+                                           (SmtConst
+                                              {|
+                                                intval := 0;
+                                                intrange :=
+                                                 Z_mod_modulus_range' 0
+                                              |}, PTree.Empty);
+                                         header_map :=
+                                           (SmtConst
+                                              {|
+                                                intval := 0;
+                                                intrange :=
+                                                 Z_mod_modulus_range' 0
+                                              |}, PTree.Empty);
+                                         state_map :=
+                                           (SmtConst
+                                              {|
+                                                intval := 0;
+                                                intrange :=
+                                                 Z_mod_modulus_range' 0
+                                              |}, PTree.Empty)
+                                       |} s))) (HeaderCtr 2))
+                           (lookup_hdr
+                              (update_all_states
+                                 (update_all_hdrs
+                                    {|
+                                      ctrl_map :=
+                                        (SmtConst
+                                           {|
+                                             intval := 0;
+                                             intrange :=
+                                               Z_mod_modulus_range' 0
+                                           |}, PTree.Empty);
+                                      header_map :=
+                                        (SmtConst
+                                           {|
+                                             intval := 0;
+                                             intrange :=
+                                               Z_mod_modulus_range' 0
+                                           |}, PTree.Empty);
+                                      state_map :=
+                                        (SmtConst
+                                           {|
+                                             intval := 0;
+                                             intrange :=
+                                               Z_mod_modulus_range' 0
+                                           |}, PTree.Empty)
+                                    |}
+                                    (fun h : Header =>
+                                     SmtConditional SmtTrue
+                                       (lookup_hdr
+                                          (update_all_states
+                                             (update_all_hdrs
+                                                {|
+                                                 ctrl_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 header_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 state_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty)
+                                                |}
+                                                (fun h0 : Header =>
+                                                 SmtConditional SmtTrue
+                                                 (lookup_hdr
+                                                 (update_hdr
+                                                 {|
+                                                 ctrl_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 header_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 state_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty)
+                                                 |} (HeaderCtr 2)
+                                                 (SmtBitAdd
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 1;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 1
+                                                 |})
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}))) h0)
+                                                 (lookup_hdr
+                                                 {|
+                                                 ctrl_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 header_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 state_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty)
+                                                 |} h0)))
+                                             (fun s : State =>
+                                              SmtConditional SmtTrue
+                                                (lookup_state
+                                                 (update_hdr
+                                                 {|
+                                                 ctrl_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 header_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 state_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty)
+                                                 |} (HeaderCtr 2)
+                                                 (SmtBitAdd
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 1;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 1
+                                                 |})
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}))) s)
+                                                (lookup_state
+                                                 {|
+                                                 ctrl_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 header_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 state_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty)
+                                                 |} s))) h)
+                                       (lookup_hdr
+                                          {|
+                                            ctrl_map :=
+                                              (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                            header_map :=
+                                              (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                            state_map :=
+                                              (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty)
+                                          |} h)))
+                                 (fun s : State =>
+                                  SmtConditional SmtTrue
+                                    (lookup_state
+                                       (update_all_states
+                                          (update_all_hdrs
+                                             {|
+                                               ctrl_map :=
+                                                 (
+                                                 SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                               header_map :=
+                                                 (
+                                                 SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                               state_map :=
+                                                 (
+                                                 SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty)
+                                             |}
+                                             (fun h : Header =>
+                                              SmtConditional SmtTrue
+                                                (lookup_hdr
+                                                 (update_hdr
+                                                 {|
+                                                 ctrl_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 header_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 state_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty)
+                                                 |} (HeaderCtr 2)
+                                                 (SmtBitAdd
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 1;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 1
+                                                 |})
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}))) h)
+                                                (lookup_hdr
+                                                 {|
+                                                 ctrl_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 header_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 state_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty)
+                                                 |} h)))
+                                          (fun s0 : State =>
+                                           SmtConditional SmtTrue
+                                             (lookup_state
+                                                (update_hdr
+                                                 {|
+                                                 ctrl_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 header_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 state_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty)
+                                                 |} 
+                                                 (HeaderCtr 2)
+                                                 (SmtBitAdd
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 1;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 1
+                                                 |})
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}))) s0)
+                                             (lookup_state
+                                                {|
+                                                 ctrl_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 header_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 state_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty)
+                                                |} s0))) s)
+                                    (lookup_state
+                                       {|
+                                         ctrl_map :=
+                                           (SmtConst
+                                              {|
+                                                intval := 0;
+                                                intrange :=
+                                                 Z_mod_modulus_range' 0
+                                              |}, PTree.Empty);
+                                         header_map :=
+                                           (SmtConst
+                                              {|
+                                                intval := 0;
+                                                intrange :=
+                                                 Z_mod_modulus_range' 0
+                                              |}, PTree.Empty);
+                                         state_map :=
+                                           (SmtConst
+                                              {|
+                                                intval := 0;
+                                                intrange :=
+                                                 Z_mod_modulus_range' 0
+                                              |}, PTree.Empty)
+                                       |} s))) (HeaderCtr 2))))
+                     (SmtBoolEq
+                        (lookup_hdr
+                           (update_all_states
+                              (update_all_hdrs
+                                 {|
+                                   ctrl_map :=
+                                     (SmtConst
+                                        {|
+                                          intval := 0;
+                                          intrange := Z_mod_modulus_range' 0
+                                        |}, PTree.Empty);
+                                   header_map :=
+                                     (SmtConst
+                                        {|
+                                          intval := 0;
+                                          intrange := Z_mod_modulus_range' 0
+                                        |}, PTree.Empty);
+                                   state_map :=
+                                     (SmtConst
+                                        {|
+                                          intval := 0;
+                                          intrange := Z_mod_modulus_range' 0
+                                        |}, PTree.Empty)
+                                 |}
+                                 (fun h : Header =>
+                                  SmtConditional SmtTrue
+                                    (lookup_hdr
+                                       (update_all_states
+                                          (update_all_hdrs
+                                             {|
+                                               ctrl_map :=
+                                                 (
+                                                 SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                               header_map :=
+                                                 (
+                                                 SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                               state_map :=
+                                                 (
+                                                 SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty)
+                                             |}
+                                             (fun h0 : Header =>
+                                              SmtConditional SmtTrue
+                                                (lookup_hdr
+                                                 (update_hdr
+                                                 {|
+                                                 ctrl_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 header_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 state_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty)
+                                                 |} (HeaderCtr 2)
+                                                 (SmtBitAdd
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 1;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 1
+                                                 |})
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}))) h0)
+                                                (lookup_hdr
+                                                 {|
+                                                 ctrl_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 header_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 state_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty)
+                                                 |} h0)))
+                                          (fun s : State =>
+                                           SmtConditional SmtTrue
+                                             (lookup_state
+                                                (update_hdr
+                                                 {|
+                                                 ctrl_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 header_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 state_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty)
+                                                 |} 
+                                                 (HeaderCtr 2)
+                                                 (SmtBitAdd
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 1;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 1
+                                                 |})
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}))) s)
+                                             (lookup_state
+                                                {|
+                                                 ctrl_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 header_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 state_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty)
+                                                |} s))) h)
+                                    (lookup_hdr
+                                       {|
+                                         ctrl_map :=
+                                           (SmtConst
+                                              {|
+                                                intval := 0;
+                                                intrange :=
+                                                 Z_mod_modulus_range' 0
+                                              |}, PTree.Empty);
+                                         header_map :=
+                                           (SmtConst
+                                              {|
+                                                intval := 0;
+                                                intrange :=
+                                                 Z_mod_modulus_range' 0
+                                              |}, PTree.Empty);
+                                         state_map :=
+                                           (SmtConst
+                                              {|
+                                                intval := 0;
+                                                intrange :=
+                                                 Z_mod_modulus_range' 0
+                                              |}, PTree.Empty)
+                                       |} h)))
+                              (fun s : State =>
+                               SmtConditional SmtTrue
+                                 (lookup_state
+                                    (update_all_states
+                                       (update_all_hdrs
+                                          {|
+                                            ctrl_map :=
+                                              (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                            header_map :=
+                                              (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                            state_map :=
+                                              (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty)
+                                          |}
+                                          (fun h : Header =>
+                                           SmtConditional SmtTrue
+                                             (lookup_hdr
+                                                (update_hdr
+                                                 {|
+                                                 ctrl_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 header_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 state_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty)
+                                                 |} 
+                                                 (HeaderCtr 2)
+                                                 (SmtBitAdd
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 1;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 1
+                                                 |})
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}))) h)
+                                             (lookup_hdr
+                                                {|
+                                                 ctrl_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 header_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 state_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty)
+                                                |} h)))
+                                       (fun s0 : State =>
+                                        SmtConditional SmtTrue
+                                          (lookup_state
+                                             (update_hdr
+                                                {|
+                                                 ctrl_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 header_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 state_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty)
+                                                |} 
+                                                (HeaderCtr 2)
+                                                (SmtBitAdd
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 1;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 1
+                                                 |})
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}))) s0)
+                                          (lookup_state
+                                             {|
+                                               ctrl_map :=
+                                                 (
+                                                 SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                               header_map :=
+                                                 (
+                                                 SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                               state_map :=
+                                                 (
+                                                 SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty)
+                                             |} s0))) s)
+                                 (lookup_state
+                                    {|
+                                      ctrl_map :=
+                                        (SmtConst
+                                           {|
+                                             intval := 0;
+                                             intrange :=
+                                               Z_mod_modulus_range' 0
+                                           |}, PTree.Empty);
+                                      header_map :=
+                                        (SmtConst
+                                           {|
+                                             intval := 0;
+                                             intrange :=
+                                               Z_mod_modulus_range' 0
+                                           |}, PTree.Empty);
+                                      state_map :=
+                                        (SmtConst
+                                           {|
+                                             intval := 0;
+                                             intrange :=
+                                               Z_mod_modulus_range' 0
+                                           |}, PTree.Empty)
+                                    |} s))) (HeaderCtr 1))
+                        (lookup_hdr
+                           (update_all_states
+                              (update_all_hdrs
+                                 {|
+                                   ctrl_map :=
+                                     (SmtConst
+                                        {|
+                                          intval := 0;
+                                          intrange := Z_mod_modulus_range' 0
+                                        |}, PTree.Empty);
+                                   header_map :=
+                                     (SmtConst
+                                        {|
+                                          intval := 0;
+                                          intrange := Z_mod_modulus_range' 0
+                                        |}, PTree.Empty);
+                                   state_map :=
+                                     (SmtConst
+                                        {|
+                                          intval := 0;
+                                          intrange := Z_mod_modulus_range' 0
+                                        |}, PTree.Empty)
+                                 |}
+                                 (fun h : Header =>
+                                  SmtConditional SmtTrue
+                                    (lookup_hdr
+                                       (update_all_states
+                                          (update_all_hdrs
+                                             {|
+                                               ctrl_map :=
+                                                 (
+                                                 SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                               header_map :=
+                                                 (
+                                                 SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                               state_map :=
+                                                 (
+                                                 SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty)
+                                             |}
+                                             (fun h0 : Header =>
+                                              SmtConditional SmtTrue
+                                                (lookup_hdr
+                                                 (update_hdr
+                                                 {|
+                                                 ctrl_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 header_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 state_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty)
+                                                 |} (HeaderCtr 2)
+                                                 (SmtBitAdd
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 1;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 1
+                                                 |})
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}))) h0)
+                                                (lookup_hdr
+                                                 {|
+                                                 ctrl_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 header_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 state_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty)
+                                                 |} h0)))
+                                          (fun s : State =>
+                                           SmtConditional SmtTrue
+                                             (lookup_state
+                                                (update_hdr
+                                                 {|
+                                                 ctrl_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 header_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 state_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty)
+                                                 |} 
+                                                 (HeaderCtr 2)
+                                                 (SmtBitAdd
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 1;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 1
+                                                 |})
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}))) s)
+                                             (lookup_state
+                                                {|
+                                                 ctrl_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 header_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 state_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty)
+                                                |} s))) h)
+                                    (lookup_hdr
+                                       {|
+                                         ctrl_map :=
+                                           (SmtConst
+                                              {|
+                                                intval := 0;
+                                                intrange :=
+                                                 Z_mod_modulus_range' 0
+                                              |}, PTree.Empty);
+                                         header_map :=
+                                           (SmtConst
+                                              {|
+                                                intval := 0;
+                                                intrange :=
+                                                 Z_mod_modulus_range' 0
+                                              |}, PTree.Empty);
+                                         state_map :=
+                                           (SmtConst
+                                              {|
+                                                intval := 0;
+                                                intrange :=
+                                                 Z_mod_modulus_range' 0
+                                              |}, PTree.Empty)
+                                       |} h)))
+                              (fun s : State =>
+                               SmtConditional SmtTrue
+                                 (lookup_state
+                                    (update_all_states
+                                       (update_all_hdrs
+                                          {|
+                                            ctrl_map :=
+                                              (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                            header_map :=
+                                              (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                            state_map :=
+                                              (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty)
+                                          |}
+                                          (fun h : Header =>
+                                           SmtConditional SmtTrue
+                                             (lookup_hdr
+                                                (update_hdr
+                                                 {|
+                                                 ctrl_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 header_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 state_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty)
+                                                 |} 
+                                                 (HeaderCtr 2)
+                                                 (SmtBitAdd
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 1;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 1
+                                                 |})
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}))) h)
+                                             (lookup_hdr
+                                                {|
+                                                 ctrl_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 header_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 state_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty)
+                                                |} h)))
+                                       (fun s0 : State =>
+                                        SmtConditional SmtTrue
+                                          (lookup_state
+                                             (update_hdr
+                                                {|
+                                                 ctrl_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 header_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 state_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty)
+                                                |} 
+                                                (HeaderCtr 2)
+                                                (SmtBitAdd
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 1;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 1
+                                                 |})
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}))) s0)
+                                          (lookup_state
+                                             {|
+                                               ctrl_map :=
+                                                 (
+                                                 SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                               header_map :=
+                                                 (
+                                                 SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                               state_map :=
+                                                 (
+                                                 SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty)
+                                             |} s0))) s)
+                                 (lookup_state
+                                    {|
+                                      ctrl_map :=
+                                        (SmtConst
+                                           {|
+                                             intval := 0;
+                                             intrange :=
+                                               Z_mod_modulus_range' 0
+                                           |}, PTree.Empty);
+                                      header_map :=
+                                        (SmtConst
+                                           {|
+                                             intval := 0;
+                                             intrange :=
+                                               Z_mod_modulus_range' 0
+                                           |}, PTree.Empty);
+                                      state_map :=
+                                        (SmtConst
+                                           {|
+                                             intval := 0;
+                                             intrange :=
+                                               Z_mod_modulus_range' 0
+                                           |}, PTree.Empty)
+                                    |} s))) (HeaderCtr 1))))
+                  (SmtBoolEq
+                     (lookup_hdr
+                        (update_all_states
+                           (update_all_hdrs
+                              {|
+                                ctrl_map :=
+                                  (SmtConst
+                                     {|
+                                       intval := 0;
+                                       intrange := Z_mod_modulus_range' 0
+                                     |}, PTree.Empty);
+                                header_map :=
+                                  (SmtConst
+                                     {|
+                                       intval := 0;
+                                       intrange := Z_mod_modulus_range' 0
+                                     |}, PTree.Empty);
+                                state_map :=
+                                  (SmtConst
+                                     {|
+                                       intval := 0;
+                                       intrange := Z_mod_modulus_range' 0
+                                     |}, PTree.Empty)
+                              |}
+                              (fun h : Header =>
+                               SmtConditional SmtTrue
+                                 (lookup_hdr
+                                    (update_all_states
+                                       (update_all_hdrs
+                                          {|
+                                            ctrl_map :=
+                                              (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                            header_map :=
+                                              (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                            state_map :=
+                                              (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty)
+                                          |}
+                                          (fun h0 : Header =>
+                                           SmtConditional SmtTrue
+                                             (lookup_hdr
+                                                (update_hdr
+                                                 {|
+                                                 ctrl_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 header_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 state_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty)
+                                                 |} 
+                                                 (HeaderCtr 2)
+                                                 (SmtBitAdd
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 1;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 1
+                                                 |})
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}))) h0)
+                                             (lookup_hdr
+                                                {|
+                                                 ctrl_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 header_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 state_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty)
+                                                |} h0)))
+                                       (fun s : State =>
+                                        SmtConditional SmtTrue
+                                          (lookup_state
+                                             (update_hdr
+                                                {|
+                                                 ctrl_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 header_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 state_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty)
+                                                |} 
+                                                (HeaderCtr 2)
+                                                (SmtBitAdd
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 1;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 1
+                                                 |})
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}))) s)
+                                          (lookup_state
+                                             {|
+                                               ctrl_map :=
+                                                 (
+                                                 SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                               header_map :=
+                                                 (
+                                                 SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                               state_map :=
+                                                 (
+                                                 SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty)
+                                             |} s))) h)
+                                 (lookup_hdr
+                                    {|
+                                      ctrl_map :=
+                                        (SmtConst
+                                           {|
+                                             intval := 0;
+                                             intrange :=
+                                               Z_mod_modulus_range' 0
+                                           |}, PTree.Empty);
+                                      header_map :=
+                                        (SmtConst
+                                           {|
+                                             intval := 0;
+                                             intrange :=
+                                               Z_mod_modulus_range' 0
+                                           |}, PTree.Empty);
+                                      state_map :=
+                                        (SmtConst
+                                           {|
+                                             intval := 0;
+                                             intrange :=
+                                               Z_mod_modulus_range' 0
+                                           |}, PTree.Empty)
+                                    |} h)))
+                           (fun s : State =>
+                            SmtConditional SmtTrue
+                              (lookup_state
+                                 (update_all_states
+                                    (update_all_hdrs
+                                       {|
+                                         ctrl_map :=
+                                           (SmtConst
+                                              {|
+                                                intval := 0;
+                                                intrange :=
+                                                 Z_mod_modulus_range' 0
+                                              |}, PTree.Empty);
+                                         header_map :=
+                                           (SmtConst
+                                              {|
+                                                intval := 0;
+                                                intrange :=
+                                                 Z_mod_modulus_range' 0
+                                              |}, PTree.Empty);
+                                         state_map :=
+                                           (SmtConst
+                                              {|
+                                                intval := 0;
+                                                intrange :=
+                                                 Z_mod_modulus_range' 0
+                                              |}, PTree.Empty)
+                                       |}
+                                       (fun h : Header =>
+                                        SmtConditional SmtTrue
+                                          (lookup_hdr
+                                             (update_hdr
+                                                {|
+                                                 ctrl_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 header_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 state_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty)
+                                                |} 
+                                                (HeaderCtr 2)
+                                                (SmtBitAdd
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 1;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 1
+                                                 |})
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}))) h)
+                                          (lookup_hdr
+                                             {|
+                                               ctrl_map :=
+                                                 (
+                                                 SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                               header_map :=
+                                                 (
+                                                 SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                               state_map :=
+                                                 (
+                                                 SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty)
+                                             |} h)))
+                                    (fun s0 : State =>
+                                     SmtConditional SmtTrue
+                                       (lookup_state
+                                          (update_hdr
+                                             {|
+                                               ctrl_map :=
+                                                 (
+                                                 SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                               header_map :=
+                                                 (
+                                                 SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                               state_map :=
+                                                 (
+                                                 SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty)
+                                             |} (HeaderCtr 2)
+                                             (SmtBitAdd
+                                                (SmtConst
+                                                 {|
+                                                 intval := 1;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 1
+                                                 |})
+                                                (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}))) s0)
+                                       (lookup_state
+                                          {|
+                                            ctrl_map :=
+                                              (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                            header_map :=
+                                              (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                            state_map :=
+                                              (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty)
+                                          |} s0))) s)
+                              (lookup_state
+                                 {|
+                                   ctrl_map :=
+                                     (SmtConst
+                                        {|
+                                          intval := 0;
+                                          intrange := Z_mod_modulus_range' 0
+                                        |}, PTree.Empty);
+                                   header_map :=
+                                     (SmtConst
+                                        {|
+                                          intval := 0;
+                                          intrange := Z_mod_modulus_range' 0
+                                        |}, PTree.Empty);
+                                   state_map :=
+                                     (SmtConst
+                                        {|
+                                          intval := 0;
+                                          intrange := Z_mod_modulus_range' 0
+                                        |}, PTree.Empty)
+                                 |} s))) (HeaderCtr 1))
+                     (lookup_hdr
+                        (update_all_states
+                           (update_all_hdrs
+                              {|
+                                ctrl_map :=
+                                  (SmtConst
+                                     {|
+                                       intval := 0;
+                                       intrange := Z_mod_modulus_range' 0
+                                     |}, PTree.Empty);
+                                header_map :=
+                                  (SmtConst
+                                     {|
+                                       intval := 0;
+                                       intrange := Z_mod_modulus_range' 0
+                                     |}, PTree.Empty);
+                                state_map :=
+                                  (SmtConst
+                                     {|
+                                       intval := 0;
+                                       intrange := Z_mod_modulus_range' 0
+                                     |}, PTree.Empty)
+                              |}
+                              (fun h : Header =>
+                               SmtConditional SmtTrue
+                                 (lookup_hdr
+                                    (update_all_states
+                                       (update_all_hdrs
+                                          {|
+                                            ctrl_map :=
+                                              (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                            header_map :=
+                                              (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                            state_map :=
+                                              (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty)
+                                          |}
+                                          (fun h0 : Header =>
+                                           SmtConditional SmtTrue
+                                             (lookup_hdr
+                                                (update_hdr
+                                                 {|
+                                                 ctrl_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 header_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 state_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty)
+                                                 |} 
+                                                 (HeaderCtr 2)
+                                                 (SmtBitAdd
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 1;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 1
+                                                 |})
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}))) h0)
+                                             (lookup_hdr
+                                                {|
+                                                 ctrl_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 header_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 state_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty)
+                                                |} h0)))
+                                       (fun s : State =>
+                                        SmtConditional SmtTrue
+                                          (lookup_state
+                                             (update_hdr
+                                                {|
+                                                 ctrl_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 header_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 state_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty)
+                                                |} 
+                                                (HeaderCtr 2)
+                                                (SmtBitAdd
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 1;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 1
+                                                 |})
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}))) s)
+                                          (lookup_state
+                                             {|
+                                               ctrl_map :=
+                                                 (
+                                                 SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                               header_map :=
+                                                 (
+                                                 SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                               state_map :=
+                                                 (
+                                                 SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty)
+                                             |} s))) h)
+                                 (lookup_hdr
+                                    {|
+                                      ctrl_map :=
+                                        (SmtConst
+                                           {|
+                                             intval := 0;
+                                             intrange :=
+                                               Z_mod_modulus_range' 0
+                                           |}, PTree.Empty);
+                                      header_map :=
+                                        (SmtConst
+                                           {|
+                                             intval := 0;
+                                             intrange :=
+                                               Z_mod_modulus_range' 0
+                                           |}, PTree.Empty);
+                                      state_map :=
+                                        (SmtConst
+                                           {|
+                                             intval := 0;
+                                             intrange :=
+                                               Z_mod_modulus_range' 0
+                                           |}, PTree.Empty)
+                                    |} h)))
+                           (fun s : State =>
+                            SmtConditional SmtTrue
+                              (lookup_state
+                                 (update_all_states
+                                    (update_all_hdrs
+                                       {|
+                                         ctrl_map :=
+                                           (SmtConst
+                                              {|
+                                                intval := 0;
+                                                intrange :=
+                                                 Z_mod_modulus_range' 0
+                                              |}, PTree.Empty);
+                                         header_map :=
+                                           (SmtConst
+                                              {|
+                                                intval := 0;
+                                                intrange :=
+                                                 Z_mod_modulus_range' 0
+                                              |}, PTree.Empty);
+                                         state_map :=
+                                           (SmtConst
+                                              {|
+                                                intval := 0;
+                                                intrange :=
+                                                 Z_mod_modulus_range' 0
+                                              |}, PTree.Empty)
+                                       |}
+                                       (fun h : Header =>
+                                        SmtConditional SmtTrue
+                                          (lookup_hdr
+                                             (update_hdr
+                                                {|
+                                                 ctrl_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 header_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                                 state_map :=
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty)
+                                                |} 
+                                                (HeaderCtr 2)
+                                                (SmtBitAdd
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 1;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 1
+                                                 |})
+                                                 (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}))) h)
+                                          (lookup_hdr
+                                             {|
+                                               ctrl_map :=
+                                                 (
+                                                 SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                               header_map :=
+                                                 (
+                                                 SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                               state_map :=
+                                                 (
+                                                 SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty)
+                                             |} h)))
+                                    (fun s0 : State =>
+                                     SmtConditional SmtTrue
+                                       (lookup_state
+                                          (update_hdr
+                                             {|
+                                               ctrl_map :=
+                                                 (
+                                                 SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                               header_map :=
+                                                 (
+                                                 SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                               state_map :=
+                                                 (
+                                                 SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty)
+                                             |} (HeaderCtr 2)
+                                             (SmtBitAdd
+                                                (SmtConst
+                                                 {|
+                                                 intval := 1;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 1
+                                                 |})
+                                                (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}))) s0)
+                                       (lookup_state
+                                          {|
+                                            ctrl_map :=
+                                              (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                            header_map :=
+                                              (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty);
+                                            state_map :=
+                                              (SmtConst
+                                                 {|
+                                                 intval := 0;
+                                                 intrange :=
+                                                 Z_mod_modulus_range' 0
+                                                 |}, PTree.Empty)
+                                          |} s0))) s)
+                              (lookup_state
+                                 {|
+                                   ctrl_map :=
+                                     (SmtConst
+                                        {|
+                                          intval := 0;
+                                          intrange := Z_mod_modulus_range' 0
+                                        |}, PTree.Empty);
+                                   header_map :=
+                                     (SmtConst
+                                        {|
+                                          intval := 0;
+                                          intrange := Z_mod_modulus_range' 0
+                                        |}, PTree.Empty);
+                                   state_map :=
+                                     (SmtConst
+                                        {|
+                                          intval := 0;
+                                          intrange := Z_mod_modulus_range' 0
+                                        |}, PTree.Empty)
+                                 |} s))) (HeaderCtr 1)))) SmtTrue))
+     : SmtResult

@@ -144,9 +144,11 @@ def main():
 
     # Print the result
     debug_print("--- Rocq Input ---", debug_mode)
-    debug_print(coqc_output, debug_mode)
+    # debug_print(coqc_output, debug_mode)
     debug_print("\n--- Z3 SMT-LIB Output ---", debug_mode)
     debug_print(z3_output, debug_mode)
+    with open("../coqc_output.txt", "w") as file:
+        file.write(coqc_output,)
     debug_print("\n--- Z# Solver Result ---", debug_mode)
     solver = Solver() 
     solver.add(parse_smt2_string(z3_output))
