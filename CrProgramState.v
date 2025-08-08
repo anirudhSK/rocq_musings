@@ -1,8 +1,10 @@
-From MyProject Require Export CrIdentifiers.
-From MyProject Require Export SmtExpr.
-From MyProject Require Export Maps.
-From MyProject Require Export CrDsl.
-From MyProject Require Export UtilLemmas.
+From MyProject Require Import CrIdentifiers.
+From MyProject Require Import SmtExpr.
+From MyProject Require Import Maps.
+From MyProject Require Import CrDsl.
+From MyProject Require Import UtilLemmas.
+From MyProject Require Import MyInts.
+From MyProject Require Import Integers.
 Require Import Strings.String.
 Require Import ZArith.
 From Coq Require Import FunctionalExtensionality.

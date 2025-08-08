@@ -1,5 +1,5 @@
-From MyProject Require Export Integers.
-From MyProject Require Export MyInts.
+From MyProject Require Import Integers.
+From MyProject Require Import MyInts.
 Require Import ZArith.
 
 Inductive InitStatus (A: Type) : Type :=

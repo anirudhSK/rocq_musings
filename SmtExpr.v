@@ -1,6 +1,7 @@
 (* Write out semantics for bitvectors in SMT,
    show that a single hdr_op evaluation can be converted to the appropriate SMT formula in Z3 *)
 From MyProject Require Import CrIdentifiers.
+From MyProject Require Import MyInts.
 From Coq.Strings Require Import String.
 
 (* Note that these strings may or may not have a one-to-one correspondence with
@@ -41,7 +42,7 @@ Fixpoint eval_smt_bool (e : SmtBoolExpr) (v : SmtValuation) : bool :=
     | SmtBoolNot e' => negb (eval_smt_bool e' v)
     | SmtBoolAnd e1 e2 => andb (eval_smt_bool e1 v) (eval_smt_bool e2 v)
     | SmtBoolOr e1 e2 => orb (eval_smt_bool e1 v) (eval_smt_bool e2 v)
-    | SmtBoolEq e1 e2 => if (eq (eval_smt_arith e1 v) (eval_smt_arith e2 v)) then true else false
+    | SmtBoolEq e1 e2 => if (Integers.eq (eval_smt_arith e1 v) (eval_smt_arith e2 v)) then true else false
     end
 with eval_smt_arith (e : SmtArithExpr) (v : SmtValuation) : uint8 :=
     match e with

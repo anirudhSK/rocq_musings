@@ -1,4 +1,4 @@
-From MyProject Require Export Integers.
+From MyProject Require Import Integers.
 Require Import ZArith.
 
 (* Various kinds of fixed-bit-width integers *)

@@ -2,6 +2,8 @@ From MyProject Require Import SmtExpr.
 From MyProject Require Import CrDsl.
 From MyProject Require Import CrIdentifiers.
 From MyProject Require Import InitStatus.
+From MyProject Require Import CrProgramState.
+From MyProject Require Import Maps.
 Require Import Classical.
 Require Import Coq.Lists.List.
 Require Import Coq.Bool.Bool.

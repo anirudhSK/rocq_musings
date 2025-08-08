@@ -5,7 +5,8 @@ Require Import List.
 Require Import ZArith.
 Import ListNotations.
 Require Import Strings.String.
-From MyProject Require Export CrIdentifiers.
+From MyProject Require Import CrIdentifiers.
+From MyProject Require Import MyInts.
 
 (* A transformer is either a sequential or a parallel transformer *)
 Inductive TransformerType : Type := 

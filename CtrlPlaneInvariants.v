@@ -4,6 +4,8 @@ From MyProject Require Import CrIdentifiers.
 From MyProject Require Import CrConcreteSemanticsTransformer.
 From MyProject Require Import SmtExpr.
 From MyProject Require Import CrSymbolicSemanticsTransformer.
+From MyProject Require Import CrProgramState.
+From MyProject Require Import ListUtils.
 Require Import Coq.Lists.List.
 
 (* Effectively, ctrl plane doesn't change *)

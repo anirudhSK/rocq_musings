@@ -5,11 +5,11 @@
 Require Import List.
 Import ListNotations.
 Require Import Strings.String.
-From MyProject Require Export CrIdentifiers.
-From MyProject Require Export CrParser.
-From MyProject Require Export CrTransformer.
-From MyProject Require Export ListUtils.
-From MyProject Require Export Coqlib.
+From MyProject Require Import CrIdentifiers.
+From MyProject Require Import CrParser.
+From MyProject Require Import CrTransformer.
+From MyProject Require Import ListUtils.
+From MyProject Require Import Coqlib.
 Require Import Coq.Bool.Bool.
 Require Import ZArith.
 

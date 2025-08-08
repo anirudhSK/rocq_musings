@@ -9,6 +9,7 @@ From MyProject Require Import CrSymbolicSemanticsTransformer.
 From Coq Require Import FunctionalExtensionality.
 From MyProject Require Import PMapHelperLemmas.
 From MyProject Require Import CrProgramState.
+From MyProject Require Import ListUtils.
 
 Lemma commute_lookup_eval_state:
   forall (s : SymbolicState) (f : SmtValuation)

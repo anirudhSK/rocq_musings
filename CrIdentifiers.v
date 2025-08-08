@@ -1,7 +1,7 @@
 Require Import Strings.String.
-From MyProject Require Export Integers.
+From MyProject Require Import Integers.
 From MyProject Require Import MyInts.
-From MyProject Require Export InitStatus.
+From MyProject Require Import InitStatus.
 Require Import ZArith.
 Require Import Bool.
 Require Import List.

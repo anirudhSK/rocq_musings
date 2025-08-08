@@ -1,12 +1,13 @@
 (* Provide semantics for a Transformer by providing an evaluation function *)
-From MyProject Require Export CrTransformer.
-From MyProject Require Export CrProgramState.
-From MyProject Require Export CrDsl.
+From MyProject Require Import CrTransformer.
+From MyProject Require Import CrProgramState.
+From MyProject Require Import CrDsl.
+From MyProject Require Import MyInts.
 Require Import List.
 Import ListNotations.
 Require Import Strings.String.
-From MyProject Require Export CrIdentifiers.
-From MyProject Require Export ListUtils.
+From MyProject Require Import CrIdentifiers.
+From MyProject Require Import ListUtils.
 
 (* Apply binary operation *)
 Definition apply_bin_op (f : BinaryOp) (arg1 : uint8) (arg2 : uint8) : uint8 :=
@@ -45,7 +46,7 @@ Definition eval_hdr_op_assign_concrete (op : HdrOp) (ps: ConcreteState) : Concre
 
 Definition eval_match_concrete (match_pattern : MatchPattern) (ps : ConcreteState) : bool :=
   (* For every list element, check if the Header's current value (determined by ps) equals the uint8 *)
-  List.forallb (fun '(h, v) => eq (lookup_hdr ps h) v) match_pattern.
+  List.forallb (fun '(h, v) => Integers.eq (lookup_hdr ps h) v) match_pattern.
 
 (* Define evaluation over a list of HdrOp *)
 (* Note we are evaluating the list from right to left (fold_right) because it simplifies proving. *)

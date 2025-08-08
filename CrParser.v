@@ -2,7 +2,7 @@
 Require Import List.
 Import ListNotations.
 Require Import Strings.String.
-From MyProject Require Export CrIdentifiers.
+From MyProject Require Import CrIdentifiers.
 
 (* A parser is a list of parser states *)
 Definition Parser : Type := list ParserState.

@@ -1,6 +1,7 @@
 From MyProject Require Import SmtExpr.
 From MyProject Require Import CrProgramState.
 From MyProject Require Import CrSymbolicSemanticsTransformer.
+From MyProject Require Import Maps.
 
 Transparent lookup_ctrl.
 Lemma commute_lookup_eval_ctrl:

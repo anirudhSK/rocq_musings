@@ -3,6 +3,11 @@ From MyProject Require Import CrIdentifiers.
 From MyProject Require Import CrConcreteSemanticsTransformer.
 From MyProject Require Import SmtExpr.
 From MyProject Require Import CrSymbolicSemanticsTransformer.
+From MyProject Require Import HelperLemmas.
+From MyProject Require Import CtrlPlaneInvariants.
+From MyProject Require Import CrProgramState.
+From MyProject Require Import MyInts.
+From MyProject Require Import ListUtils.
 Require Import ZArith.
 Require Import Coq.Strings.String.
 Local Open Scope string_scope.
@@ -10,9 +15,6 @@ Require Import Coq.Lists.List.
 Import ListNotations.
 Require Import Coq.Bool.Bool.
 From Coq Require Import FunctionalExtensionality.
-From MyProject Require Import HelperLemmas.
-From MyProject Require Import CtrlPlaneInvariants.
-From MyProject Require Import CrProgramState.
 
 (* Simpler lemma with no state update *)
 Lemma commute_sym_conc_expr:
@@ -105,7 +107,7 @@ Proof.
     rewrite commute_mapper_lookup_hdr.
     reflexivity. }
   rewrite H.
-  destruct (eq (eval_smt_arith (lookup_hdr s1 h) f) v).
+  destruct (Integers.eq (eval_smt_arith (lookup_hdr s1 h) f) v).
   - reflexivity.
   - reflexivity.
 Qed.
@@ -136,7 +138,7 @@ Proof.
     destruct hv_pair as [h v].
     simpl.
     destruct (eval_match_smt rest s1); try reflexivity.
-    destruct (eq (eval_smt_arith (lookup_hdr s1 h) f) v) eqn:des.
+    destruct (Integers.eq (eval_smt_arith (lookup_hdr s1 h) f) v) eqn:des.
     -- rewrite andb_true_r. simpl. rewrite des. reflexivity.
     -- rewrite andb_false_l. simpl. rewrite des. reflexivity.
 Qed.
