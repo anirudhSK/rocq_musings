@@ -14,6 +14,8 @@ From MyProject Require Import CrTransformer. (* Or replace with the correct modu
 From MyProject Require Import CrSymbolicSemanticsTransformer.
 From MyProject Require Import CrConcreteSemanticsTransformer.
 From MyProject Require Import ConcreteToSymbolicLemmas.
+From MyProject Require Import SmtHelperLemmas.
+From MyProject Require Import UtilLemmas.
 
 Inductive SmtResult : Type :=
   | SmtSat (f : SmtValuation)  (* Satisfiable with valuation f *)
@@ -47,182 +49,6 @@ Definition check_headers_and_state_vars (s1 s2 : SymbolicState)
                                     SmtTrue header_list)
              (List.fold_right (fun sv acc => SmtBoolAnd acc (SmtBoolEq (lookup_state s1 sv) (lookup_state s2 sv))) 
                                     SmtTrue state_var_list)).
-
-Lemma eval_smt_bool_smt_bool_not_false :
-  forall e1 e2 f,
-  eval_smt_bool (SmtBoolNot (SmtBoolAnd e1 e2)) f = false ->
-  eval_smt_bool e1 f = true /\ eval_smt_bool e2 f = true.
-Proof.
-  intros e1 e2 f H.
-  simpl in H.
-  destruct (eval_smt_bool e1 f && eval_smt_bool e2 f) eqn:Ex.
-  -- apply andb_true_iff.
-     assumption.
-  -- exfalso. simpl in H. congruence.
-Qed.
-
-Lemma eval_smt_bool_smt_bool_not_true :
-  forall e1 e2 f,
-  eval_smt_bool (SmtBoolNot (SmtBoolAnd e1 e2)) f = true ->
-  eval_smt_bool e1 f = false \/ eval_smt_bool e2 f = false.
-Proof.
-  intros e1 e2 f H.
-  simpl in H.
-  destruct (eval_smt_bool e1 f && eval_smt_bool e2 f) eqn:Ex.
-  -- exfalso. simpl in H.
-     congruence.
-  -- apply andb_false_iff in Ex.
-     assumption.
-Qed.
-
-Lemma SmtBoolConjunction_true_header:
-  forall s1 s2 header_list f,
-  eval_smt_bool (fold_right 
-    (fun (h : Header) (acc : SmtBoolExpr) =>
-          SmtBoolAnd acc
-          (SmtBoolEq (lookup_hdr s1 h)
-          (lookup_hdr s2 h))) SmtTrue header_list) f =
-    true ->
-  forallb (fun h => (eval_smt_bool
-          (SmtBoolEq
-          (lookup_hdr s1 h)
-          (lookup_hdr s2 h)) f)) header_list = true.
-Proof.
-  intros s1 s2 header_list f H.
-  induction header_list as [|h t IH].
-  - simpl in H. reflexivity.
-  - simpl in H.
-    simpl. apply andb_true_iff. split.
-    apply andb_true_iff in H. apply H.
-    apply andb_true_iff in H.
-    destruct H as [H1 H2].
-    apply IH in H1.
-    assumption.
-Qed.
-
-(* Same lemma as above, but for state var instead of header *)
-Lemma SmtBoolConjunction_true_state_var:
-  forall s1 s2 state_var_list f,
-  eval_smt_bool (fold_right 
-    (fun (sv :State) (acc : SmtBoolExpr) =>
-          SmtBoolAnd acc
-          (SmtBoolEq (lookup_state s1 sv)
-          (lookup_state s2 sv))) SmtTrue state_var_list) f =
-    true ->
-  forallb (fun sv => (eval_smt_bool
-          (SmtBoolEq
-          (lookup_state s1 sv)
-          (lookup_state s2 sv)) f)) state_var_list = true.
-Proof.
-  intros s1 s2 state_var_list f H.
-  induction state_var_list as [|sv t IH].
-  - simpl in H. reflexivity.
-  - simpl in H.
-    simpl. apply andb_true_iff. split.
-    apply andb_true_iff in H. apply H.
-    apply andb_true_iff in H.
-    destruct H as [H1 H2].
-    apply IH in H1.
-    assumption.
-Qed.
-
-Lemma SmtBoolConjunction_false_header:
-  forall s1 s2 header_list f,
-  eval_smt_bool (fold_right 
-    (fun (h : Header) (acc : SmtBoolExpr) =>
-          SmtBoolAnd acc
-          (SmtBoolEq (lookup_hdr s1 h)
-          (lookup_hdr s2 h))) SmtTrue header_list) f =
-    false ->
-  existsb (fun h => (eval_smt_bool
-          (SmtBoolNot (SmtBoolEq
-          (lookup_hdr s1 h)
-          (lookup_hdr s2 h))) f)) header_list = true.
-          (* there is a header (true), such that:
-             If you assert the inequality of the headers (equality and then not),
-             that resulting statement is true*)
-Proof.
-  intros s1 s2 header_list f H.
-  induction header_list as [|h t IH].
-  - simpl in H. exfalso. congruence.
-  - simpl in *.
-    apply andb_false_iff in H.
-    apply orb_true_iff.
-    destruct H.
-    + right. apply IH in H.
-      assumption.
-    + apply f_equal with (f := negb) in H.
-      simpl in H. left. assumption.
-Qed.
-  
-(* Same lemma as above, but for state var instead of header *)
-Lemma SmtBoolConjunction_false_state_var:
-  forall s1 s2 state_var_list f,
-  eval_smt_bool (fold_right 
-    (fun (sv :State) (acc : SmtBoolExpr) =>
-          SmtBoolAnd acc
-          (SmtBoolEq (lookup_state s1 sv)
-          (lookup_state s2 sv))) SmtTrue state_var_list) f =
-    false ->
-  existsb (fun sv => (eval_smt_bool
-          (SmtBoolNot (SmtBoolEq
-          (lookup_state s1 sv)
-          (lookup_state s2 sv))) f)) state_var_list = true.
-          (* there is a state var (true), such that:
-             If you assert the inequality of the state vars (equality and then not),
-             that resulting statement is true*) 
-Proof.
-  intros s1 s2 state_var_list f H.
-  induction state_var_list as [|sv t IH].
-  - simpl in H. exfalso. congruence.
-  - simpl in *.
-    apply andb_false_iff in H.
-    apply orb_true_iff.
-    destruct H.
-    + right. apply IH in H.
-      assumption.
-    + apply f_equal with (f := negb) in H.
-      simpl in H. left. assumption.
-Qed.
-
-Lemma forallb_in_hdr_list :
-  forall (f : Header -> bool) (l : list Header),
-  forallb f l = true ->
-  forall x, In x l -> f x = true.
-Proof.
-  intros f l H.
-  induction l as [|x t IH].
-  - intros x H_in. exfalso. simpl in H_in. contradiction.
-  - simpl in H.
-    apply andb_true_iff in H as [H1 H2].
-    specialize (IH H2).
-    simpl.
-    intros x0.
-    intros H_in.
-    destruct H_in as [H_eq | H_in_t].
-    + subst x0. assumption.
-    + apply IH. assumption.
-Qed.
-
-(* Same lemma as above but for state var list *)
-Lemma forallb_in_state_var_list :
-  forall (f :State -> bool) (l : list State),
-  forallb f l = true ->
-  forall x, In x l -> f x = true.
-Proof.
-  intros f l H.
-  induction l as [|x t IH].
-  - intros x H_in. exfalso. simpl in H_in. contradiction.
-  - simpl in H.
-    apply andb_true_iff in H as [H1 H2].
-    specialize (IH H2).
-    simpl.
-    intros x0.
-    intros H_in.
-    destruct H_in as [H_eq | H_in_t].
-    + subst x0. assumption.
-    + apply IH. assumption.
-Qed.
 
 Lemma check_headers_and_state_vars_false:
   forall s1 s2 header_list state_var_list f,
@@ -274,50 +100,6 @@ Proof.
     split; assumption.
 Qed.
 
-Definition equivalence_checker
-  (s : SymbolicState)
-  (t1 : Transformer) (t2 : Transformer)
-  (header_list : list Header) (state_var_list : list State)
-   :  SmtResult :=
-  (* assume a starting symbolic state s*)
-  (* convert t1 and t2 to an equivalent final SmtArithExpr, assuming a start state of s *)
-  let s1 := eval_transformer_smt t1 s in
-  let s2 := eval_transformer_smt t2 s in
-  (* check if the headers and state vars are equivalent *)
-  smt_query (check_headers_and_state_vars s1 s2 header_list state_var_list).
-
-Definition equivalence_checker_cr_dsl (p1: CaracaraProgram) (p2: CaracaraProgram)
-  : bool := 
-  match p1, p2 with
-   | CaracaraProgramDef h1 s1 c1 t1, CaracaraProgramDef h2 s2 c2 t2 => 
-      if hdr_list_equal h1 h2 then
-        if state_list_equal s1 s2 then
-          if ctrl_list_equal c1 c2 then
-            match (equivalence_checker (init_symbolic_state p1) t1 t2 h1 s1) with
-            (* TODO: Maybe equivalence_checker should take c as argument too? *)
-            | SmtUnsat => true  (* if it is unsatisfiable, then all state vars and headers are equal *)
-            | SmtSat _ => false (* if it is satisfiable, then some state var or header is not equal *)
-            | SmtUnknown => false (* if it is unknown, we assume it is not equal *)
-            end
-          else
-            false
-        else
-          false
-      else
-        false
-  end.
-       
-Lemma smt_bool_eq_true : forall e1 e2 f,
-  eval_smt_bool (SmtBoolEq e1 e2) f = true -> 
-  eval_smt_arith e1 f = eval_smt_arith e2 f.
-Proof.
-  intros e1 e2 f H.
-  destruct (eval_smt_bool (SmtBoolEq e1 e2) f) eqn:Ex1.
-  -- destruct e1, e2; apply concrete_if_else in Ex1;
-     try unfold eval_smt_arith; try assumption.
-  -- exfalso. congruence.
-Qed.
-
 Lemma eval_smt_bool_lemma_hdr :
   forall t1 t2 s h f,
   is_header_in_ps s h <> None ->
@@ -360,58 +142,6 @@ Proof.
   rewrite commute_mapper_lookup_state.
   apply H_eq.
   assumption. assumption.
-Qed.
-
-(* Soundness lemma about equivalence_checker conditional on the axioms above *)
-(* TODO: Joe said both equivalence checker lemmas should be named soundness lemmas,
-         rather than completness. Resolve this item.*)
-Lemma equivalence_checker_sound :
-  forall s t1 t2 header_list state_var_list f,
-  (forall v, In v header_list -> is_header_in_ps s v <> None) ->
-  (forall v, In v state_var_list -> is_state_var_in_ps s v <> None) ->
-  equivalence_checker s t1 t2 header_list state_var_list = SmtUnsat ->
-  let c  := eval_sym_state s f in
-  let c1 := eval_transformer_concrete t1 c in
-  let c2 := eval_transformer_concrete t2 c in
-  (forall v, In v header_list ->
-  (lookup_hdr c1 v) = (lookup_hdr c2 v)) /\
-  (forall v, In v state_var_list ->
-  (lookup_state c1 v) = (lookup_state c2 v)).
-Proof.
-  intros s t1 t2 header_list state_var_list f.
-  intro H1.
-  intro H2.
-  intro H.
-  simpl.
-  unfold equivalence_checker in H.
-  split; intro h; intro H_in.
-  -- specialize (smt_query_sound_none _ H f) as H_complete.
-     apply check_headers_and_state_vars_false in H_complete.
-     destruct H_complete as [H_header H_state_var].
-     clear H_state_var. (* declutter *)
-     specialize (H_header h H_in).
-     apply eval_smt_bool_lemma_hdr.
-     specialize (H1 h H_in). assumption. assumption.
-  -- specialize (smt_query_sound_none _ H f) as H_complete.
-     apply check_headers_and_state_vars_false in H_complete.
-     destruct H_complete as [H_header H_state_var].
-     clear H_header. (* declutter *)
-     specialize (H_state_var h H_in).
-     apply eval_smt_bool_lemma_state.
-     specialize (H2 h H_in). assumption. assumption.
-Qed.
-
-Print Assumptions equivalence_checker_sound.
-
-Lemma smt_bool_eq_false : forall e1 e2 f,
-  eval_smt_bool (SmtBoolEq e1 e2) f = false -> 
-  eval_smt_arith e1 f <> eval_smt_arith e2 f.
-Proof.
-  intros e1 e2 f H.
-  destruct (eval_smt_bool (SmtBoolEq e1 e2) f) eqn:Ex1.
-  -- exfalso. congruence.
-  -- destruct e1, e2; apply concrete_if_else2 in Ex1;
-     try unfold eval_smt_arith; try assumption.
 Qed.
 
 Lemma eval_smt_bool_lemma_hdr_false :
@@ -458,6 +188,80 @@ Proof.
   assumption. assumption.
 Qed.
 
+Definition equivalence_checker
+  (s : SymbolicState)
+  (t1 : Transformer) (t2 : Transformer)
+  (header_list : list Header) (state_var_list : list State)
+   :  SmtResult :=
+  (* assume a starting symbolic state s*)
+  (* convert t1 and t2 to an equivalent final SmtArithExpr, assuming a start state of s *)
+  let s1 := eval_transformer_smt t1 s in
+  let s2 := eval_transformer_smt t2 s in
+  (* check if the headers and state vars are equivalent *)
+  smt_query (check_headers_and_state_vars s1 s2 header_list state_var_list).
+
+Definition equivalence_checker_cr_dsl (p1: CaracaraProgram) (p2: CaracaraProgram)
+  : bool := 
+  match p1, p2 with
+   | CaracaraProgramDef h1 s1 c1 t1, CaracaraProgramDef h2 s2 c2 t2 => 
+      if hdr_list_equal h1 h2 then
+        if state_list_equal s1 s2 then
+          if ctrl_list_equal c1 c2 then
+            match (equivalence_checker (init_symbolic_state p1) t1 t2 h1 s1) with
+            (* TODO: Maybe equivalence_checker should take c as argument too? *)
+            | SmtUnsat => true  (* if it is unsatisfiable, then all state vars and headers are equal *)
+            | SmtSat _ => false (* if it is satisfiable, then some state var or header is not equal *)
+            | SmtUnknown => false (* if it is unknown, we assume it is not equal *)
+            end
+          else
+            false
+        else
+          false
+      else
+        false
+  end.
+
+(* Soundness lemma about equivalence_checker conditional on the axioms above *)
+(* TODO: Joe said both equivalence checker lemmas should be named soundness lemmas,
+         rather than completness. Resolve this item.*)
+Lemma equivalence_checker_sound :
+  forall s t1 t2 header_list state_var_list f,
+  (forall v, In v header_list -> is_header_in_ps s v <> None) ->
+  (forall v, In v state_var_list -> is_state_var_in_ps s v <> None) ->
+  equivalence_checker s t1 t2 header_list state_var_list = SmtUnsat ->
+  let c  := eval_sym_state s f in
+  let c1 := eval_transformer_concrete t1 c in
+  let c2 := eval_transformer_concrete t2 c in
+  (forall v, In v header_list ->
+  (lookup_hdr c1 v) = (lookup_hdr c2 v)) /\
+  (forall v, In v state_var_list ->
+  (lookup_state c1 v) = (lookup_state c2 v)).
+Proof.
+  intros s t1 t2 header_list state_var_list f.
+  intro H1.
+  intro H2.
+  intro H.
+  simpl.
+  unfold equivalence_checker in H.
+  split; intro h; intro H_in.
+  -- specialize (smt_query_sound_none _ H f) as H_complete.
+     apply check_headers_and_state_vars_false in H_complete.
+     destruct H_complete as [H_header H_state_var].
+     clear H_state_var. (* declutter *)
+     specialize (H_header h H_in).
+     apply eval_smt_bool_lemma_hdr.
+     specialize (H1 h H_in). assumption. assumption.
+  -- specialize (smt_query_sound_none _ H f) as H_complete.
+     apply check_headers_and_state_vars_false in H_complete.
+     destruct H_complete as [H_header H_state_var].
+     clear H_header. (* declutter *)
+     specialize (H_state_var h H_in).
+     apply eval_smt_bool_lemma_state.
+     specialize (H2 h H_in). assumption. assumption.
+Qed.
+
+Print Assumptions equivalence_checker_sound.
+
 (* Completeness lemma about equivalence_checker conditional on the axioms above *)
 Lemma equivalence_checker_complete :
   forall s t1 t2 header_list state_var_list f',
@@ -500,85 +304,6 @@ Proof.
        split; assumption.
   - discriminate H.
   - discriminate H.
-Qed.
-
-(* old lemma for reference
-Lemma equivalence_checker_sound :
-  forall s t1 t2 header_list state_var_list f,
-  (forall v, In v header_list -> is_header_in_ps s v <> None) ->
-  (forall v, In v state_var_list -> is_state_var_in_ps s v <> None) ->
-  equivalence_checker s t1 t2 header_list state_var_list = SmtUnsat ->
-  let c  := eval_sym_state s f in
-  let c1 := eval_transformer_concrete t1 c in
-  let c2 := eval_transformer_concrete t2 c in
-  (forall v, In v header_list ->
-  (lookup_hdr c1 v) = (lookup_hdr c2 v)) /\
-  (forall v, In v state_var_list ->
-  (lookup_state c1 v) = (lookup_state c2 v)).
-*)
-
-(*
-  (In v (get_all_headers_from_ps c1) /\             (* must be in c1 *)
-  (In v (get_all_headers_from_ps c2)) /\            (* must be in c2 *)
-*)
-
-(* Transform: map f list where f returns pairs *)
-(* Into: (map (fun x => fst (f x)) list, map (fun x => snd (f x)) list) *)
-
-Lemma map_pair_split : forall (A B C : Type) (f : A -> B * C) (l : list A),
-  map f l = combine (map (fun x => fst (f x)) l) (map (fun x => snd (f x)) l).
-Proof.
-  intros A B C f l.
-  induction l as [|a l' IH].
-  - reflexivity.
-  - simpl. f_equal.
-    + destruct (f a). reflexivity.
-    + apply IH.
-Qed.
-
-Definition unzip_paired_list_hdr (l : list (positive * SmtArithExpr)) : list Header :=
-  map (fun x => HeaderCtr (fst x)) l.
-
-Lemma helper1 :
-  forall (l : list Header) (key_fn : Header -> positive) (val_fn : Header -> SmtArithExpr) (h : Header),
-  In h l ->
-  In (key_fn h, val_fn h) (combine (map key_fn l) (map val_fn l)).
-Proof.
-  intros l key_fn val_fn h H_in.
-  induction l as [|h' t IH].
-  - simpl in H_in. exfalso. congruence.
-  - simpl.
-    simpl in H_in.
-    destruct H_in.
-    -- left. rewrite H. reflexivity.
-    -- right. apply IH. assumption.
-Qed.
-
-(* Same as helper1 but for state *)
-Lemma helper1_state :
-  forall (l : list State) (key_fn : State -> positive) (val_fn : State -> SmtArithExpr) (sv : State),
-  In sv l ->
-  In (key_fn sv, val_fn sv) (combine (map key_fn l) (map val_fn l)).
-Proof.
-  intros l key_fn val_fn sv H_in.
-  induction l as [|sv' t IH].
-  - simpl in H_in. exfalso. congruence.
-  - simpl.
-    simpl in H_in.
-    destruct H_in.
-    -- left. rewrite H. reflexivity.
-    -- right. apply IH. assumption.
-Qed.
-
-Lemma map_combine2:
-   forall {T V K} (l : list T) (val_fn : T -> V) (key_fn : T -> K),
-    (map fst (combine (map key_fn l) (map val_fn l))) =
-    (map key_fn l).
-Proof.
-  intros T V K l val_fn key_fn.
-  induction l as [|x t IH].
-  - reflexivity.
-  - simpl. f_equal. apply IH.
 Qed.
 
 Lemma ptree_of_list_lemma_hdr :
@@ -675,14 +400,14 @@ Qed.
 
 (* Soundness lemma for equivalence_checker_cr_dsl *)
 Lemma equivalence_checker_cr_sound :
-  forall p1 p2 f,
+  forall p1 p2 f s,
   equivalence_checker_cr_dsl p1 p2 = true ->
-  let c1_i  := eval_sym_state (init_symbolic_state p1) f in (* Get a sym state out of p1' headers, ctrls, and state *)
-  let c2_i  := eval_sym_state (init_symbolic_state p2) f in (* Do the same for p2 *)
+  is_init_state p1 s /\ is_init_state p2 s ->        (* s is a valid initial symbolic state for both p1 AND p2 *)
+  let c := eval_sym_state s f in                     (* Get a concrete state from s *)
   let t1 := get_transformer_from_prog p1 in
   let t2 := get_transformer_from_prog p2 in
-  let c1 := eval_transformer_concrete t1 c1_i in
-  let c2 := eval_transformer_concrete t2 c2_i in
+  let c1 := eval_transformer_concrete t1 c in
+  let c2 := eval_transformer_concrete t2 c in
   well_formed_program p1 ->                          (* p1 is well-formed *)
   (forall v, In v (get_headers_from_prog p1) ->      (* then, every header in p1 *)
   (In v (get_headers_from_prog p2)) /\               (* must be in p2 *)
