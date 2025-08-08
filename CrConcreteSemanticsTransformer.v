@@ -9,32 +9,27 @@ From MyProject Require Export CrIdentifiers.
 From MyProject Require Export ListUtils.
 
 (* Apply binary operation *)
-Definition apply_bin_op (f : BinaryOp) (arg1 : InitStatus uint8) (arg2 : InitStatus uint8) : InitStatus uint8 :=
- match arg1, arg2 with
-  | Initialized a1, Initialized a2 =>
-      let result := match f with
-      | AddOp => Integers.add a1 a2
-      | SubOp => Integers.sub a1 a2
-      | AndOp => Integers.and a1 a2
-      | OrOp =>  Integers.or a1 a2
-      | XorOp => Integers.xor a1 a2
-      | MulOp => Integers.mul a1 a2
-      | DivOp => Integers.divu a1 a2
-      | ModOp => Integers.modu a1 a2
-      end
-      in Initialized uint8 result
-  | _, _ => Uninitialized uint8
+Definition apply_bin_op (f : BinaryOp) (arg1 : uint8) (arg2 : uint8) : uint8 :=
+  match f with
+      | AddOp => Integers.add arg1 arg2
+      | SubOp => Integers.sub arg1 arg2
+      | AndOp => Integers.and arg1 arg2
+      | OrOp =>  Integers.or arg1 arg2
+      | XorOp => Integers.xor arg1 arg2
+      | MulOp => Integers.mul arg1 arg2
+      | DivOp => Integers.divu arg1 arg2
+      | ModOp => Integers.modu arg1 arg2
   end.
 
-Definition lookup_concrete (arg : FunctionArgument) (ps : ConcreteState) : InitStatus uint8 :=
+Definition lookup_concrete (arg : FunctionArgument) (ps : ConcreteState) : uint8 :=
   match arg with
   | CtrlPlaneArg c => lookup_ctrl ps c
   | HeaderArg h    => lookup_hdr ps h
-  | ConstantArg n  => Initialized uint8 n
+  | ConstantArg n  => n
   | StatefulArg s  => lookup_state ps s
   end.
 
-Definition eval_hdr_op_expr_concrete (op : HdrOp) (ps : ConcreteState) : InitStatus uint8 :=
+Definition eval_hdr_op_expr_concrete (op : HdrOp) (ps : ConcreteState) : uint8 :=
   match op with
   | StatefulOp f arg1 arg2 _ => apply_bin_op f (lookup_concrete arg1 ps) (lookup_concrete arg2 ps)
   | StatelessOp f arg1 arg2 _ => apply_bin_op f (lookup_concrete arg1 ps) (lookup_concrete arg2 ps)
@@ -50,8 +45,7 @@ Definition eval_hdr_op_assign_concrete (op : HdrOp) (ps: ConcreteState) : Concre
 
 Definition eval_match_concrete (match_pattern : MatchPattern) (ps : ConcreteState) : bool :=
   (* For every list element, check if the Header's current value (determined by ps) equals the uint8 *)
-  List.forallb (fun '(h, v) => initstatus_uint8_equal (lookup_hdr ps h) (Initialized uint8 v))
-                               match_pattern.
+  List.forallb (fun '(h, v) => eq (lookup_hdr ps h) v) match_pattern.
 
 (* Define evaluation over a list of HdrOp *)
 (* Note we are evaluating the list from right to left (fold_right) because it simplifies proving. *)

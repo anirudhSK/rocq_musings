@@ -3,6 +3,7 @@ From MyProject Require Import CrSymbolicSemanticsTransformer.
 From MyProject Require Import CrConcreteSemanticsTransformer.
 From MyProject Require Import CrIdentifiers.
 From MyProject Require Import CrProgramState.
+From MyProject Require Import MyInts.
 Require Import Bool.
 Require Import List.
 
@@ -149,7 +150,7 @@ Lemma smt_bool_eq_true : forall e1 e2 f,
 Proof.
   intros e1 e2 f H.
   destruct (eval_smt_bool (SmtBoolEq e1 e2) f) eqn:Ex1.
-  -- destruct e1, e2; apply concrete_if_else in Ex1;
+  -- destruct e1, e2; apply uint8_concrete_if_else in Ex1;
      try unfold eval_smt_arith; try assumption.
   -- exfalso. congruence.
 Qed.
@@ -161,6 +162,6 @@ Proof.
   intros e1 e2 f H.
   destruct (eval_smt_bool (SmtBoolEq e1 e2) f) eqn:Ex1.
   -- exfalso. congruence.
-  -- destruct e1, e2; apply concrete_if_else2 in Ex1;
+  -- destruct e1, e2; apply uint8_concrete_if_else2 in Ex1;
      try unfold eval_smt_arith; try assumption.
 Qed.

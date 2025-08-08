@@ -34,7 +34,7 @@ Lemma commute_update_eval_state:
 Proof.
   intros s f h v.
   unfold eval_sym_state.
-  specialize (commute_mapper_update_state (T1 := SmtArithExpr) (T2 := (InitStatus uint8))). (* TODO: Maybe typedef for InitStatus uint8 *)
+  specialize (commute_mapper_update_state (T1 := SmtArithExpr) (T2 := uint8)).
   intros.
   apply H.
 Qed.
@@ -46,7 +46,7 @@ Lemma commute_update_eval_hdr:
 Proof.
   intros s f h v.
   unfold eval_sym_state.
-  specialize (commute_mapper_update_hdr (T1 := SmtArithExpr) (T2 := InitStatus uint8)).
+  specialize (commute_mapper_update_hdr (T1 := SmtArithExpr) (T2 := uint8)).
   intros.
   apply H.
 Qed.
@@ -105,7 +105,7 @@ Proof.
     rewrite commute_mapper_lookup_hdr.
     reflexivity. }
   rewrite H.
-  destruct (initstatus_uint8_equal (eval_smt_arith (lookup_hdr s1 h) f) (Initialized uint8 v)).
+  destruct (eq (eval_smt_arith (lookup_hdr s1 h) f) v).
   - reflexivity.
   - reflexivity.
 Qed.
@@ -136,7 +136,7 @@ Proof.
     destruct hv_pair as [h v].
     simpl.
     destruct (eval_match_smt rest s1); try reflexivity.
-    destruct (initstatus_uint8_equal (eval_smt_arith (lookup_hdr s1 h) f) (Initialized uint8 v)) eqn:des.
+    destruct (eq (eval_smt_arith (lookup_hdr s1 h) f) v) eqn:des.
     -- rewrite andb_true_r. simpl. rewrite des. reflexivity.
     -- rewrite andb_false_l. simpl. rewrite des. reflexivity.
 Qed.

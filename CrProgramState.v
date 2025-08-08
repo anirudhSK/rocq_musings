@@ -26,7 +26,7 @@ Arguments header_map {T} _.
 Arguments state_map {T} _.  
 Arguments ctrl_map {T} _.
 
-Definition ConcreteState := ProgramState (InitStatus uint8).
+Definition ConcreteState := ProgramState uint8.
 Definition SymbolicState := ProgramState SmtArithExpr.
 
 (* TODO: lookup_hdr/state_map could be rolled into lookup_hdr/state. *)
@@ -445,15 +445,15 @@ Definition init_concrete_state (p : CaracaraProgram) : ConcreteState :=
   let h := get_headers_from_prog p in
   let s := get_states_from_prog p in
   let c := get_ctrls_from_prog p in
-  {|ctrl_map :=  (Uninitialized uint8,
+  {|ctrl_map :=  (repr 0, (* TODO: Need better default, but think this doesn't matter *)
                         PTree_Properties.of_list
-                        (List.map (fun x => (match x with | CtrlCtr x_id => x_id end, Uninitialized uint8)) c));
-     header_map     :=  (Uninitialized uint8,
+                        (List.map (fun x => (match x with | CtrlCtr x_id => x_id end, repr 0)) c));
+     header_map     :=  (repr 0, (* TODO: Need better default, but think this doesn't matter *)
                         PTree_Properties.of_list
-                        (List.map (fun x => (match x with | HeaderCtr x_id => x_id end, Uninitialized uint8)) h));
-     state_map  :=  (Uninitialized uint8,
+                        (List.map (fun x => (match x with | HeaderCtr x_id => x_id end, repr 0)) h));
+     state_map  :=  (repr 0,
                         PTree_Properties.of_list
-                        (List.map (fun x => (match x with | StateCtr x_id => x_id end, Uninitialized uint8)) s));|}.
+                        (List.map (fun x => (match x with | StateCtr x_id => x_id end, repr 0)) s));|}.
 
 (* Convert positive to string *)
 Fixpoint pos_to_string (p : positive) : string :=
