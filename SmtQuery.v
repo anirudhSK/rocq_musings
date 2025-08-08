@@ -200,14 +200,14 @@ Definition equivalence_checker
   (* check if the headers and state vars are equivalent *)
   smt_query (check_headers_and_state_vars s1 s2 header_list state_var_list).
 
-Definition equivalence_checker_cr_dsl (p1: CaracaraProgram) (p2: CaracaraProgram) (s: SymbolicState)
+Definition equivalence_checker_cr_dsl (p1: CaracaraProgram) (p2: CaracaraProgram)
   : bool := 
   match p1, p2 with
    | CaracaraProgramDef h1 s1 c1 t1, CaracaraProgramDef h2 s2 c2 t2 => 
       if hdr_list_equal h1 h2 then
         if state_list_equal s1 s2 then
           if ctrl_list_equal c1 c2 then
-            match (equivalence_checker s t1 t2 h1 s1) with
+            match (equivalence_checker (init_symbolic_state p1) t1 t2 h1 s1) with
             (* TODO: Maybe equivalence_checker should take c as argument too? *)
             | SmtUnsat => true  (* if it is unsatisfiable, then all state vars and headers are equal *)
             | SmtSat _ => false (* if it is satisfiable, then some state var or header is not equal *)
@@ -400,22 +400,20 @@ Qed.
 
 (* Soundness lemma for equivalence_checker_cr_dsl *)
 Lemma equivalence_checker_cr_sound :
-  forall p1 p2 f s,
-  is_init_state p1 s /\ is_init_state p2 s ->        (* s is a valid initial symbolic state for both p1 AND p2 *)
-  equivalence_checker_cr_dsl p1 p2 s = true ->
-  let c1_i  := eval_sym_state (s) f in (* Get a sym state out of p1' headers, ctrls, and state *)
-  let c2_i  := eval_sym_state (s) f in (* Do the same for p2 *)
+  forall p1 p2 f,
+  equivalence_checker_cr_dsl p1 p2 = true ->
+  let c1_i  := eval_sym_state (init_symbolic_state p1) f in (* Get a sym state out of p1' headers, ctrls, and state *)
+  let c2_i  := eval_sym_state (init_symbolic_state p2) f in (* Do the same for p2 *)
   let t1 := get_transformer_from_prog p1 in
   let t2 := get_transformer_from_prog p2 in
   let c1 := eval_transformer_concrete t1 c1_i in
   let c2 := eval_transformer_concrete t2 c2_i in
-  let c := eval_sym_state s f in
   well_formed_program p1 ->                          (* p1 is well-formed *)
   (forall v, In v (get_headers_from_prog p1) ->      (* then, every header in p1 *)
   (In v (get_headers_from_prog p2)) /\               (* must be in p2 *)
   (lookup_hdr c1 v) = (lookup_hdr c2 v)).            (* and their final values must be equal *)
 Proof.
-  intros p1 p2 f s H_init H.
+  intros p1 p2 f H.
   unfold equivalence_checker_cr_dsl in H.
   destruct p1 as [h1 s1 c1 t1] eqn:desp1,
            p2 as [h2 s2 c2 t2] eqn:desp2; simpl in H.
@@ -429,28 +427,51 @@ Proof.
   - apply hdr_list_equal_lemma in H_hdr_eq.
     rewrite H_hdr_eq in H1.
     assumption.
-  - destruct (equivalence_checker s t1 t2 h1 s1) eqn:H_eq; try (exfalso; congruence).
+  - destruct (equivalence_checker (init_symbolic_state (CaracaraProgramDef h1 s1 c1
+t1)) t1 t2 h1 s1) eqn:H_eq; try (exfalso; congruence).
     apply equivalence_checker_sound with (f := f) in H_eq.
     + apply H_eq in H1.
+      unfold c0.
+      unfold c3.
+      unfold c1_i.
+      unfold c2_i.
+      simpl.
+      unfold t0.
+      unfold t3.
+      simpl.
+      apply state_list_equal_lemma in H_state_eq.
+      apply hdr_list_equal_lemma in H_hdr_eq.
+      apply ctrl_list_equal_lemma in H_ctrl_eq.
+      rewrite <- H_hdr_eq.
+      rewrite <- H_state_eq.
+      rewrite <- H_ctrl_eq.
+      rewrite init_symbolic_state_nodep_t with (t2 := t2) in H1 at 2.
       assumption.
     + intros.
       apply is_header_in_ps_lemma.
-      destruct H_init as [H_init1 H_init2].
-      unfold is_init_state in H_init1, H_init2.
-      simpl in H_init1, H_init2.
-      specialize (H_init1 v0 (StateCtr (1%positive)) (CtrlCtr (1%positive))).
-      destruct H_init1.
-      apply H3.
-      assumption.
+      unfold init_symbolic_state.
+      Transparent get_all_headers_from_ps.
+      unfold get_all_headers_from_ps.
+      simpl.
+      rewrite map_pair_split.
+      simpl.
+      apply ptree_of_list_lemma_hdr.
+      simpl in H0.
+      destruct H0.
+      assumption. assumption.
     + intros.
       apply is_state_in_ps_lemma.
-      destruct H_init as [H_init1 H_init2].
-      unfold is_init_state in H_init1, H_init2.
-      simpl in H_init1, H_init2.
-      specialize (H_init1  (HeaderCtr (1%positive)) v0 (CtrlCtr (1%positive))).
-      destruct H_init1.
-      destruct H4.
-      apply H4.
+      unfold init_symbolic_state.
+      Transparent get_all_states_from_ps.
+      unfold get_all_states_from_ps.
+      simpl.
+      rewrite map_pair_split.
+      simpl.
+      apply ptree_of_list_lemma_state.
+      simpl in H0.
+      destruct H0.
+      destruct H3.
+      assumption.
       assumption.
 Qed.
 
