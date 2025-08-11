@@ -2,14 +2,8 @@
    show that a single hdr_op evaluation can be converted to the appropriate SMT formula in Z3 *)
 From MyProject Require Import CrIdentifiers.
 From MyProject Require Import MyInts.
+From MyProject Require Import SmtTypes.
 From Coq.Strings Require Import String.
-
-(* Note that these strings may or may not have a one-to-one correspondence with
-  identifiers in the CrDsl program. *)
-(* Currently only need valuations from strings to uint8
-  because there are no primitive bool variables within the IR.
-  Expressions can still be bools though (for conditionals, equalities, etc.) *)
-Definition SmtValuation := string -> uint8.
 
 Inductive SmtBoolExpr : Type :=
     | SmtTrue

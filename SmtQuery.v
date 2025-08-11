@@ -4,6 +4,7 @@ From MyProject Require Import CrIdentifiers.
 From MyProject Require Import InitStatus.
 From MyProject Require Import CrProgramState.
 From MyProject Require Import Maps.
+From MyProject Require Import SmtTypes.
 Require Import Classical.
 Require Import Coq.Lists.List.
 Require Import Coq.Bool.Bool.
@@ -18,11 +19,6 @@ From MyProject Require Import CrConcreteSemanticsTransformer.
 From MyProject Require Import ConcreteToSymbolicLemmas.
 From MyProject Require Import SmtHelperLemmas.
 From MyProject Require Import UtilLemmas.
-
-Inductive SmtResult : Type :=
-  | SmtSat (f : SmtValuation)  (* Satisfiable with valuation f *)
-  | SmtUnsat                   (* Unsatisfiable *)
-  | SmtUnknown.                (* Unknown status *)
 
 (* An SmtQuery takes an SmtBoolExpr and returns:
    None: meaning it is false for all possible valuations (or)

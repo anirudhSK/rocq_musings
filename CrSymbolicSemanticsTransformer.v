@@ -2,6 +2,7 @@ From MyProject Require Import CrTransformer.
 From MyProject Require Import CrIdentifiers.
 From MyProject Require Import CrProgramState.
 From MyProject Require Import SmtExpr.
+From MyProject Require Import SmtTypes.
 Require Import ZArith.
 Require Import Coq.Strings.String.
 Require Import List.
