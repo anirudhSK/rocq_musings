@@ -11,3 +11,10 @@ Makefile
 first_generated.v
 second_generated.v
 /combine.v
+*.cmi
+*.cmo
+*.cmx
+*.cma
+*.cmxa
+a.out
+smt_query
