@@ -10,17 +10,23 @@ let example_1 () =
   
   (* Create constants *)
   let zero = Arithmetic.Integer.mk_numeral_i ctx 0 in (* zero *)
-  let ten = Arithmetic.Integer.mk_numeral_i ctx 10 in (* ten *)
+  let eleven = Arithmetic.Integer.mk_numeral_i ctx 11 in (* eleven *)
   
   let x_gt_0 = Arithmetic.mk_gt ctx x zero in (* x > 0 *)
   let y_gt_0 = Arithmetic.mk_gt ctx y zero in (* y > 0 *)
   let sum = Arithmetic.mk_add ctx [x; y] in   (* sum = x + y *)
-  let x_plus_y_eq_10 = Boolean.mk_eq ctx sum ten in (* sum = 10 *)
+  let x_plus_y_eq_11 = Boolean.mk_eq ctx sum eleven in (* sum = 11 *)
   
   (* Create solver and add constraints *)
   let solver = Solver.mk_solver ctx None in
-  Solver.add solver [x_gt_0; y_gt_0; x_plus_y_eq_10];
+  Solver.add solver [x_gt_0; y_gt_0; x_plus_y_eq_11];
   
+  (* Print the constraints *)
+  Printf.printf "Constraints:\n";
+  Printf.printf "x > 0: %s\n" (Expr.to_string x_gt_0);
+  Printf.printf "y > 0: %s\n" (Expr.to_string y_gt_0);
+  Printf.printf "x + y = 11: %s\n" (Expr.to_string x_plus_y_eq_11);
+
   (* Check satisfiability *)
   match Solver.check solver [] with
   | SATISFIABLE ->
