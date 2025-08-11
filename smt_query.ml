@@ -8,14 +8,14 @@ let example_1 () =
   let x = Expr.mk_const_s ctx "x" int_sort in
   let y = Expr.mk_const_s ctx "y" int_sort in
   
-  (* Create constraints: x > 0, y > 0, x + y = 10 *)
-  let zero = Arithmetic.Integer.mk_numeral_i ctx 0 in
-  let ten = Arithmetic.Integer.mk_numeral_i ctx 10 in
+  (* Create constants *)
+  let zero = Arithmetic.Integer.mk_numeral_i ctx 0 in (* zero *)
+  let ten = Arithmetic.Integer.mk_numeral_i ctx 10 in (* ten *)
   
-  let x_gt_0 = Arithmetic.mk_gt ctx x zero in
-  let y_gt_0 = Arithmetic.mk_gt ctx y zero in
-  let sum = Arithmetic.mk_add ctx [x; y] in
-  let x_plus_y_eq_10 = Boolean.mk_eq ctx sum ten in
+  let x_gt_0 = Arithmetic.mk_gt ctx x zero in (* x > 0 *)
+  let y_gt_0 = Arithmetic.mk_gt ctx y zero in (* y > 0 *)
+  let sum = Arithmetic.mk_add ctx [x; y] in   (* sum = x + y *)
+  let x_plus_y_eq_10 = Boolean.mk_eq ctx sum ten in (* sum = 10 *)
   
   (* Create solver and add constraints *)
   let solver = Solver.mk_solver ctx None in
