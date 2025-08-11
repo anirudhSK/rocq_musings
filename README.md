@@ -33,11 +33,24 @@ which vscoqtop
 (Pinning after specifying a version is unnecessary.)
 
 **Initialize VSCode**
-* Install VSCoq extension
-* Set the path to `vscoqtop` if not auto-detected.
+* Install VSCoq extension for VS code
+* Then add the path for vscoqtop into the extension settings.
+* You can do this by pasting the output of 'which vscoqtop' into the path box in the extension settings.
 
-**Build code**
+**Build Rocq code**
 ```bash
 coq_makefile -f _CoqProject *.v -o Makefile
 make -j
 ```
+
+**For OCaml code, to interface with Z3 after extraction**
+* opam install z3
+* ocamlfind ocamlc -thread -package z3 -linkpkg -o smt_query smt_query.ml 
+
+**Build extracted code**
+* dune build
+* dune exec equivalence-checker
+
+// Apparently the vscoq language server needs to be
+// bumped up in version. Don't know why. But it still 
+// works with the old version.

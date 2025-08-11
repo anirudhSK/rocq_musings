@@ -1,0 +1,5 @@
+(executable
+ (public_name equivalence-checker)
+ (name Z3Example)
+ (libraries z3)
+ (flags (:standard -warn-error -A)))
