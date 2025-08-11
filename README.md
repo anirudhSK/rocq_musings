@@ -21,6 +21,9 @@
 * coq_makefile -f _CoqProject *.v -o Makefile
 * make
 
+**For OCaml code, to interface with Z3 after extraction**
+* ocamlfind ocamlc -thread -package z3 -linkpkg -o smt_query smt_query.ml 
+
 // Apparently the vscoq language server needs to be
 // bumped up in version. Don't know why. But it still 
 // works with the old version.
