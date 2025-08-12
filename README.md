@@ -16,6 +16,7 @@
 **Initialize VSCode**
 * Install VSCoq extension for VS code
 * Then add the path for vscoqtop into the extension settings.
+* You can do this by pasting the output of 'which vscoqtop' into the path box in the extension settings.
 
 **Build code**
 * coq_makefile -f _CoqProject *.v -o Makefile
