@@ -1,4 +1,4 @@
 (executable
  (public_name equivalence-checker)
- (name main)
+ (name Z3Example)
  (libraries z3))
