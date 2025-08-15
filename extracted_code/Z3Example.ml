@@ -1,5 +1,6 @@
 open Z3
 open SmtExpr
+open SmtQuery
 
 let ctx = mk_context []
 
@@ -43,7 +44,7 @@ let example_1 () =
   | UNKNOWN ->
     Printf.printf "UNKNOWN\n"
 
-let process_expr (expr : smtBoolExpr) : smtResult =
+let process_expr (expr : coq_SmtBoolExpr) : coq_SmtResult =
   match expr with
     | _ -> SmtUnknown
 
