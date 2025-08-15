@@ -1,0 +1,9 @@
+(library
+ (public_name rocq-musings.extracted)
+ (name extracted)
+ (libraries zarith z3))
+
+(executable
+ (public_name equivalence-checker)
+ (name main)
+ (libraries extracted zarith z3))
