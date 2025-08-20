@@ -105,7 +105,7 @@ debug_section "Cleaning the enviorment"
 rm -f ../combine.v "$OUTPUT_FILE_FIRST" "$OUTPUT_FILE_SECOND" ../Makefile.conf ../.*.aux .lia.cache .output
 cd ..
 make clean
-rm  -f Makefile Makefile.conf
+rm  -f Makefile Makefile.conf evalcompute.out
 rm -f .lia.cache
 cd translation
 
@@ -149,6 +149,7 @@ cd translation
 # Run coqc on the generated file and pipe stdout to converter
 debug_section "Run Python Script"
 debug_echo "Running coqc on $COMBINATION_FILE..."
+coqc -R .. MyProject  "$COMBINATION_FILE" -exclude-dir translation > ../evalcompute.out
 coqc -R .. MyProject  "$COMBINATION_FILE" -exclude-dir translation | python3 "$CONVERTER" --debug
 
 debug_echo "Conversion completed successfully"

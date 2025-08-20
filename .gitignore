@@ -11,3 +11,4 @@ Makefile
 first_generated.v
 second_generated.v
 /combine.v
+evalcompute.out
