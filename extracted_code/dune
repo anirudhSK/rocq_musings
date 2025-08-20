@@ -3,3 +3,9 @@
  (name Z3Example)
  (libraries z3)
  (flags (:standard -warn-error -A)))
+
+(executable
+ (public_name z3-solver)
+ (name Z3Solver)
+ (libraries z3)
+ (flags (:standard -warn-error -A)))
