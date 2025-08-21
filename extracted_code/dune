@@ -1,11 +1,14 @@
 (executable
- (public_name equivalence-checker)
+ (public_name top_level_binary)
  (name Z3Example)
- (libraries z3)
- (flags (:standard -warn-error -A)))
+ (modules Z3Example)
+ (libraries extracted_code_lib))
 
-(executable
- (public_name z3-solver)
- (name Z3Solver)
- (libraries z3)
- (flags (:standard -warn-error -A)))
+(library
+ (name extracted_code_lib)
+ (wrapped false)
+ (modules
+  Ascii BinNums BinPos Coqlib CrDsl CrIdentifiers CrProgramState
+  CrSymbolicSemanticsTransformer CrTransformer Datatypes EquivDec
+  Integers List Maps MyInts SmtTypes SmtExpr SmtQuery Specif String Z3Solver)
+ (libraries z3))
