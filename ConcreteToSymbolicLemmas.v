@@ -8,6 +8,7 @@ From MyProject Require Import CtrlPlaneInvariants.
 From MyProject Require Import CrProgramState.
 From MyProject Require Import MyInts.
 From MyProject Require Import ListUtils.
+From MyProject Require Import SmtTypes.
 Require Import ZArith.
 Require Import Coq.Strings.String.
 Local Open Scope string_scope.
