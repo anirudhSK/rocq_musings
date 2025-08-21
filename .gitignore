@@ -18,3 +18,7 @@ second_generated.v
 *.cmxa
 a.out
 smt_query
+/_build/
+/extracted_code/*.ml*
+!/extracted_code/Z3Example.ml
+!/extracted_code/Z3Solver.ml
