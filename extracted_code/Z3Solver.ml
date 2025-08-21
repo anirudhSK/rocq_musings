@@ -32,18 +32,12 @@ and z3_expr_from_coq_smt_arith_expr (expr : SmtExpr.coq_SmtArithExpr) (ctx : Z3.
 let solve (expr : SmtExpr.coq_SmtBoolExpr) =
   let ctx = mk_context [] in
   let solver = Solver.mk_solver ctx None in 
-  (match expr with
-  | SmtExpr.SmtTrue -> ()
-  | SmtExpr.SmtFalse -> ()
-  | SmtExpr.SmtBoolAnd (e1, e2) -> () (* Placeholder for stuff *)
-  | SmtExpr.SmtBoolOr (e1, e2) -> () (* Placeholder for stuff *)
-  | SmtExpr.SmtBoolNot e -> () (* Placeholder for stuff *)
-  | SmtExpr.SmtBoolEq (a1, a2) -> () (* Placeholder for stuff *));
+  Solver.add solver [z3_expr_from_coq_smt_bool_expr expr ctx];
   
   (* Check satisfiability of the constraints added to the solver *)
   match Solver.check solver [] with
   | Z3.Solver.UNSATISFIABLE -> SmtTypes.SmtUnsat
-  | Z3.Solver.SATISFIABLE -> SmtTypes.SmtSat (fun _ -> (Obj.magic 0 : MyInts.uint8))
+  | Z3.Solver.SATISFIABLE -> SmtTypes.SmtSat (fun _ -> (Obj.magic 0 : MyInts.uint8)) (* TODO: Need to fix the function here *)
   | Z3.Solver.UNKNOWN -> SmtTypes.SmtUnknown
 
 (* Main function to call the function solve above *)
