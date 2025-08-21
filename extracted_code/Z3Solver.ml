@@ -27,14 +27,14 @@ let solve (expr : SmtExpr.coq_SmtBoolExpr) =
   
   (* Check satisfiability of the constraints added to the solver *)
   match Solver.check solver [] with
-  | Z3.Solver.UNSATISFIABLE -> SmtQuery.SmtUnsat
-  | Z3.Solver.SATISFIABLE -> SmtQuery.SmtSat (fun _ -> (Obj.magic 0 : MyInts.uint8))
-  | Z3.Solver.UNKNOWN -> SmtQuery.SmtUnknown
+  | Z3.Solver.UNSATISFIABLE -> SmtTypes.SmtUnsat
+  | Z3.Solver.SATISFIABLE -> SmtTypes.SmtSat (fun _ -> (Obj.magic 0 : MyInts.uint8))
+  | Z3.Solver.UNKNOWN -> SmtTypes.SmtUnknown
 
 (* Main function to call the function solve above *)
 let () =
   let expr = SmtExpr.SmtTrue in
   match solve expr with
-  | SmtQuery.SmtUnsat -> print_endline "UNSATISFIABLE"
-  | SmtQuery.SmtSat _ -> print_endline "SATISFIABLE"
-  | SmtQuery.SmtUnknown -> print_endline "UNKNOWN"
+  | SmtTypes.SmtUnsat -> print_endline "UNSATISFIABLE"
+  | SmtTypes.SmtSat _ -> print_endline "SATISFIABLE"
+  | SmtTypes.SmtUnknown -> print_endline "UNKNOWN"
