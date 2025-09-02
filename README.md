@@ -49,7 +49,7 @@ make -j
 
 **Build extracted code**
 * dune build --profile release
-* dune exec top_level_binary
+* _build/default/extracted_code/Z3Example.exe # to run it
 
 // Apparently the vscoq language server needs to be
 // bumped up in version. Don't know why. But it still 
