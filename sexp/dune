@@ -1,5 +1,5 @@
-
-(test
+(executable
+ (public_name test_ppx_deriving_sexp)
  (name test_ppx_deriving_sexp)
  (preprocess
   (staged_pps ppx_import ppx_sexp_conv)))

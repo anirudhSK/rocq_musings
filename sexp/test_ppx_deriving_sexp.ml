@@ -1,3 +1,6 @@
+(* Run with:
+   dune build
+   dune exec test_ppx_deriving_sexp *)
 type sorts =
   [%import: Sorts.family]
   [@@deriving sexp]
