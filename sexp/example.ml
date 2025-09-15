@@ -3,13 +3,10 @@
 (* ./example *)
 
 open Sexplib.Std
+open Person
 
-(* user-defined type *)
-type person = {
-  name : string;
-  age : int;
-  hobbies : string list;
-} [@@deriving sexp]
+(* Re-declare the type with the deriving annotation *)
+type myperson = [%import: Person.person]  [@@deriving sexp]
 
 let () =
   (* Create a value of type person *)
