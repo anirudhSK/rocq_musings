@@ -1,6 +1,6 @@
 open Z3
 
-type bool = [%import: Datatypes.bool]
+type ascii = [%import: Ascii.ascii]
 [@@deriving sexp]
 
 (* Recursively convert a coq_SmtBoolExpr to a Z3 expression *)
