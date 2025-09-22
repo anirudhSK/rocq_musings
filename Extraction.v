@@ -9,4 +9,4 @@ Extract Constant smt_query => "Z3Solver.solve".
 Set Extraction Output Directory "extracted_code".
 
 (* Extract everything else normally *)
-Separate Extraction SmtQuery.equivalence_checker_cr_dsl.
+Separate Extraction SmtQuery.equivalence_checker_cr_dsl SmtTypes.SmtResult.
