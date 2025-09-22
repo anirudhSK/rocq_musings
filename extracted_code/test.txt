@@ -1,0 +1,17 @@
+(SmtBoolNot 
+    (SmtBoolAnd 
+        (SmtTrue)
+        (SmtBoolEq
+            (SmtConditional
+                (SmtBoolEq (SmtConst 0) (SmtConst 0))
+                (SmtBitAdd (SmtConst 1) (SmtConst 0))
+                (SmtConst 0)
+            )
+            (SmtConditional
+                (SmtBoolEq (SmtConst 0) (SmtConst 0))
+                (SmtBitAdd (SmtConst 1) (SmtConst 0))
+                (SmtConst 0)
+            )
+        )
+    )
+)
