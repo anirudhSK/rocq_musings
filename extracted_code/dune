@@ -11,4 +11,5 @@
   Ascii BinNums BinPos Coqlib CrDsl CrIdentifiers CrProgramState
   CrSymbolicSemanticsTransformer CrTransformer Datatypes EquivDec
   Integers List Maps MyInts SmtTypes SmtExpr SmtQuery Specif String Z3Solver)
- (libraries z3))
+ (preprocess (staged_pps ppx_import ppx_sexp_conv))
+ (libraries z3 sexplib))

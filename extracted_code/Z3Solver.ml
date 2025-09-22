@@ -1,4 +1,23 @@
 open Z3
+open Sexplib
+
+open SmtExpr
+
+type bool = [%import: Datatypes.bool]
+[@@deriving sexp]
+type ascii = [%import: Ascii.ascii]
+[@@deriving sexp]
+type positive = [%import: BinNums.positive]
+[@@deriving sexp]
+type coq_Z = [%import: BinNums.coq_Z]
+[@@deriving sexp]
+type bit_int = [%import: Integers.bit_int]
+[@@deriving sexp]
+type uint8 = [%import: MyInts.uint8]
+[@@deriving sexp]
+type coq_SmtBoolExpr = [%import: SmtExpr.coq_SmtBoolExpr]
+and coq_SmtArithExpr = [%import: SmtExpr.coq_SmtArithExpr]
+[@@deriving sexp]
 
 (* Recursively convert a coq_SmtBoolExpr to a Z3 expression *)
 (* TODO: This function is trusted, so needs to be checked via other means like fuzzing *)
@@ -47,3 +66,4 @@ let () =
   | SmtTypes.SmtUnsat -> print_endline "UNSATISFIABLE"
   | SmtTypes.SmtSat _ -> print_endline "SATISFIABLE"
   | SmtTypes.SmtUnknown -> print_endline "UNKNOWN"
+
