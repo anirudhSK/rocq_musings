@@ -1,7 +1,13 @@
 open Z3
 
+module Datatypes = struct
+type bool = [%import: Datatypes.bool]
+[@@deriving sexp]
+end
+module Ascii = struct
 type ascii = [%import: Ascii.ascii]
 [@@deriving sexp]
+end
 
 (* Recursively convert a coq_SmtBoolExpr to a Z3 expression *)
 (* TODO: This function is trusted, so needs to be checked via other means like fuzzing *)
