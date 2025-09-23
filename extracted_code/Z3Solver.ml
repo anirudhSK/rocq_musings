@@ -46,13 +46,10 @@ let ecz () =
     header_map = Coq_pair (SmtExpr.SmtConst (Obj.magic 0 : MyInts.uint8), Maps.PTree.empty);
     state_map = Coq_pair (SmtExpr.SmtConst (Obj.magic 0 : MyInts.uint8), Maps.PTree.empty)
   } in
-  let x = 3 in
-  match x with
-  | 3 -> print_endline "Matched 3"
-  | _ -> match simplest_state with
-    | { ctrl_map = Coq_pair (SmtExpr.SmtConst n, _); _ } ->
-        Printf.printf "ctrl_map constant: %d\n" (Obj.magic n : int)
-    | _ -> print_endline "No match"
+  match simplest_state with
+  | { ctrl_map = Coq_pair (SmtExpr.SmtConst n, _); _ } ->
+      Printf.printf "ctrl_map constant: %d\n" (Obj.magic n : int)
+  | _ -> print_endline "No match"
 
 (* Main function to call the function solve above *)
 let () =
@@ -63,11 +60,6 @@ let () =
   | SmtTypes.SmtUnknown -> print_endline "UNKNOWN"
 
 (* 
-Definition simplest_state : ProgramState SmtArithExpr := {|
-ctrl_plane_map := fun _ => SmtConst (repr 0%Z);
-header_map := fun _ => SmtConst (repr 0%Z);
-state_var_map := fun _ => SmtConst (repr 0%Z)
-|}.
 Definition headers_to_check : list Header := [first_generated.header_H; second_generated.header_H].
 Definition state_vars_to_check : list StateVar := [].
 Definition my_equivalence_check : SmtResult :=
