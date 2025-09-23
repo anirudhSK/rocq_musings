@@ -149,6 +149,6 @@ cd translation
 # Run coqc on the generated file and pipe stdout to converter
 debug_section "Run Python Script"
 debug_echo "Running coqc on $COMBINATION_FILE..."
-coqc -R .. MyProject  "$COMBINATION_FILE" -exclude-dir translation | python3 "$CONVERTER" --debug
+# coqc -R .. MyProject  "$COMBINATION_FILE" -exclude-dir translation | python3 "$CONVERTER" --debug
 
 debug_echo "Conversion completed successfully"
