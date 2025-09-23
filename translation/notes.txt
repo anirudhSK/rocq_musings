@@ -1,0 +1,2 @@
+change p4 compiler to ocaml desc
+: start with creating an instance of the cr ir datatype using extraction first then have the compiler do that
