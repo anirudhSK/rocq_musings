@@ -66,6 +66,6 @@ module CrProgramState = struct
   [@@deriving sexp]
   type 't coq_ProgramState = [%import: 't CrProgramState.coq_ProgramState]
   [@@deriving sexp]
-  (* type coq_SymbolicState = [%import: SmtExpr.coq_SmtArithExpr CrProgramState.coq_ProgramState]
-  [@@deriving sexp] *)
+  type coq_SymbolicState = [%import: SmtExpr.coq_SmtArithExpr CrProgramState.coq_ProgramState]
+  [@@deriving sexp]
 end
