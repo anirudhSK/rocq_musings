@@ -5,6 +5,8 @@ module Datatypes = struct
   include Datatypes
   type bool = [%import: Datatypes.bool]
   [@@deriving sexp]
+  type ('a, 'b) prod = [%import: ('a, 'b) Datatypes.prod]
+  [@@deriving sexp]
 end
 module Ascii = struct
   include Ascii
@@ -34,7 +36,36 @@ module MyInts = struct
   [@@deriving sexp]
 end
 
-type coq_SmtBoolExpr = [%import: SmtExpr.coq_SmtBoolExpr]
-[@@deriving sexp]
-and coq_SmtArithExpr = [%import: SmtExpr.coq_SmtArithExpr]
-[@@deriving sexp]
+module SmtExpr = struct
+  include SmtExpr
+  type coq_SmtBoolExpr = [%import: SmtExpr.coq_SmtBoolExpr]
+  and coq_SmtArithExpr = [%import: SmtExpr.coq_SmtArithExpr]
+  [@@deriving sexp]
+end
+
+module Maps = struct
+  include Maps
+  module PTree = struct
+    type 'a tree' = [%import: 'a Maps.PTree.tree']
+    [@@deriving sexp]
+    type 'a tree = [%import: 'a Maps.PTree.tree]
+    [@@deriving sexp]
+    type 'a t = [%import: 'a Maps.PTree.t]
+    [@@deriving sexp]
+  end
+end
+
+module CrProgramState = struct
+  include CrProgramState
+  open Maps
+  type 't coq_HeaderMap = [%import: 't Maps.PMap.t]
+  [@@deriving sexp]
+  type 't coq_StateMap = [%import: 't Maps.PMap.t]
+  [@@deriving sexp]
+  type 't coq_CtrlMap = [%import: 't Maps.PMap.t]
+  [@@deriving sexp]
+  type 't coq_ProgramState = [%import: 't CrProgramState.coq_ProgramState]
+  [@@deriving sexp]
+  (* type coq_SymbolicState = [%import: SmtExpr.coq_SmtArithExpr CrProgramState.coq_ProgramState]
+  [@@deriving sexp] *)
+end
