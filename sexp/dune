@@ -4,3 +4,9 @@
  (libraries sexplib zarith)
  (preprocess
   (staged_pps ppx_import ppx_sexp_conv)))
+
+(executable
+ (name test_combine)
+ (modules combine test_combine)
+ (libraries sexplib zarith)
+ (preprocess (pps ppx_sexp_conv)))
