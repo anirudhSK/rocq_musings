@@ -42,4 +42,7 @@ let example_1 () =
   | UNKNOWN ->
     Printf.printf "UNKNOWN\n"
 
+let example_2 () =
+  Printf.printf "todo"
+
 let () = example_1 ()
