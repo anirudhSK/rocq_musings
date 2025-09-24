@@ -1,8 +1,10 @@
-open Z3
+(* open Z3 *)
 
-let ctx = mk_context []
+open Z3Solver
 
-let example_1 () =
+(* let ctx = mk_context [] *)
+
+(* let example_1 () =
   (* Create integer variables x and y *)
   let int_sort = Arithmetic.Integer.mk_sort ctx in
   let x = Expr.mk_const_s ctx "x" int_sort in
@@ -40,9 +42,9 @@ let example_1 () =
   | UNSATISFIABLE ->
     Printf.printf "UNSAT\n"
   | UNKNOWN ->
-    Printf.printf "UNKNOWN\n"
+    Printf.printf "UNKNOWN\n" *)
 
 let example_2 () =
-  Printf.printf "todo"
+  ecz ()
 
-let () = example_1 ()
+let () = example_2 ()

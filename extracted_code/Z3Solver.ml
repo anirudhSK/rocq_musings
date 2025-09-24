@@ -1,4 +1,5 @@
 open Z3
+open Sexplib
 
 (* Recursively convert a coq_SmtBoolExpr to a Z3 expression *)
 (* TODO: This function is trusted, so needs to be checked via other means like fuzzing *)
@@ -41,9 +42,28 @@ let solve (expr : SmtExpr.coq_SmtBoolExpr) =
   | Z3.Solver.UNKNOWN -> SmtTypes.SmtUnknown
 
 let ecz () =
+  let h_a : BinNums.positive = Coq_xH in
   let h_b : BinNums.positive = Coq_xO Coq_xH in
-  match (h_b, 1) with
-  | _ -> print_endline "incomplete"
+  let my_action1_op = CrTransformer.StatelessOp (AddOp, (ConstantArg
+    (Integers.repr (Coq_xO (Coq_xO (Coq_xO Coq_xH))) (Zpos Coq_xH))), (ConstantArg
+    (Integers.repr (Coq_xO (Coq_xO (Coq_xO Coq_xH))) Z0)), h_b) in
+  let the_table_0_seq_rule = CrTransformer.SeqCtr (Coq_nil, (Coq_cons (my_action1_op, Coq_nil))) in
+  let the_table_0_rule = CrTransformer.Seq the_table_0_seq_rule in
+  
+  let headers_to_check : CrIdentifiers.coq_Header Datatypes.list = Datatypes.Coq_cons ((Coq_xI (Coq_xI Coq_xH)), Coq_nil) in
+  let state_vars_to_check : CrIdentifiers.coq_State Datatypes.list = Coq_nil in
+  let ctrl_stmts_to_check : CrIdentifiers.coq_Ctrl Datatypes.list = Coq_nil in
+  let transformer_first = Datatypes.Coq_cons (the_table_0_rule, Coq_nil) in
+
+  let example_program_1 = CrDsl.CaracaraProgramDef (headers_to_check, state_vars_to_check,
+    ctrl_stmts_to_check, transformer_first) in
+
+  let program_to_sexp = Interface.sexp_of_coq_CaracaraProgram example_program_1 in
+  
+  match (
+    h_a, h_b, my_action1_op, the_table_0_seq_rule, example_program_1,
+    headers_to_check, program_to_sexp) with
+  | _ -> print_endline (Sexp.to_string program_to_sexp)
 
 (* Main function to call the function solve above *)
 let () =
