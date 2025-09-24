@@ -65,6 +65,16 @@ let ecz () =
     headers_to_check, program_to_sexp) with
   | _ -> print_endline (Sexp.to_string program_to_sexp)
 
+let equivalence_check_programs str1 str2 =
+  let sexp_1 = Sexp.of_string str1 in
+  let sexp_2 = Sexp.of_string str2 in
+  let prog_1 = Interface.coq_CaracaraProgram_of_sexp sexp_1 in
+  let prog_2 = Interface.coq_CaracaraProgram_of_sexp sexp_2 in
+  let res = SmtQuery.equivalence_checker_cr_dsl prog_1 prog_2 in
+  match res with
+  | Coq_true -> print_endline "True"
+  | Coq_false -> print_endline "False"
+
 (* Main function to call the function solve above *)
 let () =
   let expr = SmtExpr.SmtTrue in
