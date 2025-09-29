@@ -34,51 +34,10 @@ let solve (expr : SmtExpr.coq_SmtBoolExpr) =
   let ctx = mk_context [] in
   let solver = Solver.mk_solver ctx None in 
   Solver.add solver [z3_expr_from_coq_smt_bool_expr expr ctx];
-  
+
   (* Check satisfiability of the constraints added to the solver *)
   match Solver.check solver [] with
   | Z3.Solver.UNSATISFIABLE -> SmtTypes.SmtUnsat
   | Z3.Solver.SATISFIABLE -> SmtTypes.SmtSat (fun _ -> (Obj.magic 0 : MyInts.uint8)) (* TODO: Need to fix the function here *)
   | Z3.Solver.UNKNOWN -> SmtTypes.SmtUnknown
-
-let ecz () =
-  let h_a : BinNums.positive = Coq_xH in
-  let h_b : BinNums.positive = Coq_xO Coq_xH in
-  let my_action1_op = CrTransformer.StatelessOp (AddOp, (ConstantArg
-    (Integers.repr (Coq_xO (Coq_xO (Coq_xO Coq_xH))) (Zpos Coq_xH))), (ConstantArg
-    (Integers.repr (Coq_xO (Coq_xO (Coq_xO Coq_xH))) Z0)), h_b) in
-  let the_table_0_seq_rule = CrTransformer.SeqCtr (Coq_nil, (Coq_cons (my_action1_op, Coq_nil))) in
-  let the_table_0_rule = CrTransformer.Seq the_table_0_seq_rule in
   
-  let headers_to_check : CrIdentifiers.coq_Header Datatypes.list = Datatypes.Coq_cons ((Coq_xI (Coq_xI Coq_xH)), Coq_nil) in
-  let state_vars_to_check : CrIdentifiers.coq_State Datatypes.list = Coq_nil in
-  let ctrl_stmts_to_check : CrIdentifiers.coq_Ctrl Datatypes.list = Coq_nil in
-  let transformer_first = Datatypes.Coq_cons (the_table_0_rule, Coq_nil) in
-
-  let example_program_1 = CrDsl.CaracaraProgramDef (headers_to_check, state_vars_to_check,
-    ctrl_stmts_to_check, transformer_first) in
-
-  let program_to_sexp = Interface.sexp_of_coq_CaracaraProgram example_program_1 in
-  
-  match (
-    h_a, h_b, my_action1_op, the_table_0_seq_rule, example_program_1,
-    headers_to_check, program_to_sexp) with
-  | _ -> print_endline (Sexp.to_string program_to_sexp)
-
-let equivalence_check_programs str1 str2 =
-  let sexp_1 = Sexp.of_string str1 in
-  let sexp_2 = Sexp.of_string str2 in
-  let prog_1 = Interface.coq_CaracaraProgram_of_sexp sexp_1 in
-  let prog_2 = Interface.coq_CaracaraProgram_of_sexp sexp_2 in
-  let res = SmtQuery.equivalence_checker_cr_dsl prog_1 prog_2 in
-  match res with
-  | Coq_true -> print_endline "True"
-  | Coq_false -> print_endline "False"
-
-(* Main function to call the function solve above *)
-let () =
-  let expr = SmtExpr.SmtTrue in
-  match solve expr with
-  | SmtTypes.SmtUnsat -> print_endline "UNSATISFIABLE"
-  | SmtTypes.SmtSat _ -> print_endline "SATISFIABLE"
-  | SmtTypes.SmtUnknown -> print_endline "UNKNOWN"

@@ -1,5 +1,5 @@
 (executable
- (public_name top_level_binary)
+ (public_name eq_check)
  (name Z3Example)
  (modules Z3Example)
  (libraries extracted_code_lib))
