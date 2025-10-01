@@ -1,45 +1,30 @@
-open Z3
+open Sexplib
 
-let ctx = mk_context []
+let equivalence_check_programs str1 str2 =
+  let sexp_1 = Sexp.of_string str1 in
+  let sexp_2 = Sexp.of_string str2 in
+  let prog_1 = Interface.coq_CaracaraProgram_of_sexp sexp_1 in
+  let prog_2 = Interface.coq_CaracaraProgram_of_sexp sexp_2 in
+  let res = SmtQuery.equivalence_checker_cr_dsl prog_1 prog_2 in
+  match res with
+  | Coq_true -> print_endline "Equivalent"
+  | Coq_false -> print_endline "Not Equivalent"
+  
+let load f =
+  let x = open_in f in
+  let len = in_channel_length x in
+  let str = really_input_string x len in
+  close_in x;
+  str
 
-let example_1 () =
-  (* Create integer variables x and y *)
-  let int_sort = Arithmetic.Integer.mk_sort ctx in
-  let x = Expr.mk_const_s ctx "x" int_sort in
-  let y = Expr.mk_const_s ctx "y" int_sort in
-  
-  (* Create constants *)
-  let zero = Arithmetic.Integer.mk_numeral_i ctx 0 in (* zero *)
-  let eleven = Arithmetic.Integer.mk_numeral_i ctx 11 in (* eleven *)
-  
-  let x_gt_0 = Arithmetic.mk_gt ctx x zero in (* x > 0 *)
-  let y_gt_0 = Arithmetic.mk_gt ctx y zero in (* y > 0 *)
-  let sum = Arithmetic.mk_add ctx [x; y] in   (* sum = x + y *)
-  let x_plus_y_eq_11 = Boolean.mk_eq ctx sum eleven in (* sum = 11 *)
-  
-  (* Create solver and add constraints *)
-  let solver = Solver.mk_solver ctx None in
-  Solver.add solver [x_gt_0; y_gt_0; x_plus_y_eq_11];
-  
-  (* Print the constraints *)
-  Printf.printf "Constraints:\n";
-  Printf.printf "x > 0: %s\n" (Expr.to_string x_gt_0);
-  Printf.printf "y > 0: %s\n" (Expr.to_string y_gt_0);
-  Printf.printf "x + y = 11: %s\n" (Expr.to_string x_plus_y_eq_11);
+let () =
+  if Array.length Sys.argv != 3 then (
+    prerr_endline "usage: ./bin <path/to/s/expr/1> <path/to/s/expr/2>";
+    exit 1
+  );
 
-  (* Check satisfiability *)
-  match Solver.check solver [] with
-  | SATISFIABLE ->
-    let model = Solver.get_model solver in
-    (match model with
-     | Some m ->
-       Printf.printf "SAT\n";
-       Printf.printf "x = %s\n" (Model.eval m x true |> Option.get |> Expr.to_string);
-       Printf.printf "y = %s\n" (Model.eval m y true |> Option.get |> Expr.to_string)
-     | None -> Printf.printf "No model\n")
-  | UNSATISFIABLE ->
-    Printf.printf "UNSAT\n"
-  | UNKNOWN ->
-    Printf.printf "UNKNOWN\n"
-
-let () = example_1 ()
+  let file_1 = Sys.argv.(1) in
+  let f1_str = load file_1 in
+  let file_2 = Sys.argv.(2) in
+  let f2_str = load file_2 in
+  equivalence_check_programs f1_str f2_str
