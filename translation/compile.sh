@@ -7,8 +7,8 @@ P4_FILE_SECOND="second.p4"
 P4_COMPILER="./p4c/build/rocq"
 CONVERTER="convert.py"
 DEBUG=true
-OUTPUT_FILE_FIRST="../first_generated.v"
-OUTPUT_FILE_SECOND="../second_generated.v"
+OUTPUT_FILE_FIRST="./first.out"
+OUTPUT_FILE_SECOND="./second.out"
 COMBINATION_FILE="../combine.v"
 
 # Parse command line arguments
@@ -104,11 +104,16 @@ fi
 debug_section "Cleaning the enviorment"
 rm -f ../combine.v "$OUTPUT_FILE_FIRST" "$OUTPUT_FILE_SECOND" ../Makefile.conf ../.*.aux .lia.cache .output
 cd ..
-make clean
+# make clean
 rm  -f Makefile Makefile.conf
 rm -f .lia.cache
 cd translation
 
+# Build P4C
+debug_section "Building P4C"
+cd ./p4c/build
+make -j4
+cd ../../
 
 # Compile first P4 file
 debug_section "Compiling first P4 file: $P4_FILE_FIRST"
@@ -134,21 +139,21 @@ mv output.v "$OUTPUT_FILE_SECOND"
 debug_echo "P4 compilation completed"
 
 
-# Add combination file to main dir
-cp ./combine.v $COMBINATION_FILE
+# # Add combination file to main dir
+# cp ./combine.v $COMBINATION_FILE
 
 
-# Make coq files
-debug_section "Make ROCQ"
-cd ..
-coq_makefile -f _CoqProject *.v -o Makefile
-make
-cd translation
+# # Make coq files
+# debug_section "Make ROCQ"
+# cd ..
+# coq_makefile -f _CoqProject *.v -o Makefile
+# make
+# cd translation
 
 
-# Run coqc on the generated file and pipe stdout to converter
-debug_section "Run Python Script"
-debug_echo "Running coqc on $COMBINATION_FILE..."
-# coqc -R .. MyProject  "$COMBINATION_FILE" -exclude-dir translation | python3 "$CONVERTER" --debug
+# # Run coqc on the generated file and pipe stdout to converter
+# debug_section "Run Python Script"
+# debug_echo "Running coqc on $COMBINATION_FILE..."
+# # coqc -R .. MyProject  "$COMBINATION_FILE" -exclude-dir translation | python3 "$CONVERTER" --debug
 
 debug_echo "Conversion completed successfully"
