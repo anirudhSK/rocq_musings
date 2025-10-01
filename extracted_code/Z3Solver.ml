@@ -1,27 +1,5 @@
 open Z3
 
-module Datatypes = struct
-
-(* If you omit this next line, then we would lose all the other
-   operations in the new re-defined Datatypes, so first we include
-   it. *)
-include Datatypes
-
-type bool = [%import: Datatypes.bool]
-[@@deriving sexp]
-type 'a list = [%import: 'a Datatypes.list]
-[@@deriving sexp]
-end
-module Ascii = struct
-include Ascii
-type ascii = [%import: Ascii.ascii]
-[@@deriving sexp]
-end
-
-(* Check that we can still use length *)
-
-let _ = Datatypes.length (Datatypes.Coq_nil)
-
 (* Recursively convert a coq_SmtBoolExpr to a Z3 expression *)
 (* TODO: This function is trusted, so needs to be checked via other means like fuzzing *)
 let rec z3_expr_from_coq_smt_bool_expr (expr : SmtExpr.coq_SmtBoolExpr) (ctx : Z3.context)
@@ -61,12 +39,3 @@ let solve (expr : SmtExpr.coq_SmtBoolExpr) =
   | Z3.Solver.UNSATISFIABLE -> SmtTypes.SmtUnsat
   | Z3.Solver.SATISFIABLE -> SmtTypes.SmtSat (fun _ -> (Obj.magic 0 : MyInts.uint8)) (* TODO: Need to fix the function here *)
   | Z3.Solver.UNKNOWN -> SmtTypes.SmtUnknown
-
-(* Main function to call the function solve above *)
-let () =
-  let expr = SmtExpr.SmtTrue in
-  match solve expr with
-  | SmtTypes.SmtUnsat -> print_endline "UNSATISFIABLE"
-  | SmtTypes.SmtSat _ -> print_endline "SATISFIABLE"
-  | SmtTypes.SmtUnknown -> print_endline "UNKNOWN"
-
