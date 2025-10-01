@@ -48,8 +48,16 @@ make -j
 * ocamlfind ocamlc -thread -package z3 -linkpkg -o smt_query smt_query.ml 
 
 **Build extracted code**
-* dune build --profile release
-* dune exec eq_check ./path/to/s/exp/1 ./path/to/s/exp/2
+```bash
+dune build --profile release
+
+# usage: dune exec eq_check ./path/to/s/exp/1 ./path/to/s/exp/2
+dune exec eq_check extracted_code/ref/crcr1.out extracted_code/ref/crcr1.out
+# -> Equivalent
+dune exec eq_check extracted_code/ref/crcr1.out extracted_code/ref/crcr2.out
+# -> Not Equivalent
+```
+
 
 // Apparently the vscoq language server needs to be
 // bumped up in version. Don't know why. But it still 
