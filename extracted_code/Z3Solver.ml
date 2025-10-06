@@ -1,4 +1,40 @@
+open Char
 open Z3
+
+(* Trusted Procedure *)
+let coq_Z_to_int (n : BinNums.coq_Z) : int =
+  let rec pos_to_int_ (n : BinNums.positive) (i : int) : int =
+    match n with
+    | Coq_xH -> 1 lsl i
+    | Coq_xI n_ -> (1 lsl i) + (pos_to_int_ n_ (i+1))
+    | Coq_xO n_ -> (pos_to_int_ n_ (i+1)) in
+  let pos_to_int (n : BinNums.positive) : int = (pos_to_int_ n 0) in
+  match n with
+  | Z0 -> 0
+  | Zpos n_ -> pos_to_int n_
+  | Zneg n_ -> 0 - (pos_to_int n_)
+
+(* Trusted Procedure *)
+let rec coq_str_to_str (s : String.string) : string =
+  let bool_to_bit (b : Datatypes.bool) (idx : int) : int =
+    match b with
+    | Coq_true -> 1 lsl idx
+    | Coq_false -> 0 in
+  let ascii_to_char (c : Ascii.ascii) : string =
+    match c with
+    | Ascii (b7, b6, b5, b4, b3, b2, b1, b0) -> Char.escaped (Char.chr (
+      (bool_to_bit b7 7) +
+      (bool_to_bit b6 6) +
+      (bool_to_bit b5 5) +
+      (bool_to_bit b4 4) +
+      (bool_to_bit b3 3) +
+      (bool_to_bit b2 2) +
+      (bool_to_bit b1 1) +
+      (bool_to_bit b0 0)
+    )) in
+  match s with
+  | EmptyString -> ""
+  | String (c, rest) -> (ascii_to_char c) ^ (coq_str_to_str rest)
 
 (* Recursively convert a coq_SmtBoolExpr to a Z3 expression *)
 (* TODO: This function is trusted, so needs to be checked via other means like fuzzing *)
@@ -14,8 +50,8 @@ let rec z3_expr_from_coq_smt_bool_expr (expr : SmtExpr.coq_SmtBoolExpr) (ctx : Z
 and z3_expr_from_coq_smt_arith_expr (expr : SmtExpr.coq_SmtArithExpr) (ctx : Z3.context)
   : Z3.Expr.expr =
   match expr with
-  | SmtExpr.SmtConst n -> Z3.Arithmetic.Integer.mk_numeral_i ctx (Obj.magic n : int) (* TODO: Obj.magic is not type safe. *)
-  | SmtExpr.SmtArithVar name -> Z3.Arithmetic.Integer.mk_const ctx (Z3.Symbol.mk_string ctx (Obj.magic name : string))
+  | SmtExpr.SmtConst n -> Z3.Arithmetic.Integer.mk_numeral_i ctx (coq_Z_to_int n)
+  | SmtExpr.SmtArithVar name -> Z3.Arithmetic.Integer.mk_const ctx (Z3.Symbol.mk_string ctx (coq_str_to_str name))
   | SmtExpr.SmtConditional (cond, e1, e2) ->
       Z3.Boolean.mk_ite ctx (z3_expr_from_coq_smt_bool_expr cond ctx) (z3_expr_from_coq_smt_arith_expr e1 ctx) (z3_expr_from_coq_smt_arith_expr e2 ctx)
   | SmtExpr.SmtBitAdd (e1, e2) -> Z3.Arithmetic.mk_add ctx [z3_expr_from_coq_smt_arith_expr e1 ctx; z3_expr_from_coq_smt_arith_expr e2 ctx]
