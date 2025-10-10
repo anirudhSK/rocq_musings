@@ -55,3 +55,60 @@ end
 include CrDsl
 type coq_CaracaraProgram = [%import: CrDsl.coq_CaracaraProgram]
 [@@deriving sexp]
+
+include Integers
+let int8_t = repr (Coq_xO (Coq_xO (Coq_xO Coq_xH)))
+
+(* Modified versions of extracted rocq code *)
+(* Can't directly use extracted code because of naming collisions *)
+include Datatypes
+include MyInts
+include String
+let coq_bool_eqb b1 b2 =
+  match b1 with
+  | Coq_true -> b2
+  | Coq_false -> (match b2 with
+                  | Coq_true -> Coq_false
+                  | Coq_false -> Coq_true)
+let coq_ascii_eqb a b =
+  let Ascii.Ascii (a0, a1, a2, a3, a4, a5, a6, a7) = a in
+  let Ascii.Ascii (b0, b1, b2, b3, b4, b5, b6, b7) = b in
+  (match match match match match match match coq_bool_eqb a0 b0 with
+                                       | Coq_true -> coq_bool_eqb a1 b1
+                                       | Coq_false -> Coq_false with
+                                 | Coq_true -> coq_bool_eqb a2 b2
+                                 | Coq_false -> Coq_false with
+                           | Coq_true -> coq_bool_eqb a3 b3
+                           | Coq_false -> Coq_false with
+                     | Coq_true -> coq_bool_eqb a4 b4
+                     | Coq_false -> Coq_false with
+               | Coq_true -> coq_bool_eqb a5 b5
+               | Coq_false -> Coq_false with
+         | Coq_true -> coq_bool_eqb a6 b6
+         | Coq_false -> Coq_false with
+   | Coq_true -> coq_bool_eqb a7 b7
+   | Coq_false -> Coq_false)
+let rec coq_str_eqb s1 s2 =
+  match s1 with
+  | EmptyString ->
+    (match s2 with
+     | EmptyString -> Coq_true
+     | String (_, _) -> Coq_false)
+  | String (c1, s1') ->
+    (match s2 with
+     | EmptyString -> Coq_false
+     | String (c2, s2') ->
+       (match coq_ascii_eqb c1 c2 with
+        | Coq_true -> coq_str_eqb s1' s2'
+        | Coq_false -> Coq_false))
+
+type coq_ValueMap =
+| VMap of string * uint8 * coq_ValueMap
+| VMap_DNE
+let rec coq_TraverseMap (vm : coq_ValueMap) (s : string) : uint8 =
+  match vm with
+  | VMap (var_, val_, nxt_) ->
+    (match coq_str_eqb s var_ with
+     | Coq_true -> val_
+     | Coq_false -> coq_TraverseMap nxt_ s)
+  | VMap_DNE -> int8_t Z0
