@@ -1,5 +1,11 @@
 (executable
  (public_name eq_check)
+ (name EqCheck)
+ (modules EqCheck)
+ (libraries extracted_code_lib))
+
+(executable
+ (public_name ex1)
  (name Z3Example)
  (modules Z3Example)
  (libraries extracted_code_lib))

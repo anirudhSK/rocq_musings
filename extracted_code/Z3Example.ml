@@ -1,30 +1,31 @@
-open Sexplib
+open Z3
+open Z3Solver
 
-let equivalence_check_programs str1 str2 =
-  let sexp_1 = Sexp.of_string str1 in
-  let sexp_2 = Sexp.of_string str2 in
-  let prog_1 = Interface.coq_CaracaraProgram_of_sexp sexp_1 in
-  let prog_2 = Interface.coq_CaracaraProgram_of_sexp sexp_2 in
-  let res = SmtQuery.equivalence_checker_cr_dsl prog_1 prog_2 in
-  match res with
-  | Coq_true -> print_endline "Equivalent"
-  | Coq_false -> print_endline "Not Equivalent"
-  
-let load f =
-  let x = open_in f in
-  let len = in_channel_length x in
-  let str = really_input_string x len in
-  close_in x;
-  str
+let ctx = mk_context []
+let example_1 () =
+  let x = Arithmetic.Integer.mk_const ctx (Z3.Symbol.mk_string ctx "x") in
+  let y = Arithmetic.Integer.mk_const ctx (Z3.Symbol.mk_string ctx "y") in
+  let zero = Arithmetic.Integer.mk_numeral_i ctx 0 in (* zero *)
+  let eleven = Arithmetic.Integer.mk_numeral_i ctx 11 in (* eleven *)
+  let x_gt_0 = Arithmetic.mk_gt ctx x zero in (* x > 0 *)
+  let y_gt_0 = Arithmetic.mk_gt ctx y zero in (* y > 0 *)
+  let sum = Arithmetic.mk_add ctx [x; y] in   (* sum = x + y *)
+  let x_plus_y_eq_11 = Boolean.mk_eq ctx sum eleven in (* sum = 11 *)
+  (* Create solver and add constraints *)
+  let solver = Solver.mk_solver ctx None in
+  Solver.add solver [x_gt_0; y_gt_0; x_plus_y_eq_11];
+  (* Print the constraints *)
+  Printf.printf "Constraints:\n";
+  Printf.printf "x > 0: %s\n" (Expr.to_string x_gt_0);
+  Printf.printf "y > 0: %s\n" (Expr.to_string y_gt_0);
+  Printf.printf "x + y = 11: %s\n" (Expr.to_string x_plus_y_eq_11);
+  match sat_check solver with
+  | SmtTypes.SmtSat f -> Printf.printf
+      "SAT\nx = %d\ny = %d\n"
+      (str_to_coq_str "x" |> f |> coq_Z_to_int)
+      (str_to_coq_str "y" |> f |> coq_Z_to_int)
+  | SmtTypes.SmtUnsat -> Printf.printf "UNSAT\n"
+  | SmtTypes.SmtUnknown -> Printf.printf "UNKNOWN\n"
 
 let () =
-  if Array.length Sys.argv != 3 then (
-    prerr_endline "usage: ./bin <path/to/s/expr/1> <path/to/s/expr/2>";
-    exit 1
-  );
-
-  let file_1 = Sys.argv.(1) in
-  let f1_str = load file_1 in
-  let file_2 = Sys.argv.(2) in
-  let f2_str = load file_2 in
-  equivalence_check_programs f1_str f2_str
+  let _ = example_1 () in ()
