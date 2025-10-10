@@ -23,3 +23,4 @@ smt_query
 !/extracted_code/Interface.ml
 !/extracted_code/Z3Example.ml
 !/extracted_code/Z3Solver.ml
+!/extracted_code/EqCheck.ml
