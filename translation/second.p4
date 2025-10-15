@@ -4,7 +4,6 @@
 // Header definition
 header H {
     bit<8> a;
-    bit<8> b;
 }
 
 // Headers struct - must contain all headers
@@ -31,7 +30,7 @@ control vrfy(inout Headers hdr, inout Meta meta) {
 // Ingress control
 control ingress(inout Headers hdr, inout Meta m, inout standard_metadata_t s) {
     action MyAction1() {
-        hdr.h.b = 1;
+        hdr.h.a = 1;
     }
     
     table the_table {
