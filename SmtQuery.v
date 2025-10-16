@@ -412,7 +412,6 @@ Lemma equivalence_checker_cr_sound :
   (lookup_hdr c1 v) = (lookup_hdr c2 v)).            (* and their final values must be equal *)
 Proof.
   intros p1 p2 f H.
-  unfold equivalence_checker_cr_dsl in H.
   destruct p1 as [h1 s1 c1 t1] eqn:desp1,
            p2 as [h2 s2 c2 t2] eqn:desp2; simpl in H.
   destruct
