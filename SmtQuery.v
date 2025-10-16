@@ -472,5 +472,24 @@ t1)) t1 t2 h1 s1) eqn:H_eq; try (exfalso; congruence).
       assumption.
 Qed.
 
+(* Completeness lemma for equivalence_checker_cr_dsl *)
+Lemma equivalence_checker_cr_complete :
+  forall p1 p2 f,
+  equivalence_checker_cr_dsl p1 p2 = false ->
+  let c1_i  := eval_sym_state (init_symbolic_state p1) f in (* Get a sym state out of p1' headers, ctrls, and state *)
+  let c2_i  := eval_sym_state (init_symbolic_state p2) f in (* Do the same for p2 *)
+  let t1 := get_transformer_from_prog p1 in
+  let t2 := get_transformer_from_prog p2 in
+  let c1 := eval_transformer_concrete t1 c1_i in
+  let c2 := eval_transformer_concrete t2 c2_i in
+  well_formed_program p1 ->                          (* p1 is well-formed *)
+  (exists v, In v (get_headers_from_prog p1) /\      (* then, there exists a header in p1 *)
+  (lookup_hdr c1 v) <> (lookup_hdr c2 v)) \/         (* whose final values are not equal *)
+  (exists v, In v (get_headers_from_prog p1) /\
+   ~ In v (get_headers_from_prog p2)) \/             (* or a header in p1 that is not in p2 *)
+  (exists v, In v (get_headers_from_prog p2) /\
+   ~ In v (get_headers_from_prog p1)).               (* or a header in p2 that is not in p1 *)
+Admitted.
+
 Print Assumptions equivalence_checker_complete.
 Print Assumptions equivalence_checker_cr_sound.
