@@ -472,6 +472,25 @@ t1)) t1 t2 h1 s1) eqn:H_eq; try (exfalso; congruence).
       assumption.
 Qed.
 
+Lemma headers_from_program :
+  forall h s c t,
+    get_all_headers_from_ps (init_symbolic_state (CaracaraProgramDef h s c t)) =
+    h.
+Proof.
+  intros h s c t.
+  Search get_all_headers_from_ps.
+  unfold get_all_headers_from_ps.
+  Print map.
+  simpl.
+  Search PTree_Properties.of_list.
+Admitted.
+
+Lemma states_from_program :
+  forall h s c t,
+    get_all_states_from_ps (init_symbolic_state (CaracaraProgramDef h s c t)) =
+    s.
+Admitted.
+
 (* Completeness lemma for equivalence_checker_cr_dsl *)
 Lemma equivalence_checker_cr_complete :
   forall p1 p2 f,
@@ -489,7 +508,40 @@ Lemma equivalence_checker_cr_complete :
    ~ In v (get_headers_from_prog p2)) \/             (* or a header in p1 that is not in p2 *)
   (exists v, In v (get_headers_from_prog p2) /\
    ~ In v (get_headers_from_prog p1)).               (* or a header in p2 that is not in p1 *)
-Admitted.
+Proof.
+  intros p1 p2 f H.
+  destruct p1 as [h1 s1 c1 t1] eqn:desp1,
+           p2 as [h2 s2 c2 t2] eqn:desp2; simpl in H.
+  destruct
+  (hdr_list_equal h1 h2) eqn:H_hdr_eq,
+  (state_list_equal s1 s2) eqn:H_state_eq,
+  (ctrl_list_equal c1 c2) eqn:H_ctrl_eq in H; simpl in H.
+  - destruct (equivalence_checker (init_symbolic_state (CaracaraProgramDef h1 s1 c1
+t1)) t1 t2 h1 s1) eqn:H_eq; try (exfalso; congruence).
+    -- left.
+       apply equivalence_checker_complete
+        with (f' := f0)
+             (s := init_symbolic_state (CaracaraProgramDef h1 s1 c1 t1)) 
+             (header_list := h1) (state_var_list := s1) in H_eq.
+       ++ admit.
+       ++ intros.
+          apply is_header_in_ps_lemma.
+          unfold get_all_headers_from_ps.
+          simpl.
+          Search (PTree.elements (PTree_Properties.of_list _)).
 
+          Check ptree_of_list_lemma_hdr.
+          apply ptree_of_list_lemma_hdr.
+          (* TODO: ptree_of_list_lemma_hdr doesn't have exactly the right statement for us to prove, but is close *)
+          rewrite headers_from_program.
+          assumption.
+       ++ intros.
+          apply is_state_in_ps_lemma.
+          rewrite states_from_program.
+          assumption.
+    -- admit. (* equivalence_checker returns SmtUnknown,
+                 TODO: need to come back to this *)
+Admitted.
+    
 Print Assumptions equivalence_checker_complete.
 Print Assumptions equivalence_checker_cr_sound.
