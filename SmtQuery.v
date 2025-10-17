@@ -611,6 +611,8 @@ Lemma equivalence_checker_cr_complete :
   well_formed_program p2 ->                          (* p2 is well-formed *)
   (init_symbolic_state p1 = init_symbolic_state p2) ->  (* both programs have the same initial symbolic state
                                                            , i.e., same headers, ctrls, and states *)
+                                                           (* TODO handle case where programs
+                                                           are not equivalent bcos headers, ctrls, and states differ *)
   ((exists v, In v (get_headers_from_prog p1) /\      (* then, there exists a header in p1 *)
   (lookup_hdr c1 v) <> (lookup_hdr c2 v)) \/          (* whose final values are not equal *)
   (exists v, In v (get_states_from_prog p1) /\        (* or there exists a state var in p1 *)
