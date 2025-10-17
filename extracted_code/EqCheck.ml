@@ -6,6 +6,7 @@ let equivalence_check_programs str1 str2 =
   let prog_1 = Interface.coq_CaracaraProgram_of_sexp sexp_1 in
   let prog_2 = Interface.coq_CaracaraProgram_of_sexp sexp_2 in
   let res = SmtQuery.equivalence_checker_cr_dsl prog_1 prog_2 in
+  (* Sean TODO: Need to fix this to match new version of equivalence_checker_cr_dsl *)
   match res with
   | Coq_true -> print_endline "Equivalent"
   | Coq_false -> print_endline "Not Equivalent"
