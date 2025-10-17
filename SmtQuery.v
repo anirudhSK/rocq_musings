@@ -636,8 +636,6 @@ t1)) t1 t2 h1 s1) eqn:H_eq; try (exfalso; congruence).
        ++ simpl.
           injection H as Heq.
           subst f0.
-          Search hdr_list_equal.
-          Check hdr_list_equal_lemma.
           apply hdr_list_equal_lemma in H_hdr_eq.
           rewrite <- H_hdr_eq.
           apply state_list_equal_lemma in H_state_eq.
@@ -707,3 +705,4 @@ Admitted.
 Print Assumptions equivalence_checker_complete.
 Print Assumptions equivalence_checker_cr_sound_hdr.
 Print Assumptions equivalence_checker_cr_sound_state.
+Print Assumptions equivalence_checker_cr_complete.
