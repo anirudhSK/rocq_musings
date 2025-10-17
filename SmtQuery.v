@@ -5,6 +5,7 @@ From MyProject Require Import InitStatus.
 From MyProject Require Import CrProgramState.
 From MyProject Require Import Maps.
 From MyProject Require Import SmtTypes.
+From MyProject Require Import Integers.
 Require Import Classical.
 Require Import Coq.Lists.List.
 Require Import Coq.Bool.Bool.
@@ -199,7 +200,7 @@ Definition equivalence_checker
   smt_query (check_headers_and_state_vars s1 s2 header_list state_var_list).
 
 Definition equivalence_checker_cr_dsl (p1: CaracaraProgram) (p2: CaracaraProgram)
-  : bool := 
+  : option SmtValuation := 
   match p1, p2 with
    | CaracaraProgramDef h1 s1 c1 t1, CaracaraProgramDef h2 s2 c2 t2 => 
       if hdr_list_equal h1 h2 then
@@ -207,16 +208,16 @@ Definition equivalence_checker_cr_dsl (p1: CaracaraProgram) (p2: CaracaraProgram
           if ctrl_list_equal c1 c2 then
             match (equivalence_checker (init_symbolic_state p1) t1 t2 h1 s1) with
             (* TODO: Maybe equivalence_checker should take c as argument too? *)
-            | SmtUnsat => true  (* if it is unsatisfiable, then all state vars and headers are equal *)
-            | SmtSat _ => false (* if it is satisfiable, then some state var or header is not equal *)
-            | SmtUnknown => false (* if it is unknown, we assume it is not equal *)
+            | SmtUnsat => None  (* if it is unsatisfiable, then all state vars and headers are equal *)
+            | SmtSat f => Some f (* if it is satisfiable, then some state var or header is not equal *)
+            | SmtUnknown => Some (fun _ => one) (* TODO: This is a hack *)
             end
           else
-            false
+            Some (fun _ => one) (* TODO: This is a hack *)
         else
-          false
+          Some (fun _ => one) (* TODO: This is a hack *)
       else
-        false
+        Some (fun _ => one) (* TODO: This is a hack *)
   end.
 
 (* Soundness lemma about equivalence_checker conditional on the axioms above *)
@@ -397,9 +398,9 @@ Proof.
 Qed.
 
 (* Soundness lemma for equivalence_checker_cr_dsl *)
-Lemma equivalence_checker_cr_sound :
+Lemma equivalence_checker_cr_sound_hdr :
   forall p1 p2 f,
-  equivalence_checker_cr_dsl p1 p2 = true ->
+  equivalence_checker_cr_dsl p1 p2 = None ->
   let c1_i  := eval_sym_state (init_symbolic_state p1) f in (* Get a sym state out of p1' headers, ctrls, and state *)
   let c2_i  := eval_sym_state (init_symbolic_state p2) f in (* Do the same for p2 *)
   let t1 := get_transformer_from_prog p1 in
@@ -472,29 +473,11 @@ t1)) t1 t2 h1 s1) eqn:H_eq; try (exfalso; congruence).
       assumption.
 Qed.
 
-Lemma headers_from_program :
-  forall h s c t,
-    get_all_headers_from_ps (init_symbolic_state (CaracaraProgramDef h s c t)) =
-    h.
-Proof.
-  intros h s c t.
-  Search get_all_headers_from_ps.
-  unfold get_all_headers_from_ps.
-  Print map.
-  simpl.
-  Search PTree_Properties.of_list.
-Admitted.
-
-Lemma states_from_program :
-  forall h s c t,
-    get_all_states_from_ps (init_symbolic_state (CaracaraProgramDef h s c t)) =
-    s.
-Admitted.
-
-(* Completeness lemma for equivalence_checker_cr_dsl *)
-Lemma equivalence_checker_cr_complete :
+(* Prove the same thing as above, but for state instead of headers *)
+(* Soundness lemma for equivalence_checker_cr_dsl *)
+Lemma equivalence_checker_cr_sound_state :
   forall p1 p2 f,
-  equivalence_checker_cr_dsl p1 p2 = false ->
+  equivalence_checker_cr_dsl p1 p2 = None ->
   let c1_i  := eval_sym_state (init_symbolic_state p1) f in (* Get a sym state out of p1' headers, ctrls, and state *)
   let c2_i  := eval_sym_state (init_symbolic_state p2) f in (* Do the same for p2 *)
   let t1 := get_transformer_from_prog p1 in
@@ -502,12 +485,136 @@ Lemma equivalence_checker_cr_complete :
   let c1 := eval_transformer_concrete t1 c1_i in
   let c2 := eval_transformer_concrete t2 c2_i in
   well_formed_program p1 ->                          (* p1 is well-formed *)
-  (exists v, In v (get_headers_from_prog p1) /\      (* then, there exists a header in p1 *)
-  (lookup_hdr c1 v) <> (lookup_hdr c2 v)) \/         (* whose final values are not equal *)
-  (exists v, In v (get_headers_from_prog p1) /\
-   ~ In v (get_headers_from_prog p2)) \/             (* or a header in p1 that is not in p2 *)
-  (exists v, In v (get_headers_from_prog p2) /\
-   ~ In v (get_headers_from_prog p1)).               (* or a header in p2 that is not in p1 *)
+  (forall v, In v (get_states_from_prog p1) ->      (* then, every header in p1 *)
+  (In v (get_states_from_prog p2)) /\               (* must be in p2 *)
+  (lookup_state c1 v) = (lookup_state c2 v)).            (* and their final values must be equal *)
+Proof.
+  intros p1 p2 f H.
+  destruct p1 as [h1 s1 c1 t1] eqn:desp1,
+           p2 as [h2 s2 c2 t2] eqn:desp2; simpl in H.
+  destruct
+  (hdr_list_equal h1 h2) eqn:H_hdr_eq,
+  (state_list_equal s1 s2) eqn:H_state_eq,
+  (ctrl_list_equal c1 c2) eqn:H_ctrl_eq in H; simpl in H; try (exfalso; congruence).
+  intros.
+  simpl in H1. (* TODO: May want to remove these *)
+  split.
+  - apply state_list_equal_lemma in H_state_eq.
+    rewrite H_state_eq in H1.
+    assumption.
+  - destruct (equivalence_checker (init_symbolic_state (CaracaraProgramDef h1 s1 c1
+t1)) t1 t2 h1 s1) eqn:H_eq; try (exfalso; congruence).
+    apply equivalence_checker_sound with (f := f) in H_eq.
+    + apply H_eq in H1.
+      unfold c0.
+      unfold c3.
+      unfold c1_i.
+      unfold c2_i.
+      simpl.
+      unfold t0.
+      unfold t3.
+      simpl.
+      apply state_list_equal_lemma in H_state_eq.
+      apply hdr_list_equal_lemma in H_hdr_eq.
+      apply ctrl_list_equal_lemma in H_ctrl_eq.
+      rewrite <- H_hdr_eq.
+      rewrite <- H_state_eq.
+      rewrite <- H_ctrl_eq.
+      rewrite init_symbolic_state_nodep_t with (t2 := t2) in H1 at 2.
+      assumption.
+    + intros.
+      apply is_header_in_ps_lemma.
+      unfold init_symbolic_state.
+      Transparent get_all_headers_from_ps.
+      unfold get_all_headers_from_ps.
+      simpl.
+      rewrite map_pair_split.
+      simpl.
+      apply ptree_of_list_lemma_hdr.
+      simpl in H0.
+      destruct H0.
+      assumption. assumption.
+    + intros.
+      apply is_state_in_ps_lemma.
+      unfold init_symbolic_state.
+      Transparent get_all_states_from_ps.
+      unfold get_all_states_from_ps.
+      simpl.
+      rewrite map_pair_split.
+      simpl.
+      apply ptree_of_list_lemma_state.
+      simpl in H0.
+      destruct H0.
+      destruct H3.
+      assumption.
+      assumption.
+Qed.
+
+(* TODO: lemma for Sean to complete *)
+Lemma ctrl_list_not_equal :
+  forall c1 c2,
+    ctrl_list_equal c1 c2 = false ->
+    c1 <> c2.
+Admitted.
+
+(* TODO: lemma for Sean to complete *)
+Lemma hdr_list_not_equal :
+  forall h1 h2,
+    hdr_list_equal h1 h2 = false ->
+    h1 <> h2.
+Admitted.
+
+(* TODO: lemma for Sean to complete *)
+Lemma state_list_not_equal :
+  forall s1 s2,
+    state_list_equal s1 s2 = false ->
+    s1 <> s2.
+Admitted.
+
+(* TODO: lemma for Sean to complete *)
+Lemma equal_program_states_ctrl:
+  forall h1 s1 c1 t1 h2 s2 c2 t2,
+    init_symbolic_state (CaracaraProgramDef h1 s1 c1 t1) = init_symbolic_state (CaracaraProgramDef h2 s2 c2 t2)
+    ->
+    c1 = c2.
+Admitted.
+
+(* Create two copies of the above lemma, one for state and one for header *)
+(* TODO: lemma for Sean to complete *)
+Lemma equal_program_states_hdr:
+  forall h1 s1 c1 t1 h2 s2 c2 t2,
+    init_symbolic_state (CaracaraProgramDef h1 s1 c1 t1) = init_symbolic_state (CaracaraProgramDef h2 s2 c2 t2)
+    ->
+    h1 = h2.
+Admitted.
+
+(* TODO: lemma for Sean to complete *)
+Lemma equal_program_states_state:
+  forall h1 s1 c1 t1 h2 s2 c2 t2,
+    init_symbolic_state (CaracaraProgramDef h1 s1 c1 t1) = init_symbolic_state (CaracaraProgramDef h2 s2 c2 t2)
+    ->
+    s1 = s2.
+Admitted.
+
+(* TODO: lemma for Sean to complete *)
+(* Completeness lemma for equivalence_checker_cr_dsl *)
+Lemma equivalence_checker_cr_complete :
+  forall p1 p2 f,
+  equivalence_checker_cr_dsl p1 p2 = Some f ->
+  let c1_i  := eval_sym_state (init_symbolic_state p1) f in (* Get a sym state out of p1' headers, ctrls, and state *)
+  let c2_i  := eval_sym_state (init_symbolic_state p2) f in (* Do the same for p2 *)
+  let t1 := get_transformer_from_prog p1 in
+  let t2 := get_transformer_from_prog p2 in
+  let c1 := eval_transformer_concrete t1 c1_i in
+  let c2 := eval_transformer_concrete t2 c2_i in
+  well_formed_program p1 ->                          (* p1 is well-formed *)
+  well_formed_program p2 ->                          (* p2 is well-formed *)
+  (init_symbolic_state p1 = init_symbolic_state p2) ->  (* both programs have the same initial symbolic state
+                                                           , i.e., same headers, ctrls, and states *)
+  ((exists v, In v (get_headers_from_prog p1) /\      (* then, there exists a header in p1 *)
+  (lookup_hdr c1 v) <> (lookup_hdr c2 v)) \/          (* whose final values are not equal *)
+  (exists v, In v (get_states_from_prog p1) /\        (* or there exists a state var in p1 *)
+  (lookup_state c1 v) <> (lookup_state c2 v))).       (* whose final values are not equal *)
 Proof.
   intros p1 p2 f H.
   destruct p1 as [h1 s1 c1 t1] eqn:desp1,
@@ -518,30 +625,83 @@ Proof.
   (ctrl_list_equal c1 c2) eqn:H_ctrl_eq in H; simpl in H.
   - destruct (equivalence_checker (init_symbolic_state (CaracaraProgramDef h1 s1 c1
 t1)) t1 t2 h1 s1) eqn:H_eq; try (exfalso; congruence).
-    -- left.
+    -- simpl.
+       intros.
        apply equivalence_checker_complete
         with (f' := f0)
              (s := init_symbolic_state (CaracaraProgramDef h1 s1 c1 t1)) 
              (header_list := h1) (state_var_list := s1) in H_eq.
-       ++ admit.
+       ++ simpl.
+          injection H as Heq.
+          subst f0.
+          Search hdr_list_equal.
+          Check hdr_list_equal_lemma.
+          apply hdr_list_equal_lemma in H_hdr_eq.
+          rewrite <- H_hdr_eq.
+          apply state_list_equal_lemma in H_state_eq.
+          rewrite <- H_state_eq.
+          apply ctrl_list_equal_lemma in H_ctrl_eq.
+          rewrite <- H_ctrl_eq.
+          apply H_eq.
        ++ intros.
           apply is_header_in_ps_lemma.
           unfold get_all_headers_from_ps.
           simpl.
-          Search (PTree.elements (PTree_Properties.of_list _)).
-
-          Check ptree_of_list_lemma_hdr.
+          rewrite map_pair_split.
           apply ptree_of_list_lemma_hdr.
-          (* TODO: ptree_of_list_lemma_hdr doesn't have exactly the right statement for us to prove, but is close *)
-          rewrite headers_from_program.
+          destruct H0 as [H_wf_headers _].
+          apply H_wf_headers.
           assumption.
        ++ intros.
           apply is_state_in_ps_lemma.
-          rewrite states_from_program.
+          unfold get_all_states_from_ps.
+          simpl.
+          rewrite map_pair_split.
+          apply ptree_of_list_lemma_state.
+          destruct H0 as [H_wf_headers H_wf_states].
+          destruct H_wf_states as [H_wf_states _].
+          apply H_wf_states.
           assumption.
     -- admit. (* equivalence_checker returns SmtUnknown,
                  TODO: need to come back to this *)
+  (* Sean TODO: Capture the remaining 7 cases below into one lemma with hopefully less repetition *)
+  -   intros.
+      apply ctrl_list_not_equal in H_ctrl_eq.
+      apply equal_program_states_ctrl in H2.
+      rewrite H2 in H_ctrl_eq.
+      contradiction.
+  -   intros.
+      apply state_list_not_equal in H_state_eq.
+      apply equal_program_states_state in H2.
+      rewrite H2 in H_state_eq.
+      contradiction.
+  -   intros.
+      apply state_list_not_equal in H_state_eq.
+      apply equal_program_states_state in H2.
+      rewrite H2 in H_state_eq.
+      contradiction.
+  -   intros.
+      apply hdr_list_not_equal in H_hdr_eq.
+      apply equal_program_states_hdr in H2.
+      rewrite H2 in H_hdr_eq.
+      contradiction.
+  -   intros.
+      apply hdr_list_not_equal in H_hdr_eq.
+      apply equal_program_states_hdr in H2.
+      rewrite H2 in H_hdr_eq.
+      contradiction.
+  -   intros.
+      apply hdr_list_not_equal in H_hdr_eq.
+      apply equal_program_states_hdr in H2.
+      rewrite H2 in H_hdr_eq.
+      contradiction.
+  -   intros.
+      apply hdr_list_not_equal in H_hdr_eq.
+      apply equal_program_states_hdr in H2.
+      rewrite H2 in H_hdr_eq.
+      contradiction.
 Admitted.
     
 Print Assumptions equivalence_checker_complete.
-Print Assumptions equivalence_checker_cr_sound.
+Print Assumptions equivalence_checker_cr_sound_hdr.
+Print Assumptions equivalence_checker_cr_sound_state.
