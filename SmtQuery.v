@@ -665,43 +665,15 @@ t1)) t1 t2 h1 s1) eqn:H_eq; try (exfalso; congruence).
     -- admit. (* equivalence_checker returns SmtUnknown,
                  TODO: need to come back to this *)
   (* Sean TODO: Capture the remaining 7 cases below into one lemma with hopefully less repetition *)
-  -   intros.
-      apply ctrl_list_not_equal in H_ctrl_eq.
-      apply equal_program_states_ctrl in H2.
-      rewrite H2 in H_ctrl_eq.
-      contradiction.
-  -   intros.
-      apply state_list_not_equal in H_state_eq.
-      apply equal_program_states_state in H2.
-      rewrite H2 in H_state_eq.
-      contradiction.
-  -   intros.
-      apply state_list_not_equal in H_state_eq.
-      apply equal_program_states_state in H2.
-      rewrite H2 in H_state_eq.
-      contradiction.
-  -   intros.
-      apply hdr_list_not_equal in H_hdr_eq.
-      apply equal_program_states_hdr in H2.
-      rewrite H2 in H_hdr_eq.
-      contradiction.
-  -   intros.
-      apply hdr_list_not_equal in H_hdr_eq.
-      apply equal_program_states_hdr in H2.
-      rewrite H2 in H_hdr_eq.
-      contradiction.
-  -   intros.
-      apply hdr_list_not_equal in H_hdr_eq.
-      apply equal_program_states_hdr in H2.
-      rewrite H2 in H_hdr_eq.
-      contradiction.
-  -   intros.
-      apply hdr_list_not_equal in H_hdr_eq.
-      apply equal_program_states_hdr in H2.
-      rewrite H2 in H_hdr_eq.
-      contradiction.
+  -   try (intros; apply ctrl_list_not_equal in H_ctrl_eq; apply equal_program_states_ctrl in H2; rewrite H2 in H_ctrl_eq; contradiction).
+  -   try (intros; apply state_list_not_equal in H_state_eq; apply equal_program_states_state in H2; rewrite H2 in H_state_eq; contradiction).
+  -   try (intros; apply state_list_not_equal in H_state_eq; apply equal_program_states_state in H2; rewrite H2 in H_state_eq; contradiction).
+  -   try (intros; apply hdr_list_not_equal in H_hdr_eq; apply equal_program_states_hdr in H2; rewrite H2 in H_hdr_eq; contradiction).
+  -   try (intros; apply hdr_list_not_equal in H_hdr_eq; apply equal_program_states_hdr in H2; rewrite H2 in H_hdr_eq; contradiction).
+  -   try (intros; apply hdr_list_not_equal in H_hdr_eq; apply equal_program_states_hdr in H2; rewrite H2 in H_hdr_eq; contradiction).
+  -   try (intros; apply hdr_list_not_equal in H_hdr_eq; apply equal_program_states_hdr in H2; rewrite H2 in H_hdr_eq; contradiction).
 Admitted.
-    
+
 Print Assumptions equivalence_checker_complete.
 Print Assumptions equivalence_checker_cr_sound_hdr.
 Print Assumptions equivalence_checker_cr_sound_state.
