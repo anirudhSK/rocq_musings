@@ -625,7 +625,11 @@ Proof.
   (hdr_list_equal h1 h2) eqn:H_hdr_eq,
   (state_list_equal s1 s2) eqn:H_state_eq,
   (ctrl_list_equal c1 c2) eqn:H_ctrl_eq in H; simpl in H.
-  - destruct (equivalence_checker (init_symbolic_state (CaracaraProgramDef h1 s1 c1
+  2-8: solve [try (intros; apply ctrl_list_not_equal in H_ctrl_eq; apply equal_program_states_ctrl in H2; rewrite H2 in H_ctrl_eq; contradiction) |
+          try (intros; apply state_list_not_equal in H_state_eq; apply equal_program_states_state in H2; rewrite H2 in H_state_eq; contradiction) |
+          try (intros; apply hdr_list_not_equal in H_hdr_eq; apply equal_program_states_hdr in H2; rewrite H2 in H_hdr_eq; contradiction)
+        ]. (* The easy goals, where state, ctrl, or header lists are NOT equal, proof by explosion because we assume these lists ARE equal*)
+  - destruct (equivalence_checker (init_symbolic_state (CaracaraProgramDef h1 s1 c1 (* The hard goal *)
 t1)) t1 t2 h1 s1) eqn:H_eq; try (exfalso; congruence).
     -- simpl.
        intros.
@@ -664,14 +668,6 @@ t1)) t1 t2 h1 s1) eqn:H_eq; try (exfalso; congruence).
           assumption.
     -- admit. (* equivalence_checker returns SmtUnknown,
                  TODO: need to come back to this *)
-  (* Sean TODO: Capture the remaining 7 cases below into one lemma with hopefully less repetition *)
-  -   try (intros; apply ctrl_list_not_equal in H_ctrl_eq; apply equal_program_states_ctrl in H2; rewrite H2 in H_ctrl_eq; contradiction).
-  -   try (intros; apply state_list_not_equal in H_state_eq; apply equal_program_states_state in H2; rewrite H2 in H_state_eq; contradiction).
-  -   try (intros; apply state_list_not_equal in H_state_eq; apply equal_program_states_state in H2; rewrite H2 in H_state_eq; contradiction).
-  -   try (intros; apply hdr_list_not_equal in H_hdr_eq; apply equal_program_states_hdr in H2; rewrite H2 in H_hdr_eq; contradiction).
-  -   try (intros; apply hdr_list_not_equal in H_hdr_eq; apply equal_program_states_hdr in H2; rewrite H2 in H_hdr_eq; contradiction).
-  -   try (intros; apply hdr_list_not_equal in H_hdr_eq; apply equal_program_states_hdr in H2; rewrite H2 in H_hdr_eq; contradiction).
-  -   try (intros; apply hdr_list_not_equal in H_hdr_eq; apply equal_program_states_hdr in H2; rewrite H2 in H_hdr_eq; contradiction).
 Admitted.
 
 Print Assumptions equivalence_checker_complete.
