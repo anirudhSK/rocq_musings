@@ -77,6 +77,10 @@ fi
 debug_section "Cleaning the enviorment"
 rm -f  "$OUTPUT_FILE_FIRST" "$OUTPUT_FILE_SECOND"
 
+debug_section "Building P4 compiler"
+cd p4c/build/
+make -j4
+cd ../../
 
 # Compile first P4 file
 debug_section "Compiling first P4 file: $P4_FILE_FIRST"
