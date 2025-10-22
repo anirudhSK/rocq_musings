@@ -199,8 +199,15 @@ Definition equivalence_checker
   (* check if the headers and state vars are equivalent *)
   smt_query (check_headers_and_state_vars s1 s2 header_list state_var_list).
 
+(* An inductive data type called EquivalenceResult *)
+Inductive EquivalenceResult :=
+  | Equivalent
+  | NotEquivalent (witness: SmtValuation)
+  | NotEquivalentUnknown
+  | NotEquivalentVariablesDiffer.
+
 Definition equivalence_checker_cr_dsl (p1: CaracaraProgram) (p2: CaracaraProgram)
-  : option SmtValuation := 
+  : EquivalenceResult := 
   match p1, p2 with
    | CaracaraProgramDef h1 s1 c1 t1, CaracaraProgramDef h2 s2 c2 t2 => 
       if hdr_list_equal h1 h2 then
@@ -208,16 +215,16 @@ Definition equivalence_checker_cr_dsl (p1: CaracaraProgram) (p2: CaracaraProgram
           if ctrl_list_equal c1 c2 then
             match (equivalence_checker (init_symbolic_state p1) t1 t2 h1 s1) with
             (* TODO: Maybe equivalence_checker should take c as argument too? *)
-            | SmtUnsat => None  (* if it is unsatisfiable, then all state vars and headers are equal *)
-            | SmtSat f => Some f (* if it is satisfiable, then some state var or header is not equal *)
-            | SmtUnknown => Some (fun _ => one) (* TODO: This is a hack *)
+            | SmtUnsat => Equivalent (* if it is unsatisfiable, then all state vars and headers are equal *)
+            | SmtSat f => NotEquivalent f (* if it is satisfiable, then some state var or header is not equal *)
+            | SmtUnknown => NotEquivalentUnknown
             end
           else
-            Some (fun _ => one) (* TODO: This is a hack *)
+            NotEquivalentVariablesDiffer
         else
-          Some (fun _ => one) (* TODO: This is a hack *)
+          NotEquivalentVariablesDiffer
       else
-        Some (fun _ => one) (* TODO: This is a hack *)
+        NotEquivalentVariablesDiffer
   end.
 
 (* Soundness lemma about equivalence_checker conditional on the axioms above *)
@@ -400,7 +407,7 @@ Qed.
 (* Soundness lemma for equivalence_checker_cr_dsl *)
 Lemma equivalence_checker_cr_sound_hdr :
   forall p1 p2 f,
-  equivalence_checker_cr_dsl p1 p2 = None ->
+  equivalence_checker_cr_dsl p1 p2 = Equivalent ->
   let c1_i  := eval_sym_state (init_symbolic_state p1) f in (* Get a sym state out of p1' headers, ctrls, and state *)
   let c2_i  := eval_sym_state (init_symbolic_state p2) f in (* Do the same for p2 *)
   let t1 := get_transformer_from_prog p1 in
@@ -477,7 +484,7 @@ Qed.
 (* Soundness lemma for equivalence_checker_cr_dsl *)
 Lemma equivalence_checker_cr_sound_state :
   forall p1 p2 f,
-  equivalence_checker_cr_dsl p1 p2 = None ->
+  equivalence_checker_cr_dsl p1 p2 = Equivalent ->
   let c1_i  := eval_sym_state (init_symbolic_state p1) f in (* Get a sym state out of p1' headers, ctrls, and state *)
   let c2_i  := eval_sym_state (init_symbolic_state p2) f in (* Do the same for p2 *)
   let t1 := get_transformer_from_prog p1 in
@@ -600,7 +607,7 @@ Admitted.
 (* Completeness lemma for equivalence_checker_cr_dsl *)
 Lemma equivalence_checker_cr_complete :
   forall p1 p2 f,
-  equivalence_checker_cr_dsl p1 p2 = Some f ->
+  equivalence_checker_cr_dsl p1 p2 = NotEquivalent f ->
   let c1_i  := eval_sym_state (init_symbolic_state p1) f in (* Get a sym state out of p1' headers, ctrls, and state *)
   let c2_i  := eval_sym_state (init_symbolic_state p2) f in (* Do the same for p2 *)
   let t1 := get_transformer_from_prog p1 in
@@ -666,9 +673,7 @@ t1)) t1 t2 h1 s1) eqn:H_eq; try (exfalso; congruence).
           destruct H_wf_states as [H_wf_states _].
           apply H_wf_states.
           assumption.
-    -- admit. (* equivalence_checker returns SmtUnknown,
-                 TODO: need to come back to this *)
-Admitted.
+Qed.
 
 Print Assumptions equivalence_checker_complete.
 Print Assumptions equivalence_checker_cr_sound_hdr.
