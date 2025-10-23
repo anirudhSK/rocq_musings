@@ -62,34 +62,35 @@ Definition check_for_duplicate_identifiers (program : CaracaraProgram) : bool :=
       has_duplicates ctrl_equal c
   end.
 
+From Coq Require Import Sorting.Sorted.
+Check Sorted.
+
+(* Compare two headers based on their uids *)
+Definition header_lt (h1 h2 : Header) : Prop :=
+  match h1, h2 with
+  | HeaderCtr uid1, HeaderCtr uid2 => Pos.lt uid1 uid2
+  end.
+
+(* Compare two states based on their uids *)
+Definition state_lt (s1 s2 : State) : Prop :=
+  match s1, s2 with
+  | StateCtr uid1, StateCtr uid2 => Pos.lt uid1 uid2
+  end.
+
+(* Compare two ctrls based on their uids *)
+Definition ctrl_lt (c1 c2 : Ctrl) : Prop :=
+  match c1, c2 with
+  | CtrlCtr uid1, CtrlCtr uid2 => Pos.lt uid1 uid2
+  end.
+
 (* No duplicates in Caracara Program *)
 Definition well_formed_program (p : CaracaraProgram) : Prop :=
   match p with
   | CaracaraProgramDef h s c _ =>
-      Coqlib.list_norepet h /\ Coqlib.list_norepet s /\ Coqlib.list_norepet c
+      Coqlib.list_norepet h /\ Coqlib.list_norepet s /\ Coqlib.list_norepet c /\
+      Sorted header_lt h /\ Sorted state_lt s /\ Sorted ctrl_lt c
   end.
 
-(* Check if any of the identifier lists in the CR program has duplicates.
-   Use the check_for_duplicate_identifiers function above.
-   If it returns false, it implies there are no duplicates. *)
-Lemma check_for_duplicates_in_cr_program :
-    forall (p : CaracaraProgram),
-      check_for_duplicate_identifiers (p) = false ->
-      well_formed_program p.
-Proof.
-    intros p.
-    intros H.
-    destruct p.
-    unfold well_formed_program.
-    simpl in H.
-    apply orb_false_iff in H as [H' H3].
-    apply orb_false_iff in H' as [H'' H2].
-    (* Now H'' is the first, H2 is the second, H3 is the last *)
-    repeat split.
-    - apply has_duplicates_correct with (eqb := header_equal);
-      intros; try destruct a; try destruct b; simpl; try apply Pos.eqb_refl; try apply Pos.eqb_sym; try apply H''.
-    - apply has_duplicates_correct with (eqb := state_equal);
-      intros; try destruct a; try destruct b; simpl; try apply Pos.eqb_refl; try apply Pos.eqb_sym; try apply H2.
-    - apply has_duplicates_correct with (eqb := ctrl_equal);
-      intros; try destruct a; try destruct b; simpl; try apply Pos.eqb_refl; try apply Pos.eqb_sym; try apply H3.
-Qed.
+(* TODO: Write a program to check for the well_formed_program property *)
+(* TODO: This would involve checking for duplicates and sorting the lists *)
+(* TODO: And then verifying the well_formed_program property holds *)
