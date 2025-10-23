@@ -756,8 +756,6 @@ Lemma equivalence_checker_cr_complete :
   let tran2 := get_transformer_from_prog (program_of_wfp wp2) in
   let conc1 := eval_transformer_concrete tran1 conc1_i in
   let conc2 := eval_transformer_concrete tran2 conc2_i in
-  well_formed_program (program_of_wfp wp1) ->                          (* p1 is well-formed *)
-  well_formed_program (program_of_wfp wp2) ->                          (* p2 is well-formed *)
   (init_symbolic_state (program_of_wfp wp1) = init_symbolic_state (program_of_wfp wp2)) ->  (* both programs have the same initial symbolic state
                                                            , i.e., same headers, ctrls, and states *)
                                                            (* TODO handle case where programs
@@ -776,10 +774,7 @@ Proof.
   (hdr_list_equal h1 h2) eqn:H_hdr_eq,
   (state_list_equal s1 s2) eqn:H_state_eq,
   (ctrl_list_equal c1 c2) eqn:H_ctrl_eq in H; simpl in H.
-  2-8: solve [try (intros; apply ctrl_list_not_equal in H_ctrl_eq; apply equal_program_states_ctrl in H2; rewrite H2 in H_ctrl_eq; contradiction) |
-          try (intros; apply state_list_not_equal in H_state_eq; apply equal_program_states_state in H2; rewrite H2 in H_state_eq; contradiction) |
-          try (intros; apply hdr_list_not_equal in H_hdr_eq; apply equal_program_states_hdr in H2; rewrite H2 in H_hdr_eq; contradiction)
-        ]. (* The easy goals, where state, ctrl, or header lists are NOT equal, proof by explosion because we assume these lists ARE equal*)
+  2-8: discriminate H.
   - destruct (equivalence_checker (init_symbolic_state (CaracaraProgramDef h1 s1 c1 (* The hard goal *)
 t1)) t1 t2 h1 s1) eqn:H_eq; try (exfalso; congruence).
     -- simpl.
@@ -804,8 +799,11 @@ t1)) t1 t2 h1 s1) eqn:H_eq; try (exfalso; congruence).
           simpl.
           rewrite map_pair_split.
           apply ptree_of_list_lemma_hdr.
-          destruct H0 as [H_wf_headers _].
-          apply H_wf_headers.
+          remember (proof_of_wfp wp1) as H_wfp1.
+          clear HeqH_wfp1.
+          rewrite <- Heqp1 in H_wfp1.
+          unfold well_formed_program in H_wfp1.
+          apply H_wfp1.
           assumption.
        ++ intros.
           apply is_state_in_ps_lemma.
@@ -813,9 +811,11 @@ t1)) t1 t2 h1 s1) eqn:H_eq; try (exfalso; congruence).
           simpl.
           rewrite map_pair_split.
           apply ptree_of_list_lemma_state.
-          destruct H0 as [H_wf_headers H_wf_states].
-          destruct H_wf_states as [H_wf_states _].
-          apply H_wf_states.
+          remember (proof_of_wfp wp1) as H_wfp1.
+          clear HeqH_wfp1.
+          rewrite <- Heqp1 in H_wfp1.
+          unfold well_formed_program in H_wfp1.
+          apply H_wfp1.
           assumption.
 Qed.
 
