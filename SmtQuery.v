@@ -738,28 +738,38 @@ Proof.
   - assumption.
 Qed.
 
+Definition WellFormedProgram := { p : CaracaraProgram | well_formed_program p }.
+
+Definition pack_wfp (p : CaracaraProgram) (H : well_formed_program p) : WellFormedProgram :=
+  exist _ p H.
+
+Definition program_of_wfp (w : WellFormedProgram) : CaracaraProgram := proj1_sig w.
+Definition proof_of_wfp (w : WellFormedProgram) : well_formed_program (program_of_wfp w) := proj2_sig w.
+
 (* Completeness lemma for equivalence_checker_cr_dsl *)
 Lemma equivalence_checker_cr_complete :
-  forall p1 p2 f,
-  equivalence_checker_cr_dsl p1 p2 = NotEquivalent f ->
-  let conc1_i  := eval_sym_state (init_symbolic_state p1) f in (* Get a sym state out of p1' headers, ctrls, and state *)
-  let conc2_i  := eval_sym_state (init_symbolic_state p2) f in (* Do the same for p2 *)
-  let tran1 := get_transformer_from_prog p1 in
-  let tran2 := get_transformer_from_prog p2 in
+  forall (wp1 : WellFormedProgram) (wp2 : WellFormedProgram) f,
+  equivalence_checker_cr_dsl (proj1_sig wp1) (proj1_sig wp2) = NotEquivalent f ->
+  let conc1_i  := eval_sym_state (init_symbolic_state (proj1_sig wp1)) f in (* Get a sym state out of p1' headers, ctrls, and state *)
+  let conc2_i  := eval_sym_state (init_symbolic_state (proj1_sig wp2)) f in (* Do the same for p2 *)
+  let tran1 := get_transformer_from_prog (proj1_sig wp1) in
+  let tran2 := get_transformer_from_prog (proj1_sig wp2) in
   let conc1 := eval_transformer_concrete tran1 conc1_i in
   let conc2 := eval_transformer_concrete tran2 conc2_i in
-  well_formed_program p1 ->                          (* p1 is well-formed *)
-  well_formed_program p2 ->                          (* p2 is well-formed *)
-  (init_symbolic_state p1 = init_symbolic_state p2) ->  (* both programs have the same initial symbolic state
+  well_formed_program (proj1_sig wp1) ->                          (* p1 is well-formed *)
+  well_formed_program (proj1_sig wp2) ->                          (* p2 is well-formed *)
+  (init_symbolic_state (proj1_sig wp1) = init_symbolic_state (proj1_sig wp2)) ->  (* both programs have the same initial symbolic state
                                                            , i.e., same headers, ctrls, and states *)
                                                            (* TODO handle case where programs
                                                            are not equivalent bcos headers, ctrls, and states differ *)
-  ((exists v, In v (get_headers_from_prog p1) /\      (* then, there exists a header in p1 *)
+  ((exists v, In v (get_headers_from_prog (proj1_sig wp1)) /\     (* then, there exists a header in p1 *)
   (lookup_hdr conc1 v) <> (lookup_hdr conc2 v)) \/    (* whose final values are not equal *)
-  (exists v, In v (get_states_from_prog p1) /\        (* or there exists a state var in p1 *)
+  (exists v, In v (get_states_from_prog (proj1_sig wp1)) /\       (* or there exists a state var in p1 *)
   (lookup_state conc1 v) <> (lookup_state conc2 v))). (* whose final values are not equal *)
 Proof.
-  intros p1 p2 f H.
+  intros wp1 wp2 f H.
+  remember (proj1_sig wp1) as p1.
+  remember (proj1_sig wp2) as p2.
   destruct p1 as [h1 s1 c1 t1] eqn:desp1,
            p2 as [h2 s2 c2 t2] eqn:desp2; simpl in H.
   destruct
