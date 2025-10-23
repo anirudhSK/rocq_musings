@@ -11,6 +11,7 @@ Require Import Coq.Lists.List.
 Require Import Coq.Bool.Bool.
 Require Import Coq.ZArith.ZArith.
 From Coq Require Import FunctionalExtensionality.
+From Coq Require Import Sorting.Sorted.
 Import ListNotations.
 
 (* Import or define SeqRule and related types *)
@@ -629,9 +630,7 @@ Qed.
 (* TODO: lemma for Sean to complete *)
 Lemma ptreelist_equal_lemma:
   forall [A : Type] (x : list (PTree.elt * A)) (y : list (PTree.elt * A)),
-  PTree_Properties.of_list x = PTree_Properties.of_list y -> x = y.
-Proof.
-  unfold PTree_Properties.of_list.
+  (PTree_Properties.of_list x = PTree_Properties.of_list y) -> x = y.
 Admitted.
 
 Lemma inj_map_preserves_eq :
