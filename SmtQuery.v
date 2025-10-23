@@ -742,12 +742,12 @@ Qed.
 Lemma equivalence_checker_cr_complete :
   forall p1 p2 f,
   equivalence_checker_cr_dsl p1 p2 = NotEquivalent f ->
-  let c1_i  := eval_sym_state (init_symbolic_state p1) f in (* Get a sym state out of p1' headers, ctrls, and state *)
-  let c2_i  := eval_sym_state (init_symbolic_state p2) f in (* Do the same for p2 *)
-  let t1 := get_transformer_from_prog p1 in
-  let t2 := get_transformer_from_prog p2 in
-  let c1 := eval_transformer_concrete t1 c1_i in
-  let c2 := eval_transformer_concrete t2 c2_i in
+  let conc1_i  := eval_sym_state (init_symbolic_state p1) f in (* Get a sym state out of p1' headers, ctrls, and state *)
+  let conc2_i  := eval_sym_state (init_symbolic_state p2) f in (* Do the same for p2 *)
+  let tran1 := get_transformer_from_prog p1 in
+  let tran2 := get_transformer_from_prog p2 in
+  let conc1 := eval_transformer_concrete tran1 conc1_i in
+  let conc2 := eval_transformer_concrete tran2 conc2_i in
   well_formed_program p1 ->                          (* p1 is well-formed *)
   well_formed_program p2 ->                          (* p2 is well-formed *)
   (init_symbolic_state p1 = init_symbolic_state p2) ->  (* both programs have the same initial symbolic state
@@ -755,9 +755,9 @@ Lemma equivalence_checker_cr_complete :
                                                            (* TODO handle case where programs
                                                            are not equivalent bcos headers, ctrls, and states differ *)
   ((exists v, In v (get_headers_from_prog p1) /\      (* then, there exists a header in p1 *)
-  (lookup_hdr c1 v) <> (lookup_hdr c2 v)) \/          (* whose final values are not equal *)
+  (lookup_hdr conc1 v) <> (lookup_hdr conc2 v)) \/    (* whose final values are not equal *)
   (exists v, In v (get_states_from_prog p1) /\        (* or there exists a state var in p1 *)
-  (lookup_state c1 v) <> (lookup_state c2 v))).       (* whose final values are not equal *)
+  (lookup_state conc1 v) <> (lookup_state conc2 v))). (* whose final values are not equal *)
 Proof.
   intros p1 p2 f H.
   destruct p1 as [h1 s1 c1 t1] eqn:desp1,
