@@ -1,5 +1,6 @@
 open Z3
 open Z3Solver
+open Interface
 
 let ctx = mk_context []
 let example_1 () =
