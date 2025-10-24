@@ -48,12 +48,13 @@ let sat_check solver =
                   let x = Z3.Arithmetic.Integer.get_big_int v in
                   if (not ((Z.gt x (Z.of_int 255))
                         || (Z.lt x Z.zero))) then
-                    let value = Z.to_int x in
+                    let value = Z.to_int x in (
+                    Printf.printf "%s = %d\n" name value;
                     Interface.VMap (
-                      str_to_coq_str name,
-                      Interface.int8_t (int_to_coq_uint8 value),
+                      Interface.str_to_coq_str name,
+                      Interface.int_to_coq_uint8 value,
                       acc
-                    )
+                    ))
                   else
                     raise (Failure ("Expects uint8 but got OoB value for " ^ name))
                 else
