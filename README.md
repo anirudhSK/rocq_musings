@@ -44,8 +44,8 @@ make -j
 ```
 
 **For OCaml code, to interface with Z3 after extraction**
-* opam install z3
-* ocamlfind ocamlc -thread -package z3 -linkpkg -o smt_query smt_query.ml 
+* opam install z3 ppx_import sexplib ppx_sexp_conv
+* ocamlfind ocamlc -thread -package z3 -linkpkg -o smt_query smt_query.ml
 
 **Build extracted code**
 ```bash
@@ -57,8 +57,8 @@ dune exec eq_check extracted_code/ref/crcr1.out extracted_code/ref/crcr1.out
 dune exec eq_check extracted_code/ref/crcr1.out extracted_code/ref/crcr2.out
 # -> Not Equivalent
 
-# Run a basic Z3 example
-dune exec ex1
+# Run tests
+dune exec run_tests
 ```
 
 
