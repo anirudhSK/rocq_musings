@@ -5,9 +5,9 @@
  (libraries extracted_code_lib))
 
 (executable
- (public_name ex1)
- (name Z3Example)
- (modules Z3Example)
+ (public_name run_tests)
+ (name RunTests)
+ (modules RunTests)
  (libraries extracted_code_lib))
 
 (library
