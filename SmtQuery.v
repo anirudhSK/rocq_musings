@@ -323,18 +323,19 @@ Proof.
   generalize H as H_in.
   apply helper1 with (key_fn := (fun h => crvar_id (hdr_var h))) (val_fn := val_fn) in H.
   intros.
-  destruct h.
+  destruct h eqn:des0.
+  destruct hdr_var eqn:des; try discriminate.
   remember (fun '(key, _) => make_header key) as f.
-  assert(H_tmp: HeaderCtr uid =
-         f (uid, val_fn (HeaderCtr uid))).
-  { rewrite Heqf. reflexivity. }
+  assert(H_tmp: h =
+         f (uid, val_fn (h))).
+  { rewrite Heqf. unfold make_header. rewrite des0.
+    f_equal. apply proof_irrelevance. }
+  rewrite <- des0.
   rewrite H_tmp.
-  apply in_map with (f := f) (x := (uid, val_fn (HeaderCtr uid))) (l := (PTree.elements
-  (PTree_Properties.of_list (combine (map (fun h => match h with | HeaderCtr x => x end) l) (map val_fn l))))).
-  remember (uid, val_fn (HeaderCtr uid)) as pair_val.
-  remember (combine (map (fun h : Header => match h with
-    | HeaderCtr x => x
-  end) l) (map val_fn l)) as l_combined.
+  apply in_map with (f := f) (x := (uid, val_fn h)) (l := (PTree.elements
+  (PTree_Properties.of_list (combine (map (fun h : Header => crvar_id h) l) (map val_fn l))))).
+  remember (uid, val_fn h) as pair_val.
+  remember (combine (map (fun h : Header => crvar_id h) l) (map val_fn l)) as l_combined.
   rewrite Heqpair_val in *.
   apply PTree.elements_correct with (m := PTree_Properties.of_list l_combined).
   apply PTree_Properties.of_list_norepet.
@@ -344,13 +345,25 @@ Proof.
     apply Coqlib.list_map_norepet.
     -- assumption.
     -- intros.
+       unfold crvar_id.
        destruct x.
        destruct y.
        intro H_contra.
        apply H2.
+       destruct hdr_var0; try discriminate.
+       destruct hdr_var1; try discriminate.
+       simpl in H_contra.
+       rewrite H_contra.
        f_equal.
-       assumption.
-  - assumption.
+       apply proof_irrelevance.
+  - simpl in H. rewrite Heqf in H_tmp.
+    unfold make_header in H_tmp.
+    rewrite H_tmp.
+    assert (H1 : {|hdr_var := CrHdr uid; hdr_ok := hdr_ok|} =
+                {|hdr_var := CrHdr uid; hdr_ok := eq_refl|}).
+    { f_equal. apply proof_irrelevance. }
+    rewrite <- H1.
+    assumption.
 Qed.
 
 (* Same as ptree_of_list_lemma_hdr, but for state *)
