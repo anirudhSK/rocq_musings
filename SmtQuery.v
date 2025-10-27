@@ -6,6 +6,7 @@ From MyProject Require Import CrProgramState.
 From MyProject Require Import Maps.
 From MyProject Require Import SmtTypes.
 From MyProject Require Import Integers.
+From MyProject Require Import PMapHelperLemmas.
 Require Import Classical.
 Require Import Coq.Lists.List.
 Require Import Coq.Bool.Bool.
@@ -310,53 +311,6 @@ Proof.
        split; assumption.
   - discriminate H.
   - discriminate H.
-Qed.
-
-Definition injective_contravariant {A B} (f : A -> B) : Prop :=
-  forall x y, x <> y -> f x <> f y.
-
-Lemma ptree_of_list_lemma_generic:
-    forall (X : Type) (get_key : X -> positive)
-    (make_item : positive -> X)
-    (l : list X) (val_fn : X -> SmtArithExpr)
-    (x : X),
-    make_item (get_key x) = x ->
-    injective_contravariant get_key ->
-    Coqlib.list_norepet l ->
-    In x l ->
-    In x (map (fun '(key, _) => make_item key)
-    (PTree.elements (PTree_Properties.of_list (combine (map get_key l) (map val_fn l))))).
-Proof.
-  intros X get_key make_item l val_fn x inverses inj_conv H' H.
-  generalize H as H_in.
-  apply functional_list_helper with (key_fn := get_key) (val_fn := val_fn) in H.
-  intros.
-  remember (fun '(key, _) => make_item key) as f.
-  assert(H_tmp: x =
-          f (get_key x, val_fn (x))). {
-  rewrite Heqf.
-  rewrite inverses.
-  reflexivity. }
-  rewrite H_tmp.
-  apply in_map with (f := f) (x := (get_key x, val_fn x)) (l := (PTree.elements
-  (PTree_Properties.of_list (combine (map get_key l) (map val_fn l))))).
-  remember (get_key x, val_fn x) as pair_val.
-  remember (combine (map get_key l) (map val_fn l)) as l_combined.
-  rewrite Heqpair_val in *.
-  apply PTree.elements_correct with (m := PTree_Properties.of_list l_combined).
-  apply PTree_Properties.of_list_norepet.
-  - rewrite Heql_combined.
-    simpl.
-    rewrite map_combine2.
-    apply Coqlib.list_map_norepet.
-    -- assumption.
-    -- intros.
-       apply inj_conv.
-       assumption.
-  - simpl in H. rewrite Heqf in H_tmp.
-    rewrite H_tmp.
-    rewrite inverses.
-    assumption.
 Qed.
 
 Lemma ptree_of_list_lemma_hdr :

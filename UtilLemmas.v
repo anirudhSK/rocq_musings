@@ -105,3 +105,6 @@ Proof.
   - reflexivity.
   - simpl. f_equal. apply IH.
 Qed.
+
+Definition injective_contravariant {A B} (f : A -> B) : Prop :=
+  forall x y, x <> y -> f x <> f y.
