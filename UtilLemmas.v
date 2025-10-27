@@ -78,7 +78,7 @@ Proof.
 Qed.
 
 Definition unzip_paired_list_hdr (l : list (positive * SmtArithExpr)) : list Header :=
-  map (fun x => HeaderCtr (fst x)) l.
+  map (fun x => make_header (fst x)) l.
 
 Lemma helper1 :
   forall (l : list Header) (key_fn : Header -> positive) (val_fn : Header -> SmtArithExpr) (h : Header),

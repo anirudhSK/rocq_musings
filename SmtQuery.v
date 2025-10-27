@@ -316,15 +316,15 @@ Lemma ptree_of_list_lemma_hdr :
     forall (l : list Header) (val_fn : Header -> SmtArithExpr) (h: Header),
     Coqlib.list_norepet l ->
     In h l ->
-    In h (map (fun '(key, _) => HeaderCtr key)    
-     (PTree.elements (PTree_Properties.of_list (combine (map (fun h => match h with | HeaderCtr x => x end) l) (map val_fn l))))).
+    In h (map (fun '(key, _) => make_header key)
+     (PTree.elements (PTree_Properties.of_list (combine (map (fun h => crvar_id (hdr_var h)) l) (map val_fn l))))).
 Proof.
   intros l val_fn h H' H. (* apply in_map with (f := fun pos => (pos, key_fn) in H. *)
   generalize H as H_in.
-  apply helper1 with (key_fn := (fun h => match h with | HeaderCtr x => x end)) (val_fn := val_fn) in H.
+  apply helper1 with (key_fn := (fun h => crvar_id (hdr_var h))) (val_fn := val_fn) in H.
   intros.
   destruct h.
-  remember (fun '(key, _) => HeaderCtr key) as f.
+  remember (fun '(key, _) => make_header key) as f.
   assert(H_tmp: HeaderCtr uid =
          f (uid, val_fn (HeaderCtr uid))).
   { rewrite Heqf. reflexivity. }
