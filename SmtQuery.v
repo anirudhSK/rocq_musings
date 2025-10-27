@@ -367,45 +367,60 @@ Proof.
 Qed.
 
 (* Same as ptree_of_list_lemma_hdr, but for state *)
+(* Copy down the theorem and proof from ptree_of_list_lemma_hdr above,
+   but make the right changes from header to state *)
 Lemma ptree_of_list_lemma_state :
-  forall (l : list State) (val_fn : State -> SmtArithExpr) (sv: State),
-  Coqlib.list_norepet l ->
-  In sv l ->
-  In sv (map (fun '(key, _) => StateCtr key)    
-   (PTree.elements (PTree_Properties.of_list (combine (map (fun sv => match sv with | StateCtr x => x end) l) (map val_fn l))))).
+    forall (l : list State) (val_fn : State -> SmtArithExpr) (sv: State),
+    Coqlib.list_norepet l ->
+    In sv l ->
+    In sv (map (fun '(key, _) => make_state key)
+     (PTree.elements (PTree_Properties.of_list (combine (map (fun sv => crvar_id (st_var sv)) l) (map val_fn l))))).
 Proof.
   intros l val_fn sv H' H. (* apply in_map with (f := fun pos => (pos, key_fn) in H. *)
   generalize H as H_in.
-  apply helper1_state with (key_fn := (fun sv => match sv with | StateCtr x => x end)) (val_fn := val_fn) in H.
+  apply helper1_state with (key_fn := (fun sv => crvar_id (st_var sv))) (val_fn := val_fn) in H.
   intros.
-  destruct sv.
-  remember (fun '(key, _) => StateCtr key) as f.
-  assert(H_tmp: StateCtr uid =
-     f (uid, val_fn (StateCtr uid))).
-  { rewrite Heqf. reflexivity. }
+  destruct sv eqn:des0.
+  destruct st_var eqn:des; try discriminate.
+  remember (fun '(key, _) => make_state key) as f.
+  assert(H_tmp: sv =
+         f (uid, val_fn (sv))).
+  { rewrite Heqf. unfold make_state. rewrite des0.
+    f_equal. apply proof_irrelevance. }
+  rewrite <- des0.
   rewrite H_tmp.
-  apply in_map with (f := f) (x := (uid, val_fn (StateCtr uid))) (l := (PTree.elements
-  (PTree_Properties.of_list (combine (map (fun sv : State => match sv with
-  | StateCtr x => x
-  end) l) (map val_fn l))))).
-  remember (uid, val_fn (StateCtr uid)) as pair_val.
-  remember (combine (map (fun sv : State => match sv with | StateCtr x => x end) l) (map val_fn l)) as l_combined.
+  apply in_map with (f := f) (x := (uid, val_fn sv)) (l := (PTree.elements
+  (PTree_Properties.of_list (combine (map (fun sv : State => crvar_id sv) l) (map val_fn l))))).
+  remember (uid, val_fn sv) as pair_val.
+  remember (combine (map (fun sv : State => crvar_id sv) l) (map val_fn l)) as l_combined.
   rewrite Heqpair_val in *.
   apply PTree.elements_correct with (m := PTree_Properties.of_list l_combined).
   apply PTree_Properties.of_list_norepet.
   - rewrite Heql_combined.
-  simpl.
-  rewrite map_combine2.
-  apply Coqlib.list_map_norepet.
-  -- assumption.
-  -- intros.
-     destruct x.
-     destruct y.
-     intro H_contra.
-     apply H2.
-     f_equal.
-     assumption.
-  - assumption.
+    simpl.
+    rewrite map_combine2.
+    apply Coqlib.list_map_norepet.
+    -- assumption.
+    -- intros.
+       unfold crvar_id.
+       destruct x.
+       destruct y.
+       intro H_contra.
+       apply H2.
+       destruct st_var0; try discriminate.
+       destruct st_var1; try discriminate.
+       simpl in H_contra.
+       rewrite H_contra.
+       f_equal.
+       apply proof_irrelevance.
+  - simpl in H. rewrite Heqf in H_tmp.
+    unfold make_state in H_tmp.
+    rewrite H_tmp.
+    assert (H1 : {|st_var := CrState uid; st_ok := st_ok|} =
+                {|st_var := CrState uid; st_ok := eq_refl|}).
+    { f_equal. apply proof_irrelevance. }
+    rewrite <- H1.
+    assumption.
 Qed.
 
 Lemma init_symbolic_state_nodep_t : forall h s c t1 t2,
