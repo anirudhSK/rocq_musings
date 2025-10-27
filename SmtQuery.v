@@ -312,30 +312,36 @@ Proof.
   - discriminate H.
 Qed.
 
-Lemma ptree_of_list_lemma_hdr :
-    forall (l : list Header) (val_fn : Header -> SmtArithExpr) (h: Header),
+Definition injective_contravariant {A B} (f : A -> B) : Prop :=
+  forall x y, x <> y -> f x <> f y.
+
+Lemma ptree_of_list_lemma_generic:
+    forall (X : Type) (get_key : X -> positive)
+    (make_item : positive -> X)
+    (l : list X) (val_fn : X -> SmtArithExpr)
+    (x : X),
+    make_item (get_key x) = x ->
+    injective_contravariant get_key ->
     Coqlib.list_norepet l ->
-    In h l ->
-    In h (map (fun '(key, _) => make_header key)
-     (PTree.elements (PTree_Properties.of_list (combine (map (fun h => crvar_id (hdr_var h)) l) (map val_fn l))))).
+    In x l ->
+    In x (map (fun '(key, _) => make_item key)
+    (PTree.elements (PTree_Properties.of_list (combine (map get_key l) (map val_fn l))))).
 Proof.
-  intros l val_fn h H' H. (* apply in_map with (f := fun pos => (pos, key_fn) in H. *)
+  intros X get_key make_item l val_fn x inverses inj_conv H' H.
   generalize H as H_in.
-  apply helper1 with (key_fn := (fun h => crvar_id (hdr_var h))) (val_fn := val_fn) in H.
+  apply functional_list_helper with (key_fn := get_key) (val_fn := val_fn) in H.
   intros.
-  destruct h eqn:des0.
-  destruct hdr_var eqn:des; try discriminate.
-  remember (fun '(key, _) => make_header key) as f.
-  assert(H_tmp: h =
-         f (uid, val_fn (h))).
-  { rewrite Heqf. unfold make_header. rewrite des0.
-    f_equal. apply proof_irrelevance. }
-  rewrite <- des0.
+  remember (fun '(key, _) => make_item key) as f.
+  assert(H_tmp: x =
+          f (get_key x, val_fn (x))). {
+  rewrite Heqf.
+  rewrite inverses.
+  reflexivity. }
   rewrite H_tmp.
-  apply in_map with (f := f) (x := (uid, val_fn h)) (l := (PTree.elements
-  (PTree_Properties.of_list (combine (map (fun h : Header => crvar_id h) l) (map val_fn l))))).
-  remember (uid, val_fn h) as pair_val.
-  remember (combine (map (fun h : Header => crvar_id h) l) (map val_fn l)) as l_combined.
+  apply in_map with (f := f) (x := (get_key x, val_fn x)) (l := (PTree.elements
+  (PTree_Properties.of_list (combine (map get_key l) (map val_fn l))))).
+  remember (get_key x, val_fn x) as pair_val.
+  remember (combine (map get_key l) (map val_fn l)) as l_combined.
   rewrite Heqpair_val in *.
   apply PTree.elements_correct with (m := PTree_Properties.of_list l_combined).
   apply PTree_Properties.of_list_norepet.
@@ -345,25 +351,45 @@ Proof.
     apply Coqlib.list_map_norepet.
     -- assumption.
     -- intros.
-       unfold crvar_id.
-       destruct x.
-       destruct y.
-       intro H_contra.
-       apply H2.
-       destruct hdr_var0; try discriminate.
-       destruct hdr_var1; try discriminate.
-       simpl in H_contra.
-       rewrite H_contra.
-       f_equal.
-       apply proof_irrelevance.
+       apply inj_conv.
+       assumption.
   - simpl in H. rewrite Heqf in H_tmp.
-    unfold make_header in H_tmp.
     rewrite H_tmp.
-    assert (H1 : {|hdr_var := CrHdr uid; hdr_ok := hdr_ok|} =
-                {|hdr_var := CrHdr uid; hdr_ok := eq_refl|}).
-    { f_equal. apply proof_irrelevance. }
-    rewrite <- H1.
+    rewrite inverses.
     assumption.
+Qed.
+
+Lemma ptree_of_list_lemma_hdr :
+    forall (l : list Header) (val_fn : Header -> SmtArithExpr) (h: Header),
+    Coqlib.list_norepet l ->
+    In h l ->
+    In h (map (fun '(key, _) => make_header key)
+     (PTree.elements (PTree_Properties.of_list (combine (map (fun h => crvar_id (hdr_var h)) l) (map val_fn l))))).
+Proof.
+  intros l val_fn h H' H.
+  apply ptree_of_list_lemma_generic.
+  - unfold make_header, crvar_id.
+    unfold hdr_var.
+    simpl.
+    destruct h eqn:des.
+    destruct hdr_var eqn:des_var; try discriminate.
+    f_equal.
+    apply proof_irrelevance.
+  - unfold injective_contravariant.
+    intros x y H_neq.
+    destruct x, y.
+    intro H_contra.
+    destruct hdr_var, hdr_var0; try discriminate.
+    simpl in H_contra.
+    rewrite H_contra in H_neq.
+    assert (H_tmp : {| hdr_var := CrHdr uid0; hdr_ok := hdr_ok |}=
+                     {| hdr_var := CrHdr uid0; hdr_ok := hdr_ok0 |}). {
+      f_equal. apply proof_irrelevance.
+    }
+    rewrite H_tmp in H_neq.
+    congruence.
+  - assumption.
+  - assumption.
 Qed.
 
 (* Same as ptree_of_list_lemma_hdr, but for state *)
@@ -376,51 +402,30 @@ Lemma ptree_of_list_lemma_state :
     In sv (map (fun '(key, _) => make_state key)
      (PTree.elements (PTree_Properties.of_list (combine (map (fun sv => crvar_id (st_var sv)) l) (map val_fn l))))).
 Proof.
-  intros l val_fn sv H' H. (* apply in_map with (f := fun pos => (pos, key_fn) in H. *)
-  generalize H as H_in.
-  apply helper1_state with (key_fn := (fun sv => crvar_id (st_var sv))) (val_fn := val_fn) in H.
-  intros.
-  destruct sv eqn:des0.
-  destruct st_var eqn:des; try discriminate.
-  remember (fun '(key, _) => make_state key) as f.
-  assert(H_tmp: sv =
-         f (uid, val_fn (sv))).
-  { rewrite Heqf. unfold make_state. rewrite des0.
-    f_equal. apply proof_irrelevance. }
-  rewrite <- des0.
-  rewrite H_tmp.
-  apply in_map with (f := f) (x := (uid, val_fn sv)) (l := (PTree.elements
-  (PTree_Properties.of_list (combine (map (fun sv : State => crvar_id sv) l) (map val_fn l))))).
-  remember (uid, val_fn sv) as pair_val.
-  remember (combine (map (fun sv : State => crvar_id sv) l) (map val_fn l)) as l_combined.
-  rewrite Heqpair_val in *.
-  apply PTree.elements_correct with (m := PTree_Properties.of_list l_combined).
-  apply PTree_Properties.of_list_norepet.
-  - rewrite Heql_combined.
+  intros l val_fn sv H' H.
+  apply ptree_of_list_lemma_generic.
+  - unfold make_state, crvar_id.
+    unfold st_var.
     simpl.
-    rewrite map_combine2.
-    apply Coqlib.list_map_norepet.
-    -- assumption.
-    -- intros.
-       unfold crvar_id.
-       destruct x.
-       destruct y.
-       intro H_contra.
-       apply H2.
-       destruct st_var0; try discriminate.
-       destruct st_var1; try discriminate.
-       simpl in H_contra.
-       rewrite H_contra.
-       f_equal.
-       apply proof_irrelevance.
-  - simpl in H. rewrite Heqf in H_tmp.
-    unfold make_state in H_tmp.
-    rewrite H_tmp.
-    assert (H1 : {|st_var := CrState uid; st_ok := st_ok|} =
-                {|st_var := CrState uid; st_ok := eq_refl|}).
-    { f_equal. apply proof_irrelevance. }
-    rewrite <- H1.
-    assumption.
+    destruct sv eqn:des.
+    destruct st_var eqn:des_var; try discriminate.
+    f_equal.
+    apply proof_irrelevance.
+  - unfold injective_contravariant.
+    intros x y H_neq.
+    destruct x, y.
+    intro H_contra.
+    destruct st_var, st_var0; try discriminate.
+    simpl in H_contra.
+    rewrite H_contra in H_neq.
+    assert (H_tmp : {| st_var := CrState uid0; st_ok := st_ok |}=
+                     {| st_var := CrState uid0; st_ok := st_ok0 |}). {
+      f_equal. apply proof_irrelevance.
+    }
+    rewrite H_tmp in H_neq.
+    congruence.
+  - assumption.
+  - assumption.
 Qed.
 
 Lemma init_symbolic_state_nodep_t : forall h s c t1 t2,

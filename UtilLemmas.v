@@ -80,29 +80,13 @@ Qed.
 Definition unzip_paired_list_hdr (l : list (positive * SmtArithExpr)) : list Header :=
   map (fun x => make_header (fst x)) l.
 
-Lemma helper1 :
-  forall (l : list Header) (key_fn : Header -> positive) (val_fn : Header -> SmtArithExpr) (h : Header),
-  In h l ->
-  In (key_fn h, val_fn h) (combine (map key_fn l) (map val_fn l)).
+Lemma functional_list_helper :
+  forall (X : Type) (l : list X) (key_fn : X -> positive) (val_fn : X -> SmtArithExpr) (x : X),
+  In x l ->
+  In (key_fn x, val_fn x) (combine (map key_fn l) (map val_fn l)).
 Proof.
-  intros l key_fn val_fn h H_in.
-  induction l as [|h' t IH].
-  - simpl in H_in. exfalso. congruence.
-  - simpl.
-    simpl in H_in.
-    destruct H_in.
-    -- left. rewrite H. reflexivity.
-    -- right. apply IH. assumption.
-Qed.
-
-(* Same as helper1 but for state *)
-Lemma helper1_state :
-  forall (l : list State) (key_fn : State -> positive) (val_fn : State -> SmtArithExpr) (sv : State),
-  In sv l ->
-  In (key_fn sv, val_fn sv) (combine (map key_fn l) (map val_fn l)).
-Proof.
-  intros l key_fn val_fn sv H_in.
-  induction l as [|sv' t IH].
+  intros X l key_fn val_fn x H_in.
+  induction l as [|x' t IH].
   - simpl in H_in. exfalso. congruence.
   - simpl.
     simpl in H_in.
