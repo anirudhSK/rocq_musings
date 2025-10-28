@@ -57,7 +57,7 @@ Definition injective_contravariant {A B} (f : A -> B) : Prop :=
 Class CrVarLike (A : Type) := {
   make_item : positive -> A;
   get_key   : A -> positive;
-  inverses : forall x, make_item (get_key x) = x;
+  inverses : forall (x : A), make_item (get_key x) = x;
   inj : injective_contravariant get_key;
 }.
 

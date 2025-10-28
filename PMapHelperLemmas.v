@@ -41,18 +41,15 @@ Proof.
 Qed.
 
 Lemma ptree_of_list_lemma_generic:
-    forall (X : Type) (get_key : X -> positive)
-    (make_item : positive -> X)
+    forall (X : Type) `(CrVarLike X)
     (l : list X) (val_fn : X -> SmtArithExpr)
     (x : X),
-    make_item (get_key x) = x ->
-    injective_contravariant get_key ->
     Coqlib.list_norepet l ->
     In x l ->
     In x (map (fun '(key, _) => make_item key)
     (PTree.elements (PTree_Properties.of_list (combine (map get_key l) (map val_fn l))))).
 Proof.
-  intros X get_key make_item l val_fn x inverses inj_conv H' H.
+  intros X crvarlike l val_fn x H' H.
   generalize H as H_in.
   apply functional_list_helper with (key_fn := get_key) (val_fn := val_fn) in H.
   intros.
@@ -60,7 +57,10 @@ Proof.
   assert(H_tmp: x =
           f (get_key x, val_fn (x))). {
   rewrite Heqf.
-  rewrite inverses.
+  Print CrVarLike.
+  Check CrVarLike.
+  Check inverses x.
+  rewrite (inverses x).
   reflexivity. }
   rewrite H_tmp.
   apply in_map with (f := f) (x := (get_key x, val_fn x)) (l := (PTree.elements
@@ -76,7 +76,7 @@ Proof.
     apply Coqlib.list_map_norepet.
     -- assumption.
     -- intros.
-       apply inj_conv.
+       apply (inj x0 y).
        assumption.
   - simpl in H. rewrite Heqf in H_tmp.
     rewrite H_tmp.
