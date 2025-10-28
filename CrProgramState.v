@@ -34,10 +34,10 @@ Definition SymbolicState := ProgramState SmtArithExpr.
 (* TODO: lookup_hdr/state_map could be rolled into lookup_hdr/state. *)
 (* TODO: It is used in a proof with a giant remember expression. *)
 Definition lookup_hdr_map {T : Type} (m: HeaderMap T) (x: Header) : T :=
-  PMap.get (crvar_id x) m.
+  PMap.get (match x with HeaderCtr uid => uid end) m.
 
 Definition lookup_state_map {T : Type} (m: StateMap T) (x: State) : T :=
-  PMap.get (crvar_id x) m.
+  PMap.get (match x with StateCtr uid => uid end) m.
 
 Definition lookup_hdr {T : Type} (s: ProgramState T) (x: Header) : T :=
   lookup_hdr_map (header_map s) x.
@@ -46,7 +46,7 @@ Definition lookup_state {T : Type} (s: ProgramState T) (x: State) : T :=
   lookup_state_map (state_map s) x.
 
 Definition lookup_ctrl {T : Type} (s: ProgramState T) (x: Ctrl) : T :=
-  PMap.get (crvar_id x) (ctrl_map s).
+  PMap.get (match x with CtrlCtr uid => uid end) (ctrl_map s).
 
 Lemma program_state_equality:
       forall (ps1 ps2: ConcreteState),
@@ -75,21 +75,21 @@ Definition new_pmap_from_old {T: Type} (old_pmap : PMap.t T) (f : positive -> T)
 
 Definition update_all_hdrs {T : Type} (s: ProgramState T) (fh: Header -> T) : ProgramState T :=
   {| ctrl_map := ctrl_map s;
-     header_map := new_pmap_from_old (header_map s) (fun pos => fh (make_header pos));
+     header_map := new_pmap_from_old (header_map s) (fun pos => fh (HeaderCtr pos));
      state_map := state_map s |}.
 
 Definition update_all_states {T : Type} (s: ProgramState T) (fs: State -> T) : ProgramState T :=
   {| ctrl_map := ctrl_map s;
      header_map := header_map s;
-     state_map := new_pmap_from_old (state_map s) (fun pos => fs (make_state pos))|}.
+     state_map := new_pmap_from_old (state_map s) (fun pos => fs (StateCtr pos))|}.
 
 (* Update the header map with a new value for a specific header *)
 Definition update_hdr_map {T : Type} (m: HeaderMap T) (x: Header) (v: T) : HeaderMap T :=
-  PMap.set (crvar_id x) v m.
+  PMap.set (match x with HeaderCtr uid => uid end) v m.
 
 (* Same as above, but for state variables *)
 Definition update_state_map {T : Type} (m: StateMap T) (x: State) (v: T) : StateMap T :=
-  PMap.set (crvar_id x) v m.
+  PMap.set (match x with StateCtr uid => uid end) v m.
 
 Definition update_hdr {T : Type} (s: ProgramState T) (x: Header) (v: T) : ProgramState T :=
   {|ctrl_map :=ctrl_map s;
@@ -226,7 +226,7 @@ Proof.
   rewrite PTree.gsspec.
   rewrite PTree.gmap1.
   rewrite PTree.gsspec.
-  destruct (Coqlib.peq i (crvar_id hdr_var)).
+  destruct (Coqlib.peq i uid).
   - subst. reflexivity.
   - rewrite PTree.gmap1.
     reflexivity.
@@ -256,7 +256,7 @@ Proof.
   rewrite PTree.gsspec.
   rewrite PTree.gmap1.
   rewrite PTree.gsspec.
-  destruct (Coqlib.peq i (crvar_id st_var)).
+  destruct (Coqlib.peq i uid).
   - subst. reflexivity.
   - rewrite PTree.gmap1.
     reflexivity.
@@ -270,7 +270,7 @@ Proof.
 Qed.
 
 Definition is_header_in_ps {T} (s1 : ProgramState T) (h : Header) :=
-  PTree.get (crvar_id h) (snd (header_map s1)).
+  PTree.get (match h with | HeaderCtr id => id end) (snd (header_map s1)).
 
 Require Import Coq.Logic.ProofIrrelevance.
 Lemma lookup_hdr_after_update_all_hdrs:
@@ -296,15 +296,8 @@ Proof.
   destruct h.
   simpl.
   simpl in H.
-  destruct (hdr ! (crvar_id hdr_var)) eqn:des; auto.
-  - unfold make_header.
-    unfold crvar_id.
-    simpl.
-    destruct hdr_var; try discriminate.
-    f_equal.
-    f_equal.
-    apply proof_irrelevance.
-  - congruence.
+  destruct (hdr ! uid) eqn:des; auto.
+  congruence.
 Qed.
 
 (* Create mirror image versions of the two lemmas above with state and hdr interchanged *)
@@ -316,7 +309,7 @@ Proof.
 Qed.
 
 Definition is_state_var_in_ps {T} (s1 : ProgramState T) (sv : State) :=
-  PTree.get (crvar_id sv) (snd (state_map s1)).
+  PTree.get (match sv with StateCtr uid => uid end) (snd (state_map s1)).
 
 Lemma lookup_state_after_update_all_states:
   forall {T} (s1 : ProgramState T) (sv : State) (fs : State -> T),
@@ -341,15 +334,8 @@ Proof.
   destruct sv.
   simpl.
   simpl in H.
-  destruct (sv_map ! (crvar_id st_var)) eqn:des; auto.
-  - unfold make_state.
-    unfold crvar_id.
-    simpl.
-    destruct st_var; try discriminate.
-    f_equal.
-    f_equal.
-    apply proof_irrelevance.
-  - congruence.
+  destruct (sv_map ! uid) eqn:des; auto.
+  congruence.
 Qed.
 
 Lemma commute_state_hdr_updates:
@@ -395,15 +381,15 @@ Proof.
 Qed.
 
 Definition get_all_headers_from_ps {T : Type} (s: ProgramState T) : list Header :=
-  List.map (fun '(key, value) => make_header key)
+  List.map (fun '(key, value) => HeaderCtr key)
            (PTree.elements (snd (header_map s))).
 
 Definition get_all_states_from_ps {T : Type} (s: ProgramState T) : list State :=
-  List.map (fun '(key, value) => make_state key)
+  List.map (fun '(key, value) => StateCtr key)
            (PTree.elements (snd (state_map s))).
 
 Definition get_all_ctrls_from_ps {T : Type} (s: ProgramState T) : list Ctrl :=
-  List.map (fun '(key, value) => make_ctrl key)
+  List.map (fun '(key, value) => CtrlCtr key)
            (PTree.elements (snd (ctrl_map s))).
 
 Lemma is_header_in_ps_lemma :
@@ -426,11 +412,9 @@ Proof.
   destruct h.
   destruct H.
   injection H as H_eq.
+  rewrite <- H_eq.
   apply some_is_not_none with (x := t).
   apply PTree.elements_complete.
-  unfold crvar_id.
-  simpl.
-  rewrite <- H_eq.
   assumption.
 Qed.
 
@@ -454,11 +438,9 @@ Proof.
   destruct sv.
   destruct H.
   injection H as H_eq.
+  rewrite <- H_eq.
   apply some_is_not_none with (x := t).
   apply PTree.elements_complete.
-  unfold crvar_id.
-  simpl.
-  rewrite <- H_eq.
   assumption.
 Qed.
 
@@ -466,15 +448,15 @@ Definition init_concrete_state (p : CaracaraProgram) : ConcreteState :=
   let h := get_headers_from_prog p in
   let s := get_states_from_prog p in
   let c := get_ctrls_from_prog p in
-  {|ctrl_map :=  (repr 0, (* TODO: Need better default, but think this doesn't matter *)
-                        PTree_Properties.of_list
-                        (List.map (fun x => (crvar_id (ctrl_var x), repr 0)) c));
-     header_map     :=  (repr 0, (* TODO: Need better default, but think this doesn't matter *)
-                        PTree_Properties.of_list
-                        (List.map (fun x => (crvar_id (hdr_var x), repr 0)) h));
+  {|ctrl_map    :=  (repr 0, (* TODO: Need better default, but think this doesn't matter *)
+                    PTree_Properties.of_list
+                    (List.map (fun x => (match x with CtrlCtr uid => uid end, repr 0)) c));
+     header_map :=  (repr 0, (* TODO: Need better default, but think this doesn't matter *)
+                    PTree_Properties.of_list
+                    (List.map (fun x => (match x with HeaderCtr uid => uid end, repr 0)) h));
      state_map  :=  (repr 0,
-                        PTree_Properties.of_list
-                        (List.map (fun x => (crvar_id (st_var x), repr 0)) s));|}.
+                    PTree_Properties.of_list
+                    (List.map (fun x => (match x with StateCtr uid => uid end, repr 0)) s));|}.
 
 (* Convert positive to string *)
 Fixpoint pos_to_string (p : positive) : string :=
@@ -490,13 +472,13 @@ Definition init_symbolic_state (p: CaracaraProgram) : SymbolicState :=
   let c := get_ctrls_from_prog p in
   {|ctrl_map :=  (SmtArithVar "rndstring", (*TODO: Need better default, but think this doesn't matter *)
                         PTree_Properties.of_list
-                        (List.map (fun x => let var := crvar_id (ctrl_var x) in (var,  SmtArithVar (pos_to_string var))) c));
+                        (List.map (fun x => let var := match x with CtrlCtr uid => uid end in (var,  SmtArithVar (pos_to_string var))) c));
      header_map     :=  (SmtArithVar "rndstring", (*TODO: Need better default, but think this doesn't matter *)
                         PTree_Properties.of_list
-                        (List.map (fun x => let var := crvar_id (hdr_var x) in (var, SmtArithVar (pos_to_string var))) h));
+                        (List.map (fun x => let var := match x with HeaderCtr uid => uid end in (var, SmtArithVar (pos_to_string var))) h));
      state_map  :=  (SmtArithVar "rndstring", (*TODO: Need better default, but think this doesn't matter *)
                         PTree_Properties.of_list
-                        (List.map (fun x => let var := crvar_id (st_var x) in (var, SmtArithVar (pos_to_string var))) s));|}.
+                        (List.map (fun x => let var := match x with StateCtr uid => uid end in (var, SmtArithVar (pos_to_string var))) s));|}.
 
 Definition is_init_state {T} (p : CaracaraProgram) (ps : ProgramState T) : Prop :=
   forall h sv c,

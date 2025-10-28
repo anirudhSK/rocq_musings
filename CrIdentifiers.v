@@ -13,44 +13,9 @@ Inductive ParserState : Type := ParserStateCtr (uid : positive).
 Inductive ModuleName : Type := ModuleNameCtr (uid : positive).
 Inductive FunctionName : Type := FunctionNameCtr (uid : positive).
 Inductive ConnectionName : Type := ConnectionNameCtr (uid : positive).
-
-(* Unified CrVar that represents Header / State / Ctrl identifiers *)
-Inductive CrVar : Type :=
-| CrHdr  (uid : positive)
-| CrState (uid : positive)
-| CrCtrl  (uid : positive).
-
-(* Projection to the underlying uid *)
-Definition crvar_id (v: CrVar) : positive :=
-  match v with
-  | CrHdr uid => uid
-  | CrState uid => uid
-  | CrCtrl uid => uid
-  end.
-
-(* Kind predicates (bools are convenient for decisions and proofs) *)
-Definition is_header (v: CrVar) : bool :=
-  match v with CrHdr _ => true | _ => false end.
-Definition is_state (v: CrVar) : bool :=
-  match v with CrState _ => true | _ => false end.
-Definition is_ctrl (v: CrVar) : bool :=
-  match v with CrCtrl _ => true | _ => false end.
-
-(* Wrapper records that carry the invariant that the CrVar is of the expected kind.
-   Keeping the old names (Header / State / Ctrl) lets other modules remain largely unchanged. *)
-Record Header := mkHeader { hdr_var : CrVar; hdr_ok : is_header hdr_var = true }.
-Record State  := mkState  { st_var  : CrVar; st_ok  : is_state st_var = true }.
-Record Ctrl   := mkCtrl   { ctrl_var : CrVar; ctrl_ok : is_ctrl ctrl_var = true }.
-
-(* Coercions allow a Header/State/Ctrl to be used where CrVar is expected *)
-Coercion hdr_var : Header >-> CrVar.
-Coercion st_var  : State  >-> CrVar.
-Coercion ctrl_var: Ctrl   >-> CrVar.
-
-(* Smart constructors for easy construction where the underlying invariant is evident *)
-Definition make_header (uid : positive) : Header := mkHeader (CrHdr uid) eq_refl.
-Definition make_state  (uid : positive) : State  := mkState  (CrState uid) eq_refl.
-Definition make_ctrl   (uid : positive) : Ctrl   := mkCtrl   (CrCtrl uid) eq_refl.
+Inductive Header : Type := HeaderCtr (uid : positive).
+Inductive State : Type := StateCtr (uid : positive).
+Inductive Ctrl : Type := CtrlCtr (uid : positive).
 
 Definition injective_contravariant {A B} (f : A -> B) : Prop :=
   forall x y, x <> y -> f x <> f y.
@@ -64,65 +29,34 @@ Class CrVarLike (A : Type) := {
 
 Instance CrVarLike_Header : CrVarLike Header.
 Proof.
-  refine {| make_item := make_header;
-            get_key := fun h => crvar_id (hdr_var h);
+  refine {| make_item := fun uid => HeaderCtr uid;
+            get_key := fun h => match h with HeaderCtr uid => uid end;
             inverses := _;
             inj := _ |}.
   - (* inverses : forall x, make_item (get_key x) = x *)
-    intros [v p]. simpl.
-    destruct v; simpl in p; try discriminate.
-    simpl.
-    unfold make_header.
-    f_equal.
-    apply proof_irrelevance.
+    intros [uid]. simpl. reflexivity.
   - (* inj : injective_contravariant get_key *)
     intros x y Hxy Heq.
-    destruct x as [v1 p1], y as [v2 p2]; simpl in Heq.
-    destruct v1; destruct v2; simpl in Heq; try discriminate.
+    destruct x as [uid1], y as [uid2]; simpl in Heq.
     rewrite Heq in Hxy.
-    assert (Htmp : {| hdr_var := CrHdr uid0; hdr_ok := p1 |} = {| hdr_var := CrHdr uid0; hdr_ok := p2 |}). { 
-      f_equal.
-      apply proof_irrelevance.
-    }
-    rewrite Htmp in Hxy.
     congruence.
 Defined.
 
 (* Do the same as CrVarLike Header, but for CrVarLike State *)
 Instance CrVarLike_State : CrVarLike State.
 Proof.
-  refine {| make_item := make_state;
-            get_key := fun s => crvar_id (st_var s);
+  refine {| make_item := fun uid => StateCtr uid;
+            get_key := fun s => match s with StateCtr uid => uid end;
             inverses := _;
             inj := _ |}.
   - (* inverses : forall x, make_item (get_key x) = x *)
-    intros [v p]. simpl.
-    destruct v; simpl in p; try discriminate.
-    simpl.
-    unfold make_state.
-    f_equal.
-    apply proof_irrelevance.
+    intros [uid]. simpl. reflexivity.
   - (* inj : injective_contravariant get_key *)
     intros x y Hxy Heq.
-    destruct x as [v1 p1], y as [v2 p2]; simpl  in Heq.
-    destruct v1; destruct v2; simpl in Heq; try discriminate.
+    destruct x as [uid1], y as [uid2]; simpl in Heq.
     rewrite Heq in Hxy.
-    assert (Htmp : {| st_var := CrState uid0; st_ok := p1 |} = {| st_var := CrState uid0; st_ok := p2 |}). { 
-      f_equal.
-      apply proof_irrelevance.
-    }
-    rewrite Htmp in Hxy.
     congruence.
 Defined.
-
-(* Convenience equality test on CrVar by id and constructor tag *)
-Definition crvar_eqb (a b : CrVar) : bool :=
-  match a, b with
-  | CrHdr sa,   CrHdr sb   => Pos.eqb sa sb
-  | CrState sa, CrState sb => Pos.eqb sa sb
-  | CrCtrl sa,  CrCtrl sb  => Pos.eqb sa sb
-  | _, _ => false
-  end.
 
 (* Equality check functions for the identifiers above *)
 Definition parser_state_equal (p1 p2 : ParserState) :=
@@ -137,11 +71,15 @@ Definition parser_state_equal' (p1 p2 : ParserState) :=
 
 (* Do the same thing as parser_state_equal for Header *)
 Definition header_equal (h1 h2 : Header) :=
-    crvar_eqb h1 h2.
+    match h1, h2 with
+    | HeaderCtr xid, HeaderCtr yid => Pos.eqb xid yid
+    end.
 
 (* Do the same thing as parser_state_equal for State *)
 Definition state_equal (sv1 sv2 : State) :=
-    crvar_eqb sv1 sv2.
+    match sv1, sv2 with
+    | StateCtr xid, StateCtr yid => Pos.eqb xid yid
+    end.
 
 (* Do the same thing as parser_state_equal for ModuleName *)
 Definition module_name_equal (m1 m2 : ModuleName) :=
@@ -163,7 +101,9 @@ Definition connection_name_equal (c1 c2 : ConnectionName) :=
 
 (* Do the same thing as parser_state_equal for Ctrl *)
 Definition ctrl_equal (cc1 cc2 : Ctrl) :=
-    crvar_eqb cc1 cc2.
+    match cc1, cc2 with
+    | CtrlCtr xid, CtrlCtr yid => Pos.eqb xid yid
+    end.
 
 Require Import Coq.Logic.ProofIrrelevance.
 
@@ -172,10 +112,9 @@ Lemma header_equal_lemma :
   header_equal h1 h2 = true ->
   h1 = h2.
 Proof.
-  intros [v1 p1] [v2 p2] H.
-  unfold header_equal, crvar_eqb in H. simpl in H.
-  destruct v1; destruct v2; simpl in H; try discriminate.
-  apply Pos.eqb_eq in H. subst. f_equal. apply proof_irrelevance.
+  intros [uid1] [uid2] H.
+  unfold header_equal in H. simpl in H.
+  rewrite Pos.eqb_eq in H. subst. reflexivity.
 Qed.
 
 Fixpoint hdr_list_equal (h1 : list Header) (h2 : list Header) :=
@@ -207,10 +146,9 @@ Lemma state_equal_lemma :
   state_equal s1 s2 = true ->
   s1 = s2.
 Proof.
-  intros s1 s2 H.
-  destruct s1, s2; simpl in H; try congruence.
-  destruct st_var0, st_var1; simpl in H; try discriminate.
-  apply Pos.eqb_eq in H. subst. f_equal. apply proof_irrelevance.
+  intros [uid1] [uid2] H.
+  unfold state_equal in H. simpl in H.
+  rewrite Pos.eqb_eq in H. subst. reflexivity.
 Qed.
 
 (* Do the same thing as above
@@ -251,11 +189,9 @@ Lemma ctrl_equal_lemma :
   ctrl_equal c1 c2 = true ->
   c1 = c2.
 Proof.
-  intros c1 c2 H.
-  destruct c1, c2; simpl in H.
-  unfold ctrl_equal, crvar_eqb in H. simpl in H.
-  destruct ctrl_var0, ctrl_var1; simpl in H; try discriminate.
-  apply Pos.eqb_eq in H. subst. f_equal. apply proof_irrelevance.
+  intros [uid1] [uid2] H.
+  unfold ctrl_equal in H. simpl in H.
+  rewrite Pos.eqb_eq in H. subst. reflexivity.
 Qed.
 
 Lemma ctrl_list_equal_lemma:

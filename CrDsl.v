@@ -67,23 +67,20 @@ Check Sorted.
 
 (* Compare two headers based on their uids *)
 Definition header_lt (h1 h2 : Header) : Prop :=
-  match hdr_var h1, hdr_var h2 with
-  | CrHdr uid1, CrHdr uid2 => Pos.lt uid1 uid2
-  | _, _ => False  (* TODO: This case should not happen if headers are well-formed *)
+  match h1, h2 with
+  | HeaderCtr uid1, HeaderCtr uid2 => Pos.lt uid1 uid2
   end.
 
 (* Compare two states based on their uids *)
 Definition state_lt (s1 s2 : State) : Prop :=
-  match st_var s1, st_var s2 with
-  | CrState uid1, CrState uid2 => Pos.lt uid1 uid2
-  | _, _ => False  (* TODO: This case should not happen if states are well-formed *)
+  match s1, s2 with
+  | StateCtr uid1, StateCtr uid2 => Pos.lt uid1 uid2
   end.
 
 (* Compare two ctrls based on their uids *)
 Definition ctrl_lt (c1 c2 : Ctrl) : Prop :=
-  match ctrl_var c1, ctrl_var c2 with
-  | CrCtrl uid1, CrCtrl uid2 => Pos.lt uid1 uid2
-  | _, _ => False  (* TODO: This case should not happen if ctrls are well-formed *)
+  match c1, c2 with
+  | CtrlCtr uid1, CtrlCtr uid2 => Pos.lt uid1 uid2
   end.
 
 (* No duplicates in Caracara Program *)

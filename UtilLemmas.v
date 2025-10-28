@@ -77,9 +77,6 @@ Proof.
     + apply IH.
 Qed.
 
-Definition unzip_paired_list_hdr (l : list (positive * SmtArithExpr)) : list Header :=
-  map (fun x => make_header (fst x)) l.
-
 Lemma functional_list_helper :
   forall (X : Type) (l : list X) (key_fn : X -> positive) (val_fn : X -> SmtArithExpr) (x : X),
   In x l ->
