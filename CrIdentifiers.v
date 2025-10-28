@@ -61,6 +61,33 @@ Class CrVarLike (A : Type) := {
   inj : injective_contravariant get_key;
 }.
 
+Require Import Coq.Logic.ProofIrrelevance.
+Instance CrVarLike_Header : CrVarLike Header.
+Proof.
+  refine {| make_item := make_header;
+            get_key := fun h => crvar_id (hdr_var h);
+            inverses := _;
+            inj := _ |}.
+  - (* inverses : forall x, make_item (get_key x) = x *)
+    intros [v p]. simpl.
+    destruct v; simpl in p; try discriminate.
+    simpl.
+    unfold make_header.
+    f_equal.
+    apply proof_irrelevance.
+  - (* inj : injective_contravariant get_key *)
+    intros x y Hxy Heq.
+    destruct x as [v1 p1], y as [v2 p2]; simpl in Heq.
+    destruct v1; destruct v2; simpl in Heq; try discriminate.
+    rewrite Heq in Hxy.
+    assert (Htmp : {| hdr_var := CrHdr uid0; hdr_ok := p1 |} =
+{| hdr_var := CrHdr uid0; hdr_ok := p2 |}). { 
+      f_equal.
+      apply proof_irrelevance. }
+    rewrite Htmp in Hxy.
+    congruence.
+Defined.
+
 (* Convenience equality test on CrVar by id and constructor tag *)
 Definition crvar_eqb (a b : CrVar) : bool :=
   match a, b with
