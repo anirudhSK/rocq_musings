@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: srhee/caracara:latest
-      entrypoint: /bin/bash
+      options: --entrypoint /bin/bash
     steps:
       - name: Checkout
         uses: actions/checkout@v4
