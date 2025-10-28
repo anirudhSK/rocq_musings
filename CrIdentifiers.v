@@ -107,9 +107,9 @@ Lemma header_equal_lemma :
   header_equal h1 h2 = true ->
   h1 = h2.
 Proof.
-  intros [uid1] [uid2] H.
-  unfold header_equal in H. simpl in H.
-  rewrite Pos.eqb_eq in H. subst. reflexivity.
+  intros h1 h2 H.
+  destruct h1, h2; simpl in H; try congruence.
+  apply Pos.eqb_eq in H. subst. reflexivity.
 Qed.
 
 Fixpoint hdr_list_equal (h1 : list Header) (h2 : list Header) :=
@@ -141,9 +141,9 @@ Lemma state_equal_lemma :
   state_equal s1 s2 = true ->
   s1 = s2.
 Proof.
-  intros [uid1] [uid2] H.
-  unfold state_equal in H. simpl in H.
-  rewrite Pos.eqb_eq in H. subst. reflexivity.
+  intros s1 s2 H.
+  destruct s1, s2; simpl in H; try congruence.
+  apply Pos.eqb_eq in H. subst. reflexivity.
 Qed.
 
 (* Do the same thing as above
@@ -184,9 +184,9 @@ Lemma ctrl_equal_lemma :
   ctrl_equal c1 c2 = true ->
   c1 = c2.
 Proof.
-  intros [uid1] [uid2] H.
-  unfold ctrl_equal in H. simpl in H.
-  rewrite Pos.eqb_eq in H. subst. reflexivity.
+  intros c1 c2 H.
+  destruct c1, c2; simpl in H; try congruence.
+  apply Pos.eqb_eq in H. subst. reflexivity.
 Qed.
 
 Lemma ctrl_list_equal_lemma:
