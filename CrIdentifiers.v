@@ -51,6 +51,16 @@ Definition make_header (uid : positive) : Header := mkHeader (CrHdr uid) eq_refl
 Definition make_state  (uid : positive) : State  := mkState  (CrState uid) eq_refl.
 Definition make_ctrl   (uid : positive) : Ctrl   := mkCtrl   (CrCtrl uid) eq_refl.
 
+Definition injective_contravariant {A B} (f : A -> B) : Prop :=
+  forall x y, x <> y -> f x <> f y.
+
+Class CrVarLike (A : Type) := {
+  make_item : positive -> A;
+  get_key   : A -> positive;
+  inverses : forall x, make_item (get_key x) = x;
+  inj : injective_contravariant get_key;
+}.
+
 (* Convenience equality test on CrVar by id and constructor tag *)
 Definition crvar_eqb (a b : CrVar) : bool :=
   match a, b with
