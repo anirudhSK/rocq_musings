@@ -321,34 +321,12 @@ Lemma ptree_of_list_lemma_hdr :
      (PTree.elements (PTree_Properties.of_list (combine (map (fun h => crvar_id (hdr_var h)) l) (map val_fn l))))).
 Proof.
   intros l val_fn h H' H.
-  apply ptree_of_list_lemma_generic with (X := Header).
-  - unfold make_header, crvar_id.
-    unfold hdr_var.
-    simpl.
-    destruct h eqn:des.
-    destruct hdr_var eqn:des_var; try discriminate.
-    f_equal.
-    apply proof_irrelevance.
-  - unfold injective_contravariant.
-    intros x y H_neq.
-    destruct x, y.
-    intro H_contra.
-    destruct hdr_var, hdr_var0; try discriminate.
-    simpl in H_contra.
-    rewrite H_contra in H_neq.
-    assert (H_tmp : {| hdr_var := CrHdr uid0; hdr_ok := hdr_ok |}=
-                     {| hdr_var := CrHdr uid0; hdr_ok := hdr_ok0 |}). {
-      f_equal. apply proof_irrelevance.
-    }
-    rewrite H_tmp in H_neq.
-    congruence.
+  apply (@ptree_of_list_lemma_generic Header CrVarLike_Header).
   - assumption.
   - assumption.
 Qed.
 
 (* Same as ptree_of_list_lemma_hdr, but for state *)
-(* Copy down the theorem and proof from ptree_of_list_lemma_hdr above,
-   but make the right changes from header to state *)
 Lemma ptree_of_list_lemma_state :
     forall (l : list State) (val_fn : State -> SmtArithExpr) (sv: State),
     Coqlib.list_norepet l ->
@@ -357,27 +335,7 @@ Lemma ptree_of_list_lemma_state :
      (PTree.elements (PTree_Properties.of_list (combine (map (fun sv => crvar_id (st_var sv)) l) (map val_fn l))))).
 Proof.
   intros l val_fn sv H' H.
-  apply ptree_of_list_lemma_generic.
-  - unfold make_state, crvar_id.
-    unfold st_var.
-    simpl.
-    destruct sv eqn:des.
-    destruct st_var eqn:des_var; try discriminate.
-    f_equal.
-    apply proof_irrelevance.
-  - unfold injective_contravariant.
-    intros x y H_neq.
-    destruct x, y.
-    intro H_contra.
-    destruct st_var, st_var0; try discriminate.
-    simpl in H_contra.
-    rewrite H_contra in H_neq.
-    assert (H_tmp : {| st_var := CrState uid0; st_ok := st_ok |}=
-                     {| st_var := CrState uid0; st_ok := st_ok0 |}). {
-      f_equal. apply proof_irrelevance.
-    }
-    rewrite H_tmp in H_neq.
-    congruence.
+  apply (@ptree_of_list_lemma_generic State CrVarLike_State).
   - assumption.
   - assumption.
 Qed.

@@ -6,6 +6,7 @@ Require Import ZArith.
 Require Import Bool.
 Require Import List.
 Import ListNotations.
+Require Import Coq.Logic.ProofIrrelevance.
 
 (* Define the different types of identifiers in the Caracara DSL *)
 Inductive ParserState : Type := ParserStateCtr (uid : positive).
@@ -61,7 +62,6 @@ Class CrVarLike (A : Type) := {
   inj : injective_contravariant get_key;
 }.
 
-Require Import Coq.Logic.ProofIrrelevance.
 Instance CrVarLike_Header : CrVarLike Header.
 Proof.
   refine {| make_item := make_header;
@@ -80,10 +80,37 @@ Proof.
     destruct x as [v1 p1], y as [v2 p2]; simpl in Heq.
     destruct v1; destruct v2; simpl in Heq; try discriminate.
     rewrite Heq in Hxy.
-    assert (Htmp : {| hdr_var := CrHdr uid0; hdr_ok := p1 |} =
-{| hdr_var := CrHdr uid0; hdr_ok := p2 |}). { 
+    assert (Htmp : {| hdr_var := CrHdr uid0; hdr_ok := p1 |} = {| hdr_var := CrHdr uid0; hdr_ok := p2 |}). { 
       f_equal.
-      apply proof_irrelevance. }
+      apply proof_irrelevance.
+    }
+    rewrite Htmp in Hxy.
+    congruence.
+Defined.
+
+(* Do the same as CrVarLike Header, but for CrVarLike State *)
+Instance CrVarLike_State : CrVarLike State.
+Proof.
+  refine {| make_item := make_state;
+            get_key := fun s => crvar_id (st_var s);
+            inverses := _;
+            inj := _ |}.
+  - (* inverses : forall x, make_item (get_key x) = x *)
+    intros [v p]. simpl.
+    destruct v; simpl in p; try discriminate.
+    simpl.
+    unfold make_state.
+    f_equal.
+    apply proof_irrelevance.
+  - (* inj : injective_contravariant get_key *)
+    intros x y Hxy Heq.
+    destruct x as [v1 p1], y as [v2 p2]; simpl  in Heq.
+    destruct v1; destruct v2; simpl in Heq; try discriminate.
+    rewrite Heq in Hxy.
+    assert (Htmp : {| st_var := CrState uid0; st_ok := p1 |} = {| st_var := CrState uid0; st_ok := p2 |}). { 
+      f_equal.
+      apply proof_irrelevance.
+    }
     rewrite Htmp in Hxy.
     congruence.
 Defined.
