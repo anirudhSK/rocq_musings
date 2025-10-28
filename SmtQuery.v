@@ -321,7 +321,7 @@ Lemma ptree_of_list_lemma_hdr :
      (PTree.elements (PTree_Properties.of_list (combine (map (fun h => crvar_id (hdr_var h)) l) (map val_fn l))))).
 Proof.
   intros l val_fn h H' H.
-  apply ptree_of_list_lemma_generic.
+  apply ptree_of_list_lemma_generic with (X := Header).
   - unfold make_header, crvar_id.
     unfold hdr_var.
     simpl.
