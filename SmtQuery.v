@@ -313,33 +313,6 @@ Proof.
   - discriminate H.
 Qed.
 
-Lemma ptree_of_list_lemma_hdr :
-    forall (l : list Header) (val_fn : Header -> SmtArithExpr) (h: Header),
-    Coqlib.list_norepet l ->
-    In h l ->
-    In h (map (fun '(key, _) => make_header key)
-     (PTree.elements (PTree_Properties.of_list (combine (map (fun h => crvar_id (hdr_var h)) l) (map val_fn l))))).
-Proof.
-  intros l val_fn h H' H.
-  apply (@ptree_of_list_lemma_generic Header CrVarLike_Header).
-  - assumption.
-  - assumption.
-Qed.
-
-(* Same as ptree_of_list_lemma_hdr, but for state *)
-Lemma ptree_of_list_lemma_state :
-    forall (l : list State) (val_fn : State -> SmtArithExpr) (sv: State),
-    Coqlib.list_norepet l ->
-    In sv l ->
-    In sv (map (fun '(key, _) => make_state key)
-     (PTree.elements (PTree_Properties.of_list (combine (map (fun sv => crvar_id (st_var sv)) l) (map val_fn l))))).
-Proof.
-  intros l val_fn sv H' H.
-  apply (@ptree_of_list_lemma_generic State CrVarLike_State).
-  - assumption.
-  - assumption.
-Qed.
-
 Lemma init_symbolic_state_nodep_t : forall h s c t1 t2,
   init_symbolic_state (CaracaraProgramDef h s c t1) =
   init_symbolic_state (CaracaraProgramDef h s c t2).
@@ -405,7 +378,7 @@ t1)) t1 t2 h1 s1) eqn:H_eq; try (exfalso; congruence).
       simpl.
       rewrite map_pair_split.
       simpl.
-      apply ptree_of_list_lemma_hdr.
+      apply (@ptree_of_list_lemma_generic Header CrVarLike_Header).
       simpl in H0.
       destruct H0.
       assumption. assumption.
@@ -417,7 +390,7 @@ t1)) t1 t2 h1 s1) eqn:H_eq; try (exfalso; congruence).
       simpl.
       rewrite map_pair_split.
       simpl.
-      apply ptree_of_list_lemma_state.
+      apply (@ptree_of_list_lemma_generic State CrVarLike_State).
       simpl in H0.
       destruct H0.
       destruct H3.
@@ -482,7 +455,7 @@ t1)) t1 t2 h1 s1) eqn:H_eq; try (exfalso; congruence).
       simpl.
       rewrite map_pair_split.
       simpl.
-      apply ptree_of_list_lemma_hdr.
+      apply (@ptree_of_list_lemma_generic Header CrVarLike_Header).
       simpl in H0.
       destruct H0.
       assumption. assumption.
@@ -494,7 +467,7 @@ t1)) t1 t2 h1 s1) eqn:H_eq; try (exfalso; congruence).
       simpl.
       rewrite map_pair_split.
       simpl.
-      apply ptree_of_list_lemma_state.
+      apply (@ptree_of_list_lemma_generic State CrVarLike_State).
       simpl in H0.
       destruct H0.
       destruct H3.
@@ -554,7 +527,7 @@ t1)) t1 t2 h1 s1) eqn:H_eq; try (exfalso; congruence).
           unfold get_all_headers_from_ps.
           simpl.
           rewrite map_pair_split.
-          apply ptree_of_list_lemma_hdr.
+          apply (@ptree_of_list_lemma_generic Header CrVarLike_Header).
           destruct H0 as [H_wf_headers _].
           apply H_wf_headers.
           assumption.
@@ -563,7 +536,7 @@ t1)) t1 t2 h1 s1) eqn:H_eq; try (exfalso; congruence).
           unfold get_all_states_from_ps.
           simpl.
           rewrite map_pair_split.
-          apply ptree_of_list_lemma_state.
+          apply (@ptree_of_list_lemma_generic State CrVarLike_State).
           destruct H0 as [H_wf_headers H_wf_states].
           destruct H_wf_states as [H_wf_states _].
           apply H_wf_states.
