@@ -9,16 +9,14 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: srhee/caracara:latest
-      # options: --entrypoint /bin/bash
+      entrypoint: /bin/bash
     steps:
       - name: Checkout
-        entrypoint: /bin/bash
         uses: actions/checkout@v4
         with:
           submodules: false
 
       - name: Build Project
-        entrypoint: /bin/bash
         run: |
           eval $(opam env)
           coq_makefile -f _CoqProject *.v -o Makefile
@@ -26,7 +24,6 @@ jobs:
           dune build --profile release
 
       - name: Run OCaml Tests
-        entrypoint: /bin/bash
         run: |
           eval $(opam env)
           dune exec run_tests
