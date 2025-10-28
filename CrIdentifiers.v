@@ -63,11 +63,6 @@ Definition parser_state_equal (p1 p2 : ParserState) :=
     match p1, p2 with
             | ParserStateCtr xid, ParserStateCtr yid => Pos.eqb xid yid
     end.
-(* Use positive equality directly for identifiers *)
-Definition parser_state_equal' (p1 p2 : ParserState) :=
-        match p1, p2 with
-        | ParserStateCtr xid, ParserStateCtr yid => Pos.eqb xid yid
-        end.
 
 (* Do the same thing as parser_state_equal for Header *)
 Definition header_equal (h1 h2 : Header) :=
