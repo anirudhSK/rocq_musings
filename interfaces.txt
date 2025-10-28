@@ -1,4 +1,0 @@
-is_var_in_ps
-lookup_var
-make_item
-get_key

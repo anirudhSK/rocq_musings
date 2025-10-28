@@ -6,15 +6,14 @@ Require Import ZArith.
 Require Import Bool.
 Require Import List.
 Import ListNotations.
-Require Import Coq.Logic.ProofIrrelevance.
 
 (* Define the different types of identifiers in the Caracara DSL *)
 Inductive ParserState : Type := ParserStateCtr (uid : positive).
+Inductive Header : Type := HeaderCtr (uid : positive).
+Inductive State : Type := StateCtr (uid : positive).
 Inductive ModuleName : Type := ModuleNameCtr (uid : positive).
 Inductive FunctionName : Type := FunctionNameCtr (uid : positive).
 Inductive ConnectionName : Type := ConnectionNameCtr (uid : positive).
-Inductive Header : Type := HeaderCtr (uid : positive).
-Inductive State : Type := StateCtr (uid : positive).
 Inductive Ctrl : Type := CtrlCtr (uid : positive).
 
 Definition injective_contravariant {A B} (f : A -> B) : Prop :=
@@ -99,8 +98,6 @@ Definition ctrl_equal (cc1 cc2 : Ctrl) :=
     match cc1, cc2 with
     | CtrlCtr xid, CtrlCtr yid => Pos.eqb xid yid
     end.
-
-Require Import Coq.Logic.ProofIrrelevance.
 
 Lemma header_equal_lemma :
   forall h1 h2,

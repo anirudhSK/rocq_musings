@@ -272,7 +272,6 @@ Qed.
 Definition is_header_in_ps {T} (s1 : ProgramState T) (h : Header) :=
   PTree.get (match h with | HeaderCtr id => id end) (snd (header_map s1)).
 
-Require Import Coq.Logic.ProofIrrelevance.
 Lemma lookup_hdr_after_update_all_hdrs:
   forall {T} (s1 : ProgramState T) (h : Header) (fh : Header -> T),
     is_header_in_ps s1 h <> None ->
