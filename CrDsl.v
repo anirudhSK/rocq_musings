@@ -57,9 +57,10 @@ Definition get_transformer_from_prog (p : CaracaraProgram) : Transformer :=
 Definition check_for_duplicate_identifiers (program : CaracaraProgram) : bool :=
   match program with
   | CaracaraProgramDef h s c _ =>
-      has_duplicates header_equal h ||
-      has_duplicates state_equal s ||
-      has_duplicates ctrl_equal c
+      (* TODO: can probably adjust has_duplicates *)
+      has_duplicates varlike_equal h ||
+      has_duplicates varlike_equal s ||
+      has_duplicates varlike_equal c
   end.
 
 From Coq Require Import Sorting.Sorted.

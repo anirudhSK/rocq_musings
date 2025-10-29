@@ -211,9 +211,9 @@ Definition equivalence_checker_cr_dsl (p1: CaracaraProgram) (p2: CaracaraProgram
   : EquivalenceResult := 
   match p1, p2 with
    | CaracaraProgramDef h1 s1 c1 t1, CaracaraProgramDef h2 s2 c2 t2 => 
-      if hdr_list_equal h1 h2 then
-        if state_list_equal s1 s2 then
-          if ctrl_list_equal c1 c2 then
+      if varlike_list_equal h1 h2 then
+        if varlike_list_equal s1 s2 then
+          if varlike_list_equal c1 c2 then
             match (equivalence_checker (init_symbolic_state p1) t1 t2 h1 s1) with
             (* TODO: Maybe equivalence_checker should take c as argument too? *)
             | SmtUnsat => Equivalent (* if it is unsatisfiable, then all state vars and headers are equal *)
@@ -341,13 +341,13 @@ Proof.
   destruct p1 as [h1 s1 c1 t1] eqn:desp1,
            p2 as [h2 s2 c2 t2] eqn:desp2; simpl in H.
   destruct
-  (hdr_list_equal h1 h2) eqn:H_hdr_eq,
-  (state_list_equal s1 s2) eqn:H_state_eq,
-  (ctrl_list_equal c1 c2) eqn:H_ctrl_eq in H; simpl in H; try (exfalso; congruence).
+  (varlike_list_equal h1 h2) eqn:H_hdr_eq,
+  (varlike_list_equal s1 s2) eqn:H_state_eq,
+  (varlike_list_equal c1 c2) eqn:H_ctrl_eq in H; simpl in H; try (exfalso; congruence).
   intros.
   simpl in H1. (* TODO: May want to remove these *)
   split.
-  - apply hdr_list_equal_lemma in H_hdr_eq.
+  - apply varlike_list_equal_lemma in H_hdr_eq.
     rewrite H_hdr_eq in H1.
     assumption.
   - destruct (equivalence_checker (init_symbolic_state (CaracaraProgramDef h1 s1 c1
@@ -362,9 +362,9 @@ t1)) t1 t2 h1 s1) eqn:H_eq; try (exfalso; congruence).
       unfold t0.
       unfold t3.
       simpl.
-      apply state_list_equal_lemma in H_state_eq.
-      apply hdr_list_equal_lemma in H_hdr_eq.
-      apply ctrl_list_equal_lemma in H_ctrl_eq.
+      apply varlike_list_equal_lemma in H_state_eq.
+      apply varlike_list_equal_lemma in H_hdr_eq.
+      apply varlike_list_equal_lemma in H_ctrl_eq.
       rewrite <- H_hdr_eq.
       rewrite <- H_state_eq.
       rewrite <- H_ctrl_eq.
@@ -418,13 +418,13 @@ Proof.
   destruct p1 as [h1 s1 c1 t1] eqn:desp1,
            p2 as [h2 s2 c2 t2] eqn:desp2; simpl in H.
   destruct
-  (hdr_list_equal h1 h2) eqn:H_hdr_eq,
-  (state_list_equal s1 s2) eqn:H_state_eq,
-  (ctrl_list_equal c1 c2) eqn:H_ctrl_eq in H; simpl in H; try (exfalso; congruence).
+  (varlike_list_equal h1 h2) eqn:H_hdr_eq,
+  (varlike_list_equal s1 s2) eqn:H_state_eq,
+  (varlike_list_equal c1 c2) eqn:H_ctrl_eq in H; simpl in H; try (exfalso; congruence).
   intros.
   simpl in H1. (* TODO: May want to remove these *)
   split.
-  - apply state_list_equal_lemma in H_state_eq.
+  - apply varlike_list_equal_lemma in H_state_eq.
     rewrite H_state_eq in H1.
     assumption.
   - destruct (equivalence_checker (init_symbolic_state (CaracaraProgramDef h1 s1 c1
@@ -439,9 +439,9 @@ t1)) t1 t2 h1 s1) eqn:H_eq; try (exfalso; congruence).
       unfold t0.
       unfold t3.
       simpl.
-      apply state_list_equal_lemma in H_state_eq.
-      apply hdr_list_equal_lemma in H_hdr_eq.
-      apply ctrl_list_equal_lemma in H_ctrl_eq.
+      apply varlike_list_equal_lemma in H_state_eq.
+      apply varlike_list_equal_lemma in H_hdr_eq.
+      apply varlike_list_equal_lemma in H_ctrl_eq.
       rewrite <- H_hdr_eq.
       rewrite <- H_state_eq.
       rewrite <- H_ctrl_eq.
@@ -500,9 +500,9 @@ Proof.
   destruct p1 as [h1 s1 c1 t1] eqn:desp1,
            p2 as [h2 s2 c2 t2] eqn:desp2; simpl in H.
   destruct
-  (hdr_list_equal h1 h2) eqn:H_hdr_eq,
-  (state_list_equal s1 s2) eqn:H_state_eq,
-  (ctrl_list_equal c1 c2) eqn:H_ctrl_eq in H; simpl in H.
+  (varlike_list_equal h1 h2) eqn:H_hdr_eq,
+  (varlike_list_equal s1 s2) eqn:H_state_eq,
+  (varlike_list_equal c1 c2) eqn:H_ctrl_eq in H; simpl in H.
   2-8: discriminate H. (* The easy goals, where state, ctrl, or header lists are NOT equal, proof by explosion because we assume these lists ARE equal*)
   - destruct (equivalence_checker (init_symbolic_state (CaracaraProgramDef h1 s1 c1 (* The hard goal *)
 t1)) t1 t2 h1 s1) eqn:H_eq; try (exfalso; congruence).
@@ -515,11 +515,11 @@ t1)) t1 t2 h1 s1) eqn:H_eq; try (exfalso; congruence).
        ++ simpl.
           injection H as Heq.
           subst f0.
-          apply hdr_list_equal_lemma in H_hdr_eq.
+          apply varlike_list_equal_lemma in H_hdr_eq.
           rewrite <- H_hdr_eq.
-          apply state_list_equal_lemma in H_state_eq.
+          apply varlike_list_equal_lemma in H_state_eq.
           rewrite <- H_state_eq.
-          apply ctrl_list_equal_lemma in H_ctrl_eq.
+          apply varlike_list_equal_lemma in H_ctrl_eq.
           rewrite <- H_ctrl_eq.
           apply H_eq.
        ++ intros.
