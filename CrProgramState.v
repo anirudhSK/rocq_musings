@@ -31,22 +31,82 @@ Arguments ctrl_map {T} _.
 Definition ConcreteState := ProgramState uint8.
 Definition SymbolicState := ProgramState SmtArithExpr.
 
+Inductive PSField :=
+| PSCtrl
+| PSHeader
+| PSState.
+
+Definition map_from_ps {T : Type} (ps : ProgramState T) (field : PSField) : PMap.t T :=
+  match field with
+  | PSCtrl => ctrl_map ps
+  | PSHeader => header_map ps
+  | PSState => state_map ps
+  end.
+
+Definition program_state_mapper {T1 T2 : Type} (fc: T1 -> T2) (fh : T1 -> T2) (fs : T1 -> T2) (s: ProgramState T1) : ProgramState T2 :=
+  {| ctrl_map := PMap.map fc (ctrl_map s);
+     header_map := PMap.map fh (header_map s);
+     state_map := PMap.map fs (state_map s) |}.
+
+(* Function to go through all keys in a PMap, and set them to new values. *)
+Definition new_pmap_from_old {T: Type} (old_pmap : PMap.t T) (f : positive -> T): PMap.t T :=
+  (fst old_pmap, (* The old default value *)
+   PTree.map (fun x _ => f x) (snd old_pmap) (* Take old tree (snd old_pmap) and map elements from it (x) via function (f) *)
+  ).
+
+Section VarlikeMap.
+
+Context {A : Type} `{CrVarLike A}.
+
+Definition lookup_varlike_map {T : Type} (m : PMap.t T) (x : A) : T :=
+  PMap.get (get_key x) m.
+
+Definition lookup_varlike {T : Type} (s: ProgramState T) (f: PSField) (x : A) : T :=
+  lookup_varlike_map (map_from_ps s f) x.
+
+Definition update_all_varlike {T : Type} (s: ProgramState T) (f: PSField) (fh: A -> T) : ProgramState T :=
+  let new_map := new_pmap_from_old (map_from_ps s f) (fun pos => fh (make_item pos)) in
+  match f with
+  | PSCtrl =>   {| ctrl_map := new_map;
+                   header_map := header_map s;
+                   state_map := state_map s |}
+  | PSHeader => {| ctrl_map := ctrl_map s;
+                   header_map := new_map;
+                   state_map := state_map s |}
+  | PSState =>  {| ctrl_map := ctrl_map s;
+                   header_map := header_map s;
+                   state_map := new_map |}
+  end.
+
+Definition update_varlike_map {T : Type} (m: PMap.t T) (x: A) (v: T) : PMap.t T :=
+  PMap.set (get_key x) v m.
+  
+Definition update_varlike {T : Type} (s: ProgramState T) (f: PSField) (x: A) (v: T) : ProgramState T :=
+  let new_map := update_varlike_map (map_from_ps s f) x v in
+  match f with
+  | PSCtrl =>   {| ctrl_map := new_map;
+                   header_map := header_map s;
+                   state_map := state_map s |}
+  | PSHeader => {| ctrl_map := ctrl_map s;
+                   header_map := new_map;
+                   state_map := state_map s |}
+  | PSState =>  {| ctrl_map := ctrl_map s;
+                   header_map := header_map s;
+                   state_map := new_map |}
+  end.
+
+End VarlikeMap.
+
 (* TODO: lookup_hdr/state_map could be rolled into lookup_hdr/state. *)
 (* TODO: It is used in a proof with a giant remember expression. *)
-Definition lookup_hdr_map {T : Type} (m: HeaderMap T) (x: Header) : T :=
-  PMap.get (match x with | HeaderCtr id => id end) m.
-
-Definition lookup_state_map {T : Type} (m: StateMap T) (x: State) : T :=
-  PMap.get (match x with | StateCtr id => id end) m.
-
 Definition lookup_hdr {T : Type} (s: ProgramState T) (x: Header) : T :=
-  lookup_hdr_map (header_map s) x.
+  lookup_varlike_map (map_from_ps s PSHeader) x.
 
 Definition lookup_state {T : Type} (s: ProgramState T) (x: State) : T :=
-  lookup_state_map (state_map s) x.
+  lookup_varlike_map (map_from_ps s PSState) x.
 
 Definition lookup_ctrl {T : Type} (s: ProgramState T) (x: Ctrl) : T :=
-  PMap.get (match x with | CtrlCtr id => id end) (ctrl_map s).
+  lookup_varlike_map (map_from_ps s PSCtrl) x.
 
 Lemma program_state_equality:
       forall (ps1 ps2: ConcreteState),
@@ -62,21 +122,8 @@ Proof.
   f_equal; try assumption.
 Qed.
 
-Definition program_state_mapper {T1 T2 : Type} (fc: T1 -> T2) (fh : T1 -> T2) (fs : T1 -> T2) (s: ProgramState T1) : ProgramState T2 :=
-  {| ctrl_map := PMap.map fc (ctrl_map s);
-     header_map := PMap.map fh (header_map s);
-     state_map := PMap.map fs (state_map s) |}.
-
-(* Function to go through all keys in a PMap, and set them to new values. *)
-Definition new_pmap_from_old {T: Type} (old_pmap : PMap.t T) (f : positive -> T): PMap.t T :=
-  (fst old_pmap, (* The old default value *)
-   PTree.map (fun x _ => f x) (snd old_pmap) (* Take old tree (snd old_pmap) and map elements from it (x) via function (f) *)
-  ).
-
 Definition update_all_hdrs {T : Type} (s: ProgramState T) (fh: Header -> T) : ProgramState T :=
-  {| ctrl_map := ctrl_map s;
-     header_map := new_pmap_from_old (header_map s) (fun pos => fh (HeaderCtr pos));
-     state_map := state_map s |}.
+  update_all_varlike s PSHeader fh.
 
 Definition update_all_states {T : Type} (s: ProgramState T) (fs: State -> T) : ProgramState T :=
   {| ctrl_map := ctrl_map s;
@@ -84,22 +131,15 @@ Definition update_all_states {T : Type} (s: ProgramState T) (fs: State -> T) : P
      state_map := new_pmap_from_old (state_map s) (fun pos => fs (StateCtr pos))|}.
 
 (* Update the header map with a new value for a specific header *)
-Definition update_hdr_map {T : Type} (m: HeaderMap T) (x: Header) (v: T) : HeaderMap T :=
-  PMap.set (match x with | HeaderCtr x_id => x_id end) v m.
-
-(* Same as above, but for state variables *)
-Definition update_state_map {T : Type} (m: StateMap T) (x: State) (v: T) : StateMap T :=
-  PMap.set (match x with | StateCtr x_id => x_id end) v m.
-
 Definition update_hdr {T : Type} (s: ProgramState T) (x: Header) (v: T) : ProgramState T :=
   {|ctrl_map :=ctrl_map s;
-     header_map :=  update_hdr_map (header_map s) x v;
+     header_map :=  update_varlike_map (header_map s) x v;
      state_map := state_map s|}.
 
 Definition update_state {T : Type} (s: ProgramState T) (x: State) (v: T) : ProgramState T :=
   {|ctrl_map :=ctrl_map s;
      header_map := header_map s;
-     state_map := update_state_map (state_map s) x v |}.
+     state_map := update_varlike_map (state_map s) x v |}.
 
 Lemma cons_not_nil : forall A (x : A) (xs : list A),
   ~ ((x :: xs) = nil).
@@ -122,7 +162,7 @@ Proof.
   f_equal; try reflexivity.
   unfold lookup_hdr.
   simpl.
-  unfold lookup_hdr_map.
+  unfold lookup_varlike_map.
   unfold new_pmap_from_old.
   simpl.
   destruct hdr.
@@ -149,7 +189,7 @@ Proof.
   f_equal; try reflexivity.
   unfold lookup_state.
   simpl.
-  unfold lookup_state_map.
+  unfold lookup_varlike_map.
   unfold new_pmap_from_old.
   simpl.
   destruct state.
@@ -212,7 +252,7 @@ Proof.
   unfold update_hdr.
   f_equal.
   simpl.
-  unfold update_hdr_map.
+  unfold update_varlike_map.
   destruct ps.
   simpl.
   destruct h. simpl.
@@ -242,7 +282,7 @@ Proof.
   unfold update_state.
   f_equal.
   simpl.
-  unfold update_state_map.
+  unfold update_varlike_map.
   destruct ps.
   simpl.
   destruct sv. simpl.
@@ -281,7 +321,7 @@ Proof.
   unfold lookup_hdr.
   unfold update_all_hdrs.
   simpl.
-  unfold lookup_hdr_map.
+  unfold lookup_varlike_map.
   unfold new_pmap_from_old.
   simpl.
   unfold is_header_in_ps in H.
@@ -319,7 +359,7 @@ Proof.
   unfold lookup_state.
   unfold update_all_states.
   simpl.
-  unfold lookup_state_map.
+  unfold lookup_varlike_map.
   unfold new_pmap_from_old.
   simpl.
   unfold is_state_var_in_ps in H.
@@ -347,7 +387,7 @@ Qed.
 
 Lemma lookup_hdr_trivial:
   forall {T} (s : ProgramState T) (h : Header),
-    lookup_hdr s h = lookup_hdr_map (header_map s) h.
+    lookup_hdr s h = lookup_varlike_map (header_map s) h.
 Proof.
   intros.
   reflexivity.
@@ -355,7 +395,7 @@ Qed.
 
 Lemma lookup_state_trivial:
   forall {T} (s : ProgramState T) (sv : State),
-    lookup_state s sv = lookup_state_map (state_map s) sv.
+    lookup_state s sv = lookup_varlike_map (state_map s) sv.
 Proof.
   intros.
   reflexivity.
@@ -487,14 +527,12 @@ Definition is_init_state {T} (p : CaracaraProgram) (ps : ProgramState T) : Prop 
 
 (* Mark definitions globally opaque below *)
 Global Opaque lookup_ctrl.
-Global Opaque update_hdr_map.
-Global Opaque update_state_map.
+Global Opaque update_varlike_map.
 Global Opaque update_hdr.
 Global Opaque update_state.
 Global Opaque lookup_hdr.
 Global Opaque lookup_state.
-Global Opaque lookup_hdr_map.
-Global Opaque lookup_state_map.
+Global Opaque lookup_varlike_map.
 Global Opaque program_state_mapper.
 Global Opaque update_all_hdrs.
 Global Opaque update_all_states.

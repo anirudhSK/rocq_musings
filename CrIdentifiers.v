@@ -97,49 +97,51 @@ Definition connection_name_equal (c1 c2 : ConnectionName) :=
     end.
 
 Section CrVarLikeEqual.
-  Context {A : Type} `{CrVarLike A}.
 
-  Definition varlike_equal (v1 v2 : A) :=
-    Pos.eqb (get_key v1) (get_key v2).
+Context {A : Type} `{CrVarLike A}.
 
-  Lemma varlike_equal_lemma :
-    forall v1 v2,
-    varlike_equal v1 v2 = true ->
-    v2 = v1.
-  Proof.
-    intros.
-    unfold varlike_equal in H0.
-    apply Pos.eqb_eq in H0.
-    rewrite <- inverses.
-    rewrite H0.
-    rewrite inverses.
-    reflexivity.
-  Qed.
+Definition varlike_equal (v1 v2 : A) :=
+  Pos.eqb (get_key v1) (get_key v2).
 
-  Fixpoint varlike_list_equal (v1 v2 : list A) :=
-    match v1, v2 with
-    | nil, nil => true
-    | v::y, v'::y' => andb (varlike_equal v v') (varlike_list_equal y y')
-    | _, _ => false
-    end.
+Lemma varlike_equal_lemma :
+  forall v1 v2,
+  varlike_equal v1 v2 = true ->
+  v2 = v1.
+Proof.
+  intros.
+  unfold varlike_equal in H0.
+  apply Pos.eqb_eq in H0.
+  rewrite <- inverses.
+  rewrite H0.
+  rewrite inverses.
+  reflexivity.
+Qed.
 
-  Lemma varlike_list_equal_lemma :
-    forall v1 v2,
-    varlike_list_equal v1 v2 = true ->
-    v1 = v2.
-  Proof.
-    intros.
-    revert v2 H0.
-    induction v1 as [|v1' v1''].
-    - destruct v2.
-      + reflexivity.
-      + discriminate.
-    - destruct v2 as [|v2' v2''].
-      + intros. simpl in *. congruence.
-      + intros. simpl in *.
-        rewrite andb_true_iff in H0. destruct H0.
-        apply varlike_equal_lemma in H0.
-        apply IHv1'' in H1.
-        rewrite H0. rewrite <- H1. reflexivity.
-  Qed.
+Fixpoint varlike_list_equal (v1 v2 : list A) :=
+  match v1, v2 with
+  | nil, nil => true
+  | v::y, v'::y' => andb (varlike_equal v v') (varlike_list_equal y y')
+  | _, _ => false
+  end.
+
+Lemma varlike_list_equal_lemma :
+  forall v1 v2,
+  varlike_list_equal v1 v2 = true ->
+  v1 = v2.
+Proof.
+  intros.
+  revert v2 H0.
+  induction v1 as [|v1' v1''].
+  - destruct v2.
+    + reflexivity.
+    + discriminate.
+  - destruct v2 as [|v2' v2''].
+    + intros. simpl in *. congruence.
+    + intros. simpl in *.
+      rewrite andb_true_iff in H0. destruct H0.
+      apply varlike_equal_lemma in H0.
+      apply IHv1'' in H1.
+      rewrite H0. rewrite <- H1. reflexivity.
+Qed.
+
 End CrVarLikeEqual.
