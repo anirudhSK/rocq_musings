@@ -6,6 +6,7 @@ From MyProject Require Import CrProgramState.
 From MyProject Require Import Maps.
 From MyProject Require Import SmtTypes.
 From MyProject Require Import Integers.
+From MyProject Require Import PMapHelperLemmas.
 Require Import Classical.
 Require Import Coq.Lists.List.
 Require Import Coq.Bool.Bool.
@@ -210,9 +211,9 @@ Definition equivalence_checker_cr_dsl (p1: CaracaraProgram) (p2: CaracaraProgram
   : EquivalenceResult := 
   match p1, p2 with
    | CaracaraProgramDef h1 s1 c1 t1, CaracaraProgramDef h2 s2 c2 t2 => 
-      if hdr_list_equal h1 h2 then
-        if state_list_equal s1 s2 then
-          if ctrl_list_equal c1 c2 then
+      if varlike_list_equal h1 h2 then
+        if varlike_list_equal s1 s2 then
+          if varlike_list_equal c1 c2 then
             match (equivalence_checker (init_symbolic_state p1) t1 t2 h1 s1) with
             (* TODO: Maybe equivalence_checker should take c as argument too? *)
             | SmtUnsat => Equivalent (* if it is unsatisfiable, then all state vars and headers are equal *)
@@ -312,89 +313,6 @@ Proof.
   - discriminate H.
 Qed.
 
-Lemma ptree_of_list_lemma_hdr :
-    forall (l : list Header) (val_fn : Header -> SmtArithExpr) (h: Header),
-    Coqlib.list_norepet l ->
-    In h l ->
-    In h (map (fun '(key, _) => HeaderCtr key)    
-     (PTree.elements (PTree_Properties.of_list (combine (map (fun h => match h with | HeaderCtr x => x end) l) (map val_fn l))))).
-Proof.
-  intros l val_fn h H' H. (* apply in_map with (f := fun pos => (pos, key_fn) in H. *)
-  generalize H as H_in.
-  apply helper1 with (key_fn := (fun h => match h with | HeaderCtr x => x end)) (val_fn := val_fn) in H.
-  intros.
-  destruct h.
-  remember (fun '(key, _) => HeaderCtr key) as f.
-  assert(H_tmp: HeaderCtr uid =
-         f (uid, val_fn (HeaderCtr uid))).
-  { rewrite Heqf. reflexivity. }
-  rewrite H_tmp.
-  apply in_map with (f := f) (x := (uid, val_fn (HeaderCtr uid))) (l := (PTree.elements
-  (PTree_Properties.of_list (combine (map (fun h => match h with | HeaderCtr x => x end) l) (map val_fn l))))).
-  remember (uid, val_fn (HeaderCtr uid)) as pair_val.
-  remember (combine (map (fun h : Header => match h with
-    | HeaderCtr x => x
-  end) l) (map val_fn l)) as l_combined.
-  rewrite Heqpair_val in *.
-  apply PTree.elements_correct with (m := PTree_Properties.of_list l_combined).
-  apply PTree_Properties.of_list_norepet.
-  - rewrite Heql_combined.
-    simpl.
-    rewrite map_combine2.
-    apply Coqlib.list_map_norepet.
-    -- assumption.
-    -- intros.
-       destruct x.
-       destruct y.
-       intro H_contra.
-       apply H2.
-       f_equal.
-       assumption.
-  - assumption.
-Qed.
-
-(* Same as ptree_of_list_lemma_hdr, but for state *)
-Lemma ptree_of_list_lemma_state :
-  forall (l : list State) (val_fn : State -> SmtArithExpr) (sv: State),
-  Coqlib.list_norepet l ->
-  In sv l ->
-  In sv (map (fun '(key, _) => StateCtr key)    
-   (PTree.elements (PTree_Properties.of_list (combine (map (fun sv => match sv with | StateCtr x => x end) l) (map val_fn l))))).
-Proof.
-  intros l val_fn sv H' H. (* apply in_map with (f := fun pos => (pos, key_fn) in H. *)
-  generalize H as H_in.
-  apply helper1_state with (key_fn := (fun sv => match sv with | StateCtr x => x end)) (val_fn := val_fn) in H.
-  intros.
-  destruct sv.
-  remember (fun '(key, _) => StateCtr key) as f.
-  assert(H_tmp: StateCtr uid =
-     f (uid, val_fn (StateCtr uid))).
-  { rewrite Heqf. reflexivity. }
-  rewrite H_tmp.
-  apply in_map with (f := f) (x := (uid, val_fn (StateCtr uid))) (l := (PTree.elements
-  (PTree_Properties.of_list (combine (map (fun sv : State => match sv with
-  | StateCtr x => x
-  end) l) (map val_fn l))))).
-  remember (uid, val_fn (StateCtr uid)) as pair_val.
-  remember (combine (map (fun sv : State => match sv with | StateCtr x => x end) l) (map val_fn l)) as l_combined.
-  rewrite Heqpair_val in *.
-  apply PTree.elements_correct with (m := PTree_Properties.of_list l_combined).
-  apply PTree_Properties.of_list_norepet.
-  - rewrite Heql_combined.
-  simpl.
-  rewrite map_combine2.
-  apply Coqlib.list_map_norepet.
-  -- assumption.
-  -- intros.
-     destruct x.
-     destruct y.
-     intro H_contra.
-     apply H2.
-     f_equal.
-     assumption.
-  - assumption.
-Qed.
-
 Lemma init_symbolic_state_nodep_t : forall h s c t1 t2,
   init_symbolic_state (CaracaraProgramDef h s c t1) =
   init_symbolic_state (CaracaraProgramDef h s c t2).
@@ -423,13 +341,13 @@ Proof.
   destruct p1 as [h1 s1 c1 t1] eqn:desp1,
            p2 as [h2 s2 c2 t2] eqn:desp2; simpl in H.
   destruct
-  (hdr_list_equal h1 h2) eqn:H_hdr_eq,
-  (state_list_equal s1 s2) eqn:H_state_eq,
-  (ctrl_list_equal c1 c2) eqn:H_ctrl_eq in H; simpl in H; try (exfalso; congruence).
+  (varlike_list_equal h1 h2) eqn:H_hdr_eq,
+  (varlike_list_equal s1 s2) eqn:H_state_eq,
+  (varlike_list_equal c1 c2) eqn:H_ctrl_eq in H; simpl in H; try (exfalso; congruence).
   intros.
   simpl in H1. (* TODO: May want to remove these *)
   split.
-  - apply hdr_list_equal_lemma in H_hdr_eq.
+  - apply varlike_list_equal_lemma in H_hdr_eq.
     rewrite H_hdr_eq in H1.
     assumption.
   - destruct (equivalence_checker (init_symbolic_state (CaracaraProgramDef h1 s1 c1
@@ -444,9 +362,9 @@ t1)) t1 t2 h1 s1) eqn:H_eq; try (exfalso; congruence).
       unfold t0.
       unfold t3.
       simpl.
-      apply state_list_equal_lemma in H_state_eq.
-      apply hdr_list_equal_lemma in H_hdr_eq.
-      apply ctrl_list_equal_lemma in H_ctrl_eq.
+      apply varlike_list_equal_lemma in H_state_eq.
+      apply varlike_list_equal_lemma in H_hdr_eq.
+      apply varlike_list_equal_lemma in H_ctrl_eq.
       rewrite <- H_hdr_eq.
       rewrite <- H_state_eq.
       rewrite <- H_ctrl_eq.
@@ -460,7 +378,7 @@ t1)) t1 t2 h1 s1) eqn:H_eq; try (exfalso; congruence).
       simpl.
       rewrite map_pair_split.
       simpl.
-      apply ptree_of_list_lemma_hdr.
+      apply (@ptree_of_list_lemma_generic Header CrVarLike_Header).
       simpl in H0.
       destruct H0.
       assumption. assumption.
@@ -472,7 +390,7 @@ t1)) t1 t2 h1 s1) eqn:H_eq; try (exfalso; congruence).
       simpl.
       rewrite map_pair_split.
       simpl.
-      apply ptree_of_list_lemma_state.
+      apply (@ptree_of_list_lemma_generic State CrVarLike_State).
       simpl in H0.
       destruct H0.
       destruct H3.
@@ -500,13 +418,13 @@ Proof.
   destruct p1 as [h1 s1 c1 t1] eqn:desp1,
            p2 as [h2 s2 c2 t2] eqn:desp2; simpl in H.
   destruct
-  (hdr_list_equal h1 h2) eqn:H_hdr_eq,
-  (state_list_equal s1 s2) eqn:H_state_eq,
-  (ctrl_list_equal c1 c2) eqn:H_ctrl_eq in H; simpl in H; try (exfalso; congruence).
+  (varlike_list_equal h1 h2) eqn:H_hdr_eq,
+  (varlike_list_equal s1 s2) eqn:H_state_eq,
+  (varlike_list_equal c1 c2) eqn:H_ctrl_eq in H; simpl in H; try (exfalso; congruence).
   intros.
   simpl in H1. (* TODO: May want to remove these *)
   split.
-  - apply state_list_equal_lemma in H_state_eq.
+  - apply varlike_list_equal_lemma in H_state_eq.
     rewrite H_state_eq in H1.
     assumption.
   - destruct (equivalence_checker (init_symbolic_state (CaracaraProgramDef h1 s1 c1
@@ -521,9 +439,9 @@ t1)) t1 t2 h1 s1) eqn:H_eq; try (exfalso; congruence).
       unfold t0.
       unfold t3.
       simpl.
-      apply state_list_equal_lemma in H_state_eq.
-      apply hdr_list_equal_lemma in H_hdr_eq.
-      apply ctrl_list_equal_lemma in H_ctrl_eq.
+      apply varlike_list_equal_lemma in H_state_eq.
+      apply varlike_list_equal_lemma in H_hdr_eq.
+      apply varlike_list_equal_lemma in H_ctrl_eq.
       rewrite <- H_hdr_eq.
       rewrite <- H_state_eq.
       rewrite <- H_ctrl_eq.
@@ -537,7 +455,7 @@ t1)) t1 t2 h1 s1) eqn:H_eq; try (exfalso; congruence).
       simpl.
       rewrite map_pair_split.
       simpl.
-      apply ptree_of_list_lemma_hdr.
+      apply (@ptree_of_list_lemma_generic Header CrVarLike_Header).
       simpl in H0.
       destruct H0.
       assumption. assumption.
@@ -549,7 +467,7 @@ t1)) t1 t2 h1 s1) eqn:H_eq; try (exfalso; congruence).
       simpl.
       rewrite map_pair_split.
       simpl.
-      apply ptree_of_list_lemma_state.
+      apply (@ptree_of_list_lemma_generic State CrVarLike_State).
       simpl in H0.
       destruct H0.
       destruct H3.
@@ -582,9 +500,9 @@ Proof.
   destruct p1 as [h1 s1 c1 t1] eqn:desp1,
            p2 as [h2 s2 c2 t2] eqn:desp2; simpl in H.
   destruct
-  (hdr_list_equal h1 h2) eqn:H_hdr_eq,
-  (state_list_equal s1 s2) eqn:H_state_eq,
-  (ctrl_list_equal c1 c2) eqn:H_ctrl_eq in H; simpl in H.
+  (varlike_list_equal h1 h2) eqn:H_hdr_eq,
+  (varlike_list_equal s1 s2) eqn:H_state_eq,
+  (varlike_list_equal c1 c2) eqn:H_ctrl_eq in H; simpl in H.
   2-8: discriminate H. (* The easy goals, where state, ctrl, or header lists are NOT equal, proof by explosion because we assume these lists ARE equal*)
   - destruct (equivalence_checker (init_symbolic_state (CaracaraProgramDef h1 s1 c1 (* The hard goal *)
 t1)) t1 t2 h1 s1) eqn:H_eq; try (exfalso; congruence).
@@ -597,11 +515,11 @@ t1)) t1 t2 h1 s1) eqn:H_eq; try (exfalso; congruence).
        ++ simpl.
           injection H as Heq.
           subst f0.
-          apply hdr_list_equal_lemma in H_hdr_eq.
+          apply varlike_list_equal_lemma in H_hdr_eq.
           rewrite <- H_hdr_eq.
-          apply state_list_equal_lemma in H_state_eq.
+          apply varlike_list_equal_lemma in H_state_eq.
           rewrite <- H_state_eq.
-          apply ctrl_list_equal_lemma in H_ctrl_eq.
+          apply varlike_list_equal_lemma in H_ctrl_eq.
           rewrite <- H_ctrl_eq.
           apply H_eq.
        ++ intros.
@@ -609,7 +527,7 @@ t1)) t1 t2 h1 s1) eqn:H_eq; try (exfalso; congruence).
           unfold get_all_headers_from_ps.
           simpl.
           rewrite map_pair_split.
-          apply ptree_of_list_lemma_hdr.
+          apply (@ptree_of_list_lemma_generic Header CrVarLike_Header).
           destruct H0 as [H_wf_headers _].
           apply H_wf_headers.
           assumption.
@@ -618,7 +536,7 @@ t1)) t1 t2 h1 s1) eqn:H_eq; try (exfalso; congruence).
           unfold get_all_states_from_ps.
           simpl.
           rewrite map_pair_split.
-          apply ptree_of_list_lemma_state.
+          apply (@ptree_of_list_lemma_generic State CrVarLike_State).
           destruct H0 as [H_wf_headers H_wf_states].
           destruct H_wf_states as [H_wf_states _].
           apply H_wf_states.
