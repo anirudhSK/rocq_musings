@@ -53,9 +53,9 @@ Definition eval_sym_state (s: SymbolicState) (f : SmtValuation) : ConcreteState 
 Definition eval_hdr_op_assign_smt (ho : HdrOp) (ps: SymbolicState) : SymbolicState :=
     match ho with
     | StatefulOp f arg1 arg2 target =>
-        let op_output := eval_hdr_op_expr_smt ho ps in update_state ps target op_output
+        let op_output := eval_hdr_op_expr_smt ho ps in update_varlike PSState ps target op_output
     | StatelessOp f arg1 arg2 target => 
-        let op_output := eval_hdr_op_expr_smt ho ps in update_hdr ps target op_output
+        let op_output := eval_hdr_op_expr_smt ho ps in update_varlike PSHeader ps target op_output
     end.
 
 (* Define evaluation over a list of HdrOp *)

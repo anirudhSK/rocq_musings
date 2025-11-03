@@ -18,6 +18,7 @@ Require Import Coq.Bool.Bool.
 From Coq Require Import FunctionalExtensionality.
 
 (* Simpler lemma with no state update *)
+Global Opaque lookup_varlike.
 Lemma commute_sym_conc_expr:
   forall (ho: HdrOp) (s : SymbolicState) (f : SmtValuation),
     eval_hdr_op_expr_concrete ho (eval_sym_state s f) =
@@ -25,35 +26,34 @@ Lemma commute_sym_conc_expr:
 Proof.
   intros ho s f.
   destruct ho, f0, arg1, arg2; simpl;
-  try repeat (rewrite PMapHelperLemmas.commute_lookup_eval_ctrl); try reflexivity;
-  try repeat (rewrite PMapHelperLemmas.commute_lookup_eval_state); try reflexivity; (* TODO: How did this work before? *)
-  try repeat (rewrite PMapHelperLemmas.commute_lookup_eval_hdr); try reflexivity.
+  try repeat (rewrite PMapHelperLemmas.commute_lookup_eval_generic); try reflexivity.
 Qed.
 
 Lemma commute_update_eval_state:
   forall (s : SymbolicState) (f : SmtValuation) (sv : State) (v : SmtArithExpr),
-    eval_sym_state (update_state s sv v) f =
-    update_state (eval_sym_state s f) sv (eval_smt_arith v f).
+    eval_sym_state (update_varlike PSState s sv v) f =
+    update_varlike PSState (eval_sym_state s f) sv (eval_smt_arith v f).
 Proof.
   intros s f h v.
   unfold eval_sym_state.
-  specialize (commute_mapper_update_state (T1 := SmtArithExpr) (T2 := uint8)).
+  specialize (commute_mapper_update_varlike (A := State) (T1 := SmtArithExpr) (T2 := uint8)).
   intros.
   apply H.
 Qed.
 
 Lemma commute_update_eval_hdr:
   forall (s : SymbolicState) (f : SmtValuation) (h : Header) (v : SmtArithExpr),
-    eval_sym_state (update_hdr s h v) f =
-    update_hdr (eval_sym_state s f) h (eval_smt_arith v f).
+    eval_sym_state (update_varlike PSHeader s h v) f =
+    update_varlike PSHeader (eval_sym_state s f) h (eval_smt_arith v f).
 Proof.
   intros s f h v.
   unfold eval_sym_state.
-  specialize (commute_mapper_update_hdr (T1 := SmtArithExpr) (T2 := uint8)).
+  specialize (commute_mapper_update_varlike (A := Header) (T1 := SmtArithExpr) (T2 := uint8)).
   intros.
   apply H.
 Qed.
 
+Global Opaque update_varlike.
 (* for any symbolic state, symbolic valuation, and header operation, 
   concretizing and then evaluating EQUALS
   evaluating and then concretizing *)
@@ -66,8 +66,9 @@ Proof.
   unfold eval_hdr_op_assign_concrete.
   unfold eval_hdr_op_assign_smt.
   rewrite commute_sym_conc_expr.
-  destruct ho, f0, arg1, arg2, s; simpl; try rewrite commute_update_eval_state; simpl; try reflexivity;
-  try rewrite commute_update_eval_hdr; simpl; try reflexivity.
+  destruct ho, f0, arg1, arg2, s; simpl; 
+  try rewrite commute_update_eval_state; try reflexivity;
+  try rewrite commute_update_eval_hdr; try reflexivity.
 Qed.
 
 Lemma commute_sym_vs_conc_hdr_op_list :

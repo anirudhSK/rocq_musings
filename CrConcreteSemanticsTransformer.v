@@ -39,9 +39,9 @@ Definition eval_hdr_op_expr_concrete (op : HdrOp) (ps : ConcreteState) : uint8 :
 Definition eval_hdr_op_assign_concrete (op : HdrOp) (ps: ConcreteState) : ConcreteState :=
   match op with
   | StatefulOp f arg1 arg2 target =>
-        let op_output := eval_hdr_op_expr_concrete op ps in update_state ps target op_output
+        let op_output := eval_hdr_op_expr_concrete op ps in update_varlike PSState ps target op_output
   | StatelessOp f arg1 arg2 target => 
-        let op_output := eval_hdr_op_expr_concrete op ps in update_hdr ps target op_output
+        let op_output := eval_hdr_op_expr_concrete op ps in update_varlike PSHeader ps target op_output
   end.
 
 Definition eval_match_concrete (match_pattern : MatchPattern) (ps : ConcreteState) : bool :=

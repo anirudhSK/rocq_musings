@@ -7,6 +7,18 @@ From MyProject Require Import CrIdentifiers.
 Require Import Coq.Lists.List.
 Require Import ZArith.
 
+Transparent map_from_ps.
+Transparent lookup_varlike_map.
+Lemma commute_lookup_eval_generic:
+  forall (A: Type) `{CrVarLike A} (v : A) field_type f ps,
+  lookup_varlike_map (map_from_ps field_type (eval_sym_state ps f)) v =
+  eval_smt_arith (lookup_varlike_map (map_from_ps field_type ps) v) f.
+Proof.
+  intros.
+  unfold map_from_ps.
+  destruct field_type; simpl; apply PMap.gmap.
+Qed.
+
 Transparent lookup_ctrl.
 Transparent lookup_varlike_map.
 Lemma commute_lookup_eval_ctrl:

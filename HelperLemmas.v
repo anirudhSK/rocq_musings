@@ -88,11 +88,12 @@ Qed.
 
 Lemma header_map_ps : (*TODO: Should probably be called lookup_hdr_ps *)
   forall s f h,
-    lookup_hdr (eval_sym_state s f) h =
-    eval_smt_arith (lookup_hdr s h) f.
+    lookup_varlike PSHeader (eval_sym_state s f) h =
+    eval_smt_arith (lookup_varlike PSHeader s h) f.
 Proof.
   intros.
   unfold eval_sym_state.
+  unfold lookup_varlike.
   rewrite commute_mapper_lookup_varlike.
   reflexivity.
 Qed.
@@ -100,11 +101,12 @@ Qed.
 (* Create a lemma similar to header_map_ps but with state_var_map instead *)
 Lemma state_var_map_ps : (* Same TODO as header_map_ps, bad naming *)
   forall s f sv,
-    lookup_state (eval_sym_state s f) sv =
-    eval_smt_arith (lookup_state s sv) f.
+    lookup_varlike PSState (eval_sym_state s f) sv =
+    eval_smt_arith (lookup_varlike PSState s sv) f.
 Proof.
   intros.
   unfold eval_sym_state.
+  unfold lookup_varlike.
   rewrite commute_mapper_lookup_varlike.
   reflexivity.
 Qed.

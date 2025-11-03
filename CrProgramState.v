@@ -492,3 +492,4 @@ Global Opaque is_header_in_ps.
 Global Opaque is_state_var_in_ps.
 Global Opaque get_all_headers_from_ps.
 Global Opaque get_all_states_from_ps.
+Global Opaque map_from_ps.
