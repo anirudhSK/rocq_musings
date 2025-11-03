@@ -36,7 +36,7 @@ Inductive PSField :=
 | PSHeader
 | PSState.
 
-Definition map_from_ps {T : Type} (ps : ProgramState T) (field : PSField) : PMap.t T :=
+Definition map_from_ps {T : Type} (field : PSField) (ps : ProgramState T) : PMap.t T :=
   match field with
   | PSCtrl => ctrl_map ps
   | PSHeader => header_map ps
@@ -61,11 +61,11 @@ Context {A : Type} `{CrVarLike A}.
 Definition lookup_varlike_map {T : Type} (m : PMap.t T) (x : A) : T :=
   PMap.get (get_key x) m.
 
-Definition lookup_varlike {T : Type} (s: ProgramState T) (f: PSField) (x : A) : T :=
-  lookup_varlike_map (map_from_ps s f) x.
+Definition lookup_varlike {T : Type} (f: PSField) (s: ProgramState T) (x : A) : T :=
+  lookup_varlike_map (map_from_ps f s) x.
 
-Definition update_all_varlike {T : Type} (s: ProgramState T) (f: PSField) (fh: A -> T) : ProgramState T :=
-  let new_map := new_pmap_from_old (map_from_ps s f) (fun pos => fh (make_item pos)) in
+Definition update_all_varlike {T : Type} (f: PSField) (s: ProgramState T) (fh: A -> T) : ProgramState T :=
+  let new_map := new_pmap_from_old (map_from_ps f s) (fun pos => fh (make_item pos)) in
   match f with
   | PSCtrl =>   {| ctrl_map := new_map;
                    header_map := header_map s;
@@ -81,8 +81,8 @@ Definition update_all_varlike {T : Type} (s: ProgramState T) (f: PSField) (fh: A
 Definition update_varlike_map {T : Type} (m: PMap.t T) (x: A) (v: T) : PMap.t T :=
   PMap.set (get_key x) v m.
   
-Definition update_varlike {T : Type} (s: ProgramState T) (f: PSField) (x: A) (v: T) : ProgramState T :=
-  let new_map := update_varlike_map (map_from_ps s f) x v in
+Definition update_varlike {T : Type} (f: PSField) (s: ProgramState T) (x: A) (v: T) : ProgramState T :=
+  let new_map := update_varlike_map (map_from_ps f s) x v in
   match f with
   | PSCtrl =>   {| ctrl_map := new_map;
                    header_map := header_map s;
@@ -100,13 +100,13 @@ End VarlikeMap.
 (* TODO: lookup_hdr/state_map could be rolled into lookup_hdr/state. *)
 (* TODO: It is used in a proof with a giant remember expression. *)
 Definition lookup_hdr {T : Type} (s: ProgramState T) (x: Header) : T :=
-  lookup_varlike_map (map_from_ps s PSHeader) x.
+  lookup_varlike_map (map_from_ps PSHeader s) x.
 
 Definition lookup_state {T : Type} (s: ProgramState T) (x: State) : T :=
-  lookup_varlike_map (map_from_ps s PSState) x.
+  lookup_varlike_map (map_from_ps PSState s) x.
 
 Definition lookup_ctrl {T : Type} (s: ProgramState T) (x: Ctrl) : T :=
-  lookup_varlike_map (map_from_ps s PSCtrl) x.
+  lookup_varlike_map (map_from_ps PSCtrl s) x.
 
 Lemma program_state_equality:
       forall (ps1 ps2: ConcreteState),
@@ -123,7 +123,7 @@ Proof.
 Qed.
 
 Definition update_all_hdrs {T : Type} (s: ProgramState T) (fh: Header -> T) : ProgramState T :=
-  update_all_varlike s PSHeader fh.
+  update_all_varlike PSHeader s fh.
 
 Definition update_all_states {T : Type} (s: ProgramState T) (fs: State -> T) : ProgramState T :=
   {| ctrl_map := ctrl_map s;
