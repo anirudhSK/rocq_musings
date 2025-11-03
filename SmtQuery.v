@@ -45,16 +45,16 @@ Definition check_headers_and_state_vars (s1 s2 : SymbolicState)
   (header_list : list Header) (state_var_list : list State)
   : SmtBoolExpr :=
   SmtBoolNot(
-  SmtBoolAnd (List.fold_right (fun h acc => SmtBoolAnd acc (SmtBoolEq (lookup_hdr s1 h) (lookup_hdr s2 h))) 
+  SmtBoolAnd (List.fold_right (fun h acc => SmtBoolAnd acc (SmtBoolEq (lookup_varlike PSHeader s1 h) (lookup_varlike PSHeader s2 h))) 
                                     SmtTrue header_list)
-             (List.fold_right (fun sv acc => SmtBoolAnd acc (SmtBoolEq (lookup_state s1 sv) (lookup_state s2 sv))) 
+             (List.fold_right (fun sv acc => SmtBoolAnd acc (SmtBoolEq (lookup_varlike PSState s1 sv) (lookup_varlike PSState s2 sv))) 
                                     SmtTrue state_var_list)).
 
 Lemma check_headers_and_state_vars_false:
   forall s1 s2 header_list state_var_list f,
   eval_smt_bool(check_headers_and_state_vars s1 s2 header_list state_var_list) f = false ->
-  (forall h, In h header_list -> eval_smt_bool (SmtBoolEq (lookup_hdr s1 h) (lookup_hdr s2 h)) f = true) /\
-  (forall sv, In sv state_var_list -> eval_smt_bool (SmtBoolEq (lookup_state s1 sv) (lookup_state s2 sv)) f = true).
+  (forall h, In h header_list -> eval_smt_bool (SmtBoolEq (lookup_varlike PSHeader s1 h) (lookup_varlike PSHeader s2 h)) f = true) /\
+  (forall sv, In sv state_var_list -> eval_smt_bool (SmtBoolEq (lookup_varlike PSState s1 sv) (lookup_varlike PSState s2 sv)) f = true).
 Proof.
   intros s1 s2 header_list state_var_list f H.
   unfold check_headers_and_state_vars in H.
@@ -72,9 +72,9 @@ Lemma check_headers_and_state_vars_true:
   forall s1 s2 header_list state_var_list f,
   eval_smt_bool(check_headers_and_state_vars s1 s2 header_list state_var_list) f = true ->
   (exists h : Header, In h header_list /\
-                      eval_smt_bool (SmtBoolEq (lookup_hdr s1 h) (lookup_hdr s2 h)) f = false) \/
+                      eval_smt_bool (SmtBoolEq (lookup_varlike PSHeader s1 h) (lookup_varlike PSHeader s2 h)) f = false) \/
   (exists sv :State, In sv state_var_list /\
-                      eval_smt_bool (SmtBoolEq (lookup_state s1 sv) (lookup_state s2 sv)) f = false).
+                      eval_smt_bool (SmtBoolEq (lookup_varlike PSState s1 sv) (lookup_varlike PSState s2 sv)) f = false).
 Proof.
   intros s1 s2 header_list state_var_list f H.
   unfold check_headers_and_state_vars in H.
@@ -104,10 +104,10 @@ Lemma eval_smt_bool_lemma_hdr :
   forall t1 t2 s h f,
   is_header_in_ps s h <> None ->
   eval_smt_bool
-(SmtBoolEq (lookup_hdr (eval_transformer_smt t1 s) h)
-(lookup_hdr (eval_transformer_smt t2 s) h)) f = true ->
-lookup_hdr (eval_transformer_concrete t1 (eval_sym_state s f)) h =
-lookup_hdr (eval_transformer_concrete t2 (eval_sym_state s f)) h.
+(SmtBoolEq (lookup_varlike PSHeader (eval_transformer_smt t1 s) h)
+(lookup_varlike PSHeader (eval_transformer_smt t2 s) h)) f = true ->
+lookup_varlike PSHeader (eval_transformer_concrete t1 (eval_sym_state s f)) h =
+lookup_varlike PSHeader (eval_transformer_concrete t2 (eval_sym_state s f)) h.
 Proof.
   intros t1 t2 s h f.
   intro H.
@@ -126,10 +126,10 @@ Lemma eval_smt_bool_lemma_state :
   forall t1 t2 s sv f,
   is_state_var_in_ps s sv <> None ->
   eval_smt_bool
-(SmtBoolEq (lookup_state (eval_transformer_smt t1 s) sv)
-(lookup_state (eval_transformer_smt t2 s) sv)) f = true ->
-lookup_state (eval_transformer_concrete t1 (eval_sym_state s f)) sv =
-lookup_state (eval_transformer_concrete t2 (eval_sym_state s f)) sv.
+(SmtBoolEq (lookup_varlike PSState (eval_transformer_smt t1 s) sv)
+(lookup_varlike PSState (eval_transformer_smt t2 s) sv)) f = true ->
+lookup_varlike PSState (eval_transformer_concrete t1 (eval_sym_state s f)) sv =
+lookup_varlike PSState (eval_transformer_concrete t2 (eval_sym_state s f)) sv.
 Proof.
   intros t1 t2 s sv f.
   intro H.
@@ -148,10 +148,10 @@ Lemma eval_smt_bool_lemma_hdr_false :
   forall t1 t2 s h f,
   is_header_in_ps s h <> None ->
   eval_smt_bool
-(SmtBoolEq (lookup_hdr (eval_transformer_smt t1 s) h)
-(lookup_hdr (eval_transformer_smt t2 s) h)) f = false ->
-lookup_hdr (eval_transformer_concrete t1 (eval_sym_state s f)) h <>
-lookup_hdr (eval_transformer_concrete t2 (eval_sym_state s f)) h.
+(SmtBoolEq (lookup_varlike PSHeader (eval_transformer_smt t1 s) h)
+(lookup_varlike PSHeader (eval_transformer_smt t2 s) h)) f = false ->
+lookup_varlike PSHeader (eval_transformer_concrete t1 (eval_sym_state s f)) h <>
+lookup_varlike PSHeader (eval_transformer_concrete t2 (eval_sym_state s f)) h.
 Proof.
   intros t1 t2 s h f.
   intro H1.
@@ -170,10 +170,10 @@ Lemma eval_smt_bool_lemma_state_false :
   forall t1 t2 s sv f,
   is_state_var_in_ps s sv <> None ->
   eval_smt_bool
-(SmtBoolEq (lookup_state (eval_transformer_smt t1 s) sv)
-(lookup_state (eval_transformer_smt t2 s) sv)) f = false ->
-lookup_state (eval_transformer_concrete t1 (eval_sym_state s f)) sv <>
-lookup_state (eval_transformer_concrete t2 (eval_sym_state s f)) sv.
+(SmtBoolEq (lookup_varlike PSState (eval_transformer_smt t1 s) sv)
+(lookup_varlike PSState (eval_transformer_smt t2 s) sv)) f = false ->
+lookup_varlike PSState (eval_transformer_concrete t1 (eval_sym_state s f)) sv <>
+lookup_varlike PSState (eval_transformer_concrete t2 (eval_sym_state s f)) sv.
 Proof.
   intros t1 t2 s sv f.
   intro H1.
@@ -240,9 +240,9 @@ Lemma equivalence_checker_sound :
   let c1 := eval_transformer_concrete t1 c in
   let c2 := eval_transformer_concrete t2 c in
   (forall v, In v header_list ->
-  (lookup_hdr c1 v) = (lookup_hdr c2 v)) /\
+  (lookup_varlike PSHeader c1 v) = (lookup_varlike PSHeader c2 v)) /\
   (forall v, In v state_var_list ->
-  (lookup_state c1 v) = (lookup_state c2 v)).
+  (lookup_varlike PSState c1 v) = (lookup_varlike PSState c2 v)).
 Proof.
   intros s t1 t2 header_list state_var_list f.
   intro H1.
@@ -279,9 +279,9 @@ Lemma equivalence_checker_complete :
   let c1 := eval_transformer_concrete t1 c' in
   let c2 := eval_transformer_concrete t2 c' in
   (exists v, In v header_list /\
-  (lookup_hdr c1 v) <> (lookup_hdr c2 v)) \/
+  (lookup_varlike PSHeader c1 v) <> (lookup_varlike PSHeader c2 v)) \/
   (exists v, In v state_var_list /\
-  (lookup_state c1 v) <> (lookup_state c2 v)).
+  (lookup_varlike PSState c1 v) <> (lookup_varlike PSState c2 v)).
 Proof.
   intros s t1 t2 header_list state_var_list f'.
   intro Hh.
@@ -335,7 +335,7 @@ Lemma equivalence_checker_cr_sound_hdr :
   well_formed_program p1 ->                          (* p1 is well-formed *)
   (forall v, In v (get_headers_from_prog p1) ->      (* then, every header in p1 *)
   (In v (get_headers_from_prog p2)) /\               (* must be in p2 *)
-  (lookup_hdr c1 v) = (lookup_hdr c2 v)).            (* and their final values must be equal *)
+  (lookup_varlike PSHeader c1 v) = (lookup_varlike PSHeader c2 v)).            (* and their final values must be equal *)
 Proof.
   intros p1 p2 f H.
   destruct p1 as [h1 s1 c1 t1] eqn:desp1,
@@ -412,7 +412,7 @@ Lemma equivalence_checker_cr_sound_state :
   well_formed_program p1 ->                          (* p1 is well-formed *)
   (forall v, In v (get_states_from_prog p1) ->      (* then, every header in p1 *)
   (In v (get_states_from_prog p2)) /\               (* must be in p2 *)
-  (lookup_state c1 v) = (lookup_state c2 v)).            (* and their final values must be equal *)
+  (lookup_varlike PSState c1 v) = (lookup_varlike PSState c2 v)).            (* and their final values must be equal *)
 Proof.
   intros p1 p2 f H.
   destruct p1 as [h1 s1 c1 t1] eqn:desp1,
@@ -492,9 +492,9 @@ Lemma equivalence_checker_cr_complete :
                                                            (* TODO handle case where programs
                                                            are not equivalent bcos headers, ctrls, and states differ *)
   ((exists v, In v (get_headers_from_prog p1) /\      (* then, there exists a header in p1 *)
-  (lookup_hdr c1 v) <> (lookup_hdr c2 v)) \/          (* whose final values are not equal *)
+  (lookup_varlike PSHeader c1 v) <> (lookup_varlike PSHeader c2 v)) \/          (* whose final values are not equal *)
   (exists v, In v (get_states_from_prog p1) /\        (* or there exists a state var in p1 *)
-  (lookup_state c1 v) <> (lookup_state c2 v))).       (* whose final values are not equal *)
+  (lookup_varlike PSState c1 v) <> (lookup_varlike PSState c2 v))).       (* whose final values are not equal *)
 Proof.
   intros p1 p2 f H.
   destruct p1 as [h1 s1 c1 t1] eqn:desp1,

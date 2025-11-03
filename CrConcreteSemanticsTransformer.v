@@ -46,7 +46,7 @@ Definition eval_hdr_op_assign_concrete (op : HdrOp) (ps: ConcreteState) : Concre
 
 Definition eval_match_concrete (match_pattern : MatchPattern) (ps : ConcreteState) : bool :=
   (* For every list element, check if the Header's current value (determined by ps) equals the uint8 *)
-  List.forallb (fun '(h, v) => Integers.eq (lookup_hdr ps h) v) match_pattern.
+  List.forallb (fun '(h, v) => Integers.eq (lookup_varlike PSHeader ps h) v) match_pattern.
 
 (* Define evaluation over a list of HdrOp *)
 (* Note we are evaluating the list from right to left (fold_right) because it simplifies proving. *)

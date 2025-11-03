@@ -89,6 +89,7 @@ Qed.
 
 (* For any Header, uint8 pair,
    concrete and symbolic execution match up. *)
+Transparent lookup_varlike.
 Lemma commute_sym_vs_conc_match_cond :
   forall (hv_pair: Header * uint8) (f : SmtValuation)
          (s1 : SymbolicState)
@@ -102,14 +103,15 @@ Proof.
   simpl.
   rewrite andb_true_r.
   rewrite Hc1.
-  assert (H : lookup_hdr (eval_sym_state s1 f) h =
-              eval_smt_arith (lookup_hdr s1 h) f).
+  assert (H : lookup_varlike PSHeader (eval_sym_state s1 f) h =
+              eval_smt_arith (lookup_varlike PSHeader s1 h) f).
   { unfold eval_sym_state.
+    unfold lookup_varlike.
     simpl.
     rewrite commute_mapper_lookup_varlike.
     reflexivity. }
   rewrite H.
-  destruct (Integers.eq (eval_smt_arith (lookup_hdr s1 h) f) v).
+  destruct (Integers.eq (eval_smt_arith (lookup_varlike PSHeader s1 h) f) v).
   - reflexivity.
   - reflexivity.
 Qed.
@@ -140,7 +142,7 @@ Proof.
     destruct hv_pair as [h v].
     simpl.
     destruct (eval_match_smt rest s1); try reflexivity.
-    destruct (Integers.eq (eval_smt_arith (lookup_hdr s1 h) f) v) eqn:des.
+    destruct (Integers.eq (eval_smt_arith (lookup_varlike PSHeader s1 h) f) v) eqn:des.
     -- rewrite andb_true_r. simpl. rewrite des. reflexivity.
     -- rewrite andb_false_l. simpl. rewrite des. reflexivity.
 Qed.
@@ -149,26 +151,28 @@ Lemma commute_sym_vs_conc_helper_seq_par_rule_hdr :
   forall (mp: MatchPattern) (hol: list HdrOp) (f : SmtValuation)
          (s1 : SymbolicState) (h : Header),
          is_header_in_ps s1 h <> None ->
-    lookup_hdr (if eval_match_concrete mp (eval_sym_state s1 f)
+    lookup_varlike PSHeader (if eval_match_concrete mp (eval_sym_state s1 f)
     then eval_hdr_op_list_concrete hol (eval_sym_state s1 f)
     else eval_sym_state s1 f) h =
-    lookup_hdr (eval_sym_state (update_all_states
-                   (update_all_hdrs s1 (fun h => SmtConditional (eval_match_smt mp s1)
-                                                                (lookup_hdr (eval_hdr_op_list_smt hol s1) h) (lookup_hdr s1 h)))
+    lookup_varlike PSHeader (eval_sym_state (update_all_varlike PSState
+                   (update_all_varlike PSHeader s1 (fun h => SmtConditional (eval_match_smt mp s1)
+                                                                (lookup_varlike PSHeader (eval_hdr_op_list_smt hol s1) h) (lookup_hdr s1 h)))
                    (fun s => SmtConditional (eval_match_smt mp s1)
-                             (lookup_state (eval_hdr_op_list_smt hol s1) s) (lookup_state s1 s))) f) h.
+                             (lookup_varlike PSState (eval_hdr_op_list_smt hol s1) s) (lookup_varlike PSState s1 s))) f) h.
 Proof.
   intros mp hol f s1 h Hh.
   unfold eval_sym_state at 4.
+  unfold lookup_varlike.
   rewrite commute_mapper_lookup_varlike.
-  rewrite <- commute_state_hdr_updates.
-  rewrite lookup_hdr_after_update_all_hdrs.
+  rewrite <- commute_varlike_updates.
+  rewrite lookup_varlike_after_update_all_varlike.
   -- destruct (eval_match_concrete mp (eval_sym_state s1 f)) eqn:Hmatch.
      + simpl.
        rewrite <- commute_sym_vs_conc_match_pattern with (c1 := eval_sym_state s1 f); auto.
        rewrite Hmatch.
        rewrite commute_sym_vs_conc_hdr_op_list with (f := f) (s1 := s1); auto.
-       rewrite commute_lookup_eval_hdr.
+       (* set (m := (map_from_ps PSHeader (eval_sym_state (eval_hdr_op_list_smt hol s1) f))). *)
+       apply commute_lookup_eval_hdr.
        reflexivity.
      + simpl.
        rewrite <- commute_sym_vs_conc_match_pattern with (c1 := eval_sym_state s1 f); auto.
@@ -185,8 +189,8 @@ Lemma commute_sym_vs_conc_helper_seq_par_rule_sv :
     lookup_state (if eval_match_concrete mp (eval_sym_state s1 f)
     then eval_hdr_op_list_concrete hol (eval_sym_state s1 f)
     else eval_sym_state s1 f) sv =
-    lookup_state (eval_sym_state (update_all_states
-                   (update_all_hdrs s1 (fun h => SmtConditional (eval_match_smt mp s1)
+    lookup_state (eval_sym_state (update_all_varlike PSState
+                   (update_all_varlike PSHeader s1 (fun h => SmtConditional (eval_match_smt mp s1)
                                                                 (lookup_hdr (eval_hdr_op_list_smt hol s1) h) (lookup_hdr s1 h)))
                    (fun s => SmtConditional (eval_match_smt mp s1)
                              (lookup_state (eval_hdr_op_list_smt hol s1) s) (lookup_state s1 s))) f) sv.

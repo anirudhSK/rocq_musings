@@ -68,8 +68,8 @@ Definition eval_match_smt (match_pattern : MatchPattern) (ps : SymbolicState) : 
   (* Note that because SmtBoolAnd is associative and commutative, both fold_left and fold_right give the same answer. *)
   List.fold_right (fun '(h, v) acc =>
     match acc with
-    | SmtTrue => SmtBoolEq (lookup_hdr ps h) (SmtConst v)
-    | _ => SmtBoolAnd (SmtBoolEq (lookup_hdr ps h) (SmtConst v)) acc
+    | SmtTrue => SmtBoolEq (lookup_varlike PSHeader ps h) (SmtConst v)
+    | _ => SmtBoolAnd (SmtBoolEq (lookup_varlike PSHeader ps h) (SmtConst v)) acc
     end) SmtTrue match_pattern.
 
 (* Maybe there's an intermediate function that evaluates a *single* HdrOp conditionally? *)
@@ -81,11 +81,11 @@ Definition eval_hdr_op_assign_smt_conditional
     match ho with
     | StatefulOp _ _ _ target =>
         let op_output := SmtConditional condition (eval_hdr_op_expr_smt ho ps)
-                        (lookup_state ps target) in
+                        (lookup_varlike PSState ps target) in
                         update_state ps target op_output
     | StatelessOp _ _ _ target =>
         let op_output := SmtConditional condition (eval_hdr_op_expr_smt ho ps)
-                        (lookup_hdr ps target) in
+                        (lookup_varlike PSHeader ps target) in
                         update_hdr ps target op_output
     end.
 
@@ -104,9 +104,9 @@ Definition eval_seq_rule_smt (srule : SeqRule) (ps : SymbolicState) : (SymbolicS
              ctrl_plane_map: same as what it was in the original state ps,
              header_map: for every header, its value is SmtConditional condition (value in ps') (value in ps)
              state_map: similar to header_map *)
-            update_all_states
-            (update_all_hdrs ps (fun h => SmtConditional condition (lookup_hdr ps' h) (lookup_hdr ps h)))
-            (fun s => SmtConditional condition (lookup_state ps' s) (lookup_state ps s))
+            update_all_varlike PSState
+            (update_all_varlike PSHeader ps (fun h => SmtConditional condition (lookup_varlike PSHeader ps' h) (lookup_varlike PSHeader ps h)))
+            (fun s => SmtConditional condition (lookup_varlike PSState ps' s) (lookup_varlike PSState ps s))
   end.
 
 (* Function to evaluate a parallel match-action rule,
@@ -126,9 +126,10 @@ Definition eval_par_rule_smt (prule : ParRule) (ps : SymbolicState) : (SymbolicS
              ctrl_plane_map: same as what it was in the original state ps,
              header_map: for every header, its value is SmtConditional condition (value in ps') (value in ps)
              state_map: similar to header_map *)
-            update_all_states
-            (update_all_hdrs ps (fun h => SmtConditional condition (lookup_hdr ps' h) (lookup_hdr ps h)))
-            (fun s => SmtConditional condition (lookup_state ps' s) (lookup_state ps s))
+            update_all_varlike PSState
+            (update_all_varlike PSHeader ps (fun h => SmtConditional condition (lookup_varlike PSHeader ps' h)
+                                                                   (lookup_varlike PSHeader ps h)))
+            (fun s => SmtConditional condition (lookup_varlike PSState ps' s) (lookup_varlike PSState ps s))
   end.
 
 Definition eval_match_action_rule_smt (rule : MatchActionRule) (ps : SymbolicState) : (SymbolicState) :=
@@ -156,9 +157,9 @@ Definition eval_transformer_smt (t : Transformer) (ps : SymbolicState) : Symboli
   (* get all future program states, one for each rule *)
   let program_states := List.map (fun rule => eval_match_action_rule_smt rule ps) t in
   (* map a header to all possible future exprs, one for each future state *)
-  let header_exprs   := fun h => List.map (fun ps => lookup_hdr ps h) program_states in
+  let header_exprs   := fun h => List.map (fun ps => lookup_varlike PSHeader ps h) program_states in
   (* same as above, for state variables *)
-  let state_vars     := fun s => List.map (fun ps => lookup_state ps s) program_states in
-    update_all_states
-    (update_all_hdrs ps (fun h => switch_case_expr (List.combine (get_match_results_smt t ps) (header_exprs h)) (lookup_hdr ps h)))
-    (fun s => switch_case_expr (List.combine (get_match_results_smt t ps) (state_vars s)) (lookup_state ps s)).
+  let state_vars     := fun s => List.map (fun ps => lookup_varlike PSState ps s) program_states in
+    update_all_varlike PSState
+    (update_all_varlike PSHeader ps (fun h => switch_case_expr (List.combine (get_match_results_smt t ps) (header_exprs h)) (lookup_varlike PSHeader ps h)))
+    (fun s => switch_case_expr (List.combine (get_match_results_smt t ps) (state_vars s)) (lookup_varlike PSState ps s)).
