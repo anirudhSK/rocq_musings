@@ -24,10 +24,10 @@ Definition apply_bin_op (f : BinaryOp) (arg1 : uint8) (arg2 : uint8) : uint8 :=
 
 Definition lookup_concrete (arg : FunctionArgument) (ps : ConcreteState) : uint8 :=
   match arg with
-  | CtrlPlaneArg c => lookup_ctrl ps c
-  | HeaderArg h    => lookup_hdr ps h
+  | CtrlPlaneArg c => lookup_varlike_map (map_from_ps PSCtrl ps) c
+  | HeaderArg h    => lookup_varlike_map (map_from_ps PSHeader ps) h
   | ConstantArg n  => n
-  | StatefulArg s  => lookup_state ps s
+  | StatefulArg s  => lookup_varlike_map (map_from_ps PSState ps) s
   end.
 
 Definition eval_hdr_op_expr_concrete (op : HdrOp) (ps : ConcreteState) : uint8 :=

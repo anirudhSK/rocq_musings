@@ -23,6 +23,7 @@ Class CrVarLike (A : Type) := {
   make_item : positive -> A;
   get_key   : A -> positive;
   inverses : forall (x : A), make_item (get_key x) = x;
+  inverses' : forall (i : positive), get_key (make_item i) = i;
   inj : injective_contravariant get_key;
 }.
 
@@ -34,6 +35,8 @@ Proof.
             inj := _ |}.
   - (* inverses : forall x, make_item (get_key x) = x *)
     intros [uid]. simpl. reflexivity.
+  - (* inverses' : forall i, get_key (make_item i) = i *)
+    reflexivity.
   - (* inj : injective_contravariant get_key *)
     intros x y Hxy Heq.
     destruct x as [uid1], y as [uid2]; simpl in Heq.
@@ -50,6 +53,8 @@ Proof.
             inj := _ |}.
   - (* inverses : forall x, make_item (get_key x) = x *)
     intros [uid]. simpl. reflexivity.
+  - (* inverses' : forall i, get_key (make_item i) = i *)
+    reflexivity.
   - (* inj : injective_contravariant get_key *)
     intros x y Hxy Heq.
     destruct x as [uid1], y as [uid2]; simpl in Heq.
@@ -65,6 +70,8 @@ Proof.
             inj := _ |}.
   - (* inverses : forall x, make_item (get_key x) = x *)
     intros [uid]. simpl. reflexivity.
+  - (* inverses' : forall i, get_key (make_item i) = i *)
+    reflexivity.
   - (* inj : injective_contravariant get_key *)
     intros x y Hxy Heq.
     destruct x as [uid1], y as [uid2]; simpl in Heq.

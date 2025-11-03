@@ -15,26 +15,26 @@ From MyProject Require Import ListUtils.
 Lemma commute_lookup_eval_state:
   forall (s : SymbolicState) (f : SmtValuation)
         sv,
-    lookup_state (eval_sym_state s f) sv =
-    eval_smt_arith (lookup_state s sv) f.
+    lookup_varlike_map (map_from_ps PSState (eval_sym_state s f)) sv =
+    eval_smt_arith (lookup_varlike_map (map_from_ps PSState s) sv) f.
 Proof.
   intros s f sv.
   destruct sv.
   unfold eval_sym_state.
-  rewrite commute_mapper_lookup_state.
+  rewrite commute_mapper_lookup_varlike.
   reflexivity.
 Qed.
 
 Lemma commute_lookup_eval_hdr:
   forall (s : SymbolicState) (f : SmtValuation)
         hv,
-    lookup_hdr (eval_sym_state s f) hv =
-    eval_smt_arith (lookup_hdr s hv) f.
+    lookup_varlike_map (map_from_ps PSHeader (eval_sym_state s f)) hv =
+    eval_smt_arith (lookup_varlike_map (map_from_ps PSHeader s) hv) f.
 Proof.
   intros s f hv.
   destruct hv.
   unfold eval_sym_state.
-  rewrite commute_mapper_lookup_hdr.
+  rewrite commute_mapper_lookup_varlike.
   reflexivity.
 Qed.
 
@@ -45,10 +45,11 @@ Lemma commute_lookup_eval:
     eval_smt_arith (lookup_smt arg s) f.
 Proof.
   intros s f arg.
+  unfold lookup_concrete.
   destruct arg; simpl; try reflexivity.
-  -- unfold eval_sym_state. rewrite commute_mapper_lookup_ctrl. reflexivity.
-  -- unfold eval_sym_state. rewrite commute_mapper_lookup_hdr. reflexivity.
-  -- unfold eval_sym_state. rewrite commute_mapper_lookup_state. reflexivity.
+  -- unfold eval_sym_state. rewrite commute_mapper_lookup_varlike. reflexivity.
+  -- unfold eval_sym_state. rewrite commute_mapper_lookup_varlike. reflexivity.
+  -- unfold eval_sym_state. rewrite commute_mapper_lookup_varlike. reflexivity.
 Qed.
 
 Lemma find_first_match_lemma:
@@ -92,7 +93,7 @@ Lemma header_map_ps : (*TODO: Should probably be called lookup_hdr_ps *)
 Proof.
   intros.
   unfold eval_sym_state.
-  rewrite commute_mapper_lookup_hdr.
+  rewrite commute_mapper_lookup_varlike.
   reflexivity.
 Qed.
 
@@ -104,6 +105,6 @@ Lemma state_var_map_ps : (* Same TODO as header_map_ps, bad naming *)
 Proof.
   intros.
   unfold eval_sym_state.
-  rewrite commute_mapper_lookup_state.
+  rewrite commute_mapper_lookup_varlike.
   reflexivity.
 Qed.

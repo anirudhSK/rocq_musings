@@ -12,10 +12,10 @@ Import ListNotations.
 (* Convert FunctionArgument to SmtArithExpr *)
 Definition lookup_smt (arg : FunctionArgument) (ps : SymbolicState) : SmtArithExpr :=
   match arg with
-  | CtrlPlaneArg c => lookup_ctrl ps c
-  | HeaderArg h    => lookup_hdr ps h
+  | CtrlPlaneArg c => lookup_varlike_map (map_from_ps PSCtrl ps) c
+  | HeaderArg h    => lookup_varlike_map (map_from_ps PSHeader ps) h
   | ConstantArg n  => SmtConst n
-  | StatefulArg s  => lookup_state ps s
+  | StatefulArg s  => lookup_varlike_map (map_from_ps PSState ps) s
   end.
 
 (* Define the symbolic interpreter for header operation expressions *)

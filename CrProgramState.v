@@ -95,6 +95,114 @@ Definition update_varlike {T : Type} (f: PSField) (s: ProgramState T) (x: A) (v:
                    state_map := new_map |}
   end.
 
+Lemma update_all_varlike_lookup_unchanged:
+  forall {T} (s1 : ProgramState T) (f : PSField),
+   update_all_varlike f s1 (fun v : A => lookup_varlike_map (map_from_ps f s1) v) = s1.
+Proof.
+  intros.
+  destruct s1 as [ctrl hdr state].
+  unfold update_all_varlike.
+  destruct f;
+  simpl;
+  f_equal; try reflexivity;
+  unfold lookup_varlike_map;
+  unfold new_pmap_from_old;
+  simpl;
+  try destruct ctrl; try destruct hdr; try destruct state;
+  simpl;
+  f_equal;
+  apply PTree.extensionality;
+  intros;
+  rewrite PTree.gmap;
+  unfold Coqlib.option_map;
+  unfold PMap.get;
+  simpl;
+  rewrite inverses'.
+  - destruct (t0 ! i) eqn:des; auto.
+  - destruct (t2 ! i) eqn:des; auto.
+  - destruct (t4 ! i) eqn:des; auto.
+Qed.
+
+Lemma commute_mapper_lookup_varlike:
+  forall {T1} {T2} ps v (func : T1 -> T2) f,
+  lookup_varlike_map (map_from_ps f (program_state_mapper func func func ps)) v =
+  func (lookup_varlike_map (map_from_ps f ps) v).
+Proof.
+  intros.
+  destruct f;
+  apply PMap.gmap.
+Qed.
+
+Lemma commute_mapper_update_varlike:
+  forall {T1} {T2} ps x v (func : T1 -> T2) f,
+  program_state_mapper func func func (update_varlike f ps x v) =
+  update_varlike f (program_state_mapper func func func ps) x (func v).
+Proof.
+  intros.
+  unfold program_state_mapper.
+  unfold update_varlike.
+  destruct f;
+  f_equal;
+  simpl;
+  unfold update_varlike_map;
+  destruct ps;
+  simpl;
+  unfold PMap.set;
+  unfold PMap.map;
+  simpl;
+  f_equal;
+  apply PTree.extensionality;
+  intros;
+  simpl;
+  rewrite PTree.gsspec;
+  rewrite PTree.gmap1;
+  rewrite PTree.gsspec.
+  1-3: destruct (Coqlib.peq i (get_key x));
+  try subst; try reflexivity;
+  try rewrite PTree.gmap1; try reflexivity.
+Qed.
+
+Lemma lookup_f1_unchanged_by_update_all_f2:
+  forall {T} fs (s1 : ProgramState T) (h : A) f1 f2,
+  f1 <> f2 ->
+    lookup_varlike_map (map_from_ps f1 s1) h =
+    lookup_varlike_map (map_from_ps f1 (update_all_varlike f2 s1 fs)) h.
+Proof.
+  intros.
+  destruct f1, f2;
+  try reflexivity;
+  try congruence.
+Qed.
+
+Definition is_varlike_in_ps {T} (f : PSField) (s1 : ProgramState T) (v : A) :=
+  PTree.get (get_key v) (snd (map_from_ps f s1)).
+
+(* Lemma lookup_varlike_after_update_all_varlike:
+  forall {T} (s1 : ProgramState T) (h : A) (fh : A -> T) (f : PSField),
+    is_varlike_in_ps f s1 h <> None ->
+    lookup_varlike_map (map_from_ps f (update_all_varlike f s1 fh)) h = fh h.
+Proof.
+  intros.
+  unfold lookup_varlike_map.
+  unfold update_all_varlike.
+  destruct f;
+  simpl;
+  unfold lookup_varlike_map;
+  unfold new_pmap_from_old;
+  simpl.
+  - unfold is_varlike_in_ps in H0.
+    destruct (ctrl_map s1) as [default ctrl].
+    simpl.
+    f_equal.
+    unfold PMap.get.
+    simpl.
+    rewrite PTree.gmap.
+    unfold Coqlib.option_map.
+    rewrite inverses.
+    destruct (snd (map_from_ps PSCtrl s1)) ! (get_key h).
+    destruct (ctrl ! (get_key h)) eqn:des; auto.
+Admitted. *)
+
 End VarlikeMap.
 
 (* TODO: lookup_hdr/state_map could be rolled into lookup_hdr/state. *)
@@ -145,162 +253,13 @@ Proof.
   discriminate H.
 Qed.
 
-Lemma update_all_hdrs_lookup_unchanged:
-  forall {T} (s1 : ProgramState T),
-   update_all_varlike PSHeader s1 (fun h : Header => lookup_varlike_map (map_from_ps PSHeader s1) h) = s1.
-Proof.
-  intros.
-  destruct s1 as [ctrl hdr state].
-  unfold update_all_varlike.
-  simpl.
-  f_equal; try reflexivity.
-  unfold lookup_varlike_map.
-  simpl.
-  unfold lookup_varlike_map.
-  unfold new_pmap_from_old.
-  simpl.
-  destruct hdr.
-  simpl.
-  f_equal.
-  apply PTree.extensionality.
-  intros.
-  rewrite PTree.gmap.
-  unfold Coqlib.option_map.
-  unfold PMap.get.
-  simpl.
-  destruct (t0 ! i) eqn:des; auto.
-Qed.
-
-(* Same lemma as above but for state *)
-Lemma update_all_states_lookup_unchanged:
-  forall {T} (s1 : ProgramState T),
-   update_all_varlike PSState s1 (fun sv : State => lookup_varlike_map (map_from_ps PSState s1) sv) = s1.
-Proof.
-  intros.
-  destruct s1 as [ctrl hdr state].
-  unfold update_all_varlike.
-  simpl.
-  f_equal; try reflexivity.
-  unfold lookup_varlike_map.
-  simpl.
-  unfold lookup_varlike_map.
-  unfold new_pmap_from_old.
-  simpl.
-  destruct state.
-  simpl.
-  f_equal.
-  apply PTree.extensionality.
-  intros.
-  rewrite PTree.gmap.
-  unfold Coqlib.option_map.
-  unfold PMap.get.
-  simpl.
-  destruct (t0 ! i) eqn:des; auto.
-Qed.
-
 Lemma program_state_unchanged:
   forall {T} (s1 : ProgramState T),
   update_all_varlike PSState (update_all_varlike PSHeader s1 (fun h : Header => lookup_varlike_map (map_from_ps PSHeader s1) h))
                     (fun s : State => lookup_varlike_map (map_from_ps PSState s1) s) = s1.
 Proof.
   intros.
-  rewrite update_all_hdrs_lookup_unchanged.
-  rewrite update_all_states_lookup_unchanged.
-  reflexivity.
-Qed.        
-
-Lemma commute_mapper_lookup_ctrl:
-  forall {T1} {T2} ps c (func : T1 -> T2),
-  lookup_varlike_map (map_from_ps PSCtrl (program_state_mapper func func func ps)) c =
-  func (lookup_varlike_map (map_from_ps PSCtrl ps) c).
-Proof.
-  intros.
-  apply PMap.gmap.
-Qed.
-
-Lemma commute_mapper_lookup_state:
-  forall {T1} {T2} ps sv (func : T1 -> T2),
-  lookup_varlike_map (map_from_ps PSState (program_state_mapper func func func ps)) sv =
-  func (lookup_varlike_map (map_from_ps PSState ps) sv).
-Proof.
-  intros.
-  apply PMap.gmap.
-Qed.
-
-Lemma commute_mapper_lookup_hdr:
-  forall {T1} {T2} ps hv (func : T1 -> T2),
-  lookup_varlike_map (map_from_ps PSHeader (program_state_mapper func func func ps)) hv =
-  func (lookup_varlike_map (map_from_ps PSHeader ps) hv).
-Proof.
-  intros.
-  apply PMap.gmap.
-Qed.
-
-Lemma commute_mapper_update_hdr:
-  forall {T1} {T2} ps h v (func : T1 -> T2),
-  program_state_mapper func func func (update_varlike PSHeader ps h v) =
-  update_varlike PSHeader (program_state_mapper func func func ps) h (func v).
-Proof.
-  intros.
-  unfold program_state_mapper.
-  unfold update_varlike.
-  f_equal.
-  simpl.
-  unfold update_varlike_map.
-  destruct ps.
-  simpl.
-  destruct h. simpl.
-  unfold PMap.set.
-  unfold PMap.map.
-  simpl.
-  f_equal.
-  apply PTree.extensionality.
-  intros.
-  simpl.
-  rewrite PTree.gsspec.
-  rewrite PTree.gmap1.
-  rewrite PTree.gsspec.
-  destruct (Coqlib.peq i uid).
-  - subst. reflexivity.
-  - rewrite PTree.gmap1.
-    reflexivity.
-Qed.
-
-Lemma commute_mapper_update_state:
-  forall {T1} {T2} ps sv v (func : T1 -> T2),
-  program_state_mapper func func func (update_varlike PSState ps sv v) =
-  update_varlike PSState (program_state_mapper func func func ps) sv (func v).
-Proof.
-  intros.
-  unfold program_state_mapper.
-  unfold update_varlike.
-  f_equal.
-  simpl.
-  unfold update_varlike_map.
-  destruct ps.
-  simpl.
-  destruct sv. simpl.
-  unfold PMap.set.
-  unfold PMap.map.
-  simpl.
-  f_equal.
-  apply PTree.extensionality.
-  intros.
-  simpl.
-  rewrite PTree.gsspec.
-  rewrite PTree.gmap1.
-  rewrite PTree.gsspec.
-  destruct (Coqlib.peq i uid).
-  - subst. reflexivity.
-  - rewrite PTree.gmap1.
-    reflexivity.
-Qed.
-
-Lemma lookup_hdr_unchanged_by_update_all_states:
-  forall {T} fs (s1 : ProgramState T) (h : Header),
-    lookup_varlike_map (map_from_ps PSHeader s1) h =
-    lookup_varlike_map (map_from_ps PSHeader (update_all_varlike PSState s1 fs)) h.
-Proof.
+  repeat rewrite update_all_varlike_lookup_unchanged.
   reflexivity.
 Qed.
 
@@ -332,15 +291,6 @@ Proof.
   simpl in H.
   destruct (hdr ! uid) eqn:des; auto.
   congruence.
-Qed.
-
-(* Create mirror image versions of the two lemmas above with state and hdr interchanged *)
-Lemma lookup_state_unchanged_by_update_all_hdrs:
-  forall {T} fh (s1 : ProgramState T) (sv : State),
-    lookup_varlike_map (map_from_ps PSState s1) sv =
-    lookup_varlike_map (map_from_ps PSState (update_all_varlike PSHeader s1 fh)) sv.
-Proof.
-  reflexivity.
 Qed.
 
 Definition is_state_var_in_ps {T} (s1 : ProgramState T) (sv : State) :=
