@@ -126,20 +126,14 @@ Definition update_all_hdrs {T : Type} (s: ProgramState T) (fh: Header -> T) : Pr
   update_all_varlike PSHeader s fh.
 
 Definition update_all_states {T : Type} (s: ProgramState T) (fs: State -> T) : ProgramState T :=
-  {| ctrl_map := ctrl_map s;
-     header_map := header_map s;
-     state_map := new_pmap_from_old (state_map s) (fun pos => fs (StateCtr pos))|}.
+  update_all_varlike PSState s fs.
 
 (* Update the header map with a new value for a specific header *)
 Definition update_hdr {T : Type} (s: ProgramState T) (x: Header) (v: T) : ProgramState T :=
-  {|ctrl_map :=ctrl_map s;
-     header_map :=  update_varlike_map (header_map s) x v;
-     state_map := state_map s|}.
+  update_varlike PSHeader s x v.
 
 Definition update_state {T : Type} (s: ProgramState T) (x: State) (v: T) : ProgramState T :=
-  {|ctrl_map :=ctrl_map s;
-     header_map := header_map s;
-     state_map := update_varlike_map (state_map s) x v |}.
+  update_varlike PSState s x v.
 
 Lemma cons_not_nil : forall A (x : A) (xs : list A),
   ~ ((x :: xs) = nil).
@@ -153,14 +147,14 @@ Qed.
 
 Lemma update_all_hdrs_lookup_unchanged:
   forall {T} (s1 : ProgramState T),
-   update_all_hdrs s1 (fun h : Header => lookup_hdr s1 h) = s1.
+   update_all_varlike PSHeader s1 (fun h : Header => lookup_varlike_map (map_from_ps PSHeader s1) h) = s1.
 Proof.
   intros.
   destruct s1 as [ctrl hdr state].
-  unfold update_all_hdrs.
+  unfold update_all_varlike.
   simpl.
   f_equal; try reflexivity.
-  unfold lookup_hdr.
+  unfold lookup_varlike_map.
   simpl.
   unfold lookup_varlike_map.
   unfold new_pmap_from_old.
@@ -180,14 +174,14 @@ Qed.
 (* Same lemma as above but for state *)
 Lemma update_all_states_lookup_unchanged:
   forall {T} (s1 : ProgramState T),
-   update_all_states s1 (fun sv : State => lookup_state s1 sv) = s1.
+   update_all_varlike PSState s1 (fun sv : State => lookup_varlike_map (map_from_ps PSState s1) sv) = s1.
 Proof.
   intros.
   destruct s1 as [ctrl hdr state].
-  unfold update_all_states.
+  unfold update_all_varlike.
   simpl.
   f_equal; try reflexivity.
-  unfold lookup_state.
+  unfold lookup_varlike_map.
   simpl.
   unfold lookup_varlike_map.
   unfold new_pmap_from_old.
@@ -206,8 +200,8 @@ Qed.
 
 Lemma program_state_unchanged:
   forall {T} (s1 : ProgramState T),
-  update_all_states (update_all_hdrs s1 (fun h : Header => lookup_hdr s1 h))
-                    (fun s : State => lookup_state s1 s) = s1.
+  update_all_varlike PSState (update_all_varlike PSHeader s1 (fun h : Header => lookup_varlike_map (map_from_ps PSHeader s1) h))
+                    (fun s : State => lookup_varlike_map (map_from_ps PSState s1) s) = s1.
 Proof.
   intros.
   rewrite update_all_hdrs_lookup_unchanged.
@@ -217,8 +211,8 @@ Qed.
 
 Lemma commute_mapper_lookup_ctrl:
   forall {T1} {T2} ps c (func : T1 -> T2),
-  lookup_ctrl (program_state_mapper func func func ps) c =
-  func (lookup_ctrl ps c).
+  lookup_varlike_map (map_from_ps PSCtrl (program_state_mapper func func func ps)) c =
+  func (lookup_varlike_map (map_from_ps PSCtrl ps) c).
 Proof.
   intros.
   apply PMap.gmap.
@@ -226,8 +220,8 @@ Qed.
 
 Lemma commute_mapper_lookup_state:
   forall {T1} {T2} ps sv (func : T1 -> T2),
-  lookup_state (program_state_mapper func func func ps) sv =
-  func (lookup_state ps sv).
+  lookup_varlike_map (map_from_ps PSState (program_state_mapper func func func ps)) sv =
+  func (lookup_varlike_map (map_from_ps PSState ps) sv).
 Proof.
   intros.
   apply PMap.gmap.
@@ -235,8 +229,8 @@ Qed.
 
 Lemma commute_mapper_lookup_hdr:
   forall {T1} {T2} ps hv (func : T1 -> T2),
-  lookup_hdr (program_state_mapper func func func ps) hv =
-  func (lookup_hdr ps hv).
+  lookup_varlike_map (map_from_ps PSHeader (program_state_mapper func func func ps)) hv =
+  func (lookup_varlike_map (map_from_ps PSHeader ps) hv).
 Proof.
   intros.
   apply PMap.gmap.
@@ -244,12 +238,12 @@ Qed.
 
 Lemma commute_mapper_update_hdr:
   forall {T1} {T2} ps h v (func : T1 -> T2),
-  program_state_mapper func func func (update_hdr ps h v) =
-  update_hdr (program_state_mapper func func func ps) h (func v).
+  program_state_mapper func func func (update_varlike PSHeader ps h v) =
+  update_varlike PSHeader (program_state_mapper func func func ps) h (func v).
 Proof.
   intros.
   unfold program_state_mapper.
-  unfold update_hdr.
+  unfold update_varlike.
   f_equal.
   simpl.
   unfold update_varlike_map.
@@ -274,12 +268,12 @@ Qed.
 
 Lemma commute_mapper_update_state:
   forall {T1} {T2} ps sv v (func : T1 -> T2),
-  program_state_mapper func func func (update_state ps sv v) =
-  update_state (program_state_mapper func func func ps) sv (func v).
+  program_state_mapper func func func (update_varlike PSState ps sv v) =
+  update_varlike PSState (program_state_mapper func func func ps) sv (func v).
 Proof.
   intros.
   unfold program_state_mapper.
-  unfold update_state.
+  unfold update_varlike.
   f_equal.
   simpl.
   unfold update_varlike_map.
@@ -304,7 +298,8 @@ Qed.
 
 Lemma lookup_hdr_unchanged_by_update_all_states:
   forall {T} fs (s1 : ProgramState T) (h : Header),
-    lookup_hdr s1 h = lookup_hdr (update_all_states s1 fs) h.
+    lookup_varlike_map (map_from_ps PSHeader s1) h =
+    lookup_varlike_map (map_from_ps PSHeader (update_all_varlike PSState s1 fs)) h.
 Proof.
   reflexivity.
 Qed.
@@ -315,11 +310,11 @@ Definition is_header_in_ps {T} (s1 : ProgramState T) (h : Header) :=
 Lemma lookup_hdr_after_update_all_hdrs:
   forall {T} (s1 : ProgramState T) (h : Header) (fh : Header -> T),
     is_header_in_ps s1 h <> None ->
-    lookup_hdr (update_all_hdrs s1 fh) h = fh h.
+    lookup_varlike_map (map_from_ps PSHeader (update_all_varlike PSHeader s1 fh)) h = fh h.
 Proof.
   intros.
-  unfold lookup_hdr.
-  unfold update_all_hdrs.
+  unfold lookup_varlike_map.
+  unfold update_all_varlike.
   simpl.
   unfold lookup_varlike_map.
   unfold new_pmap_from_old.
@@ -342,7 +337,8 @@ Qed.
 (* Create mirror image versions of the two lemmas above with state and hdr interchanged *)
 Lemma lookup_state_unchanged_by_update_all_hdrs:
   forall {T} fh (s1 : ProgramState T) (sv : State),
-    lookup_state s1 sv = lookup_state (update_all_hdrs s1 fh) sv.
+    lookup_varlike_map (map_from_ps PSState s1) sv =
+    lookup_varlike_map (map_from_ps PSState (update_all_varlike PSHeader s1 fh)) sv.
 Proof.
   reflexivity.
 Qed.
@@ -353,11 +349,11 @@ Definition is_state_var_in_ps {T} (s1 : ProgramState T) (sv : State) :=
 Lemma lookup_state_after_update_all_states:
   forall {T} (s1 : ProgramState T) (sv : State) (fs : State -> T),
     is_state_var_in_ps s1 sv <> None ->
-    lookup_state (update_all_states s1 fs) sv = fs sv.
+    lookup_varlike_map (map_from_ps PSState (update_all_varlike PSState s1 fs)) sv = fs sv.
 Proof.
   intros.
-  unfold lookup_state.
-  unfold update_all_states.
+  unfold lookup_varlike_map.
+  unfold update_all_varlike.
   simpl.
   unfold lookup_varlike_map.
   unfold new_pmap_from_old.
@@ -379,15 +375,16 @@ Qed.
 
 Lemma commute_state_hdr_updates:
   forall {T} (s1 : ProgramState T) (fh : Header -> T) (fs : State -> T),
-    update_all_hdrs (update_all_states s1 fs) fh =
-    update_all_states (update_all_hdrs s1 fh) fs.
+    update_all_varlike PSHeader (update_all_varlike PSState s1 fs) fh =
+    update_all_varlike PSState (update_all_varlike PSHeader s1 fh) fs.
 Proof.
   reflexivity.
 Qed.
 
 Lemma lookup_hdr_trivial:
   forall {T} (s : ProgramState T) (h : Header),
-    lookup_hdr s h = lookup_varlike_map (header_map s) h.
+    lookup_varlike_map (map_from_ps PSHeader s) h =
+    lookup_varlike_map (header_map s) h.
 Proof.
   intros.
   reflexivity.
@@ -395,7 +392,8 @@ Qed.
 
 Lemma lookup_state_trivial:
   forall {T} (s : ProgramState T) (sv : State),
-    lookup_state s sv = lookup_varlike_map (state_map s) sv.
+    lookup_varlike_map (map_from_ps PSState s) sv =
+    lookup_varlike_map (state_map s) sv.
 Proof.
   intros.
   reflexivity.
@@ -404,7 +402,7 @@ Qed.
 (* is_header_in_ps is preserved across update_all_states *)
 Lemma is_header_in_ps_after_update_all_states:
   forall {T} (s1 : ProgramState T) (h : Header) (fs : State -> T),
-    is_header_in_ps (update_all_states s1 fs) h = is_header_in_ps s1 h.
+    is_header_in_ps (update_all_varlike PSState s1 fs) h = is_header_in_ps s1 h.
 Proof.
   intros.
   reflexivity.
@@ -413,7 +411,7 @@ Qed.
 (* is_state_var_in_ps is preserved across update_all_hdrs *)
 Lemma is_state_var_in_ps_after_update_all_hdrs:
   forall {T} (s1 : ProgramState T) (sv : State) (fh : Header -> T),
-    is_state_var_in_ps (update_all_hdrs s1 fh) sv = is_state_var_in_ps s1 sv.
+    is_state_var_in_ps (update_all_varlike PSHeader s1 fh) sv = is_state_var_in_ps s1 sv.
 Proof.
   intros.
   reflexivity.
