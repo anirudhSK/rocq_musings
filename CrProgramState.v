@@ -60,6 +60,13 @@ Definition lookup_varlike_map {T A : Type} `{CrVarLike A} (m : PMap.t T) (x : A)
 Definition lookup_varlike {T A : Type} `{CrVarLike A} (f: PSField) (s: ProgramState T) (x : A) : T :=
   lookup_varlike_map (map_from_ps f s) x.
 
+Lemma varlike_from_varlike_map :
+  forall {T A} `{CrVarLike A} (f : PSField) (s : ProgramState T) (x : A),
+    lookup_varlike f s x = lookup_varlike_map (map_from_ps f s) x.
+Proof.
+  reflexivity.
+Qed.
+
 Definition update_all_varlike {T A : Type} `{CrVarLike A} (f: PSField) (s: ProgramState T) (fh: A -> T) : ProgramState T :=
   let new_map := new_pmap_from_old (map_from_ps f s) (fun pos => fh (make_item pos)) in
   match f with
@@ -309,10 +316,21 @@ Proof.
   reflexivity.
 Qed.
 
+Lemma is_v1_in_ps_after_update_all_v2:
+  forall {T A A'} `{CrVarLike A} `{CrVarLike A'} (s1 : ProgramState T)
+    f1 f2 (h : A) (fs : A' -> T),
+    f1 <> f2 ->
+    is_varlike_in_ps f1 (update_all_varlike f2 s1 fs) h = is_varlike_in_ps f1 s1 h.
+Proof.
+  intros.
+  destruct f1, f2; try congruence;
+  reflexivity.
+Qed.
+
 (* is_header_in_ps is preserved across update_all_states *)
 Lemma is_header_in_ps_after_update_all_states:
   forall {T} (s1 : ProgramState T) (h : Header) (fs : State -> T),
-    is_header_in_ps (update_all_varlike PSState s1 fs) h = is_header_in_ps s1 h.
+    is_varlike_in_ps PSHeader (update_all_varlike PSState s1 fs) h = is_varlike_in_ps PSHeader s1 h.
 Proof.
   intros.
   reflexivity.
@@ -321,7 +339,7 @@ Qed.
 (* is_state_var_in_ps is preserved across update_all_hdrs *)
 Lemma is_state_var_in_ps_after_update_all_hdrs:
   forall {T} (s1 : ProgramState T) (sv : State) (fh : Header -> T),
-    is_state_var_in_ps (update_all_varlike PSHeader s1 fh) sv = is_state_var_in_ps s1 sv.
+    is_varlike_in_ps PSState (update_all_varlike PSHeader s1 fh) sv = is_varlike_in_ps PSState s1 sv.
 Proof.
   intros.
   reflexivity.

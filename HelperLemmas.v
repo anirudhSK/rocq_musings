@@ -14,7 +14,7 @@ From MyProject Require Import ListUtils.
 
 Lemma commute_lookup_eval_state:
   forall (s : SymbolicState) (f : SmtValuation)
-        sv,
+        (sv : State),
     lookup_varlike_map (map_from_ps PSState (eval_sym_state s f)) sv =
     eval_smt_arith (lookup_varlike_map (map_from_ps PSState s) sv) f.
 Proof.
@@ -27,7 +27,7 @@ Qed.
 
 Lemma commute_lookup_eval_hdr:
   forall (s : SymbolicState) (f : SmtValuation)
-        hv,
+        (hv : Header),
     lookup_varlike_map (map_from_ps PSHeader (eval_sym_state s f)) hv =
     eval_smt_arith (lookup_varlike_map (map_from_ps PSHeader s) hv) f.
 Proof.
@@ -40,7 +40,7 @@ Qed.
 
 Lemma commute_lookup_eval_ctrl:
   forall (s : SymbolicState) (f : SmtValuation)
-        hc,
+        (hc : Ctrl),
     lookup_varlike_map (map_from_ps PSCtrl (eval_sym_state s f)) hc =
     eval_smt_arith (lookup_varlike_map (map_from_ps PSCtrl s) hc) f.
 Proof.
@@ -48,6 +48,20 @@ Proof.
   destruct hc.
   unfold eval_sym_state.
   rewrite commute_mapper_lookup_varlike.
+  reflexivity.
+Qed.
+
+Lemma commute_lookup_eval_varlike:
+  forall {A} `{CrVarLike A} (field : PSField) (ps : SymbolicState)
+        (var : A) (val : SmtValuation),
+    lookup_varlike field (eval_sym_state ps val) var =
+    eval_smt_arith (lookup_varlike field ps var) val.
+Proof.
+  intros.
+  destruct field;
+  unfold lookup_varlike;
+  unfold eval_sym_state;
+  rewrite commute_mapper_lookup_varlike;
   reflexivity.
 Qed.
 
@@ -100,7 +114,7 @@ Proof.
 Qed.
 
 Lemma header_map_ps : (*TODO: Should probably be called lookup_hdr_ps *)
-  forall s f h,
+  forall s f (h : Header),
     lookup_varlike PSHeader (eval_sym_state s f) h =
     eval_smt_arith (lookup_varlike PSHeader s h) f.
 Proof.
@@ -113,7 +127,7 @@ Qed.
 
 (* Create a lemma similar to header_map_ps but with state_var_map instead *)
 Lemma state_var_map_ps : (* Same TODO as header_map_ps, bad naming *)
-  forall s f sv,
+  forall s f (sv : State),
     lookup_varlike PSState (eval_sym_state s f) sv =
     eval_smt_arith (lookup_varlike PSState s sv) f.
 Proof.

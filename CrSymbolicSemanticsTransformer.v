@@ -157,9 +157,9 @@ Definition eval_transformer_smt (t : Transformer) (ps : SymbolicState) : Symboli
   (* get all future program states, one for each rule *)
   let program_states := List.map (fun rule => eval_match_action_rule_smt rule ps) t in
   (* map a header to all possible future exprs, one for each future state *)
-  let header_exprs   := fun h => List.map (fun ps => lookup_varlike PSHeader ps h) program_states in
+  let header_exprs   := fun (h : Header) => List.map (fun ps => lookup_varlike PSHeader ps h) program_states in
   (* same as above, for state variables *)
-  let state_vars     := fun s => List.map (fun ps => lookup_varlike PSState ps s) program_states in
+  let state_vars     := fun (s : State) => List.map (fun ps => lookup_varlike PSState ps s) program_states in
     update_all_varlike PSState
     (update_all_varlike PSHeader ps (fun h => switch_case_expr (List.combine (get_match_results_smt t ps) (header_exprs h)) (lookup_varlike PSHeader ps h)))
     (fun s => switch_case_expr (List.combine (get_match_results_smt t ps) (state_vars s)) (lookup_varlike PSState ps s)).
