@@ -136,6 +136,16 @@ Proof.
   apply PMap.gmap.
 Qed.
 
+Lemma commute_lookup_varlike:
+  forall {T1 T2 A} `{CrVarLike A} ps v (func : T1 -> T2) f,
+  lookup_varlike f (program_state_mapper func func func ps) v =
+  func (lookup_varlike_map (map_from_ps f ps) v).
+Proof.
+  intros.
+  destruct f;
+  apply PMap.gmap.
+Qed.
+
 Lemma commute_mapper_update_varlike:
   forall {T1 T2 A} `{CrVarLike A} ps x v (func : T1 -> T2) f,
   program_state_mapper func func func (update_varlike f ps x v) =

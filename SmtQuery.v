@@ -116,8 +116,7 @@ Proof.
   rewrite commute_sym_vs_conc_transfomer_hdr.
   rewrite commute_sym_vs_conc_transfomer_hdr.
   unfold eval_sym_state.
-  rewrite commute_mapper_lookup_varlike.
-  rewrite commute_mapper_lookup_varlike.
+  repeat rewrite commute_lookup_varlike.
   apply H_eq.
   assumption. assumption.
 Qed.
@@ -138,8 +137,7 @@ Proof.
   rewrite commute_sym_vs_conc_transfomer_sv.
   rewrite commute_sym_vs_conc_transfomer_sv.
   unfold eval_sym_state.
-  rewrite commute_mapper_lookup_varlike.
-  rewrite commute_mapper_lookup_varlike.
+  repeat rewrite commute_lookup_varlike.
   apply H_eq.
   assumption. assumption.
 Qed.
@@ -160,8 +158,7 @@ Proof.
   rewrite commute_sym_vs_conc_transfomer_hdr.
   rewrite commute_sym_vs_conc_transfomer_hdr.
   unfold eval_sym_state.
-  rewrite commute_mapper_lookup_varlike.
-  rewrite commute_mapper_lookup_varlike.
+  repeat rewrite commute_lookup_varlike.
   apply H.
   assumption. assumption.
 Qed.
@@ -182,8 +179,7 @@ Proof.
   rewrite commute_sym_vs_conc_transfomer_sv.
   rewrite commute_sym_vs_conc_transfomer_sv.
   unfold eval_sym_state.
-  rewrite commute_mapper_lookup_varlike.
-  rewrite commute_mapper_lookup_varlike.
+  repeat rewrite commute_lookup_varlike.
   apply H.
   assumption. assumption.
 Qed.

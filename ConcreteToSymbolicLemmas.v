@@ -106,9 +106,8 @@ Proof.
   assert (H : lookup_varlike PSHeader (eval_sym_state s1 f) h =
               eval_smt_arith (lookup_varlike PSHeader s1 h) f).
   { unfold eval_sym_state.
-    unfold lookup_varlike.
     simpl.
-    rewrite commute_mapper_lookup_varlike.
+    rewrite commute_lookup_varlike.
     reflexivity. }
   rewrite H.
   destruct (Integers.eq (eval_smt_arith (lookup_varlike PSHeader s1 h) f) v).
@@ -162,8 +161,7 @@ Lemma commute_sym_vs_conc_helper_seq_par_rule_hdr :
 Proof.
   intros mp hol f s1 h Hh.
   unfold eval_sym_state at 4.
-  unfold lookup_varlike.
-  rewrite commute_mapper_lookup_varlike.
+  rewrite commute_lookup_varlike.
   rewrite <- commute_varlike_updates.
   rewrite lookup_varlike_after_update_all_varlike.
   - destruct (eval_match_concrete mp (eval_sym_state s1 f)) eqn:Hmatch.
@@ -171,7 +169,6 @@ Proof.
       rewrite <- commute_sym_vs_conc_match_pattern with (c1 := eval_sym_state s1 f); auto.
       rewrite Hmatch.
       rewrite commute_sym_vs_conc_hdr_op_list with (f := f) (s1 := s1); auto.
-      repeat rewrite <- varlike_from_varlike_map.
       apply commute_lookup_eval_varlike.
      + simpl.
       rewrite <- commute_sym_vs_conc_match_pattern with (c1 := eval_sym_state s1 f); auto.
@@ -200,21 +197,18 @@ Lemma commute_sym_vs_conc_helper_seq_par_rule_sv :
 Proof.
   intros mp hol f s1 sv Hsv.
   unfold eval_sym_state at 4.
-  unfold lookup_varlike.
-  rewrite commute_mapper_lookup_varlike.
+  rewrite commute_lookup_varlike.
   rewrite lookup_varlike_after_update_all_varlike.
   - destruct (eval_match_concrete mp (eval_sym_state s1 f)) eqn:Hmatch.
     + simpl.
       rewrite <- commute_sym_vs_conc_match_pattern with (c1 := eval_sym_state s1 f); auto.
       rewrite Hmatch.
       rewrite commute_sym_vs_conc_hdr_op_list with (f := f) (s1 := s1); auto.
-      repeat rewrite <- varlike_from_varlike_map.
       rewrite commute_lookup_eval_varlike.
       reflexivity.
     + simpl.
       rewrite <- commute_sym_vs_conc_match_pattern with (c1 := eval_sym_state s1 f); auto.
       rewrite Hmatch.
-      repeat rewrite <- varlike_from_varlike_map.
       rewrite commute_lookup_eval_varlike.
       reflexivity.
   - rewrite is_state_var_in_ps_after_update_all_hdrs. assumption.
