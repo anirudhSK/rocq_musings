@@ -29,26 +29,14 @@ Proof.
   try repeat (rewrite PMapHelperLemmas.commute_lookup_eval_generic); try reflexivity.
 Qed.
 
-Lemma commute_update_eval_state:
-  forall (s : SymbolicState) (f : SmtValuation) (sv : State) (v : SmtArithExpr),
-    eval_sym_state (update_varlike PSState s sv v) f =
-    update_varlike PSState (eval_sym_state s f) sv (eval_smt_arith v f).
+Lemma commute_update_eval_varlike:
+  forall {A} `{CrVarLike A} (field : PSField) (s : SymbolicState) (f : SmtValuation) (var : A) (v : SmtArithExpr),
+    eval_sym_state (update_varlike field s var v) f =
+    update_varlike field (eval_sym_state s f) var (eval_smt_arith v f).
 Proof.
   intros s f h v.
   unfold eval_sym_state.
-  specialize (commute_mapper_update_varlike (A := State) (T1 := SmtArithExpr) (T2 := uint8)).
-  intros.
-  apply H.
-Qed.
-
-Lemma commute_update_eval_hdr:
-  forall (s : SymbolicState) (f : SmtValuation) (h : Header) (v : SmtArithExpr),
-    eval_sym_state (update_varlike PSHeader s h v) f =
-    update_varlike PSHeader (eval_sym_state s f) h (eval_smt_arith v f).
-Proof.
-  intros s f h v.
-  unfold eval_sym_state.
-  specialize (commute_mapper_update_varlike (A := Header) (T1 := SmtArithExpr) (T2 := uint8)).
+  specialize (commute_mapper_update_varlike (T1 := SmtArithExpr) (T2 := uint8)).
   intros.
   apply H.
 Qed.
@@ -67,8 +55,7 @@ Proof.
   unfold eval_hdr_op_assign_smt.
   rewrite commute_sym_conc_expr.
   destruct ho, f0, arg1, arg2, s; simpl; 
-  try rewrite commute_update_eval_state; try reflexivity;
-  try rewrite commute_update_eval_hdr; try reflexivity.
+  rewrite commute_update_eval_varlike; reflexivity.
 Qed.
 
 Lemma commute_sym_vs_conc_hdr_op_list :
