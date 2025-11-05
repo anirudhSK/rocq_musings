@@ -468,6 +468,7 @@ t1)) t1 t2 h1 s1) eqn:H_eq; try (exfalso; congruence).
       assumption.
 Qed.
 
+Transparent map_from_ps.
 (* Completeness lemma for equivalence_checker_cr_dsl *)
 Lemma equivalence_checker_cr_complete :
   forall p1 p2 f,
@@ -517,9 +518,7 @@ t1)) t1 t2 h1 s1) eqn:H_eq; try (exfalso; congruence).
           apply H_eq.
        ++ intros.
           apply is_varlike_in_ps_lemma.
-          Transparent get_all_varlike_from_ps.
           unfold get_all_varlike_from_ps.
-          Transparent map_from_ps.
           unfold map_from_ps.
           simpl.
           rewrite map_pair_split.
@@ -539,6 +538,7 @@ t1)) t1 t2 h1 s1) eqn:H_eq; try (exfalso; congruence).
           apply H_wf_states.
           assumption.
 Qed.
+Global Opaque map_from_ps.
 
 Print Assumptions equivalence_checker_complete.
 Print Assumptions equivalence_checker_cr_sound_hdr.

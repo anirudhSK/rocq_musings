@@ -37,9 +37,6 @@ Proof.
   assert(H_tmp: x =
           f (get_key x, val_fn (x))). {
   rewrite Heqf.
-  Print CrVarLike.
-  Check CrVarLike.
-  Check inverses x.
   rewrite (inverses x).
   reflexivity. }
   rewrite H_tmp.
