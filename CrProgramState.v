@@ -11,17 +11,12 @@ From Coq Require Import FunctionalExtensionality.
 Require Import Coq.Lists.List.
 Import ListNotations.
 
-(* Current values for each of these identifiers as a map *)
-Definition HeaderMap (T : Type) := PMap.t T. (* Maybe replace these with a generic Map type from Maps.v? *)
-Definition StateMap (T : Type) := PMap.t T.
-Definition CtrlMap (T : Type) := PMap.t T.
-
 (* The ProgramState is a record containing three maps:,
    one each for mapping headers/statevars/ctrlplaneconfigs to their current values *)
 Record ProgramState (T : Type) := {
-  ctrl_map : CtrlMap T;
-  header_map : HeaderMap T;
-  state_map : StateMap T;
+  ctrl_map : PMap.t T;
+  header_map : PMap.t T;
+  state_map : PMap.t T;
 }.
 
 Arguments header_map {T} _.
@@ -339,9 +334,6 @@ Definition is_init_state {T} (p : CaracaraProgram) (ps : ProgramState T) : Prop 
 Global Opaque update_varlike_map.
 Global Opaque lookup_varlike_map.
 Global Opaque program_state_mapper.
-Global Opaque HeaderMap.
-Global Opaque StateMap.
-Global Opaque CtrlMap.
 Global Opaque new_pmap_from_old.
 Global Opaque get_all_varlike_from_ps.
 Global Opaque map_from_ps.
