@@ -19,17 +19,6 @@ Proof.
   destruct field_type; simpl; apply PMap.gmap.
 Qed.
 
-Transparent lookup_ctrl.
-Transparent lookup_varlike_map.
-Lemma commute_lookup_eval_ctrl:
-  forall c f s,
-  lookup_ctrl (eval_sym_state s f) c =
-  eval_smt_arith (lookup_ctrl s c) f.
-Proof.
-  intros.
-  apply PMap.gmap.
-Qed.
-
 (* Same as the above lemma for hdr and state *)
 Transparent lookup_varlike.
 Lemma commute_lookup_eval_hdr:
@@ -41,11 +30,10 @@ Proof.
   apply PMap.gmap.
 Qed.
 
-Transparent lookup_state.
 Lemma commute_lookup_eval_state:
   forall sv f s,
-  lookup_state (eval_sym_state s f) sv =
-  eval_smt_arith (lookup_state s sv) f.
+  lookup_varlike PSState (eval_sym_state s f) sv =
+  eval_smt_arith (lookup_varlike PSState s sv) f.
 Proof.
   intros.
   apply PMap.gmap.
@@ -95,7 +83,4 @@ Proof.
     assumption.
 Qed.
 
-Global Opaque lookup_hdr.
-Global Opaque lookup_state.
 Global Opaque lookup_varlike_map.
-Global Opaque lookup_ctrl.

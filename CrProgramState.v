@@ -236,17 +236,6 @@ Proof.
   try unfold update_all_varlike; f_equal.
 Qed.
 
-(* TODO: lookup_hdr/state_map could be rolled into lookup_hdr/state. *)
-(* TODO: It is used in a proof with a giant remember expression. *)
-Definition lookup_hdr {T : Type} (s: ProgramState T) (x: Header) : T :=
-  lookup_varlike_map (map_from_ps PSHeader s) x.
-
-Definition lookup_state {T : Type} (s: ProgramState T) (x: State) : T :=
-  lookup_varlike_map (map_from_ps PSState s) x.
-
-Definition lookup_ctrl {T : Type} (s: ProgramState T) (x: Ctrl) : T :=
-  lookup_varlike_map (map_from_ps PSCtrl s) x.
-
 Lemma program_state_equality:
       forall (ps1 ps2: ConcreteState),
         ctrl_map ps1 = ctrl_map ps2 ->
@@ -261,29 +250,6 @@ Proof.
   f_equal; try assumption.
 Qed.
 
-Definition update_all_hdrs {T : Type} (s: ProgramState T) (fh: Header -> T) : ProgramState T :=
-  update_all_varlike PSHeader s fh.
-
-Definition update_all_states {T : Type} (s: ProgramState T) (fs: State -> T) : ProgramState T :=
-  update_all_varlike PSState s fs.
-
-(* Update the header map with a new value for a specific header *)
-Definition update_hdr {T : Type} (s: ProgramState T) (x: Header) (v: T) : ProgramState T :=
-  update_varlike PSHeader s x v.
-
-Definition update_state {T : Type} (s: ProgramState T) (x: State) (v: T) : ProgramState T :=
-  update_varlike PSState s x v.
-
-Lemma cons_not_nil : forall A (x : A) (xs : list A),
-  ~ ((x :: xs) = nil).
-Proof.
-  intros.
-  simpl.
-  unfold "<>".
-  intros.
-  discriminate H.
-Qed.
-
 Lemma program_state_unchanged:
   forall {T} (s1 : ProgramState T),
   update_all_varlike PSState (update_all_varlike PSHeader s1 (fun h : Header => lookup_varlike_map (map_from_ps PSHeader s1) h))
@@ -294,35 +260,11 @@ Proof.
   reflexivity.
 Qed.
 
-Definition is_header_in_ps {T} (s1 : ProgramState T) (h : Header) :=
-  PTree.get (match h with | HeaderCtr id => id end) (snd (header_map s1)).
-
-Definition is_state_var_in_ps {T} (s1 : ProgramState T) (sv : State) :=
-  PTree.get (match sv with | StateCtr id => id end) (snd (state_map s1)).
-
 Lemma commute_state_hdr_updates:
   forall {T} (s1 : ProgramState T) (fh : Header -> T) (fs : State -> T),
     update_all_varlike PSHeader (update_all_varlike PSState s1 fs) fh =
     update_all_varlike PSState (update_all_varlike PSHeader s1 fh) fs.
 Proof.
-  reflexivity.
-Qed.
-
-Lemma lookup_hdr_trivial:
-  forall {T} (s : ProgramState T) (h : Header),
-    lookup_varlike_map (map_from_ps PSHeader s) h =
-    lookup_varlike_map (header_map s) h.
-Proof.
-  intros.
-  reflexivity.
-Qed.
-
-Lemma lookup_state_trivial:
-  forall {T} (s : ProgramState T) (sv : State),
-    lookup_varlike_map (map_from_ps PSState s) sv =
-    lookup_varlike_map (state_map s) sv.
-Proof.
-  intros.
   reflexivity.
 Qed.
 
@@ -334,24 +276,6 @@ Lemma is_v1_in_ps_after_update_all_v2:
 Proof.
   intros.
   destruct f1, f2; try congruence;
-  reflexivity.
-Qed.
-
-(* is_header_in_ps is preserved across update_all_states *)
-Lemma is_header_in_ps_after_update_all_states:
-  forall {T} (s1 : ProgramState T) (h : Header) (fs : State -> T),
-    is_varlike_in_ps PSHeader (update_all_varlike PSState s1 fs) h = is_varlike_in_ps PSHeader s1 h.
-Proof.
-  intros.
-  reflexivity.
-Qed.
-
-(* is_state_var_in_ps is preserved across update_all_hdrs *)
-Lemma is_state_var_in_ps_after_update_all_hdrs:
-  forall {T} (s1 : ProgramState T) (sv : State) (fh : Header -> T),
-    is_varlike_in_ps PSState (update_all_varlike PSHeader s1 fh) sv = is_varlike_in_ps PSState s1 sv.
-Proof.
-  intros.
   reflexivity.
 Qed.
 
@@ -370,13 +294,13 @@ Definition get_all_ctrls_from_ps {T : Type} (s: ProgramState T) : list Ctrl :=
 Lemma is_header_in_ps_lemma :
   forall {T} (s1 : ProgramState T) (h : Header),
     In h (get_all_headers_from_ps s1) ->
-    is_header_in_ps s1 h <> None.
+    is_varlike_in_ps PSHeader s1 h <> None.
     (* TODO: Need to ask Joe about <> None *)
 Proof.
   intros.
   destruct s1 as [ctrl hdr state].
   unfold get_all_headers_from_ps in H.
-  unfold is_header_in_ps.
+  unfold is_varlike_in_ps.
   simpl in *.
   destruct hdr as [default hdr_map].
   simpl in *.
@@ -397,12 +321,12 @@ Qed.
 Lemma is_state_in_ps_lemma :
   forall {T} (s1 : ProgramState T) (sv : State),
     In sv (get_all_states_from_ps s1) ->
-    is_state_var_in_ps s1 sv <> None.
+    is_varlike_in_ps PSState s1 sv <> None.
 Proof.
   intros.
   destruct s1 as [ctrl hdr state].
   unfold get_all_states_from_ps in H.
-  unfold is_state_var_in_ps.
+  unfold is_varlike_in_ps.
   simpl in *.
   destruct state as [default state_map].
   simpl in *.
@@ -462,22 +386,13 @@ Definition is_init_state {T} (p : CaracaraProgram) (ps : ProgramState T) : Prop 
     (In c (get_ctrls_from_prog p) <-> In c (get_all_ctrls_from_ps ps)).
 
 (* Mark definitions globally opaque below *)
-Global Opaque lookup_ctrl.
 Global Opaque update_varlike_map.
-Global Opaque update_hdr.
-Global Opaque update_state.
-Global Opaque lookup_hdr.
-Global Opaque lookup_state.
 Global Opaque lookup_varlike_map.
 Global Opaque program_state_mapper.
-Global Opaque update_all_hdrs.
-Global Opaque update_all_states.
 Global Opaque HeaderMap.
 Global Opaque StateMap.
 Global Opaque CtrlMap.
 Global Opaque new_pmap_from_old.
-Global Opaque is_header_in_ps.
-Global Opaque is_state_var_in_ps.
 Global Opaque get_all_headers_from_ps.
 Global Opaque get_all_states_from_ps.
 Global Opaque map_from_ps.

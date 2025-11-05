@@ -101,8 +101,8 @@ Proof.
 Qed.
 
 Lemma eval_smt_bool_lemma_hdr :
-  forall t1 t2 s h f,
-  is_header_in_ps s h <> None ->
+  forall t1 t2 s (h : Header) f,
+  is_varlike_in_ps PSHeader s h <> None ->
   eval_smt_bool
 (SmtBoolEq (lookup_varlike PSHeader (eval_transformer_smt t1 s) h)
 (lookup_varlike PSHeader (eval_transformer_smt t2 s) h)) f = true ->
@@ -122,8 +122,8 @@ Proof.
 Qed.
 
 Lemma eval_smt_bool_lemma_state :
-  forall t1 t2 s sv f,
-  is_state_var_in_ps s sv <> None ->
+  forall t1 t2 s (sv : State) f,
+  is_varlike_in_ps PSState s sv <> None ->
   eval_smt_bool
 (SmtBoolEq (lookup_varlike PSState (eval_transformer_smt t1 s) sv)
 (lookup_varlike PSState (eval_transformer_smt t2 s) sv)) f = true ->
@@ -143,8 +143,8 @@ Proof.
 Qed.
 
 Lemma eval_smt_bool_lemma_hdr_false :
-  forall t1 t2 s h f,
-  is_header_in_ps s h <> None ->
+  forall t1 t2 s (h : Header) f,
+  is_varlike_in_ps PSHeader s h <> None ->
   eval_smt_bool
 (SmtBoolEq (lookup_varlike PSHeader (eval_transformer_smt t1 s) h)
 (lookup_varlike PSHeader (eval_transformer_smt t2 s) h)) f = false ->
@@ -164,8 +164,8 @@ Proof.
 Qed.
 
 Lemma eval_smt_bool_lemma_state_false :
-  forall t1 t2 s sv f,
-  is_state_var_in_ps s sv <> None ->
+  forall t1 t2 s (sv : State) f,
+  is_varlike_in_ps PSState s sv <> None ->
   eval_smt_bool
 (SmtBoolEq (lookup_varlike PSState (eval_transformer_smt t1 s) sv)
 (lookup_varlike PSState (eval_transformer_smt t2 s) sv)) f = false ->
@@ -229,8 +229,8 @@ Definition equivalence_checker_cr_dsl (p1: CaracaraProgram) (p2: CaracaraProgram
          rather than completness. Resolve this item.*)
 Lemma equivalence_checker_sound :
   forall s t1 t2 header_list state_var_list f,
-  (forall v, In v header_list -> is_header_in_ps s v <> None) ->
-  (forall v, In v state_var_list -> is_state_var_in_ps s v <> None) ->
+  (forall v, In v header_list -> is_varlike_in_ps PSHeader s v <> None) ->
+  (forall v, In v state_var_list -> is_varlike_in_ps PSState s v <> None) ->
   equivalence_checker s t1 t2 header_list state_var_list = SmtUnsat ->
   let c  := eval_sym_state s f in
   let c1 := eval_transformer_concrete t1 c in
@@ -268,8 +268,8 @@ Print Assumptions equivalence_checker_sound.
 (* Completeness lemma about equivalence_checker conditional on the axioms above *)
 Lemma equivalence_checker_complete :
   forall s t1 t2 header_list state_var_list f',
-  (forall v, In v header_list -> is_header_in_ps s v <> None) ->
-  (forall v, In v state_var_list -> is_state_var_in_ps s v <> None) ->
+  (forall v, In v header_list -> is_varlike_in_ps PSHeader s v <> None) ->
+  (forall v, In v state_var_list -> is_varlike_in_ps PSState s v <> None) ->
   equivalence_checker s t1 t2 header_list state_var_list = SmtSat f' ->
   let c' := eval_sym_state s f' in
   let c1 := eval_transformer_concrete t1 c' in

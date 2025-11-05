@@ -38,19 +38,6 @@ Proof.
   reflexivity.
 Qed.
 
-Lemma commute_lookup_eval_ctrl:
-  forall (s : SymbolicState) (f : SmtValuation)
-        (hc : Ctrl),
-    lookup_varlike_map (map_from_ps PSCtrl (eval_sym_state s f)) hc =
-    eval_smt_arith (lookup_varlike_map (map_from_ps PSCtrl s) hc) f.
-Proof.
-  intros s f hc.
-  destruct hc.
-  unfold eval_sym_state.
-  rewrite commute_mapper_lookup_varlike.
-  reflexivity.
-Qed.
-
 Lemma commute_lookup_eval_varlike:
   forall {A} `{CrVarLike A} (field : PSField) (ps : SymbolicState)
         (var : A) (val : SmtValuation),

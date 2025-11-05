@@ -82,11 +82,11 @@ Definition eval_hdr_op_assign_smt_conditional
     | StatefulOp _ _ _ target =>
         let op_output := SmtConditional condition (eval_hdr_op_expr_smt ho ps)
                         (lookup_varlike PSState ps target) in
-                        update_state ps target op_output
+                        update_varlike PSState ps target op_output
     | StatelessOp _ _ _ target =>
         let op_output := SmtConditional condition (eval_hdr_op_expr_smt ho ps)
                         (lookup_varlike PSHeader ps target) in
-                        update_hdr ps target op_output
+                        update_varlike PSHeader ps target op_output
     end.
 
 (* Function to evaluate a sequential match-action rule,
