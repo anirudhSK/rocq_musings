@@ -20,9 +20,8 @@ Lemma commute_lookup_eval_varlike:
 Proof.
   intros.
   destruct field;
-  unfold lookup_varlike;
   unfold eval_sym_state;
-  rewrite commute_mapper_lookup_varlike;
+  rewrite commute_lookup_varlike;
   reflexivity.
 Qed.
 
