@@ -5,7 +5,7 @@ on:
     branches: [ master ]
 
 jobs:
-  install-dependencies:
+  cache-setup:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -34,8 +34,28 @@ jobs:
 
   validate-build:
     runs-on: ubuntu-latest
-    needs: install-dependencies
+    needs: cache-setup
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Install OCaml
+        uses: ocaml/setup-ocaml@v3
+        with:
+          ocaml-compiler: 5.3
+          dune-cache: true
+
+      - name: Cache switch
+        uses: actions/cache@v4
+        with:
+          path: /home/runner/work/rocq_musings/rocq_musings/_opam
+          # May want to figure out a better set of files to hash
+          key: ${{ runner.os }}-switch-${{ hashFiles('/home/runner/work/rocq_musings/rocq_musings/dune-project', '/home/runner/work/rocq_musings/rocq_musings/extracted_code/dune') }}
+          restore-keys: |
+            ${{ runner.os }}-switch-
+
       - name: Build Project
         run: |
           eval $(opam env)
