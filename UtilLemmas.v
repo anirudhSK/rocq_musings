@@ -66,16 +66,6 @@ Proof.
     + apply IH. assumption.
 Qed.
 
-Lemma cons_not_nil : forall A (x : A) (xs : list A),
-  ~ ((x :: xs) = nil).
-Proof.
-  intros.
-  simpl.
-  unfold "<>".
-  intros.
-  discriminate H.
-Qed.
-
 Lemma map_pair_split : forall (A B C : Type) (f : A -> B * C) (l : list A),
   map f l = combine (map (fun x => fst (f x)) l) (map (fun x => snd (f x)) l).
 Proof.
