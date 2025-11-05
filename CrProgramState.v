@@ -60,13 +60,6 @@ Definition lookup_varlike_map {T A : Type} `{CrVarLike A} (m : PMap.t T) (x : A)
 Definition lookup_varlike {T A : Type} `{CrVarLike A} (f: PSField) (s: ProgramState T) (x : A) : T :=
   lookup_varlike_map (map_from_ps f s) x.
 
-Lemma varlike_from_varlike_map :
-  forall {T A} `{CrVarLike A} (f : PSField) (s : ProgramState T) (x : A),
-    lookup_varlike f s x = lookup_varlike_map (map_from_ps f s) x.
-Proof.
-  reflexivity.
-Qed.
-
 Definition update_all_varlike {T A : Type} `{CrVarLike A} (f: PSField) (s: ProgramState T) (fh: A -> T) : ProgramState T :=
   let new_map := new_pmap_from_old (map_from_ps f s) (fun pos => fh (make_item pos)) in
   match f with

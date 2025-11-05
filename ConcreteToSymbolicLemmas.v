@@ -160,8 +160,7 @@ Proof.
      + simpl.
       rewrite <- commute_sym_vs_conc_match_pattern with (c1 := eval_sym_state s1 f); auto.
       rewrite Hmatch.
-      apply commute_lookup_eval_hdr
-        with (s := s1) (f := f) (hv := h).
+      apply commute_lookup_eval_varlike.
   - set (fn := (fun s : State => SmtConditional (eval_match_smt mp s1)
       (lookup_varlike_map (map_from_ps PSState (eval_hdr_op_list_smt hol s1)) s)
       (lookup_varlike_map (map_from_ps PSState s1) s))).
@@ -578,17 +577,14 @@ Proof.
   unfold eval_transformer_concrete.
   remember (find_first_match (combine (get_match_results t (eval_sym_state s1 f)) t)) as concrete_match.
   destruct concrete_match eqn:des.
-  - unfold lookup_varlike.
-    rewrite commute_lookup_eval_hdr. repeat rewrite <- varlike_from_varlike_map.
+  - rewrite commute_lookup_eval_varlike.
     rewrite hdr_transformer_helper. apply switch_case_expr_some_match_lemma. assumption. assumption. assumption. (* TODO: This seems kind of brittle. *)
   - assert(H0: lookup_varlike PSHeader (eval_sym_state (eval_transformer_smt t s1) f) h =
                eval_smt_arith (lookup_varlike PSHeader (eval_transformer_smt t s1) h ) f).
-               { unfold lookup_varlike. rewrite commute_lookup_eval_hdr. reflexivity. }
+               { rewrite commute_lookup_eval_varlike. reflexivity. }
     rewrite H0.
-    repeat rewrite <- varlike_from_varlike_map.
     rewrite hdr_transformer_helper.
-    unfold lookup_varlike.
-    rewrite commute_lookup_eval_hdr.
+    rewrite commute_lookup_eval_varlike.
     apply switch_case_expr_no_match_lemma. assumption. assumption. assumption. (* TODO: This seems kind of brittle. *)
 Qed.
 
@@ -622,17 +618,14 @@ Proof.
   unfold eval_transformer_concrete.
   remember (find_first_match (combine (get_match_results t (eval_sym_state s1 f)) t)) as concrete_match.
   destruct concrete_match eqn:des.
-  - unfold lookup_varlike.
-    rewrite commute_lookup_eval_state. repeat rewrite <- varlike_from_varlike_map.
+  - rewrite commute_lookup_eval_varlike.
     rewrite state_transformer_helper. apply switch_case_expr_some_match_state_var_lemma. assumption. assumption. assumption. (* TODO: This seems kind of brittle. *)
   - assert(H0: lookup_varlike PSState (eval_sym_state (eval_transformer_smt t s1) f) sv =
                eval_smt_arith (lookup_varlike PSState (eval_transformer_smt t s1) sv ) f).
-               { unfold lookup_varlike. rewrite commute_lookup_eval_state. reflexivity. }
+               { rewrite commute_lookup_eval_varlike. reflexivity. }
     rewrite H0.
     rewrite state_transformer_helper.
-    unfold lookup_varlike.
-    rewrite commute_lookup_eval_state.
-    repeat rewrite <- varlike_from_varlike_map.
+    rewrite commute_lookup_eval_varlike.
     apply switch_case_expr_no_match_state_var_lemma. assumption. assumption. assumption. (* TODO: This seems kind of brittle. *)
 Qed.
 

@@ -12,32 +12,6 @@ From MyProject Require Import PMapHelperLemmas.
 From MyProject Require Import CrProgramState.
 From MyProject Require Import ListUtils.
 
-Lemma commute_lookup_eval_state:
-  forall (s : SymbolicState) (f : SmtValuation)
-        (sv : State),
-    lookup_varlike_map (map_from_ps PSState (eval_sym_state s f)) sv =
-    eval_smt_arith (lookup_varlike_map (map_from_ps PSState s) sv) f.
-Proof.
-  intros s f sv.
-  destruct sv.
-  unfold eval_sym_state.
-  rewrite commute_mapper_lookup_varlike.
-  reflexivity.
-Qed.
-
-Lemma commute_lookup_eval_hdr:
-  forall (s : SymbolicState) (f : SmtValuation)
-        (hv : Header),
-    lookup_varlike_map (map_from_ps PSHeader (eval_sym_state s f)) hv =
-    eval_smt_arith (lookup_varlike_map (map_from_ps PSHeader s) hv) f.
-Proof.
-  intros s f hv.
-  destruct hv.
-  unfold eval_sym_state.
-  rewrite commute_mapper_lookup_varlike.
-  reflexivity.
-Qed.
-
 Lemma commute_lookup_eval_varlike:
   forall {A} `{CrVarLike A} (field : PSField) (ps : SymbolicState)
         (var : A) (val : SmtValuation),

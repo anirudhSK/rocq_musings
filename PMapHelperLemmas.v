@@ -20,25 +20,6 @@ Proof.
 Qed.
 
 (* Same as the above lemma for hdr and state *)
-Transparent lookup_varlike.
-Lemma commute_lookup_eval_hdr:
-  forall h f s,
-  lookup_varlike PSHeader (eval_sym_state s f) h =
-  eval_smt_arith (lookup_varlike PSHeader s h) f.
-Proof.
-  intros.
-  apply PMap.gmap.
-Qed.
-
-Lemma commute_lookup_eval_state:
-  forall sv f s,
-  lookup_varlike PSState (eval_sym_state s f) sv =
-  eval_smt_arith (lookup_varlike PSState s sv) f.
-Proof.
-  intros.
-  apply PMap.gmap.
-Qed.
-
 Lemma ptree_of_list_lemma_generic:
     forall (X : Type) `(CrVarLike X)
     (l : list X) (val_fn : X -> SmtArithExpr)
