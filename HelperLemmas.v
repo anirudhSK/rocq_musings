@@ -74,23 +74,10 @@ Proof.
        assumption.
 Qed.
 
-Lemma header_map_ps : (*TODO: Should probably be called lookup_hdr_ps *)
-  forall s f (h : Header),
-    lookup_varlike PSHeader (eval_sym_state s f) h =
-    eval_smt_arith (lookup_varlike PSHeader s h) f.
-Proof.
-  intros.
-  unfold eval_sym_state.
-  unfold lookup_varlike.
-  rewrite commute_mapper_lookup_varlike.
-  reflexivity.
-Qed.
-
-(* Create a lemma similar to header_map_ps but with state_var_map instead *)
-Lemma state_var_map_ps : (* Same TODO as header_map_ps, bad naming *)
-  forall s f (sv : State),
-    lookup_varlike PSState (eval_sym_state s f) sv =
-    eval_smt_arith (lookup_varlike PSState s sv) f.
+Lemma lookup_varlike_ps :
+  forall {A} `{CrVarLike A} field s f (v : A),
+    lookup_varlike field (eval_sym_state s f) v =
+    eval_smt_arith (lookup_varlike field s v) f.
 Proof.
   intros.
   unfold eval_sym_state.
