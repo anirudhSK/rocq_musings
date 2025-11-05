@@ -341,7 +341,7 @@ Proof.
         simpl in H.
         rewrite des in H.
         inversion H.
-        apply lookup_varlike_ps. assumption.
+        apply commute_lookup_eval_varlike. assumption.
       + rewrite <- commute_sym_vs_conc_match_pattern with (s1 := s1) (f := f) (c1 := eval_sym_state s1 f) in des; try reflexivity.
         rewrite des in H0.
         rewrite commute_sym_vs_conc_ma_rule_hdr.
@@ -362,7 +362,7 @@ Proof.
         simpl in H.
         rewrite des in H.
         inversion H.
-        apply lookup_varlike_ps. assumption.
+        apply commute_lookup_eval_varlike. assumption.
       + rewrite <- commute_sym_vs_conc_match_pattern with (s1 := s1) (f := f) (c1 := eval_sym_state s1 f) in des; try reflexivity.
         rewrite des in H0.
         rewrite commute_sym_vs_conc_ma_rule_hdr.
@@ -458,7 +458,7 @@ Proof.
         simpl in H.
         rewrite des in H.
         inversion H.
-        apply lookup_varlike_ps.
+        apply commute_lookup_eval_varlike.
         assumption.
       + rewrite <- commute_sym_vs_conc_match_pattern with (s1 := s1) (f := f) (c1 := eval_sym_state s1 f) in des; try reflexivity.
         rewrite des in H0.
@@ -480,7 +480,7 @@ Proof.
         simpl in H.
         rewrite des in H.
         inversion H.
-        apply lookup_varlike_ps.
+        apply commute_lookup_eval_varlike.
         assumption.
       + rewrite <- commute_sym_vs_conc_match_pattern with (s1 := s1) (f := f) (c1 := eval_sym_state s1 f) in des; try reflexivity.
         rewrite des in H0.

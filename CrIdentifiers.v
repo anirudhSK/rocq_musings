@@ -27,6 +27,12 @@ Class CrVarLike (A : Type) := {
   inj : injective_contravariant get_key;
 }.
 
+Ltac prove_inj :=
+  intros x y Hxy Heq;
+  destruct x as [uid1], y as [uid2]; simpl in Heq;
+  rewrite Heq in Hxy;
+  congruence.
+
 Instance CrVarLike_Header : CrVarLike Header.
 Proof.
   refine {| make_item := fun uid => HeaderCtr uid;
@@ -38,28 +44,18 @@ Proof.
   - (* inverses' : forall i, get_key (make_item i) = i *)
     reflexivity.
   - (* inj : injective_contravariant get_key *)
-    intros x y Hxy Heq.
-    destruct x as [uid1], y as [uid2]; simpl in Heq.
-    rewrite Heq in Hxy.
-    congruence.
+    prove_inj.
 Defined.
 
-(* Do the same as CrVarLike Header, but for CrVarLike State *)
 Instance CrVarLike_State : CrVarLike State.
 Proof.
   refine {| make_item := fun uid => StateCtr uid;
             get_key := fun s => match s with StateCtr uid => uid end;
             inverses := _;
             inj := _ |}.
-  - (* inverses : forall x, make_item (get_key x) = x *)
-    intros [uid]. simpl. reflexivity.
-  - (* inverses' : forall i, get_key (make_item i) = i *)
-    reflexivity.
-  - (* inj : injective_contravariant get_key *)
-    intros x y Hxy Heq.
-    destruct x as [uid1], y as [uid2]; simpl in Heq.
-    rewrite Heq in Hxy.
-    congruence.
+  - intros [uid]. simpl. reflexivity.
+  - reflexivity.
+  - prove_inj.
 Defined.
 
 Instance CrVarLike_Ctrl : CrVarLike Ctrl.
@@ -68,15 +64,9 @@ Proof.
             get_key := fun s => match s with CtrlCtr uid => uid end;
             inverses := _;
             inj := _ |}.
-  - (* inverses : forall x, make_item (get_key x) = x *)
-    intros [uid]. simpl. reflexivity.
-  - (* inverses' : forall i, get_key (make_item i) = i *)
-    reflexivity.
-  - (* inj : injective_contravariant get_key *)
-    intros x y Hxy Heq.
-    destruct x as [uid1], y as [uid2]; simpl in Heq.
-    rewrite Heq in Hxy.
-    congruence.
+  - intros [uid]. simpl. reflexivity.
+  - reflexivity.
+  - prove_inj.
 Defined.
 
 (* Equality check functions for the identifiers above *)

@@ -34,10 +34,8 @@ Lemma commute_lookup_eval:
 Proof.
   intros s f arg.
   unfold lookup_concrete.
-  destruct arg; simpl; try reflexivity.
-  -- unfold eval_sym_state. rewrite commute_mapper_lookup_varlike. reflexivity.
-  -- unfold eval_sym_state. rewrite commute_mapper_lookup_varlike. reflexivity.
-  -- unfold eval_sym_state. rewrite commute_mapper_lookup_varlike. reflexivity.
+  destruct arg; simpl; try reflexivity;
+  apply commute_lookup_eval_varlike.
 Qed.
 
 Lemma find_first_match_lemma:
@@ -72,16 +70,4 @@ Proof.
     -- inversion H. left. reflexivity.
     -- right. apply IHrest.
        assumption.
-Qed.
-
-Lemma lookup_varlike_ps :
-  forall {A} `{CrVarLike A} field s f (v : A),
-    lookup_varlike field (eval_sym_state s f) v =
-    eval_smt_arith (lookup_varlike field s v) f.
-Proof.
-  intros.
-  unfold eval_sym_state.
-  unfold lookup_varlike.
-  rewrite commute_mapper_lookup_varlike.
-  reflexivity.
 Qed.
