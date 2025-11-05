@@ -6,6 +6,7 @@ From MyProject Require Import CrProgramState.
 From MyProject Require Import Maps.
 From MyProject Require Import SmtTypes.
 From MyProject Require Import Integers.
+From MyProject Require Import PMapHelperLemmas.
 Require Import Classical.
 Require Import Coq.Lists.List.
 Require Import Coq.Bool.Bool.
@@ -44,16 +45,16 @@ Definition check_headers_and_state_vars (s1 s2 : SymbolicState)
   (header_list : list Header) (state_var_list : list State)
   : SmtBoolExpr :=
   SmtBoolNot(
-  SmtBoolAnd (List.fold_right (fun h acc => SmtBoolAnd acc (SmtBoolEq (lookup_hdr s1 h) (lookup_hdr s2 h))) 
+  SmtBoolAnd (List.fold_right (fun h acc => SmtBoolAnd acc (SmtBoolEq (lookup_varlike PSHeader s1 h) (lookup_varlike PSHeader s2 h))) 
                                     SmtTrue header_list)
-             (List.fold_right (fun sv acc => SmtBoolAnd acc (SmtBoolEq (lookup_state s1 sv) (lookup_state s2 sv))) 
+             (List.fold_right (fun sv acc => SmtBoolAnd acc (SmtBoolEq (lookup_varlike PSState s1 sv) (lookup_varlike PSState s2 sv))) 
                                     SmtTrue state_var_list)).
 
 Lemma check_headers_and_state_vars_false:
   forall s1 s2 header_list state_var_list f,
   eval_smt_bool(check_headers_and_state_vars s1 s2 header_list state_var_list) f = false ->
-  (forall h, In h header_list -> eval_smt_bool (SmtBoolEq (lookup_hdr s1 h) (lookup_hdr s2 h)) f = true) /\
-  (forall sv, In sv state_var_list -> eval_smt_bool (SmtBoolEq (lookup_state s1 sv) (lookup_state s2 sv)) f = true).
+  (forall h, In h header_list -> eval_smt_bool (SmtBoolEq (lookup_varlike PSHeader s1 h) (lookup_varlike PSHeader s2 h)) f = true) /\
+  (forall sv, In sv state_var_list -> eval_smt_bool (SmtBoolEq (lookup_varlike PSState s1 sv) (lookup_varlike PSState s2 sv)) f = true).
 Proof.
   intros s1 s2 header_list state_var_list f H.
   unfold check_headers_and_state_vars in H.
@@ -71,9 +72,9 @@ Lemma check_headers_and_state_vars_true:
   forall s1 s2 header_list state_var_list f,
   eval_smt_bool(check_headers_and_state_vars s1 s2 header_list state_var_list) f = true ->
   (exists h : Header, In h header_list /\
-                      eval_smt_bool (SmtBoolEq (lookup_hdr s1 h) (lookup_hdr s2 h)) f = false) \/
+                      eval_smt_bool (SmtBoolEq (lookup_varlike PSHeader s1 h) (lookup_varlike PSHeader s2 h)) f = false) \/
   (exists sv :State, In sv state_var_list /\
-                      eval_smt_bool (SmtBoolEq (lookup_state s1 sv) (lookup_state s2 sv)) f = false).
+                      eval_smt_bool (SmtBoolEq (lookup_varlike PSState s1 sv) (lookup_varlike PSState s2 sv)) f = false).
 Proof.
   intros s1 s2 header_list state_var_list f H.
   unfold check_headers_and_state_vars in H.
@@ -100,13 +101,13 @@ Proof.
 Qed.
 
 Lemma eval_smt_bool_lemma_hdr :
-  forall t1 t2 s h f,
-  is_header_in_ps s h <> None ->
+  forall t1 t2 s (h : Header) f,
+  is_varlike_in_ps PSHeader s h <> None ->
   eval_smt_bool
-(SmtBoolEq (lookup_hdr (eval_transformer_smt t1 s) h)
-(lookup_hdr (eval_transformer_smt t2 s) h)) f = true ->
-lookup_hdr (eval_transformer_concrete t1 (eval_sym_state s f)) h =
-lookup_hdr (eval_transformer_concrete t2 (eval_sym_state s f)) h.
+(SmtBoolEq (lookup_varlike PSHeader (eval_transformer_smt t1 s) h)
+(lookup_varlike PSHeader (eval_transformer_smt t2 s) h)) f = true ->
+lookup_varlike PSHeader (eval_transformer_concrete t1 (eval_sym_state s f)) h =
+lookup_varlike PSHeader (eval_transformer_concrete t2 (eval_sym_state s f)) h.
 Proof.
   intros t1 t2 s h f.
   intro H.
@@ -115,20 +116,19 @@ Proof.
   rewrite commute_sym_vs_conc_transfomer_hdr.
   rewrite commute_sym_vs_conc_transfomer_hdr.
   unfold eval_sym_state.
-  rewrite commute_mapper_lookup_hdr.
-  rewrite commute_mapper_lookup_hdr.
+  repeat rewrite commute_lookup_varlike.
   apply H_eq.
   assumption. assumption.
 Qed.
 
 Lemma eval_smt_bool_lemma_state :
-  forall t1 t2 s sv f,
-  is_state_var_in_ps s sv <> None ->
+  forall t1 t2 s (sv : State) f,
+  is_varlike_in_ps PSState s sv <> None ->
   eval_smt_bool
-(SmtBoolEq (lookup_state (eval_transformer_smt t1 s) sv)
-(lookup_state (eval_transformer_smt t2 s) sv)) f = true ->
-lookup_state (eval_transformer_concrete t1 (eval_sym_state s f)) sv =
-lookup_state (eval_transformer_concrete t2 (eval_sym_state s f)) sv.
+(SmtBoolEq (lookup_varlike PSState (eval_transformer_smt t1 s) sv)
+(lookup_varlike PSState (eval_transformer_smt t2 s) sv)) f = true ->
+lookup_varlike PSState (eval_transformer_concrete t1 (eval_sym_state s f)) sv =
+lookup_varlike PSState (eval_transformer_concrete t2 (eval_sym_state s f)) sv.
 Proof.
   intros t1 t2 s sv f.
   intro H.
@@ -137,20 +137,19 @@ Proof.
   rewrite commute_sym_vs_conc_transfomer_sv.
   rewrite commute_sym_vs_conc_transfomer_sv.
   unfold eval_sym_state.
-  rewrite commute_mapper_lookup_state.
-  rewrite commute_mapper_lookup_state.
+  repeat rewrite commute_lookup_varlike.
   apply H_eq.
   assumption. assumption.
 Qed.
 
 Lemma eval_smt_bool_lemma_hdr_false :
-  forall t1 t2 s h f,
-  is_header_in_ps s h <> None ->
+  forall t1 t2 s (h : Header) f,
+  is_varlike_in_ps PSHeader s h <> None ->
   eval_smt_bool
-(SmtBoolEq (lookup_hdr (eval_transformer_smt t1 s) h)
-(lookup_hdr (eval_transformer_smt t2 s) h)) f = false ->
-lookup_hdr (eval_transformer_concrete t1 (eval_sym_state s f)) h <>
-lookup_hdr (eval_transformer_concrete t2 (eval_sym_state s f)) h.
+(SmtBoolEq (lookup_varlike PSHeader (eval_transformer_smt t1 s) h)
+(lookup_varlike PSHeader (eval_transformer_smt t2 s) h)) f = false ->
+lookup_varlike PSHeader (eval_transformer_concrete t1 (eval_sym_state s f)) h <>
+lookup_varlike PSHeader (eval_transformer_concrete t2 (eval_sym_state s f)) h.
 Proof.
   intros t1 t2 s h f.
   intro H1.
@@ -159,20 +158,19 @@ Proof.
   rewrite commute_sym_vs_conc_transfomer_hdr.
   rewrite commute_sym_vs_conc_transfomer_hdr.
   unfold eval_sym_state.
-  rewrite commute_mapper_lookup_hdr.
-  rewrite commute_mapper_lookup_hdr.
+  repeat rewrite commute_lookup_varlike.
   apply H.
   assumption. assumption.
 Qed.
 
 Lemma eval_smt_bool_lemma_state_false :
-  forall t1 t2 s sv f,
-  is_state_var_in_ps s sv <> None ->
+  forall t1 t2 s (sv : State) f,
+  is_varlike_in_ps PSState s sv <> None ->
   eval_smt_bool
-(SmtBoolEq (lookup_state (eval_transformer_smt t1 s) sv)
-(lookup_state (eval_transformer_smt t2 s) sv)) f = false ->
-lookup_state (eval_transformer_concrete t1 (eval_sym_state s f)) sv <>
-lookup_state (eval_transformer_concrete t2 (eval_sym_state s f)) sv.
+(SmtBoolEq (lookup_varlike PSState (eval_transformer_smt t1 s) sv)
+(lookup_varlike PSState (eval_transformer_smt t2 s) sv)) f = false ->
+lookup_varlike PSState (eval_transformer_concrete t1 (eval_sym_state s f)) sv <>
+lookup_varlike PSState (eval_transformer_concrete t2 (eval_sym_state s f)) sv.
 Proof.
   intros t1 t2 s sv f.
   intro H1.
@@ -181,8 +179,7 @@ Proof.
   rewrite commute_sym_vs_conc_transfomer_sv.
   rewrite commute_sym_vs_conc_transfomer_sv.
   unfold eval_sym_state.
-  rewrite commute_mapper_lookup_state.
-  rewrite commute_mapper_lookup_state.
+  repeat rewrite commute_lookup_varlike.
   apply H.
   assumption. assumption.
 Qed.
@@ -210,9 +207,9 @@ Definition equivalence_checker_cr_dsl (p1: CaracaraProgram) (p2: CaracaraProgram
   : EquivalenceResult := 
   match p1, p2 with
    | CaracaraProgramDef h1 s1 c1 t1, CaracaraProgramDef h2 s2 c2 t2 => 
-      if hdr_list_equal h1 h2 then
-        if state_list_equal s1 s2 then
-          if ctrl_list_equal c1 c2 then
+      if varlike_list_equal h1 h2 then
+        if varlike_list_equal s1 s2 then
+          if varlike_list_equal c1 c2 then
             match (equivalence_checker (init_symbolic_state p1) t1 t2 h1 s1) with
             (* TODO: Maybe equivalence_checker should take c as argument too? *)
             | SmtUnsat => Equivalent (* if it is unsatisfiable, then all state vars and headers are equal *)
@@ -232,16 +229,16 @@ Definition equivalence_checker_cr_dsl (p1: CaracaraProgram) (p2: CaracaraProgram
          rather than completness. Resolve this item.*)
 Lemma equivalence_checker_sound :
   forall s t1 t2 header_list state_var_list f,
-  (forall v, In v header_list -> is_header_in_ps s v <> None) ->
-  (forall v, In v state_var_list -> is_state_var_in_ps s v <> None) ->
+  (forall v, In v header_list -> is_varlike_in_ps PSHeader s v <> None) ->
+  (forall v, In v state_var_list -> is_varlike_in_ps PSState s v <> None) ->
   equivalence_checker s t1 t2 header_list state_var_list = SmtUnsat ->
   let c  := eval_sym_state s f in
   let c1 := eval_transformer_concrete t1 c in
   let c2 := eval_transformer_concrete t2 c in
   (forall v, In v header_list ->
-  (lookup_hdr c1 v) = (lookup_hdr c2 v)) /\
+  (lookup_varlike PSHeader c1 v) = (lookup_varlike PSHeader c2 v)) /\
   (forall v, In v state_var_list ->
-  (lookup_state c1 v) = (lookup_state c2 v)).
+  (lookup_varlike PSState c1 v) = (lookup_varlike PSState c2 v)).
 Proof.
   intros s t1 t2 header_list state_var_list f.
   intro H1.
@@ -271,16 +268,16 @@ Print Assumptions equivalence_checker_sound.
 (* Completeness lemma about equivalence_checker conditional on the axioms above *)
 Lemma equivalence_checker_complete :
   forall s t1 t2 header_list state_var_list f',
-  (forall v, In v header_list -> is_header_in_ps s v <> None) ->
-  (forall v, In v state_var_list -> is_state_var_in_ps s v <> None) ->
+  (forall v, In v header_list -> is_varlike_in_ps PSHeader s v <> None) ->
+  (forall v, In v state_var_list -> is_varlike_in_ps PSState s v <> None) ->
   equivalence_checker s t1 t2 header_list state_var_list = SmtSat f' ->
   let c' := eval_sym_state s f' in
   let c1 := eval_transformer_concrete t1 c' in
   let c2 := eval_transformer_concrete t2 c' in
   (exists v, In v header_list /\
-  (lookup_hdr c1 v) <> (lookup_hdr c2 v)) \/
+  (lookup_varlike PSHeader c1 v) <> (lookup_varlike PSHeader c2 v)) \/
   (exists v, In v state_var_list /\
-  (lookup_state c1 v) <> (lookup_state c2 v)).
+  (lookup_varlike PSState c1 v) <> (lookup_varlike PSState c2 v)).
 Proof.
   intros s t1 t2 header_list state_var_list f'.
   intro Hh.
@@ -312,89 +309,6 @@ Proof.
   - discriminate H.
 Qed.
 
-Lemma ptree_of_list_lemma_hdr :
-    forall (l : list Header) (val_fn : Header -> SmtArithExpr) (h: Header),
-    Coqlib.list_norepet l ->
-    In h l ->
-    In h (map (fun '(key, _) => HeaderCtr key)    
-     (PTree.elements (PTree_Properties.of_list (combine (map (fun h => match h with | HeaderCtr x => x end) l) (map val_fn l))))).
-Proof.
-  intros l val_fn h H' H. (* apply in_map with (f := fun pos => (pos, key_fn) in H. *)
-  generalize H as H_in.
-  apply helper1 with (key_fn := (fun h => match h with | HeaderCtr x => x end)) (val_fn := val_fn) in H.
-  intros.
-  destruct h.
-  remember (fun '(key, _) => HeaderCtr key) as f.
-  assert(H_tmp: HeaderCtr uid =
-         f (uid, val_fn (HeaderCtr uid))).
-  { rewrite Heqf. reflexivity. }
-  rewrite H_tmp.
-  apply in_map with (f := f) (x := (uid, val_fn (HeaderCtr uid))) (l := (PTree.elements
-  (PTree_Properties.of_list (combine (map (fun h => match h with | HeaderCtr x => x end) l) (map val_fn l))))).
-  remember (uid, val_fn (HeaderCtr uid)) as pair_val.
-  remember (combine (map (fun h : Header => match h with
-    | HeaderCtr x => x
-  end) l) (map val_fn l)) as l_combined.
-  rewrite Heqpair_val in *.
-  apply PTree.elements_correct with (m := PTree_Properties.of_list l_combined).
-  apply PTree_Properties.of_list_norepet.
-  - rewrite Heql_combined.
-    simpl.
-    rewrite map_combine2.
-    apply Coqlib.list_map_norepet.
-    -- assumption.
-    -- intros.
-       destruct x.
-       destruct y.
-       intro H_contra.
-       apply H2.
-       f_equal.
-       assumption.
-  - assumption.
-Qed.
-
-(* Same as ptree_of_list_lemma_hdr, but for state *)
-Lemma ptree_of_list_lemma_state :
-  forall (l : list State) (val_fn : State -> SmtArithExpr) (sv: State),
-  Coqlib.list_norepet l ->
-  In sv l ->
-  In sv (map (fun '(key, _) => StateCtr key)    
-   (PTree.elements (PTree_Properties.of_list (combine (map (fun sv => match sv with | StateCtr x => x end) l) (map val_fn l))))).
-Proof.
-  intros l val_fn sv H' H. (* apply in_map with (f := fun pos => (pos, key_fn) in H. *)
-  generalize H as H_in.
-  apply helper1_state with (key_fn := (fun sv => match sv with | StateCtr x => x end)) (val_fn := val_fn) in H.
-  intros.
-  destruct sv.
-  remember (fun '(key, _) => StateCtr key) as f.
-  assert(H_tmp: StateCtr uid =
-     f (uid, val_fn (StateCtr uid))).
-  { rewrite Heqf. reflexivity. }
-  rewrite H_tmp.
-  apply in_map with (f := f) (x := (uid, val_fn (StateCtr uid))) (l := (PTree.elements
-  (PTree_Properties.of_list (combine (map (fun sv : State => match sv with
-  | StateCtr x => x
-  end) l) (map val_fn l))))).
-  remember (uid, val_fn (StateCtr uid)) as pair_val.
-  remember (combine (map (fun sv : State => match sv with | StateCtr x => x end) l) (map val_fn l)) as l_combined.
-  rewrite Heqpair_val in *.
-  apply PTree.elements_correct with (m := PTree_Properties.of_list l_combined).
-  apply PTree_Properties.of_list_norepet.
-  - rewrite Heql_combined.
-  simpl.
-  rewrite map_combine2.
-  apply Coqlib.list_map_norepet.
-  -- assumption.
-  -- intros.
-     destruct x.
-     destruct y.
-     intro H_contra.
-     apply H2.
-     f_equal.
-     assumption.
-  - assumption.
-Qed.
-
 Lemma init_symbolic_state_nodep_t : forall h s c t1 t2,
   init_symbolic_state (CaracaraProgramDef h s c t1) =
   init_symbolic_state (CaracaraProgramDef h s c t2).
@@ -404,7 +318,6 @@ Proof.
   f_equal.
 Qed.
 
-(* Soundness lemma for equivalence_checker_cr_dsl *)
 Lemma equivalence_checker_cr_sound_hdr :
   forall p1 p2 f,
   equivalence_checker_cr_dsl p1 p2 = Equivalent ->
@@ -417,19 +330,19 @@ Lemma equivalence_checker_cr_sound_hdr :
   well_formed_program p1 ->                          (* p1 is well-formed *)
   (forall v, In v (get_headers_from_prog p1) ->      (* then, every header in p1 *)
   (In v (get_headers_from_prog p2)) /\               (* must be in p2 *)
-  (lookup_hdr c1 v) = (lookup_hdr c2 v)).            (* and their final values must be equal *)
+  (lookup_varlike PSHeader c1 v) = (lookup_varlike PSHeader c2 v)).            (* and their final values must be equal *)
 Proof.
   intros p1 p2 f H.
   destruct p1 as [h1 s1 c1 t1] eqn:desp1,
            p2 as [h2 s2 c2 t2] eqn:desp2; simpl in H.
   destruct
-  (hdr_list_equal h1 h2) eqn:H_hdr_eq,
-  (state_list_equal s1 s2) eqn:H_state_eq,
-  (ctrl_list_equal c1 c2) eqn:H_ctrl_eq in H; simpl in H; try (exfalso; congruence).
+  (varlike_list_equal h1 h2) eqn:H_hdr_eq,
+  (varlike_list_equal s1 s2) eqn:H_state_eq,
+  (varlike_list_equal c1 c2) eqn:H_ctrl_eq in H; simpl in H; try (exfalso; congruence).
   intros.
   simpl in H1. (* TODO: May want to remove these *)
   split.
-  - apply hdr_list_equal_lemma in H_hdr_eq.
+  - apply varlike_list_equal_lemma in H_hdr_eq.
     rewrite H_hdr_eq in H1.
     assumption.
   - destruct (equivalence_checker (init_symbolic_state (CaracaraProgramDef h1 s1 c1
@@ -444,35 +357,34 @@ t1)) t1 t2 h1 s1) eqn:H_eq; try (exfalso; congruence).
       unfold t0.
       unfold t3.
       simpl.
-      apply state_list_equal_lemma in H_state_eq.
-      apply hdr_list_equal_lemma in H_hdr_eq.
-      apply ctrl_list_equal_lemma in H_ctrl_eq.
+      apply varlike_list_equal_lemma in H_state_eq.
+      apply varlike_list_equal_lemma in H_hdr_eq.
+      apply varlike_list_equal_lemma in H_ctrl_eq.
       rewrite <- H_hdr_eq.
       rewrite <- H_state_eq.
       rewrite <- H_ctrl_eq.
       rewrite init_symbolic_state_nodep_t with (t2 := t2) in H1 at 2.
       assumption.
     + intros.
-      apply is_header_in_ps_lemma.
+      apply is_varlike_in_ps_lemma.
       unfold init_symbolic_state.
-      Transparent get_all_headers_from_ps.
-      unfold get_all_headers_from_ps.
+      Transparent get_all_varlike_from_ps.
+      unfold get_all_varlike_from_ps.
       simpl.
-      rewrite map_pair_split.
+      repeat rewrite map_pair_split.
       simpl.
-      apply ptree_of_list_lemma_hdr.
+      apply (@ptree_of_list_lemma_generic Header CrVarLike_Header).
       simpl in H0.
       destruct H0.
       assumption. assumption.
     + intros.
-      apply is_state_in_ps_lemma.
+      apply is_varlike_in_ps_lemma.
       unfold init_symbolic_state.
-      Transparent get_all_states_from_ps.
-      unfold get_all_states_from_ps.
+      unfold get_all_varlike_from_ps.
       simpl.
-      rewrite map_pair_split.
+      repeat rewrite map_pair_split.
       simpl.
-      apply ptree_of_list_lemma_state.
+      apply (@ptree_of_list_lemma_generic State CrVarLike_State).
       simpl in H0.
       destruct H0.
       destruct H3.
@@ -494,19 +406,19 @@ Lemma equivalence_checker_cr_sound_state :
   well_formed_program p1 ->                          (* p1 is well-formed *)
   (forall v, In v (get_states_from_prog p1) ->      (* then, every header in p1 *)
   (In v (get_states_from_prog p2)) /\               (* must be in p2 *)
-  (lookup_state c1 v) = (lookup_state c2 v)).            (* and their final values must be equal *)
+  (lookup_varlike PSState c1 v) = (lookup_varlike PSState c2 v)).            (* and their final values must be equal *)
 Proof.
   intros p1 p2 f H.
   destruct p1 as [h1 s1 c1 t1] eqn:desp1,
            p2 as [h2 s2 c2 t2] eqn:desp2; simpl in H.
   destruct
-  (hdr_list_equal h1 h2) eqn:H_hdr_eq,
-  (state_list_equal s1 s2) eqn:H_state_eq,
-  (ctrl_list_equal c1 c2) eqn:H_ctrl_eq in H; simpl in H; try (exfalso; congruence).
+  (varlike_list_equal h1 h2) eqn:H_hdr_eq,
+  (varlike_list_equal s1 s2) eqn:H_state_eq,
+  (varlike_list_equal c1 c2) eqn:H_ctrl_eq in H; simpl in H; try (exfalso; congruence).
   intros.
   simpl in H1. (* TODO: May want to remove these *)
   split.
-  - apply state_list_equal_lemma in H_state_eq.
+  - apply varlike_list_equal_lemma in H_state_eq.
     rewrite H_state_eq in H1.
     assumption.
   - destruct (equivalence_checker (init_symbolic_state (CaracaraProgramDef h1 s1 c1
@@ -521,35 +433,34 @@ t1)) t1 t2 h1 s1) eqn:H_eq; try (exfalso; congruence).
       unfold t0.
       unfold t3.
       simpl.
-      apply state_list_equal_lemma in H_state_eq.
-      apply hdr_list_equal_lemma in H_hdr_eq.
-      apply ctrl_list_equal_lemma in H_ctrl_eq.
+      apply varlike_list_equal_lemma in H_state_eq.
+      apply varlike_list_equal_lemma in H_hdr_eq.
+      apply varlike_list_equal_lemma in H_ctrl_eq.
       rewrite <- H_hdr_eq.
       rewrite <- H_state_eq.
       rewrite <- H_ctrl_eq.
       rewrite init_symbolic_state_nodep_t with (t2 := t2) in H1 at 2.
       assumption.
     + intros.
-      apply is_header_in_ps_lemma.
+      apply is_varlike_in_ps_lemma.
       unfold init_symbolic_state.
-      Transparent get_all_headers_from_ps.
-      unfold get_all_headers_from_ps.
+      Transparent get_all_varlike_from_ps.
+      unfold get_all_varlike_from_ps.
       simpl.
-      rewrite map_pair_split.
+      repeat rewrite map_pair_split.
       simpl.
-      apply ptree_of_list_lemma_hdr.
+      apply (@ptree_of_list_lemma_generic Header CrVarLike_Header).
       simpl in H0.
       destruct H0.
       assumption. assumption.
     + intros.
-      apply is_state_in_ps_lemma.
+      apply is_varlike_in_ps_lemma.
       unfold init_symbolic_state.
-      Transparent get_all_states_from_ps.
-      unfold get_all_states_from_ps.
+      unfold get_all_varlike_from_ps.
       simpl.
-      rewrite map_pair_split.
+      repeat rewrite map_pair_split.
       simpl.
-      apply ptree_of_list_lemma_state.
+      apply (@ptree_of_list_lemma_generic State CrVarLike_State).
       simpl in H0.
       destruct H0.
       destruct H3.
@@ -557,6 +468,7 @@ t1)) t1 t2 h1 s1) eqn:H_eq; try (exfalso; congruence).
       assumption.
 Qed.
 
+Transparent map_from_ps.
 (* Completeness lemma for equivalence_checker_cr_dsl *)
 Lemma equivalence_checker_cr_complete :
   forall p1 p2 f,
@@ -574,17 +486,17 @@ Lemma equivalence_checker_cr_complete :
                                                            (* TODO handle case where programs
                                                            are not equivalent bcos headers, ctrls, and states differ *)
   ((exists v, In v (get_headers_from_prog p1) /\      (* then, there exists a header in p1 *)
-  (lookup_hdr c1 v) <> (lookup_hdr c2 v)) \/          (* whose final values are not equal *)
+  (lookup_varlike PSHeader c1 v) <> (lookup_varlike PSHeader c2 v)) \/          (* whose final values are not equal *)
   (exists v, In v (get_states_from_prog p1) /\        (* or there exists a state var in p1 *)
-  (lookup_state c1 v) <> (lookup_state c2 v))).       (* whose final values are not equal *)
+  (lookup_varlike PSState c1 v) <> (lookup_varlike PSState c2 v))).       (* whose final values are not equal *)
 Proof.
   intros p1 p2 f H.
   destruct p1 as [h1 s1 c1 t1] eqn:desp1,
            p2 as [h2 s2 c2 t2] eqn:desp2; simpl in H.
   destruct
-  (hdr_list_equal h1 h2) eqn:H_hdr_eq,
-  (state_list_equal s1 s2) eqn:H_state_eq,
-  (ctrl_list_equal c1 c2) eqn:H_ctrl_eq in H; simpl in H.
+  (varlike_list_equal h1 h2) eqn:H_hdr_eq,
+  (varlike_list_equal s1 s2) eqn:H_state_eq,
+  (varlike_list_equal c1 c2) eqn:H_ctrl_eq in H; simpl in H.
   2-8: discriminate H. (* The easy goals, where state, ctrl, or header lists are NOT equal, proof by explosion because we assume these lists ARE equal*)
   - destruct (equivalence_checker (init_symbolic_state (CaracaraProgramDef h1 s1 c1 (* The hard goal *)
 t1)) t1 t2 h1 s1) eqn:H_eq; try (exfalso; congruence).
@@ -597,33 +509,36 @@ t1)) t1 t2 h1 s1) eqn:H_eq; try (exfalso; congruence).
        ++ simpl.
           injection H as Heq.
           subst f0.
-          apply hdr_list_equal_lemma in H_hdr_eq.
+          apply varlike_list_equal_lemma in H_hdr_eq.
           rewrite <- H_hdr_eq.
-          apply state_list_equal_lemma in H_state_eq.
+          apply varlike_list_equal_lemma in H_state_eq.
           rewrite <- H_state_eq.
-          apply ctrl_list_equal_lemma in H_ctrl_eq.
+          apply varlike_list_equal_lemma in H_ctrl_eq.
           rewrite <- H_ctrl_eq.
           apply H_eq.
        ++ intros.
-          apply is_header_in_ps_lemma.
-          unfold get_all_headers_from_ps.
+          apply is_varlike_in_ps_lemma.
+          unfold get_all_varlike_from_ps.
+          unfold map_from_ps.
           simpl.
           rewrite map_pair_split.
-          apply ptree_of_list_lemma_hdr.
+          apply (@ptree_of_list_lemma_generic Header CrVarLike_Header).
           destruct H0 as [H_wf_headers _].
           apply H_wf_headers.
           assumption.
        ++ intros.
-          apply is_state_in_ps_lemma.
-          unfold get_all_states_from_ps.
+          apply is_varlike_in_ps_lemma.
+          unfold get_all_varlike_from_ps.
+          unfold map_from_ps.
           simpl.
           rewrite map_pair_split.
-          apply ptree_of_list_lemma_state.
+          apply (@ptree_of_list_lemma_generic State CrVarLike_State).
           destruct H0 as [H_wf_headers H_wf_states].
           destruct H_wf_states as [H_wf_states _].
           apply H_wf_states.
           assumption.
 Qed.
+Global Opaque map_from_ps.
 
 Print Assumptions equivalence_checker_complete.
 Print Assumptions equivalence_checker_cr_sound_hdr.

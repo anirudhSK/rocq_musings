@@ -39,13 +39,13 @@ Lemma SmtBoolConjunction_true_header:
   eval_smt_bool (fold_right 
     (fun (h : Header) (acc : SmtBoolExpr) =>
           SmtBoolAnd acc
-          (SmtBoolEq (lookup_hdr s1 h)
-          (lookup_hdr s2 h))) SmtTrue header_list) f =
+          (SmtBoolEq (lookup_varlike PSHeader s1 h)
+          (lookup_varlike PSHeader s2 h))) SmtTrue header_list) f =
     true ->
   forallb (fun h => (eval_smt_bool
           (SmtBoolEq
-          (lookup_hdr s1 h)
-          (lookup_hdr s2 h)) f)) header_list = true.
+          (lookup_varlike PSHeader s1 h)
+          (lookup_varlike PSHeader s2 h)) f)) header_list = true.
 Proof.
   intros s1 s2 header_list f H.
   induction header_list as [|h t IH].
@@ -65,13 +65,13 @@ Lemma SmtBoolConjunction_true_state_var:
   eval_smt_bool (fold_right 
     (fun (sv :State) (acc : SmtBoolExpr) =>
           SmtBoolAnd acc
-          (SmtBoolEq (lookup_state s1 sv)
-          (lookup_state s2 sv))) SmtTrue state_var_list) f =
+          (SmtBoolEq (lookup_varlike PSState s1 sv)
+          (lookup_varlike PSState s2 sv))) SmtTrue state_var_list) f =
     true ->
   forallb (fun sv => (eval_smt_bool
           (SmtBoolEq
-          (lookup_state s1 sv)
-          (lookup_state s2 sv)) f)) state_var_list = true.
+          (lookup_varlike PSState s1 sv)
+          (lookup_varlike PSState s2 sv)) f)) state_var_list = true.
 Proof.
   intros s1 s2 state_var_list f H.
   induction state_var_list as [|sv t IH].
@@ -90,13 +90,13 @@ Lemma SmtBoolConjunction_false_header:
   eval_smt_bool (fold_right 
     (fun (h : Header) (acc : SmtBoolExpr) =>
           SmtBoolAnd acc
-          (SmtBoolEq (lookup_hdr s1 h)
-          (lookup_hdr s2 h))) SmtTrue header_list) f =
+          (SmtBoolEq (lookup_varlike PSHeader s1 h)
+          (lookup_varlike PSHeader s2 h))) SmtTrue header_list) f =
     false ->
   existsb (fun h => (eval_smt_bool
           (SmtBoolNot (SmtBoolEq
-          (lookup_hdr s1 h)
-          (lookup_hdr s2 h))) f)) header_list = true.
+          (lookup_varlike PSHeader s1 h)
+          (lookup_varlike PSHeader s2 h))) f)) header_list = true.
           (* there is a header (true), such that:
              If you assert the inequality of the headers (equality and then not),
              that resulting statement is true*)
@@ -120,13 +120,13 @@ Lemma SmtBoolConjunction_false_state_var:
   eval_smt_bool (fold_right 
     (fun (sv :State) (acc : SmtBoolExpr) =>
           SmtBoolAnd acc
-          (SmtBoolEq (lookup_state s1 sv)
-          (lookup_state s2 sv))) SmtTrue state_var_list) f =
+          (SmtBoolEq (lookup_varlike PSState s1 sv)
+          (lookup_varlike PSState s2 sv))) SmtTrue state_var_list) f =
     false ->
   existsb (fun sv => (eval_smt_bool
           (SmtBoolNot (SmtBoolEq
-          (lookup_state s1 sv)
-          (lookup_state s2 sv))) f)) state_var_list = true.
+          (lookup_varlike PSState s1 sv)
+          (lookup_varlike PSState s2 sv))) f)) state_var_list = true.
           (* there is a state var (true), such that:
              If you assert the inequality of the state vars (equality and then not),
              that resulting statement is true*) 

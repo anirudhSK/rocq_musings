@@ -57,38 +57,28 @@ Definition get_transformer_from_prog (p : CaracaraProgram) : Transformer :=
 Definition check_for_duplicate_identifiers (program : CaracaraProgram) : bool :=
   match program with
   | CaracaraProgramDef h s c _ =>
-      has_duplicates header_equal h ||
-      has_duplicates state_equal s ||
-      has_duplicates ctrl_equal c
+      (* TODO: can probably adjust has_duplicates *)
+      has_duplicates varlike_equal h ||
+      has_duplicates varlike_equal s ||
+      has_duplicates varlike_equal c
   end.
 
 From Coq Require Import Sorting.Sorted.
 Check Sorted.
 
 (* Compare two headers based on their uids *)
-Definition header_lt (h1 h2 : Header) : Prop :=
-  match h1, h2 with
-  | HeaderCtr uid1, HeaderCtr uid2 => Pos.lt uid1 uid2
-  end.
-
-(* Compare two states based on their uids *)
-Definition state_lt (s1 s2 : State) : Prop :=
-  match s1, s2 with
-  | StateCtr uid1, StateCtr uid2 => Pos.lt uid1 uid2
-  end.
-
-(* Compare two ctrls based on their uids *)
-Definition ctrl_lt (c1 c2 : Ctrl) : Prop :=
-  match c1, c2 with
-  | CtrlCtr uid1, CtrlCtr uid2 => Pos.lt uid1 uid2
-  end.
+Section VarlikeCmp.
+Context {A : Type} {CrVarLike_A : CrVarLike A}.
+Definition varlike_lt (v1 v2: A) : Prop :=
+  Pos.lt (get_key v1) (get_key v2).
+End VarlikeCmp.
 
 (* No duplicates in Caracara Program *)
 Definition well_formed_program (p : CaracaraProgram) : Prop :=
   match p with
   | CaracaraProgramDef h s c _ =>
       Coqlib.list_norepet h /\ Coqlib.list_norepet s /\ Coqlib.list_norepet c /\
-      Sorted header_lt h /\ Sorted state_lt s /\ Sorted ctrl_lt c
+      Sorted varlike_lt h /\ Sorted varlike_lt s /\ Sorted varlike_lt c
   end.
 
 (* TODO: Write a program to check for the well_formed_program property *)

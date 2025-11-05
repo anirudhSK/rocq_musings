@@ -18,6 +18,7 @@ Require Import Coq.Bool.Bool.
 From Coq Require Import FunctionalExtensionality.
 
 (* Simpler lemma with no state update *)
+Global Opaque lookup_varlike.
 Lemma commute_sym_conc_expr:
   forall (ho: HdrOp) (s : SymbolicState) (f : SmtValuation),
     eval_hdr_op_expr_concrete ho (eval_sym_state s f) =
@@ -25,35 +26,22 @@ Lemma commute_sym_conc_expr:
 Proof.
   intros ho s f.
   destruct ho, f0, arg1, arg2; simpl;
-  try repeat (rewrite PMapHelperLemmas.commute_lookup_eval_ctrl); try reflexivity;
-  try repeat (rewrite PMapHelperLemmas.commute_lookup_eval_state); try reflexivity; (* TODO: How did this work before? *)
-  try repeat (rewrite PMapHelperLemmas.commute_lookup_eval_hdr); try reflexivity.
+  try repeat (rewrite PMapHelperLemmas.commute_lookup_eval_generic); try reflexivity.
 Qed.
 
-Lemma commute_update_eval_state:
-  forall (s : SymbolicState) (f : SmtValuation) (sv : State) (v : SmtArithExpr),
-    eval_sym_state (update_state s sv v) f =
-    update_state (eval_sym_state s f) sv (eval_smt_arith v f).
+Lemma commute_update_eval_varlike:
+  forall {A} `{CrVarLike A} (field : PSField) (s : SymbolicState) (f : SmtValuation) (var : A) (v : SmtArithExpr),
+    eval_sym_state (update_varlike field s var v) f =
+    update_varlike field (eval_sym_state s f) var (eval_smt_arith v f).
 Proof.
   intros s f h v.
   unfold eval_sym_state.
-  specialize (commute_mapper_update_state (T1 := SmtArithExpr) (T2 := uint8)).
+  specialize (commute_mapper_update_varlike (T1 := SmtArithExpr) (T2 := uint8)).
   intros.
   apply H.
 Qed.
 
-Lemma commute_update_eval_hdr:
-  forall (s : SymbolicState) (f : SmtValuation) (h : Header) (v : SmtArithExpr),
-    eval_sym_state (update_hdr s h v) f =
-    update_hdr (eval_sym_state s f) h (eval_smt_arith v f).
-Proof.
-  intros s f h v.
-  unfold eval_sym_state.
-  specialize (commute_mapper_update_hdr (T1 := SmtArithExpr) (T2 := uint8)).
-  intros.
-  apply H.
-Qed.
-
+Global Opaque update_varlike.
 (* for any symbolic state, symbolic valuation, and header operation, 
   concretizing and then evaluating EQUALS
   evaluating and then concretizing *)
@@ -66,8 +54,8 @@ Proof.
   unfold eval_hdr_op_assign_concrete.
   unfold eval_hdr_op_assign_smt.
   rewrite commute_sym_conc_expr.
-  destruct ho, f0, arg1, arg2, s; simpl; try rewrite commute_update_eval_state; simpl; try reflexivity;
-  try rewrite commute_update_eval_hdr; simpl; try reflexivity.
+  destruct ho, f0, arg1, arg2, s; simpl; 
+  rewrite commute_update_eval_varlike; reflexivity.
 Qed.
 
 Lemma commute_sym_vs_conc_hdr_op_list :
@@ -88,6 +76,7 @@ Qed.
 
 (* For any Header, uint8 pair,
    concrete and symbolic execution match up. *)
+Transparent lookup_varlike.
 Lemma commute_sym_vs_conc_match_cond :
   forall (hv_pair: Header * uint8) (f : SmtValuation)
          (s1 : SymbolicState)
@@ -101,14 +90,14 @@ Proof.
   simpl.
   rewrite andb_true_r.
   rewrite Hc1.
-  assert (H : lookup_hdr (eval_sym_state s1 f) h =
-              eval_smt_arith (lookup_hdr s1 h) f).
+  assert (H : lookup_varlike PSHeader (eval_sym_state s1 f) h =
+              eval_smt_arith (lookup_varlike PSHeader s1 h) f).
   { unfold eval_sym_state.
     simpl.
-    rewrite commute_mapper_lookup_hdr.
+    rewrite commute_lookup_varlike.
     reflexivity. }
   rewrite H.
-  destruct (Integers.eq (eval_smt_arith (lookup_hdr s1 h) f) v).
+  destruct (Integers.eq (eval_smt_arith (lookup_varlike PSHeader s1 h) f) v).
   - reflexivity.
   - reflexivity.
 Qed.
@@ -139,7 +128,7 @@ Proof.
     destruct hv_pair as [h v].
     simpl.
     destruct (eval_match_smt rest s1); try reflexivity.
-    destruct (Integers.eq (eval_smt_arith (lookup_hdr s1 h) f) v) eqn:des.
+    destruct (Integers.eq (eval_smt_arith (lookup_varlike PSHeader s1 h) f) v) eqn:des.
     -- rewrite andb_true_r. simpl. rewrite des. reflexivity.
     -- rewrite andb_false_l. simpl. rewrite des. reflexivity.
 Qed.
@@ -147,74 +136,76 @@ Qed.
 Lemma commute_sym_vs_conc_helper_seq_par_rule_hdr :
   forall (mp: MatchPattern) (hol: list HdrOp) (f : SmtValuation)
          (s1 : SymbolicState) (h : Header),
-         is_header_in_ps s1 h <> None ->
-    lookup_hdr (if eval_match_concrete mp (eval_sym_state s1 f)
+         is_varlike_in_ps PSHeader s1 h <> None ->
+    lookup_varlike PSHeader (if eval_match_concrete mp (eval_sym_state s1 f)
     then eval_hdr_op_list_concrete hol (eval_sym_state s1 f)
     else eval_sym_state s1 f) h =
-    lookup_hdr (eval_sym_state (update_all_states
-                   (update_all_hdrs s1 (fun h => SmtConditional (eval_match_smt mp s1)
-                                                                (lookup_hdr (eval_hdr_op_list_smt hol s1) h) (lookup_hdr s1 h)))
-                   (fun s => SmtConditional (eval_match_smt mp s1)
-                             (lookup_state (eval_hdr_op_list_smt hol s1) s) (lookup_state s1 s))) f) h.
+    lookup_varlike PSHeader (eval_sym_state (update_all_varlike PSState
+                   (update_all_varlike PSHeader s1 (fun (h : Header) => SmtConditional (eval_match_smt mp s1)
+                                                                (lookup_varlike PSHeader (eval_hdr_op_list_smt hol s1) h) (lookup_varlike PSHeader s1 h)))
+                   (fun (s : State) => SmtConditional (eval_match_smt mp s1)
+                             (lookup_varlike PSState (eval_hdr_op_list_smt hol s1) s) (lookup_varlike PSState s1 s))) f) h.
 Proof.
   intros mp hol f s1 h Hh.
   unfold eval_sym_state at 4.
-  rewrite commute_mapper_lookup_hdr.
-  rewrite <- commute_state_hdr_updates.
-  rewrite lookup_hdr_after_update_all_hdrs.
-  -- destruct (eval_match_concrete mp (eval_sym_state s1 f)) eqn:Hmatch.
+  rewrite commute_lookup_varlike.
+  rewrite <- commute_varlike_updates.
+  rewrite lookup_varlike_after_update_all_varlike.
+  - destruct (eval_match_concrete mp (eval_sym_state s1 f)) eqn:Hmatch.
      + simpl.
-       rewrite <- commute_sym_vs_conc_match_pattern with (c1 := eval_sym_state s1 f); auto.
-       rewrite Hmatch.
-       rewrite commute_sym_vs_conc_hdr_op_list with (f := f) (s1 := s1); auto.
-       rewrite commute_lookup_eval_hdr.
-       reflexivity.
+      rewrite <- commute_sym_vs_conc_match_pattern with (c1 := eval_sym_state s1 f); auto.
+      rewrite Hmatch.
+      rewrite commute_sym_vs_conc_hdr_op_list with (f := f) (s1 := s1); auto.
+      apply commute_lookup_eval_varlike.
      + simpl.
-       rewrite <- commute_sym_vs_conc_match_pattern with (c1 := eval_sym_state s1 f); auto.
-       rewrite Hmatch.
-       rewrite commute_lookup_eval_hdr.
-       reflexivity.
-  -- rewrite is_header_in_ps_after_update_all_states. assumption.
+      rewrite <- commute_sym_vs_conc_match_pattern with (c1 := eval_sym_state s1 f); auto.
+      rewrite Hmatch.
+      apply commute_lookup_eval_varlike.
+  - set (fn := (fun s : State => SmtConditional (eval_match_smt mp s1)
+      (lookup_varlike_map (map_from_ps PSState (eval_hdr_op_list_smt hol s1)) s)
+      (lookup_varlike_map (map_from_ps PSState s1) s))).
+    rewrite is_v1_in_ps_after_update_all_v2. assumption. discriminate.
+  - discriminate.
 Qed.
 
 Lemma commute_sym_vs_conc_helper_seq_par_rule_sv :
   forall (mp: MatchPattern) (hol: list HdrOp) (f : SmtValuation)
          (s1 : SymbolicState) (sv : State),
-         is_state_var_in_ps s1 sv <> None ->
-    lookup_state (if eval_match_concrete mp (eval_sym_state s1 f)
+         is_varlike_in_ps PSState s1 sv <> None ->
+    lookup_varlike PSState (if eval_match_concrete mp (eval_sym_state s1 f)
     then eval_hdr_op_list_concrete hol (eval_sym_state s1 f)
     else eval_sym_state s1 f) sv =
-    lookup_state (eval_sym_state (update_all_states
-                   (update_all_hdrs s1 (fun h => SmtConditional (eval_match_smt mp s1)
-                                                                (lookup_hdr (eval_hdr_op_list_smt hol s1) h) (lookup_hdr s1 h)))
-                   (fun s => SmtConditional (eval_match_smt mp s1)
-                             (lookup_state (eval_hdr_op_list_smt hol s1) s) (lookup_state s1 s))) f) sv.
+    lookup_varlike PSState (eval_sym_state (update_all_varlike PSState
+                   (update_all_varlike PSHeader s1 (fun (h : Header) => SmtConditional (eval_match_smt mp s1)
+                                                                (lookup_varlike PSHeader (eval_hdr_op_list_smt hol s1) h) (lookup_varlike PSHeader s1 h)))
+                   (fun (s : State) => SmtConditional (eval_match_smt mp s1)
+                             (lookup_varlike PSState (eval_hdr_op_list_smt hol s1) s) (lookup_varlike PSState s1 s))) f) sv.
 Proof.
   intros mp hol f s1 sv Hsv.
   unfold eval_sym_state at 4.
-  rewrite commute_mapper_lookup_state.
-  rewrite lookup_state_after_update_all_states.
-  -- destruct (eval_match_concrete mp (eval_sym_state s1 f)) eqn:Hmatch.
-     + simpl.
-       rewrite <- commute_sym_vs_conc_match_pattern with (c1 := eval_sym_state s1 f); auto.
-       rewrite Hmatch.
-       rewrite commute_sym_vs_conc_hdr_op_list with (f := f) (s1 := s1); auto.
-       rewrite commute_lookup_eval_state.
-       reflexivity.
-     + simpl.
-       rewrite <- commute_sym_vs_conc_match_pattern with (c1 := eval_sym_state s1 f); auto.
-       rewrite Hmatch.
-       rewrite commute_lookup_eval_state.
-       reflexivity.
-  -- rewrite is_state_var_in_ps_after_update_all_hdrs. assumption.
+  rewrite commute_lookup_varlike.
+  rewrite lookup_varlike_after_update_all_varlike.
+  - destruct (eval_match_concrete mp (eval_sym_state s1 f)) eqn:Hmatch.
+    + simpl.
+      rewrite <- commute_sym_vs_conc_match_pattern with (c1 := eval_sym_state s1 f); auto.
+      rewrite Hmatch.
+      rewrite commute_sym_vs_conc_hdr_op_list with (f := f) (s1 := s1); auto.
+      rewrite commute_lookup_eval_varlike.
+      reflexivity.
+    + simpl.
+      rewrite <- commute_sym_vs_conc_match_pattern with (c1 := eval_sym_state s1 f); auto.
+      rewrite Hmatch.
+      rewrite commute_lookup_eval_varlike.
+      reflexivity.
+  - rewrite is_v1_in_ps_after_update_all_v2. assumption. discriminate.
 Qed.
 
 Lemma commute_sym_vs_conc_seq_rule_hdr :
   forall (sr: SeqRule) (f : SmtValuation)
          (s1 : SymbolicState) (h : Header),
-      is_header_in_ps s1 h <> None ->
-      lookup_hdr (eval_seq_rule_concrete sr (eval_sym_state s1 f)) h = (* first concretize, and then interpret *)
-      lookup_hdr (eval_sym_state (eval_seq_rule_smt sr s1) f) h. (* first interpret, and then concretize *)
+      is_varlike_in_ps PSHeader s1 h <> None ->
+      lookup_varlike PSHeader (eval_seq_rule_concrete sr (eval_sym_state s1 f)) h = (* first concretize, and then interpret *)
+      lookup_varlike PSHeader (eval_sym_state (eval_seq_rule_smt sr s1) f) h. (* first interpret, and then concretize *)
 Proof.
   intros sr f s1 h Hh.
   destruct sr as [mp hol].
@@ -226,9 +217,9 @@ Qed.
 Lemma commute_sym_vs_conc_par_rule_hdr :
   forall (pr: ParRule) (f : SmtValuation)
          (s1 : SymbolicState) (h : Header),
-    is_header_in_ps s1 h <> None ->
-    lookup_hdr (eval_par_rule_concrete pr (eval_sym_state s1 f)) h = (* first concretize, and then interpret *)
-    lookup_hdr (eval_sym_state (eval_par_rule_smt pr s1) f) h. (* first interpret, and then concretize *)
+    is_varlike_in_ps PSHeader s1 h <> None ->
+    lookup_varlike PSHeader (eval_par_rule_concrete pr (eval_sym_state s1 f)) h = (* first concretize, and then interpret *)
+    lookup_varlike PSHeader (eval_sym_state (eval_par_rule_smt pr s1) f) h. (* first interpret, and then concretize *)
 Proof.
   intros pr f s1 h Hh.
   destruct pr as [mp hol].
@@ -241,9 +232,9 @@ Qed.
 Lemma commute_sym_vs_conc_seq_rule_sv :
   forall (sr: SeqRule) (f : SmtValuation)
          (s1 : SymbolicState) (sv : State),
-    is_state_var_in_ps s1 sv <> None ->
-    lookup_state (eval_seq_rule_concrete sr (eval_sym_state s1 f)) sv = (* first concretize, and then interpret *)
-    lookup_state (eval_sym_state (eval_seq_rule_smt sr s1) f) sv. (* first interpret, and then concretize *)
+    is_varlike_in_ps PSState s1 sv <> None ->
+    lookup_varlike PSState (eval_seq_rule_concrete sr (eval_sym_state s1 f)) sv = (* first concretize, and then interpret *)
+    lookup_varlike PSState (eval_sym_state (eval_seq_rule_smt sr s1) f) sv. (* first interpret, and then concretize *)
 Proof.
   intros sr f s1 sv Hsv.
   destruct sr as [mp hol].
@@ -255,9 +246,9 @@ Qed.
 Lemma commute_sym_vs_conc_par_rule_sv :
   forall (pr: ParRule) (f : SmtValuation)
          (s1 : SymbolicState) (sv : State),
-    is_state_var_in_ps s1 sv <> None ->
-    lookup_state (eval_par_rule_concrete pr (eval_sym_state s1 f)) sv = (* first concretize, and then interpret *)
-    lookup_state (eval_sym_state (eval_par_rule_smt pr s1) f) sv. (* first interpret, and then concretize *)
+    is_varlike_in_ps PSState s1 sv <> None ->
+    lookup_varlike PSState (eval_par_rule_concrete pr (eval_sym_state s1 f)) sv = (* first concretize, and then interpret *)
+    lookup_varlike PSState (eval_sym_state (eval_par_rule_smt pr s1) f) sv. (* first interpret, and then concretize *)
 Proof.
   intros pr f s1 sv Hsv.
   destruct pr as [mp hol].
@@ -269,9 +260,9 @@ Qed.
 Lemma commute_sym_vs_conc_ma_rule_hdr:
   forall (ma : MatchActionRule) (f : SmtValuation)
          (s1 : SymbolicState) (h: Header),
-    is_header_in_ps s1 h <> None ->
-    lookup_hdr (eval_match_action_rule_concrete ma (eval_sym_state s1 f)) h = (* first concretize, and then interpret *)
-    lookup_hdr (eval_sym_state (eval_match_action_rule_smt ma s1) f) h. (* first interpret, and then concretize *)
+    is_varlike_in_ps PSHeader s1 h <> None ->
+    lookup_varlike PSHeader (eval_match_action_rule_concrete ma (eval_sym_state s1 f)) h = (* first concretize, and then interpret *)
+    lookup_varlike PSHeader (eval_sym_state (eval_match_action_rule_smt ma s1) f) h. (* first interpret, and then concretize *)
 Proof.
   intros ma f s1 h Hh.
   destruct ma as [sr | pr].
@@ -282,9 +273,9 @@ Qed.
 Lemma commute_sym_vs_conc_ma_rule_sv:
   forall (ma : MatchActionRule) (f : SmtValuation)
          (s1 : SymbolicState) (sv: State),
-    is_state_var_in_ps s1 sv <> None ->
-    lookup_state (eval_match_action_rule_concrete ma (eval_sym_state s1 f)) sv = (* first concretize, and then interpret *)
-    lookup_state (eval_sym_state (eval_match_action_rule_smt ma s1) f) sv. (* first interpret, and then concretize *)
+    is_varlike_in_ps PSState s1 sv <> None ->
+    lookup_varlike PSState (eval_match_action_rule_concrete ma (eval_sym_state s1 f)) sv = (* first concretize, and then interpret *)
+    lookup_varlike PSState (eval_sym_state (eval_match_action_rule_smt ma s1) f) sv. (* first interpret, and then concretize *)
 Proof.
   intros ma f s1 sv Hsv.
   destruct ma as [sr | pr].
@@ -322,14 +313,14 @@ Proof.
 Qed.
 
 Lemma switch_case_expr_some_match_lemma :
-  forall t f s1 h rule,
-    is_header_in_ps s1 h <> None ->
+  forall t f s1 (h : Header) rule,
+    is_varlike_in_ps PSHeader s1 h <> None ->
     Some rule = find_first_match (combine (get_match_results t (eval_sym_state s1 f)) t) ->
-    lookup_hdr (eval_match_action_rule_concrete rule (eval_sym_state s1 f)) h =
+    lookup_varlike PSHeader (eval_match_action_rule_concrete rule (eval_sym_state s1 f)) h =
     eval_smt_arith (switch_case_expr (combine (get_match_results_smt t s1)
-                                              (map (fun ps : SymbolicState => lookup_hdr ps h)
+                                              (map (fun ps : SymbolicState => lookup_varlike PSHeader ps h)
                                                    (map (fun rule : MatchActionRule => eval_match_action_rule_smt rule s1) t)))
-                                     (lookup_hdr s1 h)) f.
+                                     (lookup_varlike PSHeader s1 h)) f.
 Proof.
   intros t f s1 h rule Hh H.
   induction t.
@@ -350,7 +341,7 @@ Proof.
         simpl in H.
         rewrite des in H.
         inversion H.
-        apply header_map_ps. assumption.
+        apply commute_lookup_eval_varlike. assumption.
       + rewrite <- commute_sym_vs_conc_match_pattern with (s1 := s1) (f := f) (c1 := eval_sym_state s1 f) in des; try reflexivity.
         rewrite des in H0.
         rewrite commute_sym_vs_conc_ma_rule_hdr.
@@ -371,7 +362,7 @@ Proof.
         simpl in H.
         rewrite des in H.
         inversion H.
-        apply header_map_ps. assumption.
+        apply commute_lookup_eval_varlike. assumption.
       + rewrite <- commute_sym_vs_conc_match_pattern with (s1 := s1) (f := f) (c1 := eval_sym_state s1 f) in des; try reflexivity.
         rewrite des in H0.
         rewrite commute_sym_vs_conc_ma_rule_hdr.
@@ -383,14 +374,14 @@ Proof.
 Qed.
 
 Lemma switch_case_expr_no_match_lemma :
-  forall t f s1 h,
-    is_header_in_ps s1 h <> None ->
+  forall t f s1 (h : Header),
+    is_varlike_in_ps PSHeader s1 h <> None ->
     None = find_first_match (combine (get_match_results t (eval_sym_state s1 f)) t) ->
-    eval_smt_arith (lookup_hdr s1 h) f =
+    eval_smt_arith (lookup_varlike_map (map_from_ps PSHeader s1) h) f =
     eval_smt_arith (switch_case_expr  (combine (get_match_results_smt t s1)
-                                               (map (fun ps : SymbolicState => lookup_hdr ps h)
+                                               (map (fun ps : SymbolicState => lookup_varlike_map (map_from_ps PSHeader ps) h)
                                                     (map (fun rule : MatchActionRule => eval_match_action_rule_smt rule s1) t)))
-                                      (lookup_hdr s1 h)) f.
+                                      (lookup_varlike_map (map_from_ps PSHeader s1) h)) f.
 Proof.
   intros t f s1 h Hh H.
   induction t.
@@ -439,14 +430,14 @@ Qed.
    except with lookup_hdr replaced by lookup_state.
    The remaining aspects can be identical. *)
 Lemma switch_case_expr_some_match_state_var_lemma :
-  forall t f s1 sv rule,
-    is_state_var_in_ps s1 sv <> None ->
+  forall t f s1 (sv : State) rule,
+    is_varlike_in_ps PSState s1 sv <> None ->
     Some rule = find_first_match (combine (get_match_results t (eval_sym_state s1 f)) t) ->
-    lookup_state (eval_match_action_rule_concrete rule (eval_sym_state s1 f)) sv =
+    lookup_varlike PSState (eval_match_action_rule_concrete rule (eval_sym_state s1 f)) sv =
     eval_smt_arith (switch_case_expr (combine (get_match_results_smt t s1)
-                                              (map (fun ps : SymbolicState => lookup_state ps sv)
+                                              (map (fun ps : SymbolicState => lookup_varlike PSState ps sv)
                                                    (map (fun rule : MatchActionRule => eval_match_action_rule_smt rule s1) t)))
-                                     (lookup_state s1 sv)) f.
+                                     (lookup_varlike PSState s1 sv)) f.
 Proof.
   intros t f s1 sv rule Hsv H.
   induction t.
@@ -467,7 +458,7 @@ Proof.
         simpl in H.
         rewrite des in H.
         inversion H.
-        apply state_var_map_ps.
+        apply commute_lookup_eval_varlike.
         assumption.
       + rewrite <- commute_sym_vs_conc_match_pattern with (s1 := s1) (f := f) (c1 := eval_sym_state s1 f) in des; try reflexivity.
         rewrite des in H0.
@@ -489,7 +480,7 @@ Proof.
         simpl in H.
         rewrite des in H.
         inversion H.
-        apply state_var_map_ps.
+        apply commute_lookup_eval_varlike.
         assumption.
       + rewrite <- commute_sym_vs_conc_match_pattern with (s1 := s1) (f := f) (c1 := eval_sym_state s1 f) in des; try reflexivity.
         rewrite des in H0.
@@ -502,14 +493,14 @@ Proof.
 Qed.
 
 Lemma switch_case_expr_no_match_state_var_lemma :
-  forall t f s1 sv,
-    is_state_var_in_ps s1 sv <> None ->
+  forall t f s1 (sv : State),
+    is_varlike_in_ps PSState s1 sv <> None ->
     None = find_first_match (combine (get_match_results t (eval_sym_state s1 f)) t) ->
-    eval_smt_arith (lookup_state s1 sv) f =
+    eval_smt_arith (lookup_varlike_map (map_from_ps PSState s1) sv) f =
     eval_smt_arith (switch_case_expr  (combine (get_match_results_smt t s1)
-                                               (map (fun ps : SymbolicState => lookup_state ps sv)
+                                               (map (fun ps : SymbolicState => lookup_varlike_map (map_from_ps PSState ps) sv)
                                                     (map (fun rule : MatchActionRule => eval_match_action_rule_smt rule s1) t)))
-                                      (lookup_state s1 sv)) f.
+                                      (lookup_varlike_map (map_from_ps PSState s1) sv)) f.
 Proof.
   intros t f s1 sv Hsv H.
   induction t.
@@ -555,85 +546,86 @@ Proof.
 Qed.
 
 Lemma hdr_transformer_helper:
-  forall t s1 h,
-     is_header_in_ps s1 h <> None ->
-     (lookup_hdr (eval_transformer_smt t s1) h) =
+  forall t s1 (h : Header),
+     is_varlike_in_ps PSHeader s1 h <> None ->
+     (lookup_varlike PSHeader (eval_transformer_smt t s1) h) =
      switch_case_expr
      (combine (get_match_results_smt t s1)
-     (map (fun ps : SymbolicState => lookup_hdr ps h)
+     (map (fun ps : SymbolicState => lookup_varlike PSHeader ps h)
      (map (fun rule : MatchActionRule => eval_match_action_rule_smt rule s1) t)))
-     (lookup_hdr s1 h).
+     (lookup_varlike PSHeader s1 h).
 Proof.
   intros.
   unfold eval_transformer_smt.
-  rewrite <- commute_state_hdr_updates.
-  rewrite lookup_hdr_after_update_all_hdrs.
+  rewrite <- commute_varlike_updates.
+  unfold lookup_varlike.
+  rewrite lookup_varlike_after_update_all_varlike.
   -- reflexivity.
-  -- rewrite is_header_in_ps_after_update_all_states.
-     assumption.
+  -- rewrite is_v1_in_ps_after_update_all_v2.
+     assumption. discriminate.
+  -- discriminate.
 Qed.
 
 Lemma commute_sym_vs_conc_transformer_header_map:
-  forall t f s1 h,
-    is_header_in_ps s1 h <> None ->
-    lookup_hdr (eval_transformer_concrete t (eval_sym_state s1 f)) h = (* TODO: Can use some notation for lookup_hdr *)
-    lookup_hdr (eval_sym_state (eval_transformer_smt t s1) f) h.
+  forall t f s1 (h : Header),
+    is_varlike_in_ps PSHeader s1 h <> None ->
+    lookup_varlike PSHeader (eval_transformer_concrete t (eval_sym_state s1 f)) h = (* TODO: Can use some notation for lookup_hdr *)
+    lookup_varlike PSHeader (eval_sym_state (eval_transformer_smt t s1) f) h.
 Proof.
   intros.
   simpl.
   unfold eval_transformer_concrete.
   remember (find_first_match (combine (get_match_results t (eval_sym_state s1 f)) t)) as concrete_match.
   destruct concrete_match eqn:des.
-  - repeat rewrite <- lookup_hdr_trivial.
-    rewrite commute_lookup_eval_hdr. rewrite hdr_transformer_helper. apply switch_case_expr_some_match_lemma. assumption. assumption. assumption. (* TODO: This seems kind of brittle. *)
-  - assert(H0: lookup_hdr (eval_sym_state (eval_transformer_smt t s1) f) h =
-               eval_smt_arith (lookup_hdr (eval_transformer_smt t s1) h ) f).
-               { rewrite commute_lookup_eval_hdr. reflexivity. }
-    repeat rewrite <- lookup_hdr_trivial.
+  - rewrite commute_lookup_eval_varlike.
+    rewrite hdr_transformer_helper. apply switch_case_expr_some_match_lemma. assumption. assumption. assumption. (* TODO: This seems kind of brittle. *)
+  - assert(H0: lookup_varlike PSHeader (eval_sym_state (eval_transformer_smt t s1) f) h =
+               eval_smt_arith (lookup_varlike PSHeader (eval_transformer_smt t s1) h ) f).
+               { rewrite commute_lookup_eval_varlike. reflexivity. }
     rewrite H0.
     rewrite hdr_transformer_helper.
-    rewrite commute_lookup_eval_hdr.
+    rewrite commute_lookup_eval_varlike.
     apply switch_case_expr_no_match_lemma. assumption. assumption. assumption. (* TODO: This seems kind of brittle. *)
 Qed.
 
 Lemma state_transformer_helper:
-  forall t s1 sv,
-     is_state_var_in_ps s1 sv <> None ->
-     (lookup_state (eval_transformer_smt t s1) sv) =
+  forall t s1 (sv : State),
+     is_varlike_in_ps PSState s1 sv <> None ->
+     (lookup_varlike PSState (eval_transformer_smt t s1) sv) =
      switch_case_expr
      (combine (get_match_results_smt t s1)
-     (map (fun ps : SymbolicState => lookup_state ps sv)
+     (map (fun ps : SymbolicState => lookup_varlike PSState ps sv)
      (map (fun rule : MatchActionRule => eval_match_action_rule_smt rule s1) t)))
-     (lookup_state s1 sv).
+     (lookup_varlike PSState s1 sv).
 Proof.
   intros.
   unfold eval_transformer_smt.
-  rewrite lookup_state_after_update_all_states.
+  unfold lookup_varlike.
+  rewrite lookup_varlike_after_update_all_varlike.
   -- reflexivity.
-  -- rewrite is_state_var_in_ps_after_update_all_hdrs.
-     assumption. 
+  -- rewrite is_v1_in_ps_after_update_all_v2.
+     assumption. discriminate.
 Qed.
 
 Lemma commute_sym_vs_conc_transformer_state_var_map:
-  forall t f s1 sv,
-    is_state_var_in_ps s1 sv <> None ->
-    lookup_state (eval_transformer_concrete t (eval_sym_state s1 f)) sv = (* first concretize, and then interpret *)
-    lookup_state (eval_sym_state (eval_transformer_smt t s1) f) sv. (* first interpret, and then concretize *)
+  forall t f s1 (sv : State),
+    is_varlike_in_ps PSState s1 sv <> None ->
+    lookup_varlike PSState (eval_transformer_concrete t (eval_sym_state s1 f)) sv = (* first concretize, and then interpret *)
+    lookup_varlike PSState (eval_sym_state (eval_transformer_smt t s1) f) sv. (* first interpret, and then concretize *)
 Proof.
   intros.
   simpl.
   unfold eval_transformer_concrete.
   remember (find_first_match (combine (get_match_results t (eval_sym_state s1 f)) t)) as concrete_match.
   destruct concrete_match eqn:des.
-  - repeat rewrite <- lookup_state_trivial.
-    rewrite commute_lookup_eval_state. rewrite state_transformer_helper. apply switch_case_expr_some_match_state_var_lemma. assumption. assumption. assumption. (* TODO: This seems kind of brittle. *)
-  - assert(H0: lookup_state (eval_sym_state (eval_transformer_smt t s1) f) sv =
-               eval_smt_arith (lookup_state (eval_transformer_smt t s1) sv ) f).
-               { rewrite commute_lookup_eval_state. reflexivity. }
-    repeat rewrite <- lookup_state_trivial.
+  - rewrite commute_lookup_eval_varlike.
+    rewrite state_transformer_helper. apply switch_case_expr_some_match_state_var_lemma. assumption. assumption. assumption. (* TODO: This seems kind of brittle. *)
+  - assert(H0: lookup_varlike PSState (eval_sym_state (eval_transformer_smt t s1) f) sv =
+               eval_smt_arith (lookup_varlike PSState (eval_transformer_smt t s1) sv ) f).
+               { rewrite commute_lookup_eval_varlike. reflexivity. }
     rewrite H0.
     rewrite state_transformer_helper.
-    rewrite commute_lookup_eval_state.
+    rewrite commute_lookup_eval_varlike.
     apply switch_case_expr_no_match_state_var_lemma. assumption. assumption. assumption. (* TODO: This seems kind of brittle. *)
 Qed.
 
@@ -649,13 +641,14 @@ Proof.
   reflexivity.
 Qed.
 
+Opaque update_all_varlike.
 Lemma commute_sym_vs_conc_transfomer_hdr:
   forall (t: Transformer) (f : SmtValuation)
          (s1 : SymbolicState)
          (h : Header),
-    is_header_in_ps s1 h <> None ->
-    lookup_hdr (eval_transformer_concrete t (eval_sym_state s1 f)) h = (* first concretize, and then interpret *)
-    lookup_hdr (eval_sym_state (eval_transformer_smt t s1) f) h. (* first interpret, and then concretize *)
+    is_varlike_in_ps PSHeader s1 h <> None ->
+    lookup_varlike PSHeader (eval_transformer_concrete t (eval_sym_state s1 f)) h = (* first concretize, and then interpret *)
+    lookup_varlike PSHeader (eval_sym_state (eval_transformer_smt t s1) f) h. (* first interpret, and then concretize *)
 Proof.
   intros t f s1 h.
   induction t as [| m rest IHrest].
@@ -664,6 +657,7 @@ Proof.
     simpl.
     unfold eval_transformer_smt.
     simpl.
+    unfold lookup_varlike.
     rewrite program_state_unchanged.
     reflexivity.
   - simpl.
@@ -674,9 +668,9 @@ Lemma commute_sym_vs_conc_transfomer_sv:
   forall (t: Transformer) (f : SmtValuation)
          (s1 : SymbolicState)
          (sv : State),
-    is_state_var_in_ps s1 sv <> None ->
-    lookup_state (eval_transformer_concrete t (eval_sym_state s1 f)) sv = (* first concretize, and then interpret *)
-    lookup_state (eval_sym_state (eval_transformer_smt t s1) f) sv. (* first interpret, and then concretize *)
+    is_varlike_in_ps PSState s1 sv <> None ->
+    lookup_varlike PSState (eval_transformer_concrete t (eval_sym_state s1 f)) sv = (* first concretize, and then interpret *)
+    lookup_varlike PSState (eval_sym_state (eval_transformer_smt t s1) f) sv. (* first interpret, and then concretize *)
 Proof.
   intros t f s1 sv.
   induction t as [| m rest IHrest].
@@ -685,6 +679,7 @@ Proof.
     simpl.
     unfold eval_transformer_smt.
     simpl.
+    unfold lookup_varlike.
     rewrite program_state_unchanged.
     reflexivity.
   - simpl.
