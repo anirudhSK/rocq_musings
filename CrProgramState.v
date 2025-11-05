@@ -260,14 +260,6 @@ Proof.
   reflexivity.
 Qed.
 
-Lemma commute_state_hdr_updates:
-  forall {T} (s1 : ProgramState T) (fh : Header -> T) (fs : State -> T),
-    update_all_varlike PSHeader (update_all_varlike PSState s1 fs) fh =
-    update_all_varlike PSState (update_all_varlike PSHeader s1 fh) fs.
-Proof.
-  reflexivity.
-Qed.
-
 Lemma is_v1_in_ps_after_update_all_v2:
   forall {T A A'} `{CrVarLike A} `{CrVarLike A'} (s1 : ProgramState T)
     f1 f2 (h : A) (fs : A' -> T),

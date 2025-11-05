@@ -558,12 +558,13 @@ Lemma hdr_transformer_helper:
 Proof.
   intros.
   unfold eval_transformer_smt.
-  rewrite <- commute_state_hdr_updates.
+  rewrite <- commute_varlike_updates.
   unfold lookup_varlike.
   rewrite lookup_varlike_after_update_all_varlike.
   -- reflexivity.
   -- rewrite is_v1_in_ps_after_update_all_v2.
      assumption. discriminate.
+  -- discriminate.
 Qed.
 
 Lemma commute_sym_vs_conc_transformer_header_map:
