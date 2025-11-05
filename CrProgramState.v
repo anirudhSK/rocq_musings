@@ -279,67 +279,32 @@ Proof.
   reflexivity.
 Qed.
 
-Definition get_all_headers_from_ps {T : Type} (s: ProgramState T) : list Header :=
-  List.map (fun '(key, value) => HeaderCtr key)
-           (PTree.elements (snd (header_map s))).
+Definition get_all_varlike_from_ps {T A : Type} `{CrVarLike A} (f : PSField) (s: ProgramState T) : list A :=
+  List.map (fun '(key, value) => make_item key)
+           (PTree.elements (snd (map_from_ps f s))).
 
-Definition get_all_states_from_ps {T : Type} (s: ProgramState T) : list State :=
-  List.map (fun '(key, value) => StateCtr key)
-           (PTree.elements (snd (state_map s))).
-
-Definition get_all_ctrls_from_ps {T : Type} (s: ProgramState T) : list Ctrl :=
-  List.map (fun '(key, value) => CtrlCtr key)
-           (PTree.elements (snd (ctrl_map s))).
-
-Lemma is_header_in_ps_lemma :
-  forall {T} (s1 : ProgramState T) (h : Header),
-    In h (get_all_headers_from_ps s1) ->
-    is_varlike_in_ps PSHeader s1 h <> None.
-    (* TODO: Need to ask Joe about <> None *)
+Lemma is_varlike_in_ps_lemma :
+  forall {T A} `{CrVarLike A} (f : PSField) (s1 : ProgramState T) (v : A),
+    In v (get_all_varlike_from_ps f s1) ->
+    is_varlike_in_ps f s1 v <> None.
 Proof.
-  intros.
+  intros T A HA f s1 v H.
   destruct s1 as [ctrl hdr state].
-  unfold get_all_headers_from_ps in H.
-  unfold is_varlike_in_ps.
-  simpl in *.
-  destruct hdr as [default hdr_map].
-  simpl in *.
-  apply in_map_iff in H.
-  simpl in H.
-  destruct H. (* TODO: ask Joe, seems to extract witness *)
-  destruct x.
-  destruct h.
-  destruct H.
-  injection H as H_eq.
-  rewrite <- H_eq.
-  apply some_is_not_none with (x := t).
-  apply PTree.elements_complete.
-  assumption.
-Qed.
-
-(* Same as above lemma, but for state *)
-Lemma is_state_in_ps_lemma :
-  forall {T} (s1 : ProgramState T) (sv : State),
-    In sv (get_all_states_from_ps s1) ->
-    is_varlike_in_ps PSState s1 sv <> None.
-Proof.
-  intros.
-  destruct s1 as [ctrl hdr state].
-  unfold get_all_states_from_ps in H.
-  unfold is_varlike_in_ps.
-  simpl in *.
-  destruct state as [default state_map].
-  simpl in *.
-  apply in_map_iff in H.
-  simpl in H.
-  destruct H. (* TODO: ask Joe, seems to extract witness *)
-  destruct x.
-  destruct sv.
-  destruct H.
-  injection H as H_eq.
-  rewrite <- H_eq.
-  apply some_is_not_none with (x := t).
-  apply PTree.elements_complete.
+  destruct f;
+  unfold get_all_varlike_from_ps in H;
+  unfold is_varlike_in_ps;
+  simpl in *;
+  destruct ctrl as [c0 ctrl_map];
+  destruct hdr as [h0 hdr_map];
+  destruct state as [s0 state_map];
+  simpl in *;
+  apply in_map_iff in H;
+  destruct H; (* TODO: ask Joe, seems to extract witness *)
+  destruct x;
+  destruct H;
+  rewrite <- H; rewrite inverses';
+  apply some_is_not_none with (x := t);
+  apply PTree.elements_complete;
   assumption.
 Qed.
 
@@ -381,9 +346,9 @@ Definition init_symbolic_state (p: CaracaraProgram) : SymbolicState :=
 
 Definition is_init_state {T} (p : CaracaraProgram) (ps : ProgramState T) : Prop :=
   forall h sv c,
-    (In h (get_headers_from_prog p) <-> In h (get_all_headers_from_ps ps)) /\
-    (In sv (get_states_from_prog p) <-> In sv (get_all_states_from_ps ps)) /\
-    (In c (get_ctrls_from_prog p) <-> In c (get_all_ctrls_from_ps ps)).
+    (In h (get_headers_from_prog p) <-> In h (get_all_varlike_from_ps PSHeader ps)) /\
+    (In sv (get_states_from_prog p) <-> In sv (get_all_varlike_from_ps PSState ps)) /\
+    (In c (get_ctrls_from_prog p) <-> In c (get_all_varlike_from_ps PSCtrl ps)).
 
 (* Mark definitions globally opaque below *)
 Global Opaque update_varlike_map.
@@ -393,6 +358,5 @@ Global Opaque HeaderMap.
 Global Opaque StateMap.
 Global Opaque CtrlMap.
 Global Opaque new_pmap_from_old.
-Global Opaque get_all_headers_from_ps.
-Global Opaque get_all_states_from_ps.
+Global Opaque get_all_varlike_from_ps.
 Global Opaque map_from_ps.

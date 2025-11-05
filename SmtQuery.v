@@ -367,24 +367,23 @@ t1)) t1 t2 h1 s1) eqn:H_eq; try (exfalso; congruence).
       rewrite init_symbolic_state_nodep_t with (t2 := t2) in H1 at 2.
       assumption.
     + intros.
-      apply is_header_in_ps_lemma.
+      apply is_varlike_in_ps_lemma.
       unfold init_symbolic_state.
-      Transparent get_all_headers_from_ps.
-      unfold get_all_headers_from_ps.
+      Transparent get_all_varlike_from_ps.
+      unfold get_all_varlike_from_ps.
       simpl.
-      rewrite map_pair_split.
+      repeat rewrite map_pair_split.
       simpl.
       apply (@ptree_of_list_lemma_generic Header CrVarLike_Header).
       simpl in H0.
       destruct H0.
       assumption. assumption.
     + intros.
-      apply is_state_in_ps_lemma.
+      apply is_varlike_in_ps_lemma.
       unfold init_symbolic_state.
-      Transparent get_all_states_from_ps.
-      unfold get_all_states_from_ps.
+      unfold get_all_varlike_from_ps.
       simpl.
-      rewrite map_pair_split.
+      repeat rewrite map_pair_split.
       simpl.
       apply (@ptree_of_list_lemma_generic State CrVarLike_State).
       simpl in H0.
@@ -444,24 +443,23 @@ t1)) t1 t2 h1 s1) eqn:H_eq; try (exfalso; congruence).
       rewrite init_symbolic_state_nodep_t with (t2 := t2) in H1 at 2.
       assumption.
     + intros.
-      apply is_header_in_ps_lemma.
+      apply is_varlike_in_ps_lemma.
       unfold init_symbolic_state.
-      Transparent get_all_headers_from_ps.
-      unfold get_all_headers_from_ps.
+      Transparent get_all_varlike_from_ps.
+      unfold get_all_varlike_from_ps.
       simpl.
-      rewrite map_pair_split.
+      repeat rewrite map_pair_split.
       simpl.
       apply (@ptree_of_list_lemma_generic Header CrVarLike_Header).
       simpl in H0.
       destruct H0.
       assumption. assumption.
     + intros.
-      apply is_state_in_ps_lemma.
+      apply is_varlike_in_ps_lemma.
       unfold init_symbolic_state.
-      Transparent get_all_states_from_ps.
-      unfold get_all_states_from_ps.
+      unfold get_all_varlike_from_ps.
       simpl.
-      rewrite map_pair_split.
+      repeat rewrite map_pair_split.
       simpl.
       apply (@ptree_of_list_lemma_generic State CrVarLike_State).
       simpl in H0.
@@ -519,8 +517,10 @@ t1)) t1 t2 h1 s1) eqn:H_eq; try (exfalso; congruence).
           rewrite <- H_ctrl_eq.
           apply H_eq.
        ++ intros.
-          apply is_header_in_ps_lemma.
-          unfold get_all_headers_from_ps.
+          apply is_varlike_in_ps_lemma.
+          unfold get_all_varlike_from_ps.
+          Transparent map_from_ps.
+          unfold map_from_ps.
           simpl.
           rewrite map_pair_split.
           apply (@ptree_of_list_lemma_generic Header CrVarLike_Header).
@@ -528,8 +528,9 @@ t1)) t1 t2 h1 s1) eqn:H_eq; try (exfalso; congruence).
           apply H_wf_headers.
           assumption.
        ++ intros.
-          apply is_state_in_ps_lemma.
-          unfold get_all_states_from_ps.
+          apply is_varlike_in_ps_lemma.
+          unfold get_all_varlike_from_ps.
+          unfold map_from_ps.
           simpl.
           rewrite map_pair_split.
           apply (@ptree_of_list_lemma_generic State CrVarLike_State).
