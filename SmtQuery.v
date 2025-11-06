@@ -338,7 +338,7 @@ Definition lookup_vid (field_type : PSField) (s : ConcreteState) (vid : positive
 
 Lemma equivalence_checker_cr_sound :
   forall p1 p2 f field_type,
-  field_type <> PSCtrl ->
+  field_type <> PSCtrl ->                                   (* TODO: Bit of a hack, need to fix *)
   equivalence_checker_cr_dsl p1 p2 = Equivalent ->
   let c1_i  := eval_sym_state (init_symbolic_state p1) f in (* Get a sym state out of p1' headers, ctrls, and state *)
   let c2_i  := eval_sym_state (init_symbolic_state p2) f in (* Do the same for p2 *)
