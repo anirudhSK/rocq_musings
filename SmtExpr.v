@@ -3,7 +3,7 @@
 From MyProject Require Import CrIdentifiers.
 From MyProject Require Import MyInts.
 From MyProject Require Import SmtTypes.
-From Coq.Strings Require Import String.
+From Stdlib.Strings Require Import String.
 
 Inductive SmtBoolExpr : Type :=
     | SmtTrue

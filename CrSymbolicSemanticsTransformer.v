@@ -3,10 +3,10 @@ From MyProject Require Import CrIdentifiers.
 From MyProject Require Import CrProgramState.
 From MyProject Require Import SmtExpr.
 From MyProject Require Import SmtTypes.
-Require Import ZArith.
-Require Import Coq.Strings.String.
-Require Import List.
-Require Import Coq.Lists.List.
+From Stdlib Require Import ZArith.
+From Stdlib Require Import Strings.String.
+From Stdlib Require Import List.
+From Stdlib Require Import Lists.List.
 Import ListNotations.
 
 (* Convert FunctionArgument to SmtArithExpr *)

@@ -4,8 +4,8 @@ From MyProject Require Import CrConcreteSemanticsTransformer.
 From MyProject Require Import CrIdentifiers.
 From MyProject Require Import CrProgramState.
 From MyProject Require Import MyInts.
-Require Import Bool.
-Require Import List.
+From Stdlib Require Import Bool.
+From Stdlib Require Import List.
 
 Lemma eval_smt_bool_smt_bool_not_false :
   forall e1 e2 f,

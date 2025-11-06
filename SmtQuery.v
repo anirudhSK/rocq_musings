@@ -8,11 +8,11 @@ From MyProject Require Import SmtTypes.
 From MyProject Require Import Integers.
 From MyProject Require Import MyInts.
 From MyProject Require Import PMapHelperLemmas.
-Require Import Classical.
-Require Import Coq.Lists.List.
-Require Import Coq.Bool.Bool.
-Require Import Coq.ZArith.ZArith.
-From Coq Require Import FunctionalExtensionality.
+From Stdlib Require Import Classical.
+From Stdlib Require Import Lists.List.
+From Stdlib Require Import Bool.Bool.
+From Stdlib Require Import ZArith.ZArith.
+From Stdlib Require Import FunctionalExtensionality.
 Import ListNotations.
 
 (* Import or define SeqRule and related types *)

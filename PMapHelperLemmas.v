@@ -4,8 +4,8 @@ From MyProject Require Import CrSymbolicSemanticsTransformer.
 From MyProject Require Import Maps.
 From MyProject Require Import UtilLemmas.
 From MyProject Require Import CrIdentifiers.
-Require Import Coq.Lists.List.
-Require Import ZArith.
+From Stdlib Require Import Lists.List.
+From Stdlib Require Import ZArith.
 
 Transparent map_from_ps.
 Transparent lookup_varlike_map.

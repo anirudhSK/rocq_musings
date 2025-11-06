@@ -1,11 +1,11 @@
-Require Import List.
-Require Import Coq.Lists.List.
-Require Import Coq.Arith.EqNat.
-Require Import Coq.Arith.PeanoNat.
+From Stdlib Require Import List.
+From Stdlib Require Import Lists.List.
+From Stdlib Require Import Arith.EqNat.
+From Stdlib Require Import Arith.PeanoNat.
 Import ListNotations.
-Require Import Coq.Logic.Classical_Prop.
-From Coq Require Import FunctionalExtensionality.
-Require Import Coq.Strings.String.
+From Stdlib Require Import Logic.Classical_Prop.
+From Stdlib Require Import FunctionalExtensionality.
+From Stdlib Require Import Strings.String.
 Open Scope string_scope.
 From MyProject Require Import Coqlib.
 

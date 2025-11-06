@@ -3,9 +3,9 @@ From MyProject Require Import CrTransformer.
 From MyProject Require Import CrProgramState.
 From MyProject Require Import CrDsl.
 From MyProject Require Import MyInts.
-Require Import List.
+From Stdlib Require Import List.
 Import ListNotations.
-Require Import Strings.String.
+From Stdlib Require Import Strings.String.
 From MyProject Require Import CrIdentifiers.
 From MyProject Require Import ListUtils.
 

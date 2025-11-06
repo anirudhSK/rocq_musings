@@ -1554,7 +1554,7 @@ Module ZTree := ITree(ZIndexed).
 
 (** * Additional properties over trees *)
 
-From Coq Require Import Equivalence EquivDec.
+From Stdlib Require Import Equivalence EquivDec.
 
 Module Tree_Properties(T: TREE).
 

@@ -1,10 +1,10 @@
 (* Transformer section below *)
 
 (* Import necessary modules *)
-Require Import List.
-Require Import ZArith.
+From Stdlib Require Import List.
+From Stdlib Require Import ZArith.
 Import ListNotations.
-Require Import Strings.String.
+From Stdlib Require Import Strings.String.
 From MyProject Require Import CrIdentifiers.
 From MyProject Require Import MyInts.
 
