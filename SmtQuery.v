@@ -6,6 +6,7 @@ From MyProject Require Import CrProgramState.
 From MyProject Require Import Maps.
 From MyProject Require Import SmtTypes.
 From MyProject Require Import Integers.
+From MyProject Require Import MyInts.
 From MyProject Require Import PMapHelperLemmas.
 Require Import Classical.
 Require Import Coq.Lists.List.
@@ -318,84 +319,26 @@ Proof.
   f_equal.
 Qed.
 
-Lemma equivalence_checker_cr_sound_hdr :
-  forall p1 p2 f,
-  equivalence_checker_cr_dsl p1 p2 = Equivalent ->
-  let c1_i  := eval_sym_state (init_symbolic_state p1) f in (* Get a sym state out of p1' headers, ctrls, and state *)
-  let c2_i  := eval_sym_state (init_symbolic_state p2) f in (* Do the same for p2 *)
-  let t1 := get_transformer_from_prog p1 in
-  let t2 := get_transformer_from_prog p2 in
-  let c1 := eval_transformer_concrete t1 c1_i in
-  let c2 := eval_transformer_concrete t2 c2_i in
-  well_formed_program p1 ->                          (* p1 is well-formed *)
-  (forall v, In v (get_headers_from_prog p1) ->      (* then, every header in p1 *)
-  (In v (get_headers_from_prog p2)) /\               (* must be in p2 *)
-  (lookup_varlike PSHeader c1 v) = (lookup_varlike PSHeader c2 v)).            (* and their final values must be equal *)
-Proof.
-  intros p1 p2 f H.
-  destruct p1 as [h1 s1 c1 t1] eqn:desp1,
-           p2 as [h2 s2 c2 t2] eqn:desp2; simpl in H.
-  destruct
-  (varlike_list_equal h1 h2) eqn:H_hdr_eq,
-  (varlike_list_equal s1 s2) eqn:H_state_eq,
-  (varlike_list_equal c1 c2) eqn:H_ctrl_eq in H; simpl in H; try (exfalso; congruence).
-  intros.
-  simpl in H1. (* TODO: May want to remove these *)
-  split.
-  - apply varlike_list_equal_lemma in H_hdr_eq.
-    rewrite H_hdr_eq in H1.
-    assumption.
-  - destruct (equivalence_checker (init_symbolic_state (CaracaraProgramDef h1 s1 c1
-t1)) t1 t2 h1 s1) eqn:H_eq; try (exfalso; congruence).
-    apply equivalence_checker_sound with (f := f) in H_eq.
-    + apply H_eq in H1.
-      unfold c0.
-      unfold c3.
-      unfold c1_i.
-      unfold c2_i.
-      simpl.
-      unfold t0.
-      unfold t3.
-      simpl.
-      apply varlike_list_equal_lemma in H_state_eq.
-      apply varlike_list_equal_lemma in H_hdr_eq.
-      apply varlike_list_equal_lemma in H_ctrl_eq.
-      rewrite <- H_hdr_eq.
-      rewrite <- H_state_eq.
-      rewrite <- H_ctrl_eq.
-      rewrite init_symbolic_state_nodep_t with (t2 := t2) in H1 at 2.
-      assumption.
-    + intros.
-      apply is_varlike_in_ps_lemma.
-      unfold init_symbolic_state.
-      Transparent get_all_varlike_from_ps.
-      unfold get_all_varlike_from_ps.
-      simpl.
-      repeat rewrite map_pair_split.
-      simpl.
-      apply (@ptree_of_list_lemma_generic Header CrVarLike_Header).
-      simpl in H0.
-      destruct H0.
-      assumption. assumption.
-    + intros.
-      apply is_varlike_in_ps_lemma.
-      unfold init_symbolic_state.
-      unfold get_all_varlike_from_ps.
-      simpl.
-      repeat rewrite map_pair_split.
-      simpl.
-      apply (@ptree_of_list_lemma_generic State CrVarLike_State).
-      simpl in H0.
-      destruct H0.
-      destruct H3.
-      assumption.
-      assumption.
-Qed.
+Definition get_vids_from_prog (field_type : PSField) (p : CaracaraProgram) : list positive :=
+  match p with
+  | CaracaraProgramDef headers states ctrls transformer =>
+      match field_type with
+      | PSHeader => map (fun h => match h with HeaderCtr uid => uid end) headers
+      | PSState => map (fun s => match s with StateCtr uid => uid end) states
+      | PSCtrl => map (fun c => match c with CtrlCtr uid => uid end) ctrls
+      end
+  end.
 
-(* Prove the same thing as above, but for state instead of headers *)
-(* Soundness lemma for equivalence_checker_cr_dsl *)
-Lemma equivalence_checker_cr_sound_state :
-  forall p1 p2 f,
+Definition lookup_vid (field_type : PSField) (s : ConcreteState) (vid : positive) : uint8 :=
+  match field_type with
+  | PSHeader => lookup_varlike PSHeader s (HeaderCtr vid)
+  | PSState => lookup_varlike PSState s (StateCtr vid)
+  | PSCtrl => lookup_varlike PSCtrl s (CtrlCtr vid)
+  end.
+
+Lemma equivalence_checker_cr_sound :
+  forall p1 p2 f field_type,
+  field_type <> PSCtrl ->
   equivalence_checker_cr_dsl p1 p2 = Equivalent ->
   let c1_i  := eval_sym_state (init_symbolic_state p1) f in (* Get a sym state out of p1' headers, ctrls, and state *)
   let c2_i  := eval_sym_state (init_symbolic_state p2) f in (* Do the same for p2 *)
@@ -404,11 +347,11 @@ Lemma equivalence_checker_cr_sound_state :
   let c1 := eval_transformer_concrete t1 c1_i in
   let c2 := eval_transformer_concrete t2 c2_i in
   well_formed_program p1 ->                          (* p1 is well-formed *)
-  (forall v, In v (get_states_from_prog p1) ->      (* then, every header in p1 *)
-  (In v (get_states_from_prog p2)) /\               (* must be in p2 *)
-  (lookup_varlike PSState c1 v) = (lookup_varlike PSState c2 v)).            (* and their final values must be equal *)
+  (forall vid, In vid (get_vids_from_prog field_type p1) ->      (* then, every header in p1 *)
+  (In vid (get_vids_from_prog field_type p2)) /\               (* must be in p2 *)
+  (lookup_vid field_type c1 vid) = (lookup_vid field_type c2 vid)).            (* and their final values must be equal *)
 Proof.
-  intros p1 p2 f H.
+  intros p1 p2 f field_type not_ctrl H.
   destruct p1 as [h1 s1 c1 t1] eqn:desp1,
            p2 as [h2 s2 c2 t2] eqn:desp2; simpl in H.
   destruct
@@ -418,29 +361,64 @@ Proof.
   intros.
   simpl in H1. (* TODO: May want to remove these *)
   split.
-  - apply varlike_list_equal_lemma in H_state_eq.
-    rewrite H_state_eq in H1.
-    assumption.
-  - destruct (equivalence_checker (init_symbolic_state (CaracaraProgramDef h1 s1 c1
-t1)) t1 t2 h1 s1) eqn:H_eq; try (exfalso; congruence).
-    apply equivalence_checker_sound with (f := f) in H_eq.
-    + apply H_eq in H1.
-      unfold c0.
-      unfold c3.
-      unfold c1_i.
-      unfold c2_i.
-      simpl.
-      unfold t0.
-      unfold t3.
-      simpl.
-      apply varlike_list_equal_lemma in H_state_eq.
-      apply varlike_list_equal_lemma in H_hdr_eq.
-      apply varlike_list_equal_lemma in H_ctrl_eq.
-      rewrite <- H_hdr_eq.
-      rewrite <- H_state_eq.
-      rewrite <- H_ctrl_eq.
-      rewrite init_symbolic_state_nodep_t with (t2 := t2) in H1 at 2.
+  - destruct field_type eqn:ft.
+    + exfalso. apply not_ctrl. reflexivity.
+    + apply varlike_list_equal_lemma in H_hdr_eq.
+      rewrite H_hdr_eq in H1.
       assumption.
+    + apply varlike_list_equal_lemma in H_state_eq.
+      rewrite H_state_eq in H1.
+      assumption.
+  - destruct (equivalence_checker (init_symbolic_state (CaracaraProgramDef h1 s1 c1 t1)) t1 t2 h1 s1) eqn:H_eq; try (exfalso; congruence).
+    apply equivalence_checker_sound with (f := f) in H_eq.
+    + destruct field_type eqn:ft.
+      * exfalso. apply not_ctrl. reflexivity. 
+      * simpl in H1.
+        remember (HeaderCtr vid) as v.
+        apply in_map_iff in H1.
+        destruct H1 as [h [Hin Heq]].
+        apply H_eq in Heq.
+        unfold c0.
+        unfold c3.
+        unfold c1_i.
+        unfold c2_i.
+        simpl.
+        unfold t0.
+        unfold t3.
+        simpl.
+        apply varlike_list_equal_lemma in H_state_eq.
+        apply varlike_list_equal_lemma in H_hdr_eq.
+        apply varlike_list_equal_lemma in H_ctrl_eq.
+        rewrite <- H_hdr_eq.
+        rewrite <- H_state_eq.
+        rewrite <- H_ctrl_eq.
+        rewrite init_symbolic_state_nodep_t with (t2 := t2) in Heq at 2.
+        assert (h = HeaderCtr vid). { destruct h. rewrite Hin. reflexivity. }
+        rewrite <- H1.
+        apply Heq.
+      * simpl in H1.
+        remember (StateCtr vid) as v.
+        apply in_map_iff in H1.
+        destruct H1 as [h [Hin Heq]].
+        apply H_eq in Heq.
+        unfold c0.
+        unfold c3.
+        unfold c1_i.
+        unfold c2_i.
+        simpl.
+        unfold t0.
+        unfold t3.
+        simpl.
+        apply varlike_list_equal_lemma in H_state_eq.
+        apply varlike_list_equal_lemma in H_hdr_eq.
+        apply varlike_list_equal_lemma in H_ctrl_eq.
+        rewrite <- H_hdr_eq.
+        rewrite <- H_state_eq.
+        rewrite <- H_ctrl_eq.
+        rewrite init_symbolic_state_nodep_t with (t2 := t2) in Heq at 2.
+        assert (h = StateCtr vid). { destruct h. rewrite Hin. reflexivity. }
+        rewrite <- H1.
+        apply Heq.
     + intros.
       apply is_varlike_in_ps_lemma.
       unfold init_symbolic_state.
@@ -464,8 +442,7 @@ t1)) t1 t2 h1 s1) eqn:H_eq; try (exfalso; congruence).
       simpl in H0.
       destruct H0.
       destruct H3.
-      assumption.
-      assumption.
+      assumption. assumption.
 Qed.
 
 Transparent map_from_ps.
@@ -540,7 +517,5 @@ t1)) t1 t2 h1 s1) eqn:H_eq; try (exfalso; congruence).
 Qed.
 Global Opaque map_from_ps.
 
-Print Assumptions equivalence_checker_complete.
-Print Assumptions equivalence_checker_cr_sound_hdr.
-Print Assumptions equivalence_checker_cr_sound_state.
+Print Assumptions equivalence_checker_cr_sound.
 Print Assumptions equivalence_checker_cr_complete.
