@@ -4,6 +4,7 @@ From MyProject Require Import CrSymbolicSemanticsTransformer.
 From MyProject Require Import Maps.
 From MyProject Require Import UtilLemmas.
 From MyProject Require Import CrIdentifiers.
+From MyProject Require Import CrVarLike.
 Require Import Coq.Lists.List.
 Require Import ZArith.
 

@@ -14,7 +14,7 @@
  (name extracted_code_lib)
  (wrapped false)
  (modules
-  Ascii BinInt BinNums BinPos Coqlib CrDsl CrIdentifiers CrProgramState
+  Ascii BinInt BinNums BinPos Coqlib CrDsl CrIdentifiers CrProgramState CrVarLike
   CrSymbolicSemanticsTransformer CrTransformer Datatypes EquivDec
   Integers Interface List Maps MyInts Nat Rocqlib SmtTypes SmtExpr SmtQuery
   Specif String Z3Solver Zpower)
