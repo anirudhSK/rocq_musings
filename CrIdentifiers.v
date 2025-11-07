@@ -1,6 +1,13 @@
 From Stdlib Require Import ZArith.
-From MyProject Require Import CrVarLike.
-Export CrVarLike.
+
+(* Define the different types of identifiers in the Caracara DSL *)
+Inductive ParserState : Type := ParserStateCtr (uid : positive).
+Inductive Header : Type := HeaderCtr (uid : positive).
+Inductive State : Type := StateCtr (uid : positive).
+Inductive ModuleName : Type := ModuleNameCtr (uid : positive).
+Inductive FunctionName : Type := FunctionNameCtr (uid : positive).
+Inductive ConnectionName : Type := ConnectionNameCtr (uid : positive).
+Inductive Ctrl : Type := CtrlCtr (uid : positive).
 
 (* Equality check functions for the identifiers above *)
 Definition parser_state_equal (p1 p2 : ParserState) :=

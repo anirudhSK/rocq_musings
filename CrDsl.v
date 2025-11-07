@@ -6,6 +6,7 @@ From Stdlib Require Import List.
 Import ListNotations.
 From Stdlib Require Import Strings.String.
 From MyProject Require Import CrIdentifiers.
+From MyProject Require Import CrVarLike.
 From MyProject Require Import CrParser.
 From MyProject Require Import CrTransformer.
 From MyProject Require Import ListUtils.

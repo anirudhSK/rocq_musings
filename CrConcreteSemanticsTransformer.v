@@ -2,6 +2,7 @@
 From MyProject Require Import CrTransformer.
 From MyProject Require Import CrProgramState.
 From MyProject Require Import CrDsl.
+From MyProject Require Import CrVarLike.
 From MyProject Require Import MyInts.
 From Stdlib Require Import List.
 Import ListNotations.

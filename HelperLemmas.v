@@ -1,6 +1,7 @@
 (* Miscellaneous helper lemmas for ConcreteToSymbolicLemmas.v *)
 From MyProject Require Import CrTransformer.
 From MyProject Require Import CrIdentifiers.
+From MyProject Require Import CrVarLike.
 From MyProject Require Import CrConcreteSemanticsTransformer.
 From MyProject Require Import SmtExpr.
 From MyProject Require Import SmtTypes.
