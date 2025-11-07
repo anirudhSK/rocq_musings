@@ -7,7 +7,6 @@ Require Import List.
 Import ListNotations.
 Require Import Strings.String.
 From MyProject Require Import CrIdentifiers.
-From MyProject Require Import CrVarLike.
 From MyProject Require Import ListUtils.
 
 (* Apply binary operation *)
