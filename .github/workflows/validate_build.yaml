@@ -1,8 +1,6 @@
 name: Validate Build
 
 on:
-  push:
-    branches: [ master ]
   pull_request:
     branches: [ master ]
 
@@ -32,7 +30,7 @@ jobs:
 
       - name: Install Switch
         run: |
-          opam install -y coq.9.1.0 z3 ppx_import sexplib ppx_sexp_conv
+          opam install -y coq.8.20.1 z3 ppx_import sexplib ppx_sexp_conv
 
   validate-build:
     runs-on: ubuntu-latest

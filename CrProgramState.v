@@ -1,5 +1,4 @@
 From MyProject Require Import CrIdentifiers.
-From MyProject Require Import CrVarLike.
 From MyProject Require Import SmtExpr.
 From MyProject Require Import Maps.
 From MyProject Require Import CrDsl.

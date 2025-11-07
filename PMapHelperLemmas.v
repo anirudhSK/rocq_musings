@@ -1,6 +1,5 @@
 From MyProject Require Import SmtExpr.
 From MyProject Require Import CrProgramState.
-From MyProject Require Import CrVarLike.
 From MyProject Require Import CrSymbolicSemanticsTransformer.
 From MyProject Require Import Maps.
 From MyProject Require Import UtilLemmas.
