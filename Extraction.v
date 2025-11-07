@@ -1,4 +1,4 @@
-From Stdlib Require Extraction.
+From Coq Require Extraction.
 Extraction Language OCaml.
 
 From MyProject Require Import SmtQuery.

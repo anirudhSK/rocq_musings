@@ -1,7 +1,7 @@
 (* Parser section below *)
-From Stdlib Require Import List.
+Require Import List.
 Import ListNotations.
-From Stdlib Require Import Strings.String.
+Require Import Strings.String.
 From MyProject Require Import CrIdentifiers.
 
 (* A parser is a list of parser states *)

@@ -18,13 +18,13 @@
     used throughout the development.  It complements the Coq standard
     library. *)
 
-From Stdlib Require Export String.
-From Stdlib Require Export ZArith.
-From Stdlib Require Export Znumtheory.
-From Stdlib Require Export List.
-From Stdlib Require Export Bool.
+Require Export String.
+Require Export ZArith.
+Require Export Znumtheory.
+Require Export List.
+Require Export Bool.
 
-From Stdlib Require Import micromega.Lia.
+Require Import micromega.Lia.
 Global Set Asymmetric Patterns.
 
 (** * Useful tactics *)
@@ -1370,7 +1370,7 @@ End DECIDABLE_PREDICATE.
 
 (** * Well-founded orderings *)
 
-From Stdlib Require Import Relations.
+Require Import Relations.
 
 (** A non-dependent version of lexicographic ordering. *)
 

@@ -10,13 +10,13 @@ From MyProject Require Import CrProgramState.
 From MyProject Require Import MyInts.
 From MyProject Require Import ListUtils.
 From MyProject Require Import SmtTypes.
-From Stdlib Require Import ZArith.
-From Stdlib Require Import Strings.String.
+Require Import ZArith.
+Require Import Coq.Strings.String.
 Local Open Scope string_scope.
-From Stdlib Require Import Lists.List.
+Require Import Coq.Lists.List.
 Import ListNotations.
-From Stdlib Require Import Bool.Bool.
-From Stdlib Require Import FunctionalExtensionality.
+Require Import Coq.Bool.Bool.
+From Coq Require Import FunctionalExtensionality.
 
 (* Simpler lemma with no state update *)
 Global Opaque lookup_varlike.

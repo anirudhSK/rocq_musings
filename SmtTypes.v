@@ -1,4 +1,4 @@
-From Stdlib.Strings Require Import String.
+From Coq.Strings Require Import String.
 From MyProject Require Import MyInts.
 
 (* Note that these strings may or may not have a one-to-one correspondence with

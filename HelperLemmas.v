@@ -5,10 +5,10 @@ From MyProject Require Import CrVarLike.
 From MyProject Require Import CrConcreteSemanticsTransformer.
 From MyProject Require Import SmtExpr.
 From MyProject Require Import SmtTypes.
-From Stdlib Require Import ZArith.
-From Stdlib Require Import Lists.List.
+Require Import ZArith.
+Require Import Coq.Lists.List.
 From MyProject Require Import CrSymbolicSemanticsTransformer.
-From Stdlib Require Import FunctionalExtensionality.
+From Coq Require Import FunctionalExtensionality.
 From MyProject Require Import PMapHelperLemmas.
 From MyProject Require Import CrProgramState.
 From MyProject Require Import ListUtils.

@@ -1,8 +1,8 @@
 From MyProject Require Import CrIdentifiers.
 From MyProject Require Import SmtExpr.
-From Stdlib Require Import Bool.Bool.
-From Stdlib Require Import Lists.List.
-From Stdlib Require Import ZArith.ZArith.
+Require Import Coq.Bool.Bool.
+Require Import Coq.Lists.List.
+Require Import Coq.ZArith.ZArith.
 
 Lemma not_none_is_some : forall {A : Type} (y : option A),
   y <> None -> exists x, y = Some x.

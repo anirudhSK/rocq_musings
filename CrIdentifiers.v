@@ -1,4 +1,4 @@
-From Stdlib Require Import ZArith.
+Require Import ZArith.
 
 (* Define the different types of identifiers in the Caracara DSL *)
 Inductive ParserState : Type := ParserStateCtr (uid : positive).

@@ -4,9 +4,9 @@ From MyProject Require Import CrProgramState.
 From MyProject Require Import CrDsl.
 From MyProject Require Import CrVarLike.
 From MyProject Require Import MyInts.
-From Stdlib Require Import List.
+Require Import List.
 Import ListNotations.
-From Stdlib Require Import Strings.String.
+Require Import Strings.String.
 From MyProject Require Import CrIdentifiers.
 From MyProject Require Import ListUtils.
 

@@ -2,17 +2,17 @@
 (* The grammar is defined using inductive types and is used to parse and interpret Caracara code. *)
 
 (* Import necessary modules *)
-From Stdlib Require Import List.
+Require Import List.
 Import ListNotations.
-From Stdlib Require Import Strings.String.
+Require Import Strings.String.
 From MyProject Require Import CrIdentifiers.
 From MyProject Require Import CrVarLike.
 From MyProject Require Import CrParser.
 From MyProject Require Import CrTransformer.
 From MyProject Require Import ListUtils.
 From MyProject Require Import Coqlib.
-From Stdlib Require Import Bool.Bool.
-From Stdlib Require Import ZArith.
+Require Import Coq.Bool.Bool.
+Require Import ZArith.
 
 (* A Module has a module name and either a parser or transformer definition *)
 Inductive CrModule : Type := 
@@ -64,7 +64,7 @@ Definition check_for_duplicate_identifiers (program : CaracaraProgram) : bool :=
       has_duplicates varlike_equal c
   end.
 
-From Stdlib Require Import Sorting.Sorted.
+From Coq Require Import Sorting.Sorted.
 Check Sorted.
 
 (* Compare two headers based on their uids *)

@@ -1,6 +1,6 @@
 From MyProject Require Import Integers.
 From MyProject Require Import MyInts.
-From Stdlib Require Import ZArith.
+Require Import ZArith.
 
 Inductive InitStatus (A: Type) : Type :=
   | Uninitialized : InitStatus A
