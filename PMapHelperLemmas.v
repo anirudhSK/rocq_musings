@@ -14,6 +14,8 @@ Lemma commute_lookup_eval_generic:
   forall (A: Type) `{CrVarLike A} (v : A) f ps,
   lookup_varlike_map (map_from_ps (eval_sym_state ps f)) v =
   eval_smt_arith (lookup_varlike_map (map_from_ps ps) v) f.
+Proof.
+  (* TODO: Need some helper lemmas here *)
 Admitted.
 
 (* Same as the above lemma for hdr and state *)

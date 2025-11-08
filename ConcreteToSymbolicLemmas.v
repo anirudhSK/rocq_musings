@@ -24,7 +24,25 @@ Lemma commute_sym_conc_expr:
   forall (ho: HdrOp) (s : SymbolicState) (f : SmtValuation),
     eval_hdr_op_expr_concrete ho (eval_sym_state s f) =
     eval_smt_arith (eval_hdr_op_expr_smt ho s) f.
+Proof.
+  intros ho s f.
+  destruct ho, f0, arg1, arg2; simpl.
+  - rewrite PMapHelperLemmas.commute_lookup_eval_generic.
+    rewrite PMapHelperLemmas.commute_lookup_eval_generic.
+    reflexivity.
+  - rewrite PMapHelperLemmas.commute_lookup_eval_generic.
 Admitted.
+    (*
+      Check @PMapHelperLemmas.commute_lookup_eval_generic.
+      rewrite (@PMapHelperLemmas.commute_lookup_eval_generic
+           Header
+           CrVarLike_Header
+           h
+           f
+           s).
+      reflexivity.
+      try repeat (rewrite PMapHelperLemmas.commute_lookup_eval_generic); try reflexivity.
+    *)
 
 Lemma commute_update_eval_varlike:
   forall {A} `{CrVarLike A} (s : SymbolicState) (f : SmtValuation) (var : A) (v : SmtArithExpr),

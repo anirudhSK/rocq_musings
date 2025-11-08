@@ -7,6 +7,7 @@ From MyProject Require Import CrProgramState.
 From MyProject Require Import SmtExpr.
 From MyProject Require Import CrDsl.
 From MyProject Require Import Maps.
+From MyProject Require Import UtilLemmas.
 Require Import ZArith.
 Require Import Bool.
 Require Import List.
@@ -56,11 +57,17 @@ Class CrVarLike (A : Type) := {
 
 Class CrVarLikePairLemmas (A A' : Type) `(CrVarLike A) `(CrVarLike A') := {
   test : A; (*TODO: doesn't compile without this. FIX *)
+
   commute_varlike_updates:
   forall {T} (s1 : ProgramState T)
     (fv : A -> T) (fv' : A' -> T),
     update_all_varlike (update_all_varlike s1 fv') fv =
     update_all_varlike (update_all_varlike s1 fv) fv';
+
+  is_v1_in_ps_after_update_all_v2:
+  forall {T} (s1 : ProgramState T)
+    (h : A) (fs : A' -> T),
+    is_varlike_in_ps (update_all_varlike s1 fs) h = is_varlike_in_ps s1 h;
 }.
 
 Ltac prove_inj :=
@@ -263,6 +270,8 @@ Proof.
   - intros.
     simpl.
     f_equal.
+  - intros.
+    reflexivity.
 Defined.
 
 Instance CrVarLikePairLemmas_State_Header : CrVarLikePairLemmas State Header CrVarLike_State CrVarLike_Header.
@@ -271,6 +280,8 @@ Proof.
   - intros.
     simpl.
     f_equal.
+  - intros.
+    reflexivity.
 Defined.
 
 Lemma program_state_equality:
@@ -297,20 +308,6 @@ Proof.
   reflexivity.
 Qed.
 
-(* TODO: Does this hold if A = A'? Similar to lemma before. *)
-Lemma is_v1_in_ps_after_update_all_v2:
-  forall {T A A'} `{CrVarLike A} `{CrVarLike A'} (s1 : ProgramState T)
-    (h : A) (fs : A' -> T),
-    is_varlike_in_ps (update_all_varlike s1 fs) h = is_varlike_in_ps s1 h.
-Admitted.
-(*
-Proof.
-  intros.
-  destruct f1, f2; try congruence;
-  reflexivity.
-Qed.
-*)
-
 Definition get_all_varlike_from_ps {T A : Type} `{CrVarLike A} (s: ProgramState T) : list A :=
   List.map (fun '(key, value) => make_item key)
            (PTree.elements (snd (map_from_ps s))).
@@ -319,29 +316,25 @@ Lemma is_varlike_in_ps_lemma :
   forall {T A} `{CrVarLike A} (s1 : ProgramState T) (v : A),
     In v (get_all_varlike_from_ps s1) ->
     is_varlike_in_ps s1 v <> None.
-Admitted.
-(*
 Proof.
-  intros T A HA f s1 v H.
+  intros T A HA s1 v H.
   destruct s1 as [ctrl hdr state].
-  destruct f;
-  unfold get_all_varlike_from_ps in H;
-  unfold is_varlike_in_ps;
-  simpl in *;
-  destruct ctrl as [c0 ctrl_map];
-  destruct hdr as [h0 hdr_map];
-  destruct state as [s0 state_map];
-  simpl in *;
-  apply in_map_iff in H;
-  destruct H; (* TODO: ask Joe, seems to extract witness *)
-  destruct x;
-  destruct H;
-  rewrite <- H; rewrite inverses';
+  unfold get_all_varlike_from_ps in H.
+  unfold is_varlike_in_ps.
+  simpl in *.
+  destruct ctrl as [c0 ctrl_map].
+  destruct hdr as [h0 hdr_map].
+  destruct state as [s0 state_map].
+  simpl in *.
+  apply in_map_iff in H.
+  destruct H. (* TODO: ask Joe, seems to extract witness *)
+  destruct x.
+  destruct H.
+  rewrite <- H. rewrite inverses'.
   apply some_is_not_none with (x := t);
   apply PTree.elements_complete;
   assumption.
 Qed.
-*)
 
 Definition init_concrete_state (p : CaracaraProgram) : ConcreteState :=
   let h := get_headers_from_prog p in

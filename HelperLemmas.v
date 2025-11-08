@@ -18,13 +18,26 @@ Lemma commute_lookup_eval_varlike:
         (var : A) (val : SmtValuation),
     lookup_varlike (eval_sym_state ps val) var =
     eval_smt_arith (lookup_varlike ps var) val.
-Admitted.
+Proof.
+  intros.
+  unfold eval_sym_state.
+  rewrite commute_lookup_varlike.
+  reflexivity.
+Qed.
 
 Lemma commute_lookup_eval:
   forall (s : SymbolicState) (f : SmtValuation)
         arg,
     lookup_concrete arg (eval_sym_state s f) =
     eval_smt_arith (lookup_smt arg s) f.
+Proof.
+  intros.
+  destruct arg; simpl; try reflexivity.
+  - apply (@commute_lookup_eval_varlike Ctrl CrVarLike_Ctrl s c f).
+  - Check @commute_lookup_eval_varlike. admit. 
+  - admit.
+(* - apply (@commute_lookup_eval_varlike Header CrVarLike_Header s h f).
+  - apply (@commute_lookup_eval_varlike State CrVarLike_State s s0 f). *)
 Admitted.
 
 Lemma find_first_match_lemma:
