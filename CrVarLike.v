@@ -289,9 +289,13 @@ Qed.
 
 Lemma program_state_unchanged:
   forall {T} (s1 : ProgramState T),
-  update_all_varlike (update_all_varlike s1 (fun h : Header => lookup_varlike_map (map_from_ps s1) h))
-                    (fun s : State => lookup_varlike_map (map_from_ps s1) s) = s1.
-Admitted.
+  update_all_varlike (update_all_varlike s1 (fun h : Header => lookup_varlike_map ((@map_from_ps Header CrVarLike_Header T) s1) h))
+                    (fun s : State => lookup_varlike_map ((@map_from_ps State CrVarLike_State T) s1) s) = s1.
+Proof.
+  intros.
+  repeat rewrite update_all_varlike_lookup_unchanged.
+  reflexivity.
+Qed.
 
 (* TODO: Does this hold if A = A'? Similar to lemma before. *)
 Lemma is_v1_in_ps_after_update_all_v2:
