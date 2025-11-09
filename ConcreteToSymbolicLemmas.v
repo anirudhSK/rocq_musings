@@ -5,6 +5,7 @@ From MyProject Require Import CrConcreteSemanticsTransformer.
 From MyProject Require Import SmtExpr.
 From MyProject Require Import CrSymbolicSemanticsTransformer.
 From MyProject Require Import HelperLemmas.
+From MyProject Require Import PMapHelperLemmas.
 From MyProject Require Import CtrlPlaneInvariants.
 From MyProject Require Import CrProgramState.
 From MyProject Require Import MyInts.
@@ -240,9 +241,9 @@ Proof.
   destruct pr as [mp hol].
   unfold eval_par_rule_concrete.
   unfold eval_par_rule_smt.
-  admit. (* TODO: Should be an easy fix I think *)
-  (* apply commute_sym_vs_conc_helper_seq_par_rule_hdr. assumption. *)
-Admitted.
+  apply commute_sym_vs_conc_helper_seq_par_rule_hdr.
+  assumption.
+Qed.
 
 (* Same as above two lemmas but for state variables *)
 Lemma commute_sym_vs_conc_seq_rule_sv :
@@ -256,7 +257,8 @@ Proof.
   destruct sr as [mp hol].
   unfold eval_seq_rule_concrete.
   unfold eval_seq_rule_smt.
-Admitted.
+  apply commute_sym_vs_conc_helper_seq_par_rule_sv. assumption.
+Qed.
 
 Lemma commute_sym_vs_conc_par_rule_sv :
   forall (pr: ParRule) (f : SmtValuation)
@@ -269,7 +271,8 @@ Proof.
   destruct pr as [mp hol].
   unfold eval_par_rule_concrete.
   unfold eval_par_rule_smt.
-Admitted.
+  apply commute_sym_vs_conc_helper_seq_par_rule_sv. assumption.
+Qed.
 
 Lemma commute_sym_vs_conc_ma_rule_hdr:
   forall (ma : MatchActionRule) (f : SmtValuation)
@@ -391,11 +394,11 @@ Lemma switch_case_expr_no_match_lemma :
   forall t f s1 (h : Header),
     is_varlike_in_ps s1 h <> None ->
     None = find_first_match (combine (get_match_results t (eval_sym_state s1 f)) t) ->
-    eval_smt_arith (lookup_varlike_map (map_from_ps s1) h) f =
+    eval_smt_arith (lookup_varlike s1 h) f =
     eval_smt_arith (switch_case_expr  (combine (get_match_results_smt t s1)
-                                               (map (fun ps : SymbolicState => lookup_varlike_map (map_from_ps ps) h)
+                                               (map (fun ps : SymbolicState => lookup_varlike ps h)
                                                     (map (fun rule : MatchActionRule => eval_match_action_rule_smt rule s1) t)))
-                                      (lookup_varlike_map (map_from_ps s1) h)) f.
+                                      (lookup_varlike s1 h)) f.
 Proof.
   intros t f s1 h Hh H.
   induction t.
@@ -510,11 +513,11 @@ Lemma switch_case_expr_no_match_state_var_lemma :
   forall t f s1 (sv : State),
     is_varlike_in_ps s1 sv <> None ->
     None = find_first_match (combine (get_match_results t (eval_sym_state s1 f)) t) ->
-    eval_smt_arith (lookup_varlike_map (map_from_ps s1) sv) f =
+    eval_smt_arith (lookup_varlike s1 sv) f =
     eval_smt_arith (switch_case_expr  (combine (get_match_results_smt t s1)
-                                               (map (fun ps : SymbolicState => lookup_varlike_map (map_from_ps ps) sv)
+                                               (map (fun ps : SymbolicState => lookup_varlike ps sv)
                                                     (map (fun rule : MatchActionRule => eval_match_action_rule_smt rule s1) t)))
-                                      (lookup_varlike_map (map_from_ps s1) sv)) f.
+                                      (lookup_varlike s1 sv)) f.
 Proof.
   intros t f s1 sv Hsv H.
   induction t.
@@ -598,8 +601,8 @@ Proof.
     rewrite H0.
     rewrite hdr_transformer_helper.
     rewrite commute_lookup_eval_varlike.
-    (* TODO: apply switch_case_expr_no_match_lemma. *) 
-Admitted.
+    apply switch_case_expr_no_match_lemma. assumption. assumption. assumption.
+Qed.
 
 Lemma state_transformer_helper:
   forall t s1 (sv : State),
@@ -639,8 +642,8 @@ Proof.
     rewrite H0.
     rewrite state_transformer_helper.
     rewrite commute_lookup_eval_varlike.
-    (* TODO: apply switch_case_expr_no_match_state_var_lemma.*)
-Admitted.
+    apply switch_case_expr_no_match_state_var_lemma. assumption. assumption. assumption.
+Qed.
 
 Lemma commute_sym_vs_conc_transformer_ctrl_map:
   forall t f s1,
@@ -671,11 +674,11 @@ Proof.
     unfold eval_transformer_smt.
     simpl.
     unfold lookup_varlike.
-    (* TODO: rewrite program_state_unchanged. *)
-    admit.
+    rewrite program_state_unchanged.
+    reflexivity.
   - simpl.
     apply commute_sym_vs_conc_transformer_header_map.
-Admitted.
+Qed.
 
 Lemma commute_sym_vs_conc_transfomer_sv:
   forall (t: Transformer) (f : SmtValuation)
@@ -693,8 +696,8 @@ Proof.
     unfold eval_transformer_smt.
     simpl.
     unfold lookup_varlike.
-    (* TODO: rewrite program_state_unchanged. *)
-    admit.
+    rewrite program_state_unchanged.
+    reflexivity.
   - simpl.
     apply commute_sym_vs_conc_transformer_state_var_map.
-Admitted.
+Qed.

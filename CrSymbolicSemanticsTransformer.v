@@ -128,8 +128,8 @@ Definition eval_par_rule_smt (prule : ParRule) (ps : SymbolicState) : (SymbolicS
              header_map: for every header, its value is SmtConditional condition (value in ps') (value in ps)
              state_map: similar to header_map *)
             update_all_varlike
-            (update_all_varlike ps (fun h => SmtConditional condition (lookup_varlike ps' h) (lookup_varlike ps h)))
-            (fun s => SmtConditional condition (lookup_varlike ps' s) (lookup_varlike ps s))
+            (update_all_varlike ps (fun (h : Header) => SmtConditional condition (lookup_varlike ps' h) (lookup_varlike ps h)))
+            (fun (s : State) => SmtConditional condition (lookup_varlike ps' s) (lookup_varlike ps s))
   end.
 
 Definition eval_match_action_rule_smt (rule : MatchActionRule) (ps : SymbolicState) : (SymbolicState) :=
