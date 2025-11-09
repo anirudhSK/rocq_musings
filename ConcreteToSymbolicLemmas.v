@@ -225,9 +225,9 @@ Proof.
   destruct sr as [mp hol].
   unfold eval_seq_rule_concrete.
   unfold eval_seq_rule_smt.
-  admit. (* TODO: Should be an easy fix I think *)
-  (* apply commute_sym_vs_conc_helper_seq_par_rule_hdr. assumption. *)
-Admitted.
+  apply commute_sym_vs_conc_helper_seq_par_rule_hdr.
+  assumption.
+Qed.
 
 Lemma commute_sym_vs_conc_par_rule_hdr :
   forall (pr: ParRule) (f : SmtValuation)
