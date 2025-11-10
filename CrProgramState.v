@@ -24,9 +24,3 @@ Arguments ctrl_map {T} _.
 
 Definition ConcreteState := ProgramState uint8.
 Definition SymbolicState := ProgramState SmtArithExpr.
-
-(* TODO: Can remove at the very end *)
-Inductive PSField :=
-| PSCtrl
-| PSHeader
-| PSState.
