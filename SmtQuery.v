@@ -343,6 +343,21 @@ Class CrVarProg A := {
     (lookup_var c1 var) = (lookup_var c2 var);         (* and their final values must be equal *)
 }.
 
+Ltac prove_in_var_list_implies_in_prog_state hypothesis type crvar_type :=
+  intros;
+  apply is_varlike_in_ps_lemma;
+  unfold init_symbolic_state;
+  unfold get_all_varlike_from_ps;
+  simpl;
+  repeat rewrite map_pair_split;
+  simpl;
+  apply (@ptree_of_list_lemma_generic type crvar_type);
+  simpl in hypothesis;
+  destruct hypothesis as [H0 H3];
+  destruct H3;
+  assumption; assumption.
+
+Transparent get_all_varlike_from_ps.
 Instance CrVarProg_Header : CrVarProg Header.
 Proof.
   refine {| get_vars_from_prog := get_headers_from_prog;
@@ -358,52 +373,22 @@ Proof.
     apply varlike_list_equal_lemma in H_state_eq.
     apply varlike_list_equal_lemma in H_hdr_eq.
     apply varlike_list_equal_lemma in H_ctrl_eq.
-    intros.
+    intros c1_i c2_i t0 t3 c0 c3 H0 var H1.
     simpl in H1.
-    split.
-    -- rewrite H_hdr_eq in H1.
-       assumption.
-    -- destruct (equivalence_checker (init_symbolic_state (CaracaraProgramDef h1 s1 c1 t1)) t1 t2 h1 s1) eqn:H_eq; try (exfalso; congruence).
-       apply equivalence_checker_sound with (f := f) in H_eq.
-       ++ apply H_eq in H1.
-          unfold c0.
-          unfold c3.
-          unfold c1_i.
-          unfold c2_i.
-          simpl.
-          unfold t0.
-          unfold t3.
-          simpl.
-          rewrite <- H_hdr_eq.
-          rewrite <- H_state_eq.
-          rewrite <- H_ctrl_eq.
-          rewrite init_symbolic_state_nodep_t with (t2 := t2) in H1 at 2.
-          assumption.
-       ++ intros.
-          apply is_varlike_in_ps_lemma.
-          unfold init_symbolic_state.
-          Transparent get_all_varlike_from_ps.
-          unfold get_all_varlike_from_ps.
-          simpl.
-          repeat rewrite map_pair_split.
-          simpl.
-          apply (@ptree_of_list_lemma_generic Header CrVarLike_Header).
-          simpl in H0.
-          destruct H0.
-          destruct H3.
-          assumption. assumption.
-       ++ intros.
-          apply is_varlike_in_ps_lemma.
-          unfold init_symbolic_state.
-          unfold get_all_varlike_from_ps.
-          simpl.
-          repeat rewrite map_pair_split. 
-          simpl.
-          apply (@ptree_of_list_lemma_generic State CrVarLike_State).
-          simpl in H0.
-          destruct H0.
-          destruct H3.
-          assumption. assumption.
+    split;
+    try (rewrite H_hdr_eq in H1; assumption).
+    destruct (equivalence_checker (init_symbolic_state (CaracaraProgramDef h1 s1 c1 t1)) t1 t2 h1 s1) eqn:H_eq; try (exfalso; congruence);
+    apply equivalence_checker_sound with (f := f) in H_eq;
+    try(apply H_eq in H1;
+        unfold c0, c3, c1_i, c2_i, t0, t3;
+        simpl;
+        rewrite <- H_hdr_eq;
+        rewrite <- H_state_eq;
+        rewrite <- H_ctrl_eq;
+        rewrite init_symbolic_state_nodep_t with (t2 := t2) in H1 at 2;
+        assumption);
+    try(prove_in_var_list_implies_in_prog_state H0 Header CrVarLike_Header);
+    try(prove_in_var_list_implies_in_prog_state H0 State CrVarLike_State).
 Defined.
 
 Instance CrVarProg_State : CrVarProg State.
@@ -493,6 +478,7 @@ t1)) t1 t2 h1 s1) eqn:H_eq; try (exfalso; congruence).
           assumption.
 Qed.
 Global Opaque map_from_ps.
+Global Opaque get_all_varlike_from_ps.
 
 Print Assumptions equivalence_checker_cr_sound.
 Print Assumptions equivalence_checker_cr_complete.
