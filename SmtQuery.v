@@ -355,34 +355,33 @@ Proof.
     (varlike_list_equal h1 h2) eqn:H_hdr_eq,
     (varlike_list_equal s1 s2) eqn:H_state_eq,
     (varlike_list_equal c1 c2) eqn:H_ctrl_eq in H; simpl in H; try (exfalso; congruence).
+    apply varlike_list_equal_lemma in H_state_eq.
+    apply varlike_list_equal_lemma in H_hdr_eq.
+    apply varlike_list_equal_lemma in H_ctrl_eq.
     intros.
     simpl in H1.
     split.
-    -- apply varlike_list_equal_lemma in H_hdr_eq.
-       rewrite H_hdr_eq in H1.
+    -- rewrite H_hdr_eq in H1.
        assumption.
     -- destruct (equivalence_checker (init_symbolic_state (CaracaraProgramDef h1 s1 c1 t1)) t1 t2 h1 s1) eqn:H_eq; try (exfalso; congruence).
-    apply equivalence_checker_sound with (f := f) in H_eq.
-      ++ apply H_eq in H1.
-         unfold c0.
-         unfold c3.
-         unfold c1_i.
-         unfold c2_i.
-         simpl.
-         unfold t0.
-         unfold t3.
-         simpl.
-         apply varlike_list_equal_lemma in H_state_eq.
-         apply varlike_list_equal_lemma in H_hdr_eq.
-         apply varlike_list_equal_lemma in H_ctrl_eq.
-         rewrite <- H_hdr_eq.
-         rewrite <- H_state_eq.
-         rewrite <- H_ctrl_eq.
-         rewrite init_symbolic_state_nodep_t with (t2 := t2) in H1 at 2.
-         assumption.
-      ++ intros.
-         apply is_varlike_in_ps_lemma.
-         unfold init_symbolic_state.
+       apply equivalence_checker_sound with (f := f) in H_eq.
+       ++ apply H_eq in H1.
+          unfold c0.
+          unfold c3.
+          unfold c1_i.
+          unfold c2_i.
+          simpl.
+          unfold t0.
+          unfold t3.
+          simpl.
+          rewrite <- H_hdr_eq.
+          rewrite <- H_state_eq.
+          rewrite <- H_ctrl_eq.
+          rewrite init_symbolic_state_nodep_t with (t2 := t2) in H1 at 2.
+          assumption.
+       ++ intros.
+          apply is_varlike_in_ps_lemma.
+          unfold init_symbolic_state.
           Transparent get_all_varlike_from_ps.
           unfold get_all_varlike_from_ps.
           simpl.
@@ -391,19 +390,20 @@ Proof.
           apply (@ptree_of_list_lemma_generic Header CrVarLike_Header).
           simpl in H0.
           destruct H0.
+          destruct H3.
           assumption. assumption.
-      ++ intros.
-         apply is_varlike_in_ps_lemma.
-         unfold init_symbolic_state.
-         unfold get_all_varlike_from_ps.
-         simpl.
-         repeat rewrite map_pair_split. 
-         simpl.
-         apply (@ptree_of_list_lemma_generic State CrVarLike_State).
-         simpl in H0.
-         destruct H0.
-         destruct H3.
-         assumption. assumption.
+       ++ intros.
+          apply is_varlike_in_ps_lemma.
+          unfold init_symbolic_state.
+          unfold get_all_varlike_from_ps.
+          simpl.
+          repeat rewrite map_pair_split. 
+          simpl.
+          apply (@ptree_of_list_lemma_generic State CrVarLike_State).
+          simpl in H0.
+          destruct H0.
+          destruct H3.
+          assumption. assumption.
 Defined.
 
 Instance CrVarProg_State : CrVarProg State.
