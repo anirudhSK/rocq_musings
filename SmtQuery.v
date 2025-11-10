@@ -357,38 +357,41 @@ Ltac prove_in_var_list_implies_in_prog_state hypothesis type crvar_type :=
   destruct H3;
   assumption; assumption.
 
+Ltac prove_equivalence_checker_cr_sound :=
+  intros p1 p2 f H;
+  destruct p1 as [h1 s1 c1 t1] eqn:desp1,
+            p2 as [h2 s2 c2 t2] eqn:desp2; simpl in H;
+  destruct
+  (varlike_list_equal h1 h2) eqn:H_hdr_eq,
+  (varlike_list_equal s1 s2) eqn:H_state_eq,
+  (varlike_list_equal c1 c2) eqn:H_ctrl_eq in H; simpl in H; try (exfalso; congruence);
+  apply varlike_list_equal_lemma in H_state_eq;
+  apply varlike_list_equal_lemma in H_hdr_eq;
+  apply varlike_list_equal_lemma in H_ctrl_eq;
+  intros c1_i c2_i t0 t3 c0 c3 H0 var H1;
+  simpl in H1;
+  split;
+  try (rewrite H_hdr_eq in H1; assumption); try (rewrite H_state_eq in H1; assumption);
+  destruct (equivalence_checker (init_symbolic_state (CaracaraProgramDef h1 s1 c1 t1)) t1 t2 h1 s1) eqn:H_eq; try (exfalso; congruence);
+  apply equivalence_checker_sound with (f := f) in H_eq;
+  try(apply H_eq in H1;
+      unfold c0, c3, c1_i, c2_i, t0, t3;
+      simpl;
+      rewrite <- H_hdr_eq;
+      rewrite <- H_state_eq;
+      rewrite <- H_ctrl_eq;
+      rewrite init_symbolic_state_nodep_t with (t2 := t2) in H1 at 2;
+      assumption);
+  try(prove_in_var_list_implies_in_prog_state H0 Header CrVarLike_Header);
+  try(prove_in_var_list_implies_in_prog_state H0 State CrVarLike_State).
+
 Transparent get_all_varlike_from_ps.
 Instance CrVarProg_Header : CrVarProg Header.
 Proof.
   refine {| get_vars_from_prog := get_headers_from_prog;
             lookup_var := fun s h => lookup_varlike s h; |}.
   - intros. simpl. reflexivity.
-  - intros p1 p2 f H.
-    destruct p1 as [h1 s1 c1 t1] eqn:desp1,
-             p2 as [h2 s2 c2 t2] eqn:desp2; simpl in H.
-    destruct
-    (varlike_list_equal h1 h2) eqn:H_hdr_eq,
-    (varlike_list_equal s1 s2) eqn:H_state_eq,
-    (varlike_list_equal c1 c2) eqn:H_ctrl_eq in H; simpl in H; try (exfalso; congruence).
-    apply varlike_list_equal_lemma in H_state_eq.
-    apply varlike_list_equal_lemma in H_hdr_eq.
-    apply varlike_list_equal_lemma in H_ctrl_eq.
-    intros c1_i c2_i t0 t3 c0 c3 H0 var H1.
-    simpl in H1.
-    split;
-    try (rewrite H_hdr_eq in H1; assumption).
-    destruct (equivalence_checker (init_symbolic_state (CaracaraProgramDef h1 s1 c1 t1)) t1 t2 h1 s1) eqn:H_eq; try (exfalso; congruence);
-    apply equivalence_checker_sound with (f := f) in H_eq;
-    try(apply H_eq in H1;
-        unfold c0, c3, c1_i, c2_i, t0, t3;
-        simpl;
-        rewrite <- H_hdr_eq;
-        rewrite <- H_state_eq;
-        rewrite <- H_ctrl_eq;
-        rewrite init_symbolic_state_nodep_t with (t2 := t2) in H1 at 2;
-        assumption);
-    try(prove_in_var_list_implies_in_prog_state H0 Header CrVarLike_Header);
-    try(prove_in_var_list_implies_in_prog_state H0 State CrVarLike_State).
+  - prove_equivalence_checker_cr_sound.
 Defined.
 
 Instance CrVarProg_State : CrVarProg State.
@@ -396,15 +399,15 @@ Proof.
   refine {| get_vars_from_prog := get_states_from_prog;
             lookup_var := fun s sv => lookup_varlike s sv; |}.
   - intros. simpl. reflexivity.
-  - admit.
-Admitted.
+  - prove_equivalence_checker_cr_sound.
+Defined.
 
 Instance CrVarProg_Ctrl : CrVarProg Ctrl.
 Proof.
   refine {| get_vars_from_prog := get_ctrls_from_prog;
             lookup_var := fun s c => lookup_varlike s c; |}.
   - intros. simpl. reflexivity.
-  - admit.
+  - prove_equivalence_checker_cr_sound. admit.
 Admitted.
 
 Transparent map_from_ps.
