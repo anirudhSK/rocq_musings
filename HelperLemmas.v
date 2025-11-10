@@ -31,14 +31,11 @@ Lemma commute_lookup_eval:
     lookup_concrete arg (eval_sym_state s f) =
     eval_smt_arith (lookup_smt arg s) f.
 Proof.
-  intros.
-  destruct arg; simpl; try reflexivity.
-  - apply (@commute_lookup_eval_varlike Ctrl CrVarLike_Ctrl s c f).
-  - Check @commute_lookup_eval_varlike. admit. 
-  - admit.
-(* - apply (@commute_lookup_eval_varlike Header CrVarLike_Header s h f).
-  - apply (@commute_lookup_eval_varlike State CrVarLike_State s s0 f). *)
-Admitted.
+  intros s f arg.
+  unfold lookup_concrete.
+  destruct arg; simpl; try reflexivity;
+  apply commute_lookup_eval_varlike.
+Qed.
 
 Lemma find_first_match_lemma:
   forall {T : Set} (list_of_pair :  list (bool*T)),
