@@ -12,7 +12,6 @@ Transparent map_from_ps.
 Transparent lookup_varlike_map.
 
 Class CrVarLikeEval (A: Type) `(CrVarLike A) := {
-  test : A;
   commute_lookup_eval_generic:
   forall (v : A) f ps,
   lookup_varlike_map (map_from_ps (eval_sym_state ps f)) v =
@@ -21,19 +20,19 @@ Class CrVarLikeEval (A: Type) `(CrVarLike A) := {
 
 Instance CrVarLikeEval_Header : CrVarLikeEval Header CrVarLike_Header.
 Proof.
-  refine {| test := HeaderCtr xH;|}. (* TODO: Another hack, unsued *)
+  constructor.
   intros. unfold map_from_ps. apply PMap.gmap.
 Defined.
 
 Instance CrVarLikeEval_State : CrVarLikeEval State CrVarLike_State.
 Proof.
-  refine {| test := StateCtr xH;|}. (* TODO: Another hack, unsued *)
+  constructor.
   intros. unfold map_from_ps. apply PMap.gmap.
 Defined.
 
 Instance CrVarLikeEval_Ctrl : CrVarLikeEval Ctrl CrVarLike_Ctrl.
 Proof.
-  refine {| test := CtrlCtr xH;|}. (* TODO: Another hack, unsued *)
+  constructor.
   intros. unfold map_from_ps. apply PMap.gmap.
 Defined.
 

@@ -56,8 +56,6 @@ Class CrVarLike (A : Type) := {
 }.
 
 Class CrVarLikePairLemmas (A A' : Type) `(CrVarLike A) `(CrVarLike A') := {
-  test : A; (*TODO: doesn't compile without this. FIX *)
-
   commute_varlike_updates:
   forall {T} (s1 : ProgramState T)
     (fv : A -> T) (fv' : A' -> T),
@@ -266,7 +264,7 @@ End CrVarLikeEqual.
 
 Instance CrVarLikePairLemmas_Header_State : CrVarLikePairLemmas Header State CrVarLike_Header CrVarLike_State.
 Proof.
-  refine {| test := HeaderCtr xH;|}.
+  constructor.
   - intros.
     simpl.
     f_equal.
@@ -276,7 +274,7 @@ Defined.
 
 Instance CrVarLikePairLemmas_State_Header : CrVarLikePairLemmas State Header CrVarLike_State CrVarLike_Header.
 Proof.
-  refine {| test := StateCtr xH;|}.
+  constructor.
   - intros.
     simpl.
     f_equal.
