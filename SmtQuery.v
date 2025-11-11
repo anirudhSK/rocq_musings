@@ -103,6 +103,15 @@ Proof.
     split; assumption.
 Qed.
 
+Ltac prove_eval_smt_bool_lemma smt_bool_lemma commute_lemma:=
+  intros t1 t2 s h f H H_eq;
+  apply smt_bool_lemma in H_eq;
+  rewrite (commute_lemma t1 f s h H);
+  rewrite (commute_lemma t2 f s h H);
+  unfold eval_sym_state;
+  repeat rewrite commute_lookup_varlike;
+  apply H_eq.
+
 Lemma eval_smt_bool_lemma_hdr :
   forall t1 t2 s (h : Header) f,
   is_varlike_in_ps s h <> None ->
@@ -112,16 +121,7 @@ Lemma eval_smt_bool_lemma_hdr :
 lookup_varlike (eval_transformer_concrete t1 (eval_sym_state s f)) h =
 lookup_varlike (eval_transformer_concrete t2 (eval_sym_state s f)) h.
 Proof.
-  intros t1 t2 s h f.
-  intro H.
-  intros H_eq.
-  apply smt_bool_eq_true in H_eq.
-  rewrite commute_sym_vs_conc_transfomer_hdr.
-  rewrite commute_sym_vs_conc_transfomer_hdr.
-  unfold eval_sym_state.
-  repeat rewrite commute_lookup_varlike.
-  apply H_eq.
-  assumption. assumption.
+  prove_eval_smt_bool_lemma smt_bool_eq_true commute_sym_vs_conc_transfomer_hdr.
 Qed.
 
 Lemma eval_smt_bool_lemma_state :
@@ -133,16 +133,7 @@ Lemma eval_smt_bool_lemma_state :
 lookup_varlike (eval_transformer_concrete t1 (eval_sym_state s f)) sv =
 lookup_varlike (eval_transformer_concrete t2 (eval_sym_state s f)) sv.
 Proof.
-  intros t1 t2 s sv f.
-  intro H.
-  intros H_eq.
-  apply smt_bool_eq_true in H_eq.
-  rewrite commute_sym_vs_conc_transfomer_sv.
-  rewrite commute_sym_vs_conc_transfomer_sv.
-  unfold eval_sym_state.
-  repeat rewrite commute_lookup_varlike.
-  apply H_eq.
-  assumption. assumption.
+  prove_eval_smt_bool_lemma smt_bool_eq_true commute_sym_vs_conc_transfomer_sv.
 Qed.
 
 Lemma eval_smt_bool_lemma_hdr_false :
@@ -154,16 +145,7 @@ Lemma eval_smt_bool_lemma_hdr_false :
 lookup_varlike (eval_transformer_concrete t1 (eval_sym_state s f)) h <>
 lookup_varlike (eval_transformer_concrete t2 (eval_sym_state s f)) h.
 Proof.
-  intros t1 t2 s h f.
-  intro H1.
-  intro H.
-  apply smt_bool_eq_false in H.
-  rewrite commute_sym_vs_conc_transfomer_hdr.
-  rewrite commute_sym_vs_conc_transfomer_hdr.
-  unfold eval_sym_state.
-  repeat rewrite commute_lookup_varlike.
-  apply H.
-  assumption. assumption.
+  prove_eval_smt_bool_lemma smt_bool_eq_false commute_sym_vs_conc_transfomer_hdr.
 Qed.
 
 Lemma eval_smt_bool_lemma_state_false :
@@ -175,16 +157,7 @@ Lemma eval_smt_bool_lemma_state_false :
 lookup_varlike (eval_transformer_concrete t1 (eval_sym_state s f)) sv <>
 lookup_varlike (eval_transformer_concrete t2 (eval_sym_state s f)) sv.
 Proof.
-  intros t1 t2 s sv f.
-  intro H1.
-  intro H.
-  apply smt_bool_eq_false in H.
-  rewrite commute_sym_vs_conc_transfomer_sv.
-  rewrite commute_sym_vs_conc_transfomer_sv.
-  unfold eval_sym_state.
-  repeat rewrite commute_lookup_varlike.
-  apply H.
-  assumption. assumption.
+  prove_eval_smt_bool_lemma smt_bool_eq_false commute_sym_vs_conc_transfomer_sv.
 Qed.
 
 Definition equivalence_checker
