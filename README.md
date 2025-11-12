@@ -61,6 +61,11 @@ dune exec eq_check extracted_code/ref/crcr1.out extracted_code/ref/crcr2.out
 dune exec run_tests
 ```
 
+**Configure Git Repo**
+
+To prevent pushing old versions of the P4C compiler due to git not updating it, configure an automatic submodule update for this repo.
+`git config submodule.recurse true`
+
 
 // Apparently the vscoq language server needs to be
 // bumped up in version. Don't know why. But it still 
