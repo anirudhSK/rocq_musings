@@ -634,6 +634,16 @@ Proof.
 Qed.
 
 Opaque update_all_varlike.
+
+Ltac prove_commute_sym_vs_conc_transformer helper_lemma :=
+  intros t f s1 h;
+  unfold eval_transformer_concrete, eval_transformer_smt, lookup_varlike;
+  induction t as [| m rest IHrest];
+  try (simpl;
+       rewrite program_state_unchanged;
+       reflexivity);
+  apply helper_lemma.
+
 Lemma commute_sym_vs_conc_transfomer_hdr:
   forall (t: Transformer) (f : SmtValuation)
          (s1 : SymbolicState)
@@ -642,18 +652,7 @@ Lemma commute_sym_vs_conc_transfomer_hdr:
     lookup_varlike (eval_transformer_concrete t (eval_sym_state s1 f)) h = (* first concretize, and then interpret *)
     lookup_varlike (eval_sym_state (eval_transformer_smt t s1) f) h. (* first interpret, and then concretize *)
 Proof.
-  intros t f s1 h.
-  induction t as [| m rest IHrest].
-  - simpl.
-    unfold eval_transformer_concrete.
-    simpl.
-    unfold eval_transformer_smt.
-    simpl.
-    unfold lookup_varlike.
-    rewrite program_state_unchanged.
-    reflexivity.
-  - simpl.
-    apply commute_sym_vs_conc_transformer_header_map.
+  prove_commute_sym_vs_conc_transformer commute_sym_vs_conc_transformer_header_map.
 Qed.
 
 Lemma commute_sym_vs_conc_transfomer_sv:
@@ -664,16 +663,5 @@ Lemma commute_sym_vs_conc_transfomer_sv:
     lookup_varlike (eval_transformer_concrete t (eval_sym_state s1 f)) sv = (* first concretize, and then interpret *)
     lookup_varlike (eval_sym_state (eval_transformer_smt t s1) f) sv. (* first interpret, and then concretize *)
 Proof.
-  intros t f s1 sv.
-  induction t as [| m rest IHrest].
-  - simpl.
-    unfold eval_transformer_concrete.
-    simpl.
-    unfold eval_transformer_smt.
-    simpl.
-    unfold lookup_varlike.
-    rewrite program_state_unchanged.
-    reflexivity.
-  - simpl.
-    apply commute_sym_vs_conc_transformer_state_var_map.
+  prove_commute_sym_vs_conc_transformer commute_sym_vs_conc_transformer_state_var_map.
 Qed.
