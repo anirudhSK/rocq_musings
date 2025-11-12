@@ -201,6 +201,14 @@ Proof.
   - rewrite is_v1_in_ps_after_update_all_v2. assumption.
 Qed.
 
+Ltac prove_commute_sym_vs_conc helper_lemma :=
+  intros sr f s1 h Hh;
+  destruct sr as [mp hol];
+  unfold eval_seq_rule_concrete;
+  unfold eval_seq_rule_smt;
+  apply helper_lemma;
+  assumption.
+
 Lemma commute_sym_vs_conc_seq_rule_hdr :
   forall (sr: SeqRule) (f : SmtValuation)
          (s1 : SymbolicState) (h : Header),
@@ -208,12 +216,7 @@ Lemma commute_sym_vs_conc_seq_rule_hdr :
       lookup_varlike (eval_seq_rule_concrete sr (eval_sym_state s1 f)) h = (* first concretize, and then interpret *)
       lookup_varlike (eval_sym_state (eval_seq_rule_smt sr s1) f) h. (* first interpret, and then concretize *)
 Proof.
-  intros sr f s1 h Hh.
-  destruct sr as [mp hol].
-  unfold eval_seq_rule_concrete.
-  unfold eval_seq_rule_smt.
-  apply commute_sym_vs_conc_helper_seq_par_rule_hdr.
-  assumption.
+  prove_commute_sym_vs_conc commute_sym_vs_conc_helper_seq_par_rule_hdr.
 Qed.
 
 Lemma commute_sym_vs_conc_par_rule_hdr :
@@ -223,12 +226,7 @@ Lemma commute_sym_vs_conc_par_rule_hdr :
     lookup_varlike (eval_par_rule_concrete pr (eval_sym_state s1 f)) h = (* first concretize, and then interpret *)
     lookup_varlike (eval_sym_state (eval_par_rule_smt pr s1) f) h. (* first interpret, and then concretize *)
 Proof.
-  intros pr f s1 h Hh.
-  destruct pr as [mp hol].
-  unfold eval_par_rule_concrete.
-  unfold eval_par_rule_smt.
-  apply commute_sym_vs_conc_helper_seq_par_rule_hdr.
-  assumption.
+  prove_commute_sym_vs_conc commute_sym_vs_conc_helper_seq_par_rule_hdr.
 Qed.
 
 (* Same as above two lemmas but for state variables *)
@@ -239,11 +237,7 @@ Lemma commute_sym_vs_conc_seq_rule_sv :
     lookup_varlike (eval_seq_rule_concrete sr (eval_sym_state s1 f)) sv = (* first concretize, and then interpret *)
     lookup_varlike (eval_sym_state (eval_seq_rule_smt sr s1) f) sv. (* first interpret, and then concretize *)
 Proof.
-  intros sr f s1 sv Hsv.
-  destruct sr as [mp hol].
-  unfold eval_seq_rule_concrete.
-  unfold eval_seq_rule_smt.
-  apply commute_sym_vs_conc_helper_seq_par_rule_sv. assumption.
+  prove_commute_sym_vs_conc commute_sym_vs_conc_helper_seq_par_rule_sv.
 Qed.
 
 Lemma commute_sym_vs_conc_par_rule_sv :
@@ -253,11 +247,7 @@ Lemma commute_sym_vs_conc_par_rule_sv :
     lookup_varlike (eval_par_rule_concrete pr (eval_sym_state s1 f)) sv = (* first concretize, and then interpret *)
     lookup_varlike (eval_sym_state (eval_par_rule_smt pr s1) f) sv. (* first interpret, and then concretize *)
 Proof.
-  intros pr f s1 sv Hsv.
-  destruct pr as [mp hol].
-  unfold eval_par_rule_concrete.
-  unfold eval_par_rule_smt.
-  apply commute_sym_vs_conc_helper_seq_par_rule_sv. assumption.
+  prove_commute_sym_vs_conc commute_sym_vs_conc_helper_seq_par_rule_sv.
 Qed.
 
 Lemma commute_sym_vs_conc_ma_rule_hdr:
