@@ -538,6 +538,19 @@ Proof.
       assumption.
 Qed.
 
+Ltac prove_transformer_helper use_commute :=
+  intros;
+  unfold eval_transformer_smt;
+  match use_commute with
+  | true => rewrite <- commute_varlike_updates
+  | false => idtac
+  end;
+  unfold lookup_varlike;
+  rewrite lookup_varlike_after_update_all_varlike;
+  [ reflexivity
+  | rewrite is_v1_in_ps_after_update_all_v2;
+    assumption ].
+
 Lemma hdr_transformer_helper:
   forall t s1 (h : Header),
      is_varlike_in_ps s1 h <> None ->
@@ -548,14 +561,7 @@ Lemma hdr_transformer_helper:
      (map (fun rule : MatchActionRule => eval_match_action_rule_smt rule s1) t)))
      (lookup_varlike s1 h).
 Proof.
-  intros.
-  unfold eval_transformer_smt.
-  rewrite <- commute_varlike_updates.
-  unfold lookup_varlike.
-  rewrite lookup_varlike_after_update_all_varlike.
-  -- reflexivity.
-  -- rewrite is_v1_in_ps_after_update_all_v2.
-     assumption.
+  prove_transformer_helper true.
 Qed.
 
 Lemma commute_sym_vs_conc_transformer_header_map:
@@ -590,13 +596,7 @@ Lemma state_transformer_helper:
      (map (fun rule : MatchActionRule => eval_match_action_rule_smt rule s1) t)))
      (lookup_varlike s1 sv).
 Proof.
-  intros.
-  unfold eval_transformer_smt.
-  unfold lookup_varlike.
-  rewrite lookup_varlike_after_update_all_varlike.
-  -- reflexivity.
-  -- rewrite is_v1_in_ps_after_update_all_v2.
-     assumption.
+  prove_transformer_helper false.
 Qed.
 
 Lemma commute_sym_vs_conc_transformer_state_var_map:
