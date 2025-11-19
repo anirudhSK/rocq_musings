@@ -11,7 +11,9 @@ let programs = [|
   get_program "./test/prog1.out";
   get_program "./test/prog2.out";
   get_program "./test/subtract1.out";
-  get_program "./test/subtract2.out"
+  get_program "./test/subtract2.out";
+  get_program "./test/complex1a.out";
+  get_program "./test/complex1b.out";
 |]
 
 let test_1 () =
@@ -34,7 +36,7 @@ let test_2 () =
   | _ -> 0
 
 let test_3 () =
-  (* reflexive comparison of subtraction *)
+  (* reflexive comparison of subtraction programs *)
   let p = programs.(2) in
 
   let res = SmtQuery.equivalence_checker_cr_dsl p p in
@@ -43,9 +45,19 @@ let test_3 () =
   | _ -> 0
 
 let test_4 () =
-  (* compares subtraction and 1s complement *)
+  (* compares subtraction and 1s complement addition *)
   let p1 = programs.(2) in
   let p2 = programs.(3) in
+
+  let res = SmtQuery.equivalence_checker_cr_dsl p1 p2 in
+   match res with
+  | Equivalent -> 1
+  | _ -> 0
+
+let test_5 () =
+  (* compares two complex actions that should be equal *)
+  let p1 = programs.(4) in
+  let p2 = programs.(5) in
 
   let res = SmtQuery.equivalence_checker_cr_dsl p1 p2 in
   match res with
@@ -54,7 +66,7 @@ let test_4 () =
 
 let () =
   let tests = [
-    test_1; test_2; test_3; test_4
+    test_1; test_2; test_3; test_5
   ] in
   
   let n_passed = Stdlib.List.fold_left
