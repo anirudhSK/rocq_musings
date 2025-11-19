@@ -34,7 +34,7 @@ let test_2 () =
   | _ -> 0
 
 let test_3 () =
-  (* reflexive comparison of extremely basic program *)
+  (* reflexive comparison of subtraction *)
   let p = programs.(2) in
 
   let res = SmtQuery.equivalence_checker_cr_dsl p p in
@@ -43,13 +43,13 @@ let test_3 () =
   | _ -> 0
 
 let test_4 () =
-  (* compares two basic programs with different header values *)
+  (* compares subtraction and 1s complement *)
   let p1 = programs.(2) in
   let p2 = programs.(3) in
 
   let res = SmtQuery.equivalence_checker_cr_dsl p1 p2 in
   match res with
-  | NotEquivalent _ -> 1
+  | Equivalent -> 1
   | _ -> 0
 
 let () =
