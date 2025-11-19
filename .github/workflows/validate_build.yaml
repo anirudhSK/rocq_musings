@@ -3,6 +3,12 @@ name: Validate Build
 on:
   pull_request:
     branches: [ master ]
+  workflow_dispatch:
+    inputs:
+      target_branch:
+        description: 'Branch to run the workflow on (e.g., testing)'
+        required: true
+        default: 'master'
 
 jobs:
   cache-setup:
