@@ -100,7 +100,7 @@ let rec coq_str_to_str (s : string) : Stdlib.String.t =
     | Coq_false -> 0 in
   let ascii_to_char (c : Ascii.ascii) : Stdlib.String.t =
     match c with
-    | Ascii (b7, b6, b5, b4, b3, b2, b1, b0) -> Char.escaped (Char.chr (
+    | Ascii (b0, b1, b2, b3, b4, b5, b6, b7) -> Stdlib.String.make 1 (Char.chr (
       (bool_to_bit b7 7) +
       (bool_to_bit b6 6) +
       (bool_to_bit b5 5) +
