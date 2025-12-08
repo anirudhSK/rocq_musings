@@ -53,7 +53,7 @@ Defined.
 Instance CrVarLike_Ctrl : CrVarLike Ctrl.
 Proof.
   refine {| make_item := fun uid => CtrlCtr uid;
-            get_key := fun s => match s with CtrlCtr uid => uid end;
+            get_key := fun c => match c with CtrlCtr uid => uid end;
             inverses := _;
             inj := _ |}.
   - intros [uid]. simpl. reflexivity.

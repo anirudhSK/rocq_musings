@@ -129,3 +129,26 @@ let rec str_to_coq_str (s : Stdlib.String.t) : string =
     let c = Stdlib.String.get s 0 in
     let rest = Stdlib.String.sub s 1 (Stdlib.String.length s - 1) in
     String.String ((char_to_ascii c), (str_to_coq_str rest))
+
+
+let example_program : coq_CaracaraProgram =
+  let h0 : BinNums.positive = Coq_xH in
+  let r0 : BinNums.positive = Coq_xH in
+  let r1 : BinNums.positive = Coq_xO Coq_xH in
+  let r2 : BinNums.positive = Coq_xI Coq_xH in
+  let r3 : BinNums.positive = Coq_xO (Coq_xO Coq_xH) in
+  let headers = Coq_cons (h0, Coq_nil) in
+  let states = Coq_cons (r0, (Coq_cons (r1, (Coq_cons (r2, (Coq_cons (r3,
+    Coq_nil)))))))
+  in
+  let ctrls = Coq_nil in
+  let match_pattern = Coq_cons ((Coq_pair (h0,
+    (repr (Coq_xO (Coq_xO (Coq_xO Coq_xH))) Z0))), Coq_nil)
+  in
+  let action = Coq_cons ((CrTransformer.StatefulOp (AddOp, (ConstantArg
+    (repr (Coq_xO (Coq_xO (Coq_xO Coq_xH))) (Zpos (Coq_xI (Coq_xO Coq_xH))))),
+    (ConstantArg (repr (Coq_xO (Coq_xO (Coq_xO Coq_xH))) Z0)), r0)), Coq_nil)
+  in
+  let rule = CrTransformer.Seq (SeqCtr (match_pattern, action)) in
+  let transformer = Coq_cons (rule, Coq_nil) in
+  CaracaraProgramDef (headers, states, ctrls, transformer)

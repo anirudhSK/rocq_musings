@@ -2,7 +2,8 @@ From MyProject Require Import Integers.
 Require Import ZArith.
 
 (* Various kinds of fixed-bit-width integers *)
-Definition uint8 := @bit_int 8%positive.
+Definition uint8   := @bit_int  8%positive.
+Definition uintptr := @bit_int 32%positive.
 
 Lemma uint8_eq_from_unsigned : forall (v1 v2 : uint8),
   unsigned v1 = unsigned v2 -> v1 = v2.
