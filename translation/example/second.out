@@ -1,8 +1,0 @@
-(CaracaraProgramDef (Coq_cons Coq_xH Coq_nil)
- Coq_nil 
- Coq_nil
-(Coq_cons (Seq ( SeqCtr Coq_nil (Coq_cons (  StatelessOp AddOp (ConstantArg (Zpos Coq_xH))
- (ConstantArg Z0) Coq_xH))
-
-Coq_nil))) 
-Coq_nil))
