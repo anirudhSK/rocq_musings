@@ -30,22 +30,12 @@ control vrfy(inout Headers hdr, inout Meta meta) {
 // Ingress control
 control ingress(inout Headers hdr, inout Meta m, inout standard_metadata_t s) {
     action MyAction1() {
-        hdr.h.a = 1;
-    }
-    
-    table the_table {
-        key = {
-            hdr.h.a : exact;
-        }
-        actions = {
-            MyAction1;
-        }
-        size = 1024;
-        default_action = MyAction1();
+        hdr.h.a += 2;
+        hdr.h.a -= 1;
     }
     
     apply {
-        the_table.apply();
+        MyAction1();
     }
 }
 
