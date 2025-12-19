@@ -14,6 +14,9 @@ let programs = [|
   get_program "./test/subtract2.out";
   get_program "./test/complex1a.out"; (* -1, +2*)
   get_program "./test/complex1b.out"; (* +2, -1*)
+  get_program "./test/table1a.out";
+  get_program "./test/table1b.out";
+  get_program "./test/table1c.out";
 |]
 
 let tests = ref []
@@ -66,6 +69,24 @@ let () = register "complex_add/sub equal" (fun () ->
 let () = register "complex_add/sub NOT equal" (fun () ->
   let p1 = programs.(5) in
   let p2 = programs.(2) in
+
+  let res = SmtQuery.equivalence_checker_cr_dsl p1 p2 in
+  match res with
+  | NotEquivalent _ -> 1
+  | _ -> 0)
+
+  let () = register "table equal" (fun () ->
+  let p1 = programs.(6) in
+  let p2 = programs.(7) in
+
+  let res = SmtQuery.equivalence_checker_cr_dsl p1 p2 in
+   match res with
+  | Equivalent -> 1
+  | _ -> 0)
+
+let () = register "table NOT equal" (fun () ->
+  let p1 = programs.(7) in
+  let p2 = programs.(8) in
 
   let res = SmtQuery.equivalence_checker_cr_dsl p1 p2 in
   match res with

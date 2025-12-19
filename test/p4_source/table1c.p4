@@ -30,8 +30,7 @@ control MyIngress(inout Headers headers,
 
 
     action drop_pkt() {
-        headers.hdr.dstAddr = headers.hdr.dstAddr + 1;
-        headers.hdr.dstAddr -=  1;
+        headers.hdr.dstAddr += 1; 
     }
 
     action forward_pkt() {
