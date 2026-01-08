@@ -25,3 +25,4 @@ smt_query
 !/extracted_code/Z3Solver.ml
 !/extracted_code/EqCheck.ml
 !/extracted_code/RunTests.ml
+/.vscode/

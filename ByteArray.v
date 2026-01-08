@@ -7,27 +7,10 @@ From MyProject Require Import Maps.
 From MyProject Require Import ListUtils.
 From MyProject Require Import CrVarLike.
 
-Definition byte_arr := PMap.t (option uint8). (* <-> map_from_ps *)
-
-(* Definition load_arr (arr : byte_arr) (addr : positive) : option uint8 :=
-  PMap.get addr arr.
-
-Definition store_arr (arr : byte_arr) (addr : positive) (value : uint8) : byte_arr :=
-  PMap.set addr (Some value) arr. *)
-
-(* Inductive Memcell : Type := McCtr (offset : positive).
-
-Instance CrVarLike_Memcell : CrVarLike Memcell.
-Proof.
-  refine {| make_item := fun off => McCtr off;
-            get_key := fun mc => match mc with McCtr off => off end;
-            inverses := _;
-            inj := _ |}.
-  - intros [offset]. simpl. reflexivity.
-  - reflexivity.
-  - prove_inj.
-Defined. *)
-
+(*
+In essence, I'm representing memory as a set of arrays.
+Each array boils down to a starting address, a length, and the bytes themselves.
+*)
 Record Array := {
   base : nat;
   len : nat;
@@ -35,12 +18,20 @@ Record Array := {
 }.
 Definition Memory := PMap.t (option Array).
 
+(*
+Because bytes are stored as a PMap.t, each byte is associated with
+a positive number. I'm doing 0-indexing, so that means that index i
+is a natural number (incl. 0), but the key in the PMap associated
+with it is i + 1 (since 0 \notin positive).
+*)
 Definition keys_from_map {T : Type} (m : PMap.t T) : list positive :=
   List.map fst (PTree.elements (snd m)).
 Definition key_to_idx (k: positive) : nat :=
   (Pos.to_nat k) - 1.
 Definition idx_to_key (i: nat) : positive :=
   (Pos.of_nat (i + 1)).
+
+(* more map accessor helpers since I'm storing an option type *)
 Definition vals_from_map {T : Type} (m : PMap.t T) : list T :=
   List.map snd (PTree.elements (snd m)).
 Fixpoint unnone {T : Type} (l : list (option T)) : list T :=
@@ -54,8 +45,8 @@ Fixpoint unnone {T : Type} (l : list (option T)) : list T :=
 Definition vals_from_map' {T : Type} (m : PMap.t (option T)) : list T :=
   unnone (vals_from_map m).
 
+(* checks that two arrays don't overlap *)
 Definition arrays_disjoint (a1 a2 : Array) : bool :=
-  (* checks that two arrays don't overlap *)
   let start1 := base a1 in
   let end1 := (base a1) + (len a1) in
   let start2 := base a2 in
@@ -63,8 +54,8 @@ Definition arrays_disjoint (a1 a2 : Array) : bool :=
   (negb (start1 =? start2)) && (
     ((start1 <? start2) && (end1 <? start2)) ||
     ((start2 <? start1) && (end2 <? start1))).
+(* checks that an array doesn't overlap with any other arrays *)
 Definition array_unique (x : Array) (xs : list Array) :=
-  (* checks that an array doesn't overlap with any other arrays *)
   List.forallb (fun x' => arrays_disjoint x x') xs.
 Fixpoint mem_disjoint_helper (A : list Array) :=
   match A with
@@ -74,8 +65,8 @@ Fixpoint mem_disjoint_helper (A : list Array) :=
     else
       false
   end.
+(* checks that all arrays are unique *)
 Definition memory_disjoint (mem : Memory) : bool :=
-  (* checks that all arrays are unique *)
   mem_disjoint_helper (vals_from_map' mem).
 
 Fixpoint valid_offset_helper (off : list nat) (len : nat) :=
@@ -83,20 +74,24 @@ Fixpoint valid_offset_helper (off : list nat) (len : nat) :=
   | [] => true
   | x :: xs => andb (x <? len) (valid_offset_helper xs len)
   end.
+(* checks that an array has no out-of-bounds stores *)
 Definition has_valid_offsets (a : Array) : bool :=
   let l := len a in
   let mem := bytes a in
   let idxs := List.map key_to_idx (keys_from_map mem) in
   valid_offset_helper idxs l.
+(* checks that all arrays have no OoB stores *)
 Definition all_array_offsets_valid (mem : Memory) : bool :=
   List.forallb has_valid_offsets (vals_from_map' mem).
 
-Definition valid_memory (mem : Memory) : bool :=
+(* what I'm initially assuming to be a sane understanding of valid memory *)
+Definition valid_memory (mem : Memory) : Prop :=
   (* arrays have different address ranges *)
-  (memory_disjoint mem) &&
+  ((memory_disjoint mem) = true) /\
   (* arrays stay within their address ranges *)
-  (all_array_offsets_valid mem).
+  ((all_array_offsets_valid mem) = true).
 
+(* a pointer is an offset into an array *)
 Inductive Ptr : Type :=
 | Address (base: nat) (offset : nat).
 Definition ptr_base (p : Ptr) : positive :=
@@ -108,9 +103,11 @@ Definition ptr_off (p : Ptr) : positive :=
   | Address _ x => x
   end.
 
+(* check if a pointer's array is in memory *)
 Definition find_array (mem : Memory) (p : Ptr) : option Array :=
   mem !! (ptr_base p).
 
+(* load the value that a pointer points to *)
 Definition ld_arr (a : Array) (p : Ptr) : option uint8 :=
   (bytes a) !! (ptr_off p).
 Definition ld_mem (mem : Memory) (p : Ptr) : option uint8 :=
@@ -119,6 +116,7 @@ Definition ld_mem (mem : Memory) (p : Ptr) : option uint8 :=
   | None => None
   end.
 
+(* store a value into a pointer *)
 Definition st_arr (a : Array) (p : Ptr) (v : uint8) : option Array :=
   let off := ptr_off p in
   if (Pos.ltb off (Pos.of_nat (len a))) then
@@ -143,6 +141,9 @@ Definition st_mem (mem : Memory) (p : Ptr) (v : uint8) : Memory :=
   | None => mem
   end.
 
+(* accessing a pointer is valid if...
+  - there exists an associated array in memory
+  - the pointer's access into that array is in-bounds *)
 Definition mem_access_valid (mem: Memory) (p : Ptr) : Prop :=
   let a := find_array mem p in
   let l := match a with
@@ -150,6 +151,8 @@ Definition mem_access_valid (mem: Memory) (p : Ptr) : Prop :=
   | None => 1%positive
   end in
   (a <> None) /\ ((Pos.ltb (ptr_off p) l) = true).
+
+(* random lemma I felt like proving *)
 Lemma valid_st_lemma:
   forall (mem : Memory) (p : Ptr) (v : uint8),
   mem_access_valid mem p ->
@@ -165,6 +168,7 @@ Proof.
   discriminate.
 Qed.
 
+(* read after write lemmas *)
 Lemma raw_same_address:
   forall (mem : Memory) (p : Ptr) (v : uint8),
   mem_access_valid mem p ->
@@ -193,7 +197,6 @@ Proof.
 
   reflexivity.
 Qed.
-
 Lemma raw_different_address:
   forall (mem : Memory) (p1 p2 : Ptr) (v : uint8),
   p1 <> p2 ->
@@ -244,13 +247,12 @@ Inductive Value : Type :=
 | Numeric (val: uint8)
 | Pointer (val : Ptr)
 | NilVal.
-
 Definition Registers : Type := PMap.t Value.
-
 Record Machine := {
   registers: Registers;
   memory: Memory
 }.
+
 Definition TabulaRasa : Machine := {|
   registers := PMap.init NilVal;
   memory := PMap.init None
@@ -298,6 +300,7 @@ Definition st_reg (m : Machine) (f t : positive) : Machine :=
     |}
   | _, _ => m
   end.
+  
 Definition add_ (v1 v2 : Value) : Value :=
   match v1, v2 with
   | Numeric x, Numeric y => Numeric (Integers.add x y)
@@ -345,174 +348,17 @@ Definition prog_2 :=
   let m5 := set_reg m4 6 (Numeric (repr 10)) in
   (* r2 = r3 + r6 *)
   let m6 := set_reg m5 2 (add_
-    (get_reg m5 3)
-    (get_reg m5 6)) in
+    (get_reg m5 6)
+    (get_reg m5 3)) in
   get_reg m6 2.
 
 Example p1_p2_eq:
   prog_1 = prog_2.
 Proof.
   unfold prog_1. unfold prog_2.
-
-(* Definition ld_mem (a : Array) (off : positive) : option uint8 :=
-  PMap.get off (bytes a).
-Definition st_mem' (a : Array) (off : positive) (v : uint8) : option Array :=
-  if (Pos.ltb off (len a)) then
-    Some {|
-      base := base a;
-      len := len a;
-      bytes := PMap.set off (Some v) (bytes a)
-    |}
-  else
-    None.
-Definition st_mem (a : Array) (off : positive) (v : uint8) : Array :=
-  match (st_mem' a off v) with
-  | Some res => res
-  | None => a
-  end. *)
-(* Definition st_mem' (b : Array) (off : positive) (v : uint8) : Array :=
-  {|
-    base := base b;
-    len := len b;
-    bytes :=  if (Pos.ltb off (len b)) then
-      PMap.set off (Some v) (bytes b)
-    else
-      bytes b
-  |}. *)
-
-(* Lemma valid_offset_lemma:
-  forall (b : Array) (off : positive) (v : uint8),
-  has_valid_offsets {|
-    base := base b;
-    len := len b;
-    bytes := PMap.set off (Some v) (bytes b)
-  |} = andb (Pos.ltb off (len b)) (has_valid_offsets b).
-Proof.
-  intros.
-  destruct (has_valid_offsets b) eqn:Hb.
-  - unfold has_valid_offsets.
-    simpl.
-    unfold valid_offset_helper.
-    simpl.
-Admitted.
-Lemma st_preserves_valid:
-  forall (b : Array) (off : positive) (v : uint8),
-  (has_valid_offsets b) = true ->
-  (has_valid_offsets (st_mem b off v)) = true.
-Proof.
-  intros.
-  unfold st_mem. unfold st_mem'.
-  destruct (off <? len b)%positive eqn:Hoff.
-  - rewrite valid_offset_lemma.
-    rewrite Hoff. simpl.
-    assumption.
-  - assumption.
-Qed.
-  
-Definition new_block (start : positive) (len : positive) : Array :=
-  {|
-    base := start;
-    len := len;
-    bytes := PMap.init None
-  |}.
-
-Definition bpex : Array := {|
-  base := 1024%positive;
-  len := 10%positive;
-  bytes :=
-    (PMap.set 3 (Some (repr 12))
-    (PMap.set 3 (Some (repr 67))
-    (PMap.set 3 (Some (repr 5))
-    (PMap.init None))))
-|}.
-Compute PMap.get 3 (bytes bpex).
-Compute PMap.get 5 (bytes bpex).
-Compute has_valid_offsets bpex.
-
-Example ex1 :
-  bpex = st_mem (new_block 1024 10) 3 (repr 12).
-Proof. unfold st_mem. reflexivity. Qed.
-
-Lemma ldst_obvious :
-  forall (b : Array) (o : positive) (v : uint8),
-  (o <? (len b))%positive = true ->
-  ld_mem (st_mem b o v) o = Some v.
-Proof.
-  intros. unfold ld_mem. unfold st_mem.
-  rewrite H. simpl.
-  rewrite PMap.gss.
+  unfold get_reg. simpl.
+  repeat rewrite PMap.gss.
+  unfold add.
+  simpl.
   reflexivity.
 Qed.
-
-Lemma stld_obvious :
-  forall (b : Array) (o1 o2 : positive) (v : uint8),
-  o1 <> o2 ->
-  ld_mem b o1 = ld_mem (st_mem b o2 v) o1.
-Proof.
-  intros. unfold ld_mem. unfold st_mem.
-  simpl. destruct (o2 <? len b)%positive.
-  - destruct (bytes b).
-    rewrite PMap.gso.
-    reflexivity.
-    assumption.
-  - reflexivity.
-Qed. *)
-
-(* 
-Definition store_ptr (p : Array) (offset : positive) (value : uint8) : option Array :=
-  if Pos.ltb (offset) (len p) then
-    let bytes' := store_arr (bytes p) ((base p) + offset) value in
-    Some {| base := base p; len := len p; bytes := bytes' |}
-  else
-    None.
-
-Definition load_ptr (p : Array) (offset : positive) : option uint8 :=
-  if Pos.ltb (offset) (len p) then
-    load_arr (bytes p) ((base p) + offset)
-  else
-    None.
-
-Definition valid_ptr_access (p : Array) (offset : positive) : Prop :=
-  (offset < len p)%positive.
-
-Lemma valid_store : forall (p : Array) (offset : positive) (val : uint8),
-  valid_ptr_access p offset ->
-  exists p', store_ptr p offset val = Some p'.
-Proof.
-  intros.
-  unfold store_ptr.
-  apply Pos.ltb_lt in H.
-  rewrite H.
-  eexists.
-  reflexivity.
-Qed.
-
-Lemma store_preserves_length : forall (p : Array) (offset : positive) (val : uint8) (p' : Array),
-  store_ptr p offset val = Some p' ->
-  len p' = len p.
-Proof.
-  intros.
-  unfold store_ptr in H.
-  destruct (Pos.ltb offset (len p)).
-  - inversion H. subst. reflexivity.
-  - discriminate H.
-Qed.
-
-Lemma rw_identical : forall (p: Array) (offset : positive) (val : uint8),
-  valid_ptr_access p offset ->
-  exists p',
-  load_ptr p' offset = Some val.
-Proof.
-  intros.
-  destruct (valid_store p offset val H) as [p' H0].
-  exists p'.
-  assert (len p' = len p) as Hlen.
-  { apply store_preserves_length with (offset := offset) (val := val). assumption. }
-  unfold load_ptr.
-  unfold valid_ptr_access in H. apply Pos.ltb_lt in H. rewrite Hlen. rewrite H.
-  unfold store_ptr in H0.
-  rewrite H in H0. injection H0 as Hp'.
-  subst. simpl.
-  unfold load_arr. unfold store_arr.
-  apply PMap.gss.
-Qed. *)
