@@ -152,6 +152,19 @@ Definition mem_access_valid (mem: Memory) (p : Ptr) : Prop :=
   end in
   (a <> None) /\ ((Pos.ltb (ptr_off p) l) = true).
 
+Ltac mavtac :=
+  match goal with
+    m : Memory,
+    p : Ptr,
+    H : mem_access_valid _ _
+    |- _ =>
+      destruct H as [Hoptinj Hoffset];
+      destruct (find_array m p) eqn:Harray;
+      try congruence;
+      unfold st_mem; unfold st_mem'; unfold st_arr;
+      try rewrite Harray; try rewrite Hoffset
+  end.
+
 (* random lemma I felt like proving *)
 Lemma valid_st_lemma:
   forall (mem : Memory) (p : Ptr) (v : uint8),
@@ -159,12 +172,7 @@ Lemma valid_st_lemma:
   (st_mem' mem p v) <> None.
 Proof.
   intros.
-  destruct H as [H0 H1].
-  destruct (find_array mem p) eqn:Harray; try congruence.
-  unfold st_mem'.
-  rewrite Harray.
-  unfold st_arr.
-  rewrite H1.
+  mavtac.
   discriminate.
 Qed.
 
@@ -175,37 +183,20 @@ Lemma raw_same_address:
   ld_mem (st_mem mem p v) p = Some v.
 Proof.
   intros.
-  unfold st_mem.
-  assert (st_mem' mem p v <> None) as Hvsl. { apply valid_st_lemma. assumption. }
-  destruct (st_mem' mem p v) eqn:Hm'; try congruence.
-  unfold st_mem' in Hm'.
-  destruct (find_array mem p) eqn:Harray; try congruence.
-  destruct (st_arr a p v) eqn:Hstore; try congruence.
-  injection Hm' as Hm.
-
-  unfold ld_mem.
-  rewrite <- Hm.
-  unfold find_array.
-  rewrite PMap.gss.
-
-  unfold ld_arr.
-  unfold st_arr in Hstore.
-  destruct (Pos.ltb (ptr_off p) (Pos.of_nat (len a))) eqn:Hoffset; try congruence.
-  injection Hstore as Hstore.
-  rewrite <- Hstore. simpl.
-  rewrite PMap.gss.
-
+  mavtac.
+  unfold ld_mem. unfold find_array. unfold ld_arr.
+  rewrite PMap.gss. simpl. rewrite PMap.gss.
   reflexivity.
 Qed.
 Lemma raw_different_address:
   forall (mem : Memory) (p1 p2 : Ptr) (v : uint8),
   p1 <> p2 ->
   ld_mem mem p1 = ld_mem (st_mem mem p2 v) p1.
-Proof.
+Proof with try congruence; try discriminate; try reflexivity.
   intros.
   unfold st_mem. unfold st_mem'.
-  destruct (find_array mem p2) eqn:Hp2; try congruence.
-  destruct (st_arr a p2 v) eqn:Ha2'; try congruence.
+  destruct (find_array mem p2) eqn:Hp2...
+  destruct (st_arr a p2 v) eqn:Ha2'...
 
   unfold ld_mem.
   unfold find_array.
@@ -216,30 +207,27 @@ Proof.
     unfold ld_arr.
     unfold st_arr in Ha2'.
     unfold find_array in Hp2. rewrite Hp2.
-    destruct (Pos.ltb (ptr_off p2) (Pos.of_nat (len a))) eqn:Hp2l; try congruence.
+    destruct (Pos.ltb (ptr_off p2) (Pos.of_nat (len a))) eqn:Hp2l...
     injection Ha2' as Ha2'.
     rewrite <- Ha2'. simpl.
-    rewrite PMap.gso.
-    + reflexivity.
-    + destruct p1. destruct p2. simpl in *.
-      unfold ptr_off. unfold ptr_base in Heq.
-      unfold idx_to_key. unfold idx_to_key in Heq.
-      apply Nat2Pos.inj in Heq; try rewrite Nat.add_1_r; try discriminate.
-      apply Nat.add_cancel_r in Heq.
-      rewrite Heq in H.
-      destruct (offset =? offset0) eqn:Hoff.
-      * apply Nat.eqb_eq in Hoff.
-        rewrite Hoff.
-        congruence.
-      * apply Nat.eqb_neq in Hoff.
-        intro Hcontra.
-        apply Nat2Pos.inj in Hcontra; try rewrite Nat.add_1_r; try discriminate.
-        rewrite Nat.add_1_r in Hcontra. injection Hcontra as Hcontra.
-        contradiction.
+    rewrite PMap.gso...
+    destruct p1. destruct p2. simpl in *.
+    unfold ptr_off. unfold ptr_base in Heq.
+    unfold idx_to_key. unfold idx_to_key in Heq.
+    apply Nat2Pos.inj in Heq; try rewrite Nat.add_1_r...
+    apply Nat.add_cancel_r in Heq.
+    rewrite Heq in H.
+    destruct (offset =? offset0) eqn:Hoff.
+    + apply Nat.eqb_eq in Hoff.
+      rewrite Hoff.
+      congruence.
+    + apply Nat.eqb_neq in Hoff.
+      intro Hcontra.
+      apply Nat2Pos.inj in Hcontra; try rewrite Nat.add_1_r...
+      rewrite Nat.add_1_r in Hcontra. injection Hcontra as Hcontra.
+      contradiction.
   - rewrite Pos.eqb_neq in Heq.
-    rewrite PMap.gso.
-    + reflexivity.
-    + assumption.
+    rewrite PMap.gso...
 Qed.
 
 (* Case 2 Example *)
