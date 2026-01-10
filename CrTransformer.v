@@ -7,6 +7,7 @@ Import ListNotations.
 Require Import Strings.String.
 From MyProject Require Import CrIdentifiers.
 From MyProject Require Import MyInts.
+From MyProject Require Import CrVal.
 
 (* A transformer is either a sequential or a parallel transformer *)
 Inductive TransformerType : Type := 
@@ -16,7 +17,7 @@ Inductive TransformerType : Type :=
 Inductive FunctionArgument :=
   | CtrlPlaneArg (c : Ctrl)
   | HeaderArg (h : Header)
-  | ConstantArg (n : uint8)
+  | ConstantArg (n : CrVal)
   | StatefulArg (s : State).
 
 (* A BinaryOp takes two uint8 arguments and returns another uint8 *)
@@ -38,7 +39,7 @@ Inductive HdrOp :=
 (* Define MatchPattern as a list of header, pattern pairs,
    where patterns are uint8 and headers contain uint8 values,
    hence both can be compared. TODO: Need to handle wildcards. *)
-Definition MatchPattern := list (Header * uint8).
+Definition MatchPattern := list (Header * CrVal).
 
 Inductive SeqRule :=
   | SeqCtr (match_pattern : MatchPattern) (action : list HdrOp).

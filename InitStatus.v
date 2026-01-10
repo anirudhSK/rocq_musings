@@ -83,7 +83,7 @@ Proof.
      --- unfold eq in Ex.
          unfold Rocqlib.zeq in Ex.
          destruct (Z.eq_dec (unsigned u) (unsigned u0)) as [Heq|Hneq].
-         ---- apply uint8_eq_from_unsigned in Heq. rewrite Heq.
+         ---- apply uintw_eq_from_unsigned in Heq. rewrite Heq.
               reflexivity.
          ---- exfalso. congruence.
   -- exfalso. congruence.

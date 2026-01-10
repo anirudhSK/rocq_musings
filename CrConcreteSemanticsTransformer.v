@@ -9,21 +9,32 @@ Require Import Strings.String.
 From MyProject Require Import CrIdentifiers.
 From MyProject Require Import CrVarLike.
 From MyProject Require Import ListUtils.
+From MyProject Require Import CrVal.
 
 (* Apply binary operation *)
-Definition apply_bin_op (f : BinaryOp) (arg1 : uint8) (arg2 : uint8) : uint8 :=
-  match f with
-      | AddOp => Integers.add arg1 arg2
-      | SubOp => Integers.sub arg1 arg2
-      | AndOp => Integers.and arg1 arg2
-      | OrOp =>  Integers.or arg1 arg2
-      | XorOp => Integers.xor arg1 arg2
-      | MulOp => Integers.mul arg1 arg2
-      | DivOp => Integers.divu arg1 arg2
-      | ModOp => Integers.modu arg1 arg2
+Definition apply_bin_op (f : BinaryOp) (arg1 : CrVal) (arg2 : CrVal) : CrVal :=
+  match arg1, arg2 with
+  | CrInt x, CrInt y =>
+    (CrInt match f with
+    | AddOp => Integers.add x y
+    | SubOp => Integers.sub x y
+    | AndOp => Integers.and x y
+    | OrOp =>  Integers.or x y
+    | XorOp => Integers.xor x y
+    | MulOp => Integers.mul x y
+    | DivOp => Integers.divu x y
+    | ModOp => Integers.modu x y
+    end)
+  | CrPtr b o, CrInt y =>
+    match f with
+    | AddOp => CrVal.add (CrPtr b o) (CrInt y)
+    | SubOp => CrVal.sub (CrPtr b o) (CrInt y)
+    | _ => CrNil
+    end
+  | _, _ => CrNil
   end.
 
-Definition lookup_concrete (arg : FunctionArgument) (ps : ConcreteState) : uint8 :=
+Definition lookup_concrete (arg : FunctionArgument) (ps : ConcreteState) : CrVal :=
   match arg with
   | CtrlPlaneArg c => lookup_varlike_map (map_from_ps PSCtrl ps) c
   | HeaderArg h    => lookup_varlike_map (map_from_ps PSHeader ps) h
@@ -31,7 +42,7 @@ Definition lookup_concrete (arg : FunctionArgument) (ps : ConcreteState) : uint8
   | StatefulArg s  => lookup_varlike_map (map_from_ps PSState ps) s
   end.
 
-Definition eval_hdr_op_expr_concrete (op : HdrOp) (ps : ConcreteState) : uint8 :=
+Definition eval_hdr_op_expr_concrete (op : HdrOp) (ps : ConcreteState) : CrVal :=
   match op with
   | StatefulOp f arg1 arg2 _ => apply_bin_op f (lookup_concrete arg1 ps) (lookup_concrete arg2 ps)
   | StatelessOp f arg1 arg2 _ => apply_bin_op f (lookup_concrete arg1 ps) (lookup_concrete arg2 ps)
@@ -47,7 +58,7 @@ Definition eval_hdr_op_assign_concrete (op : HdrOp) (ps: ConcreteState) : Concre
 
 Definition eval_match_concrete (match_pattern : MatchPattern) (ps : ConcreteState) : bool :=
   (* For every list element, check if the Header's current value (determined by ps) equals the uint8 *)
-  List.forallb (fun '(h, v) => Integers.eq (lookup_varlike PSHeader ps h) v) match_pattern.
+  List.forallb (fun '(h, v) => CrVal.eqb (lookup_varlike PSHeader ps h) v) match_pattern.
 
 (* Define evaluation over a list of HdrOp *)
 (* Note we are evaluating the list from right to left (fold_right) because it simplifies proving. *)

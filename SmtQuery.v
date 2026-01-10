@@ -9,6 +9,7 @@ From MyProject Require Import SmtTypes.
 From MyProject Require Import Integers.
 From MyProject Require Import MyInts.
 From MyProject Require Import PMapHelperLemmas.
+From MyProject Require Import CrVal.
 Require Import Classical.
 Require Import Coq.Lists.List.
 Require Import Coq.Bool.Bool.
@@ -330,7 +331,7 @@ Definition get_vids_from_prog (field_type : PSField) (p : CaracaraProgram) : lis
       end
   end.
 
-Definition lookup_vid (field_type : PSField) (s : ConcreteState) (vid : positive) : uint8 :=
+Definition lookup_vid (field_type : PSField) (s : ConcreteState) (vid : positive) : CrVal :=
   match field_type with
   | PSHeader => lookup_varlike PSHeader s (HeaderCtr vid)
   | PSState => lookup_varlike PSState s (StateCtr vid)

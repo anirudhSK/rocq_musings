@@ -3,6 +3,7 @@
 From MyProject Require Import CrIdentifiers.
 From MyProject Require Import MyInts.
 From MyProject Require Import SmtTypes.
+From MyProject Require Import CrVal.
 From Coq.Strings Require Import String.
 
 Inductive SmtBoolExpr : Type :=
@@ -13,7 +14,7 @@ Inductive SmtBoolExpr : Type :=
     | SmtBoolOr (e1 e2 : SmtBoolExpr)
     | SmtBoolEq (e1 e2 : SmtArithExpr)
 with SmtArithExpr : Type :=
-    | SmtConst (value : uint8)
+    | SmtConst (value : CrVal)
     | SmtArithVar (name : string)
     | SmtConditional (cond : SmtBoolExpr) (then_expr else_expr : SmtArithExpr)
     (* Arithmetic operations *)
@@ -36,9 +37,9 @@ Fixpoint eval_smt_bool (e : SmtBoolExpr) (v : SmtValuation) : bool :=
     | SmtBoolNot e' => negb (eval_smt_bool e' v)
     | SmtBoolAnd e1 e2 => andb (eval_smt_bool e1 v) (eval_smt_bool e2 v)
     | SmtBoolOr e1 e2 => orb (eval_smt_bool e1 v) (eval_smt_bool e2 v)
-    | SmtBoolEq e1 e2 => if (Integers.eq (eval_smt_arith e1 v) (eval_smt_arith e2 v)) then true else false
+    | SmtBoolEq e1 e2 => if (CrVal.eqb (eval_smt_arith e1 v) (eval_smt_arith e2 v)) then true else false
     end
-with eval_smt_arith (e : SmtArithExpr) (v : SmtValuation) : uint8 :=
+with eval_smt_arith (e : SmtArithExpr) (v : SmtValuation) : CrVal :=
     match e with
     | SmtConst value => value
     | SmtArithVar name => v name
@@ -46,14 +47,14 @@ with eval_smt_arith (e : SmtArithExpr) (v : SmtValuation) : uint8 :=
         if eval_smt_bool cond v 
         then eval_smt_arith then_expr v 
         else eval_smt_arith else_expr v
-    | SmtBitAdd e1 e2 => Integers.add (eval_smt_arith e1 v) (eval_smt_arith e2 v)
-    | SmtBitSub e1 e2 => Integers.sub (eval_smt_arith e1 v) (eval_smt_arith e2 v)
-    | SmtBitAnd e1 e2 => Integers.and (eval_smt_arith e1 v) (eval_smt_arith e2 v)
-    | SmtBitOr e1 e2 =>  Integers.or (eval_smt_arith e1 v) (eval_smt_arith e2 v)
-    | SmtBitXor e1 e2 => Integers.xor (eval_smt_arith e1 v) (eval_smt_arith e2 v)
-    | SmtBitNot e =>     Integers.not (eval_smt_arith e v)
-    | SmtBitMul e1 e2 => Integers.mul (eval_smt_arith e1 v) (eval_smt_arith e2 v)
-    | SmtBitDiv e1 e2 => Integers.divu (eval_smt_arith e1 v) (eval_smt_arith e2 v)
-    | SmtBitMod e1 e2 => Integers.modu (eval_smt_arith e1 v) (eval_smt_arith e2 v)
+    | SmtBitAdd e1 e2 => CrVal.add (eval_smt_arith e1 v) (eval_smt_arith e2 v)
+    | SmtBitSub e1 e2 => CrVal.sub (eval_smt_arith e1 v) (eval_smt_arith e2 v)
+    | SmtBitAnd e1 e2 => CrVal.and (eval_smt_arith e1 v) (eval_smt_arith e2 v)
+    | SmtBitOr e1 e2 =>  CrVal.or (eval_smt_arith e1 v) (eval_smt_arith e2 v)
+    | SmtBitXor e1 e2 => CrVal.xor (eval_smt_arith e1 v) (eval_smt_arith e2 v)
+    | SmtBitNot e =>     CrVal.not (eval_smt_arith e v)
+    | SmtBitMul e1 e2 => CrVal.mul (eval_smt_arith e1 v) (eval_smt_arith e2 v)
+    | SmtBitDiv e1 e2 => CrVal.divu (eval_smt_arith e1 v) (eval_smt_arith e2 v)
+    | SmtBitMod e1 e2 => CrVal.modu (eval_smt_arith e1 v) (eval_smt_arith e2 v)
     end.
 (* InitStatus: might be unnecessary and error prone because Z3 may not map 1-to-1 to this. *)

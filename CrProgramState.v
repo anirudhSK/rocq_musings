@@ -6,6 +6,7 @@ From MyProject Require Import CrDsl.
 From MyProject Require Import UtilLemmas.
 From MyProject Require Import MyInts.
 From MyProject Require Import Integers.
+From MyProject Require Import CrVal.
 Require Import Strings.String.
 Require Import ZArith.
 From Coq Require Import FunctionalExtensionality.
@@ -24,7 +25,7 @@ Arguments header_map {T} _.
 Arguments state_map {T} _.  
 Arguments ctrl_map {T} _.
 
-Definition ConcreteState := ProgramState uint8.
+Definition ConcreteState := ProgramState CrVal.
 Definition SymbolicState := ProgramState SmtArithExpr.
 
 Inductive PSField :=
@@ -283,15 +284,15 @@ Definition init_concrete_state (p : CaracaraProgram) : ConcreteState :=
   let h := get_headers_from_prog p in
   let s := get_states_from_prog p in
   let c := get_ctrls_from_prog p in
-  {|ctrl_map    :=  (repr 0, (* TODO: Need better default, but think this doesn't matter *)
+  {|ctrl_map    :=  (CrNil, (* TODO: Need better default, but think this doesn't matter *)
                     PTree_Properties.of_list
-                    (List.map (fun x => (match x with | CtrlCtr x_id => x_id end, repr 0)) c));
-     header_map :=  (repr 0, (* TODO: Need better default, but think this doesn't matter *)
+                    (List.map (fun x => (match x with | CtrlCtr x_id => x_id end, CrNil)) c));
+     header_map :=  (CrNil, (* TODO: Need better default, but think this doesn't matter *)
                     PTree_Properties.of_list
-                    (List.map (fun x => (match x with | HeaderCtr x_id => x_id end, repr 0)) h));
-     state_map  :=  (repr 0,
+                    (List.map (fun x => (match x with | HeaderCtr x_id => x_id end, CrNil)) h));
+     state_map  :=  (CrNil,
                     PTree_Properties.of_list
-                    (List.map (fun x => (match x with | StateCtr x_id => x_id end, repr 0)) s));|}.
+                    (List.map (fun x => (match x with | StateCtr x_id => x_id end, CrNil)) s));|}.
 
 (* Convert positive to string *)
 Fixpoint pos_to_string (p : positive) : string :=

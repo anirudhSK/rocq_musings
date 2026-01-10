@@ -10,6 +10,7 @@ From MyProject Require Import CrProgramState.
 From MyProject Require Import MyInts.
 From MyProject Require Import ListUtils.
 From MyProject Require Import SmtTypes.
+From MyProject Require Import CrVal.
 Require Import ZArith.
 Require Import Coq.Strings.String.
 Local Open Scope string_scope.
@@ -26,8 +27,22 @@ Lemma commute_sym_conc_expr:
     eval_smt_arith (eval_hdr_op_expr_smt ho s) f.
 Proof.
   intros ho s f.
-  destruct ho, f0, arg1, arg2; simpl;
-  try repeat (rewrite PMapHelperLemmas.commute_lookup_eval_generic); try reflexivity.
+  destruct ho eqn:Hs, arg1 eqn:H1, arg2 eqn:H2, f0 eqn:Hbop;
+  unfold eval_hdr_op_expr_concrete;
+  unfold apply_bin_op;
+  simpl;
+  try repeat (rewrite PMapHelperLemmas.commute_lookup_eval_generic);
+  try destruct (eval_smt_arith (lookup_varlike_map (map_from_ps PSCtrl s) c) f);
+  try destruct (eval_smt_arith (lookup_varlike_map (map_from_ps PSCtrl s) c0) f);
+  try destruct (eval_smt_arith (lookup_varlike_map (map_from_ps PSHeader s) h) f);
+  try destruct (eval_smt_arith (lookup_varlike_map (map_from_ps PSHeader s) h0) f);
+  try destruct (eval_smt_arith (lookup_varlike_map (map_from_ps PSState s) s) f);
+  try destruct (eval_smt_arith (lookup_varlike_map (map_from_ps PSState s) s0) f);
+  try destruct (eval_smt_arith (lookup_varlike_map (map_from_ps PSState s) s1) f);
+  try destruct n;
+  try destruct n0;
+  simpl;
+  try reflexivity.
 Qed.
 
 Lemma commute_update_eval_varlike:
@@ -37,7 +52,7 @@ Lemma commute_update_eval_varlike:
 Proof.
   intros s f h v.
   unfold eval_sym_state.
-  specialize (commute_mapper_update_varlike (T1 := SmtArithExpr) (T2 := uint8)).
+  specialize (commute_mapper_update_varlike (T1 := SmtArithExpr) (T2 := CrVal)).
   intros.
   apply H.
 Qed.
@@ -79,7 +94,7 @@ Qed.
    concrete and symbolic execution match up. *)
 Transparent lookup_varlike.
 Lemma commute_sym_vs_conc_match_cond :
-  forall (hv_pair: Header * uint8) (f : SmtValuation)
+  forall (hv_pair: Header * CrVal) (f : SmtValuation)
          (s1 : SymbolicState)
          (c1 : ConcreteState),
     c1 = eval_sym_state s1 f ->
@@ -98,9 +113,7 @@ Proof.
     rewrite commute_lookup_varlike.
     reflexivity. }
   rewrite H.
-  destruct (Integers.eq (eval_smt_arith (lookup_varlike PSHeader s1 h) f) v).
-  - reflexivity.
-  - reflexivity.
+  destruct (CrVal.eqb (eval_smt_arith (lookup_varlike PSHeader s1 h) f) v); reflexivity.
 Qed.
 
 (* The same lemma as above, but
@@ -129,9 +142,8 @@ Proof.
     destruct hv_pair as [h v].
     simpl.
     destruct (eval_match_smt rest s1); try reflexivity.
-    destruct (Integers.eq (eval_smt_arith (lookup_varlike PSHeader s1 h) f) v) eqn:des.
-    -- rewrite andb_true_r. simpl. rewrite des. reflexivity.
-    -- rewrite andb_false_l. simpl. rewrite des. reflexivity.
+    simpl.
+    destruct (CrVal.eqb (eval_smt_arith (lookup_varlike PSHeader s1 h) f) v); reflexivity.
 Qed.
 
 Lemma commute_sym_vs_conc_helper_seq_par_rule_hdr :
