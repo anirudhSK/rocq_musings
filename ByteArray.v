@@ -292,6 +292,8 @@ Definition st_reg (m : Machine) (f t : positive) : Machine :=
 Definition add_ (v1 v2 : Value) : Value :=
   match v1, v2 with
   | Numeric x, Numeric y => Numeric (Integers.add x y)
+  | Pointer (Address x y), Numeric z =>
+    Pointer (Address x (y + (Z.to_nat (unsigned z))))
   | _, _ => NilVal
   end.
 
