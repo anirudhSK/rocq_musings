@@ -30,7 +30,7 @@ control vrfy(inout Headers hdr, inout Meta meta) {
 // Ingress control
 control ingress(inout Headers hdr, inout Meta m, inout standard_metadata_t s) {
     action MyAction1() {
-        hdr.h.a = 5;
+        hdr.h.a = hdr.h.a - 2;
     }
     
     table the_table {

@@ -14,15 +14,14 @@ From MyProject Require Import CrProgramState.
 From MyProject Require Import ListUtils.
 
 Lemma commute_lookup_eval_varlike:
-  forall {A} `{CrVarLike A} (field : PSField) (ps : SymbolicState)
+  forall {A} `{CrVarLike A} (ps : SymbolicState)
         (var : A) (val : SmtValuation),
-    lookup_varlike field (eval_sym_state ps val) var =
-    eval_smt_arith (lookup_varlike field ps var) val.
+    lookup_varlike (eval_sym_state ps val) var =
+    eval_smt_arith (lookup_varlike ps var) val.
 Proof.
   intros.
-  destruct field;
-  unfold eval_sym_state;
-  rewrite commute_lookup_varlike;
+  unfold eval_sym_state.
+  rewrite commute_lookup_varlike.
   reflexivity.
 Qed.
 

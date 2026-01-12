@@ -10,15 +10,31 @@ Require Import ZArith.
 
 Transparent map_from_ps.
 Transparent lookup_varlike_map.
-Lemma commute_lookup_eval_generic:
-  forall (A: Type) `{CrVarLike A} (v : A) field_type f ps,
-  lookup_varlike_map (map_from_ps field_type (eval_sym_state ps f)) v =
-  eval_smt_arith (lookup_varlike_map (map_from_ps field_type ps) v) f.
+
+Class CrVarLikeEval (A: Type) `(CrVarLike A) := {
+  commute_lookup_eval_generic:
+  forall (v : A) f ps,
+  lookup_varlike_map (map_from_ps (eval_sym_state ps f)) v =
+  eval_smt_arith (lookup_varlike_map (map_from_ps ps) v) f;
+}.
+
+Instance CrVarLikeEval_Header : CrVarLikeEval Header CrVarLike_Header.
 Proof.
-  intros.
-  unfold map_from_ps.
-  destruct field_type; simpl; apply PMap.gmap.
-Qed.
+  constructor.
+  intros. unfold map_from_ps. apply PMap.gmap.
+Defined.
+
+Instance CrVarLikeEval_State : CrVarLikeEval State CrVarLike_State.
+Proof.
+  constructor.
+  intros. unfold map_from_ps. apply PMap.gmap.
+Defined.
+
+Instance CrVarLikeEval_Ctrl : CrVarLikeEval Ctrl CrVarLike_Ctrl.
+Proof.
+  constructor.
+  intros. unfold map_from_ps. apply PMap.gmap.
+Defined.
 
 (* Same as the above lemma for hdr and state *)
 Lemma ptree_of_list_lemma_generic:

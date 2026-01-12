@@ -36,10 +36,10 @@ Definition apply_bin_op (f : BinaryOp) (arg1 : CrVal) (arg2 : CrVal) : CrVal :=
 
 Definition lookup_concrete (arg : FunctionArgument) (ps : ConcreteState) : CrVal :=
   match arg with
-  | CtrlPlaneArg c => lookup_varlike_map (map_from_ps PSCtrl ps) c
-  | HeaderArg h    => lookup_varlike_map (map_from_ps PSHeader ps) h
+  | CtrlPlaneArg c => lookup_varlike_map (@map_from_ps Ctrl _ _ ps) c
+  | HeaderArg h    => lookup_varlike_map (@map_from_ps Header _ _ ps) h
   | ConstantArg n  => n
-  | StatefulArg s  => lookup_varlike_map (map_from_ps PSState ps) s
+  | StatefulArg s  => lookup_varlike_map (@map_from_ps State _ _ ps) s
   end.
 
 Definition eval_hdr_op_expr_concrete (op : HdrOp) (ps : ConcreteState) : CrVal :=
@@ -51,14 +51,14 @@ Definition eval_hdr_op_expr_concrete (op : HdrOp) (ps : ConcreteState) : CrVal :
 Definition eval_hdr_op_assign_concrete (op : HdrOp) (ps: ConcreteState) : ConcreteState :=
   match op with
   | StatefulOp f arg1 arg2 target =>
-        let op_output := eval_hdr_op_expr_concrete op ps in update_varlike PSState ps target op_output
+        let op_output := eval_hdr_op_expr_concrete op ps in update_varlike ps target op_output
   | StatelessOp f arg1 arg2 target => 
-        let op_output := eval_hdr_op_expr_concrete op ps in update_varlike PSHeader ps target op_output
+        let op_output := eval_hdr_op_expr_concrete op ps in update_varlike ps target op_output
   end.
 
 Definition eval_match_concrete (match_pattern : MatchPattern) (ps : ConcreteState) : bool :=
   (* For every list element, check if the Header's current value (determined by ps) equals the uint8 *)
-  List.forallb (fun '(h, v) => CrVal.eqb (lookup_varlike PSHeader ps h) v) match_pattern.
+  List.forallb (fun '(h, v) => CrVal.eqb (lookup_varlike ps h) v) match_pattern.
 
 (* Define evaluation over a list of HdrOp *)
 (* Note we are evaluating the list from right to left (fold_right) because it simplifies proving. *)
