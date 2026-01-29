@@ -17,7 +17,7 @@ Inductive TransformerType : Type :=
 Inductive FunctionArgument :=
   | CtrlPlaneArg (c : Ctrl)
   | HeaderArg (h : Header)
-  | ConstantArg (n : CrVal)
+  | ConstantArg (n : CrInt_T) (* TODO: Can have constant ptrs as well *)
   | StatefulArg (s : State).
 
 (* A BinaryOp takes two uint8 arguments and returns another uint8 *)
@@ -39,7 +39,7 @@ Inductive HdrOp :=
 (* Define MatchPattern as a list of header, pattern pairs,
    where patterns are uint8 and headers contain uint8 values,
    hence both can be compared. TODO: Need to handle wildcards. *)
-Definition MatchPattern := list (Header * CrVal).
+Definition MatchPattern := list (Header * CrInt_T). (* TODO: might have to change *)
 
 Inductive SeqRule :=
   | SeqCtr (match_pattern : MatchPattern) (action : list HdrOp).

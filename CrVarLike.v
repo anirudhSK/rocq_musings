@@ -339,15 +339,15 @@ Definition init_concrete_state (p : CaracaraProgram) : ConcreteState :=
   let h := get_headers_from_prog p in
   let s := get_states_from_prog p in
   let c := get_ctrls_from_prog p in
-  {|ctrl_map    :=  (CrInt (repr 0), (* TODO: Need better default, but think this doesn't matter *)
+  {|ctrl_map    :=  (IntVal (CrUInt8 (repr 0)), (* TODO: Need better default, but think this doesn't matter *)
                     PTree_Properties.of_list
-                    (List.map (fun x => (match x with | CtrlCtr x_id => x_id end, CrNil)) c));
-     header_map :=  (CrInt (repr 0), (* TODO: Need better default, but think this doesn't matter *)
+                    (List.map (fun x => (match x with | CtrlCtr x_id => x_id end, UninitVal)) c));
+     header_map :=  (IntVal (CrUInt8 (repr 0)), (* TODO: Need better default, but think this doesn't matter *)
                     PTree_Properties.of_list
-                    (List.map (fun x => (match x with | HeaderCtr x_id => x_id end, CrNil)) h));
-     state_map  :=  (CrInt (repr 0),
+                    (List.map (fun x => (match x with | HeaderCtr x_id => x_id end, UninitVal)) h));
+     state_map  :=  (IntVal (CrUInt8 (repr 0)),
                     PTree_Properties.of_list
-                    (List.map (fun x => (match x with | StateCtr x_id => x_id end, CrNil)) s));|}.
+                    (List.map (fun x => (match x with | StateCtr x_id => x_id end, UninitVal)) s));|}.
 
 (* Convert positive to string *)
 Fixpoint pos_to_string (p : positive) : string :=

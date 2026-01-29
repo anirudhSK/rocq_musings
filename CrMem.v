@@ -1,57 +1,44 @@
-(* Require Import ZArith.
+Require Import ZArith.
 Require Import List.
 Import ListNotations.
 From MyProject Require Import MyInts.
 From MyProject Require Import Integers.
 From MyProject Require Import Maps.
 From MyProject Require Import ListUtils.
-From MyProject Require Import CrVarLike.
+(* From MyProject Require Import CrVarLike.
 From MyProject Require Import CrVal.
 From MyProject Require Import SmtExpr.
 From MyProject Require Import SmtTypes.
-From MyProject Require Import SmtQuery.
+From MyProject Require Import SmtQuery. *)
 
-(*
-In essence, I'm representing memory as a set of arrays.
-Each array boils down to a starting address, a length, and the bytes themselves.
-*)
-
-(* explicit uninitialized data type *)
-(*
-error return type(?)
-- affects notion of transformation validity
-
-eBPF
-- Possibly assume program passes checker
-
-Make a prop + proof that assumes program accesses are in bounds.
-
-for the states that wouldn't generate an error...
-*)
-
-(* An array is an allocated block of contiguous memory *)
-(* Said block has an associated length *)
-Inductive LookupVal {T : Type} :=
-| Init (v : T)
-| Uninit.
-Record MemBlock (T : Type) := {
-  arr_len : positive;
-  arr_bytes : PMap.t (@LookupVal T);
-}.
-Arguments arr_len {T} _.
-Arguments arr_bytes {T} _.
-Inductive Array {T : Type} :=
-| Allocated (arr : MemBlock T)
-| Unallocated.
-Arguments Unallocated {T}.
 Inductive Check_T (T : Type) :=
 | Legal (v : T)
 | Illegal.
 Arguments Legal {T} _.
 Arguments Illegal {T}.
 
-(* A program's memory is a collection of arrays *)
+(*
+In essence, I'm representing memory as a set of arrays.
+Each array boils down to a starting address, a length, and the bytes themselves.
+*)
+
+Inductive MemVal (T : Type) :=
+| Init (v : T)
+| Uninit.
+Arguments Uninit {T}.
+Record MemBlock (T : Type) := {
+  arr_len : positive;
+  arr_bytes : PMap.t (MemVal T);
+}.
+Arguments arr_len {T} _.
+Arguments arr_bytes {T} _.
+
+Inductive Array {T : Type} :=
+| Allocated (arr : MemBlock T)
+| Unallocated.
+Arguments Unallocated {T}.
 Definition Memory (T : Type) := PMap.t (@Array T).
+
 Record MachineState (T : Type) := {
   reg_state : PMap.t T;
   mem_state : Memory T;
@@ -60,8 +47,6 @@ Arguments reg_state {T} _.
 Arguments mem_state {T} _.
 
 (* Values in the array can either be initialized or not *)
-Definition ConcreteMState := MachineState CrVal.
-Definition SymbolicMState := MachineState SmtArithExpr.
 
 Definition keys_from_map {T : Type} (m : PMap.t T) : list positive :=
   List.map fst (PTree.elements (snd m)).
@@ -96,6 +81,7 @@ Definition get_array {T : Type} (mem : Memory T) (base : positive) : Array :=
   mem !! base.
 Transparent get_array.
 
+(* possibly change to <> *)
 Definition mem_disjoint {T : Type} (mem : Memory T) : Prop :=
   forall (base base' : positive),
   Pos.lt base base' ->
@@ -126,10 +112,10 @@ Proof.
 Qed.
 
 (* load the value that a pointer points to *)
-Definition ld_block {T : Type} (block : MemBlock T) (idx : positive) : @LookupVal T :=
+Definition ld_block {T : Type} (block : MemBlock T) (idx : positive) : @MemVal T :=
   (arr_bytes block) !! idx.
 Definition ld_mem {T : Type} (mem : Memory T) (base : positive) (idx : positive)
-  : Check_T LookupVal :=
+  : Check_T MemVal :=
   match (get_array mem base) with
   | Allocated block => Legal (ld_block block idx)
   | Unallocated => Illegal
@@ -197,6 +183,9 @@ Inductive Op {T : Type} : Type :=
 | Add (arg1 arg2 : @FnArg T).
 
 Definition Program {T : Type} : Type := list (@Op T).
+
+Definition ConcreteMState := MachineState CrVal.
+Definition SymbolicMState := MachineState SmtArithExpr.
 
 Definition alloc {T : Type} (m : MachineState T) (arg1 arg2 : @FnArg T) : Check_T (MachineState T) :=
   match arg1, arg2 with
@@ -343,4 +332,4 @@ Fixpoint compile_concrete (p : Program) (m : ConcreteMState) : Check_T ConcreteM
 Definition initial_state : ConcreteMState := {|
   reg_state := PMap.init CrNil;
   mem_state := @TabulaRasa CrVal;
-|}. *)
+|}.

@@ -106,7 +106,7 @@ Proof.
          unfold Rocqlib.zeq in Ex.
          destruct (Z.eq_dec (unsigned u) (unsigned u0)) as [Heq|Hneq].
          ---- exfalso. congruence.
-         ---- apply uint8_neq_from_unsigned in Hneq.
+         ---- apply uintw_neq_from_unsigned in Hneq.
               intro Hcontra.
               injection Hcontra as H_eq.
               apply Hneq.

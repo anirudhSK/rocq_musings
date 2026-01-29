@@ -10,35 +10,40 @@ From MyProject Require Import CrIdentifiers.
 From MyProject Require Import CrVarLike.
 From MyProject Require Import ListUtils.
 From MyProject Require Import CrVal.
+Require Import ZArith.
+
+Definition apply_int_int_op {w : positive} (f : BinaryOp) (arg1 arg2 : @Integers.bit_int w) : @Integers.bit_int w :=
+  match f with
+  | AddOp => Integers.add arg1 arg2
+  | SubOp => Integers.sub arg1 arg2
+  | AndOp => Integers.and arg1 arg2
+  | OrOp =>  Integers.or arg1 arg2
+  | XorOp => Integers.xor arg1 arg2
+  | MulOp => Integers.mul arg1 arg2
+  | DivOp => Integers.divu arg1 arg2
+  | ModOp => Integers.modu arg1 arg2
+  end.
 
 (* Apply binary operation *)
 Definition apply_bin_op (f : BinaryOp) (arg1 : CrVal) (arg2 : CrVal) : CrVal :=
   match arg1, arg2 with
-  | CrInt x, CrInt y =>
-    (CrInt match f with
-    | AddOp => Integers.add x y
-    | SubOp => Integers.sub x y
-    | AndOp => Integers.and x y
-    | OrOp =>  Integers.or x y
-    | XorOp => Integers.xor x y
-    | MulOp => Integers.mul x y
-    | DivOp => Integers.divu x y
-    | ModOp => Integers.modu x y
-    end)
-  | CrPtr b o, CrInt y =>
+  | IntVal (CrUInt8 x), IntVal (CrUInt8 y)
+    => IntVal (CrUInt8 (apply_int_int_op f x y))
+  | IntVal (CrUInt32 x), IntVal (CrUInt32 y)
+    => IntVal (CrUInt32 (apply_int_int_op f x y))
+  | PtrVal (CrPtr b i), IntVal (CrUInt32 o) =>
     match f with
-    | AddOp => CrVal.add (CrPtr b o) (CrInt y)
-    | SubOp => CrVal.sub (CrPtr b o) (CrInt y)
-    | _ => CrNil
+    | AddOp => PtrVal (CrPtr b (Integers.add i o))
+    | _ => ErrorVal
     end
-  | _, _ => CrNil
+  | _, _ => ErrorVal
   end.
 
 Definition lookup_concrete (arg : FunctionArgument) (ps : ConcreteState) : CrVal :=
   match arg with
   | CtrlPlaneArg c => lookup_varlike_map (@map_from_ps Ctrl _ _ ps) c
   | HeaderArg h    => lookup_varlike_map (@map_from_ps Header _ _ ps) h
-  | ConstantArg n  => n
+  | ConstantArg n  => IntVal n
   | StatefulArg s  => lookup_varlike_map (@map_from_ps State _ _ ps) s
   end.
 
@@ -58,7 +63,7 @@ Definition eval_hdr_op_assign_concrete (op : HdrOp) (ps: ConcreteState) : Concre
 
 Definition eval_match_concrete (match_pattern : MatchPattern) (ps : ConcreteState) : bool :=
   (* For every list element, check if the Header's current value (determined by ps) equals the uint8 *)
-  List.forallb (fun '(h, v) => CrVal.eqb (lookup_varlike ps h) v) match_pattern.
+  List.forallb (fun '(h, v) => CrVal.eqb (lookup_varlike ps h) (IntVal v)) match_pattern.
 
 (* Define evaluation over a list of HdrOp *)
 (* Note we are evaluating the list from right to left (fold_right) because it simplifies proving. *)

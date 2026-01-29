@@ -15,10 +15,11 @@ Proof.
   apply mkint_eq; auto.
 Qed.
 
-Lemma uint8_neq_from_unsigned : forall (v1 v2 : uint8),
+Lemma uintw_neq_from_unsigned :
+  forall (w : positive) (v1 v2 : @bit_int w),
   unsigned v1 <> unsigned v2 -> v1 <> v2.
 Proof.
-  intros v1 v2 H.
+  intros w v1 v2 H.
   destruct v1 as [val1 range1].
   destruct v2 as [val2 range2].
   simpl in H.

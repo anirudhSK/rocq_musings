@@ -33,8 +33,8 @@ Lemma commute_lookup_eval:
 Proof.
   intros s f arg.
   unfold lookup_concrete.
-  destruct arg; simpl; try reflexivity;
-  apply commute_lookup_eval_varlike.
+  destruct arg eqn:Harg; simpl; try reflexivity;
+  try apply commute_lookup_eval_varlike.
 Qed.
 
 Lemma find_first_match_lemma:

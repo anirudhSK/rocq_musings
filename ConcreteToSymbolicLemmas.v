@@ -40,9 +40,10 @@ Proof.
   try destruct (eval_smt_arith (lookup_varlike_map (map_from_ps s) s) f);
   try destruct (eval_smt_arith (lookup_varlike_map (map_from_ps s) s0) f);
   try destruct (eval_smt_arith (lookup_varlike_map (map_from_ps s) s1) f);
-  try destruct n;
-  try destruct n0;
+  try destruct val; try destruct val0;
+  try destruct n; try destruct n0;
   simpl;
+  try rewrite Integers.repr_unsigned;
   try reflexivity.
 Qed.
 
@@ -95,7 +96,7 @@ Qed.
    concrete and symbolic execution match up. *)
 Transparent lookup_varlike.
 Lemma commute_sym_vs_conc_match_cond :
-  forall (hv_pair: Header * CrVal) (f : SmtValuation)
+  forall (hv_pair: Header * CrInt_T) (f : SmtValuation)
          (s1 : SymbolicState)
          (c1 : ConcreteState),
     c1 = eval_sym_state s1 f ->
@@ -114,7 +115,11 @@ Proof.
     rewrite commute_lookup_varlike.
     reflexivity. }
   rewrite H.
-  destruct (CrVal.eqb (eval_smt_arith (lookup_varlike s1 h) f) v); reflexivity.
+  destruct (eval_smt_arith (lookup_varlike s1 h) f).
+  - destruct (CrVal.eqb (IntVal val) (IntVal v)); reflexivity.
+  - destruct (CrVal.eqb (PtrVal val) (IntVal v)); reflexivity.
+  - destruct (CrVal.eqb UninitVal (IntVal v)); reflexivity.
+  - destruct (CrVal.eqb ErrorVal (IntVal v)); reflexivity.
 Qed.
 
 (* The same lemma as above, but
@@ -144,7 +149,7 @@ Proof.
     simpl.
     destruct (eval_match_smt rest s1); try reflexivity.
     simpl.
-    destruct (CrVal.eqb (eval_smt_arith (lookup_varlike s1 h) f) v); reflexivity.
+    rewrite andb_true_r. reflexivity.
 Qed.
 
 Lemma commute_sym_vs_conc_helper_seq_par_rule_hdr :
