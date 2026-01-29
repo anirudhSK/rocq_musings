@@ -3,6 +3,7 @@ Require Import ZArith.
 
 (* Various kinds of fixed-bit-width integers *)
 Definition uint8   := @bit_int  8%positive.
+Definition uint32  := @bit_int 32%positive.
 Definition uintptr := @bit_int 32%positive.
 
 Lemma uintw_eq_from_unsigned :
