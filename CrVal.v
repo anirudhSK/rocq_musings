@@ -14,7 +14,7 @@ Inductive CrInt_T : Type :=
 | CrUInt32 (val : uint32)
 | CrNilInt.
 Inductive CrPtr_T : Type :=
-| CrPtr (base : uintptr) (idx : uintptr)
+| CrPtr (addr : uintptr)
 | CrNilPtr.
 Inductive CrVal : Type :=
 | IntVal (val : CrInt_T)
@@ -50,10 +50,8 @@ Definition pkey_to_mkey (p : uintptr) : positive :=
 Definition eqb (x y : CrVal) : bool :=
   match x, y with
   | IntVal (CrUInt8 x'), IntVal (CrUInt8 y')
-  | IntVal (CrUInt32 x'), IntVal (CrUInt32 y') => Integers.eq x' y'
-  | PtrVal (CrPtr b1 o1), PtrVal (CrPtr b2 o2) =>
-    (Integers.eq b1 b2) &&
-    (Integers.eq o1 o2)
+  | IntVal (CrUInt32 x'), IntVal (CrUInt32 y')
+  | PtrVal (CrPtr x'), PtrVal (CrPtr y') => Integers.eq x' y'
   | UninitVal, UninitVal
   | ErrorVal, ErrorVal
   | IntVal (CrNilInt), IntVal (CrNilInt)
@@ -67,9 +65,6 @@ Definition add (x y : CrVal) : Check_T CrVal :=
     => Legal (IntVal (CrUInt8 (Integers.add x' y')))
   | IntVal (CrUInt32 x'), IntVal (CrUInt32 y')
     => Legal (IntVal (CrUInt32 (Integers.add x' y')))
-  | PtrVal (CrPtr b' o'), IntVal (CrUInt32 y_)
-    => let y' : uintptr := repr (intval y_) in
-       Legal (PtrVal (CrPtr b' (Integers.add o' y')))
   | _, _ => Illegal
   end.
 
@@ -79,9 +74,6 @@ Definition sub (x y : CrVal) : Check_T CrVal :=
     => Legal (IntVal (CrUInt8 (Integers.sub x' y')))
   | IntVal (CrUInt32 x'), IntVal (CrUInt32 y')
     => Legal (IntVal (CrUInt32 (Integers.sub x' y')))
-  (* | PtrVal (CrPtr b' o'), IntVal (CrUInt32 y_)
-    => let y' : uintptr := repr (intval y_) in
-       Legal (PtrVal (CrPtr b' (Integers.sub o' y'))) *)
   | _, _ => Illegal
   end.
 
@@ -148,34 +140,36 @@ Definition modu (x y : CrVal) : Check_T CrVal :=
   | _, _ => Illegal
   end.
 
-Definition ld (m : Memory CrVal) (p : CrVal) : Check_T CrVal :=
+Definition ld (m : Memory CrVal) (p : CrVal) (i : CrVal) : Check_T CrVal :=
   match m with
-  | Mem m' => 
-    match p with
-    | PtrVal (CrPtr base idx) =>
-      match m' !! (pkey_to_mkey base) with
-      | Allocated array => if (Integers.ltu idx (arr_len array)) then
+  | Mem m' =>
+    match p, i with
+    | PtrVal (CrPtr addr), IntVal (CrUInt32 idx) =>
+      match m' !! (pkey_to_mkey addr) with
+      | Allocated array =>
+        if (Integers.ltu idx (arr_len array)) then
           match (arr_bytes array) !! (pkey_to_mkey idx) with
           | Init v => Legal v
-          | Uninit => Legal UninitVal
+          | Uninit => Illegal
           end
         else
           Illegal
       | Unallocated => Illegal
       end
-    | _ => Illegal
-    end
+    | _, _ => Illegal
+    end 
   | Invalid => Illegal
   end.
 
-Definition st (m : Memory CrVal) (p : CrVal) (v : CrVal) : Check_T (Memory CrVal) :=
+Definition st (m : Memory CrVal) (p : CrVal) (i : CrVal) (v : CrVal) : Check_T (Memory CrVal) :=
   match m with
   | Mem m' =>
-    match p with
-    | PtrVal (CrPtr base idx) =>
-      match m' !! (pkey_to_mkey base) with
-      | Allocated array => if (Integers.ltu idx (arr_len array)) then
-          Legal (Mem (PMap.set (pkey_to_mkey base) (Allocated {|
+    match p, i with
+    | PtrVal (CrPtr addr), IntVal (CrUInt32 idx) =>
+      match m' !! (pkey_to_mkey addr) with
+      | Allocated array =>
+        if (Integers.ltu idx (arr_len array)) then
+          Legal (Mem (PMap.set (pkey_to_mkey addr) (Allocated {|
             arr_len := arr_len array;
             arr_bytes := PMap.set (pkey_to_mkey idx) (Init v) (arr_bytes array);
           |}) m'))
@@ -183,7 +177,7 @@ Definition st (m : Memory CrVal) (p : CrVal) (v : CrVal) : Check_T (Memory CrVal
           Illegal
       | Unallocated => Illegal
       end
-    | _ => Illegal
+    | _, _ => Illegal
     end
   | Invalid => Illegal
   end.
@@ -192,16 +186,16 @@ Definition tabula_rasa {T : Type} : Memory T :=
   Mem (PMap.init Unallocated).
 
 (* TODO: Handle allocation collisions i.e. set mem to Invalid *)
-Definition alloc {T : Type} (m : Memory T) (arg1 : CrVal) : Check_T (Memory T) :=
+Definition alloc {T : Type} (m : Memory T) (arg1 : CrVal) (arg2 : CrVal) : Check_T (Memory T) :=
   match m with
   | Mem m' =>
-    match arg1 with
-    | PtrVal (CrPtr b l) => Legal (Mem
-        (PMap.set (pkey_to_mkey b) (Allocated {|
-          arr_len := l;
+    match arg1, arg2 with
+    | PtrVal (CrPtr addr), IntVal (CrUInt32 idx) => Legal (Mem
+        (PMap.set (pkey_to_mkey addr) (Allocated {|
+          arr_len := idx;
           arr_bytes := PMap.init Uninit;
       |}) m'))
-    | _ => Illegal
+    | _, _ => Illegal
     end
   | Invalid => Illegal
   end.
@@ -211,7 +205,7 @@ Definition free {T : Type} (m : Memory T) (arg1 : CrVal) : Check_T (Memory T) :=
   match m with
   | Mem m' =>
     match arg1 with
-    | PtrVal (CrPtr b _) => Legal (Mem
+    | PtrVal (CrPtr b) => Legal (Mem
         (PMap.set (pkey_to_mkey b) Unallocated m'))
     | _ => Illegal
     end
@@ -225,41 +219,26 @@ Proof.
   intros v1 v2 H.
   unfold eqb, eq, Rocqlib.zeq in H.
   destruct v1, v2; try reflexivity; try discriminate;
-  try (destruct val; exfalso; congruence).
-  - destruct val; destruct val0; try discriminate; try reflexivity;
-    destruct (BinInt.Z.eq_dec (unsigned val) (unsigned val0)); try discriminate;
-    apply uintw_eq_from_unsigned in e; rewrite e; reflexivity.
-  - destruct val, val0; try discriminate; try reflexivity.
-    destruct (BinInt.Z.eq_dec (unsigned base) (unsigned base0)); try discriminate.
-    destruct (BinInt.Z.eq_dec (unsigned idx) (unsigned idx0)); try discriminate.
-    apply uintw_eq_from_unsigned in e, e0.
-    rewrite e, e0; reflexivity.
+  try (destruct val; exfalso; congruence);
+  destruct val; destruct val0; try discriminate; try reflexivity;
+  try destruct (BinInt.Z.eq_dec (unsigned val) (unsigned val0)); try discriminate;
+  try destruct (BinInt.Z.eq_dec (unsigned addr) (unsigned addr0)); try discriminate;
+  apply uintw_eq_from_unsigned in e; rewrite e; reflexivity.
 Qed.
 
 Lemma crval_concrete_if_else2 : forall (v1 v2 : CrVal),
   ((if eqb v1 v2 then true else false) = false)->
   v1 <> v2.
-Proof with try injection; try congruence; intros.
+Proof.
   intros v1 v2 H.
   destruct v1, v2; try discriminate;
   unfold eqb in H;
   unfold eq in H;
   unfold Rocqlib.zeq in H;
-  try injection; try congruence; intros.
-  - destruct val, val0; try congruence;
-    destruct (BinInt.Z.eq_dec (unsigned val) (unsigned val0))...
-  - destruct val, val0; try congruence.
-    destruct (BinInt.Z.eq_dec (unsigned base) (unsigned base0));
-    destruct (BinInt.Z.eq_dec (unsigned idx) (unsigned idx0)); try discriminate;
-    simpl in *.
-    + apply uintw_eq_from_unsigned in e.
-      apply uintw_neq_from_unsigned in n.
-      rewrite e in H1.
-      inversion H1. congruence.
-    + apply uintw_neq_from_unsigned in n.
-      apply uintw_eq_from_unsigned in e.
-      rewrite e in H1.
-      inversion H1. congruence.
-    + apply uintw_neq_from_unsigned in n, n0.
-      inversion H0. congruence.
+  injection;
+  destruct val, val0; try congruence;
+  try destruct (BinInt.Z.eq_dec (unsigned val) (unsigned val0)); try discriminate;
+  try destruct (BinInt.Z.eq_dec (unsigned addr) (unsigned addr0)); try discriminate;
+  intros;
+  apply uintw_neq_from_unsigned in n; congruence.
 Qed.

@@ -1,19 +1,32 @@
 (CaracaraProgramDef
+  (* Header List: [ "1" ] *)
   (Coq_cons Coq_xH
   Coq_nil)
 
+  (* State List: [ "1", "2", "3", "4" ] *)
   (Coq_cons  Coq_xH
   (Coq_cons (Coq_xO Coq_xH)
   (Coq_cons (Coq_xI Coq_xH)
   (Coq_cons (Coq_xO(Coq_xO Coq_xH))
   Coq_nil))))
 
+  (* Ctrl List: [] *)
   Coq_nil
 
+  (* Program Seq: 
+     Seq [
+       SeqCtr [
+         ( "1", 0 )
+       ] [
+         AddOp (ConstantArg 5) (ConstantArg 0) "1"
+       ]
+     ]
   (Coq_cons (Seq (SeqCtr (Coq_cons (Coq_pair Coq_xH Z0) Coq_nil)
                          (Coq_cons (StatefulOp
                            AddOp
                            (ConstantArg (Zpos(Coq_xI(Coq_xO Coq_xH))))
                            (ConstantArg Z0)
                            Coq_xH
-                          )Coq_nil)))Coq_nil))
+                          )Coq_nil)
+                 ))
+            Coq_nil))

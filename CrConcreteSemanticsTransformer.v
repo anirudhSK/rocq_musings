@@ -12,30 +12,31 @@ From MyProject Require Import ListUtils.
 From MyProject Require Import CrVal.
 Require Import ZArith.
 
-Definition apply_int_int_op {w : positive} (f : BinaryOp) (arg1 arg2 : @Integers.bit_int w) : @Integers.bit_int w :=
+Definition apply_int_int_op {w : positive} (f : BinaryOp) (arg1 arg2 : @Integers.bit_int w) : Check_T (@Integers.bit_int w) :=
   match f with
-  | AddOp => Integers.add arg1 arg2
-  | SubOp => Integers.sub arg1 arg2
-  | AndOp => Integers.and arg1 arg2
-  | OrOp =>  Integers.or arg1 arg2
-  | XorOp => Integers.xor arg1 arg2
-  | MulOp => Integers.mul arg1 arg2
-  | DivOp => Integers.divu arg1 arg2
-  | ModOp => Integers.modu arg1 arg2
+  | AddOp => Legal (Integers.add arg1 arg2)
+  | SubOp => Legal (Integers.sub arg1 arg2)
+  | AndOp => Legal (Integers.and arg1 arg2)
+  | OrOp =>  Legal (Integers.or arg1 arg2)
+  | XorOp => Legal (Integers.xor arg1 arg2)
+  | MulOp => Legal (Integers.mul arg1 arg2)
+  | DivOp => Legal (Integers.divu arg1 arg2)
+  | ModOp => Legal (Integers.modu arg1 arg2)
   end.
 
 (* Apply binary operation *)
-Definition apply_bin_op (f : BinaryOp) (arg1 : CrVal) (arg2 : CrVal) : CrVal :=
+Definition apply_bin_op (ps: ConcreteState) (f : BinaryOp) (arg1 : CrVal) (arg2 : CrVal) : CrVal :=
   match arg1, arg2 with
   | IntVal (CrUInt8 x), IntVal (CrUInt8 y)
-    => IntVal (CrUInt8 (apply_int_int_op f x y))
+    => match apply_int_int_op f x y with
+       | Legal z => IntVal (CrUInt8 z)
+       | Illegal => ErrorVal
+       end
   | IntVal (CrUInt32 x), IntVal (CrUInt32 y)
-    => IntVal (CrUInt32 (apply_int_int_op f x y))
-  | PtrVal (CrPtr b i), IntVal (CrUInt32 o) =>
-    match f with
-    | AddOp => PtrVal (CrPtr b (Integers.add i o))
-    | _ => ErrorVal
-    end
+    => match apply_int_int_op f x y with
+       | Legal z => IntVal (CrUInt32 z)
+       | Illegal => ErrorVal
+       end
   | _, _ => ErrorVal
   end.
 
@@ -49,8 +50,8 @@ Definition lookup_concrete (arg : FunctionArgument) (ps : ConcreteState) : CrVal
 
 Definition eval_hdr_op_expr_concrete (op : HdrOp) (ps : ConcreteState) : CrVal :=
   match op with
-  | StatefulOp f arg1 arg2 _ => apply_bin_op f (lookup_concrete arg1 ps) (lookup_concrete arg2 ps)
-  | StatelessOp f arg1 arg2 _ => apply_bin_op f (lookup_concrete arg1 ps) (lookup_concrete arg2 ps)
+  | StatefulOp f arg1 arg2 _ => apply_bin_op ps f (lookup_concrete arg1 ps) (lookup_concrete arg2 ps)
+  | StatelessOp f arg1 arg2 _ => apply_bin_op ps f (lookup_concrete arg1 ps) (lookup_concrete arg2 ps)
   end.
 
 Definition eval_hdr_op_assign_concrete (op : HdrOp) (ps: ConcreteState) : ConcreteState :=

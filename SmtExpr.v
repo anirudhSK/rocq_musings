@@ -29,16 +29,15 @@ with SmtArithExpr : Type :=
     | SmtBitMul (e1 e2 : SmtArithExpr)
     | SmtBitDiv (e1 e2 : SmtArithExpr)
     | SmtBitMod (e1 e2 : SmtArithExpr)
-    | SmtPtrLd (e1 : SmtMemExpr) (e2 : SmtPtrExpr)
-with SmtPtrExpr : Type :=
+    | SmtPtrLd (e1 : SmtMemExpr) (e2 : (*SmtPtrExpr*) SmtArithExpr) (e3 : SmtArithExpr)
+(* with SmtPtrExpr : Type := *)
     | SmtPtrVal (e1 : CrPtr_T) (* e.g. 0x7fffffff0000 *)
     | SmtPtrVar (e1 : string) (* e.g. x *)
-    | SmtPtrAdd (e1 : SmtPtrExpr) (e2 : SmtArithExpr)
 with SmtMemExpr : Type :=
     | SmtMemInit
-    | SmtMemAlloc (e1 : SmtMemExpr) (e2 : SmtPtrExpr)
-    | SmtMemFree (e1 : SmtMemExpr) (e2 : SmtPtrExpr)
-    | SmtPtrSt (e1 : SmtMemExpr) (e2 : SmtPtrExpr) (e3 : SmtArithExpr).
+    | SmtMemAlloc (e1 : SmtMemExpr) (e2 : (*SmtPtrExpr*) SmtArithExpr) (e3 : SmtArithExpr)
+    | SmtMemFree (e1 : SmtMemExpr) (e2 : (*SmtPtrExpr*) SmtArithExpr)
+    | SmtPtrSt (e1 : SmtMemExpr) (e2 : (*SmtPtrExpr*) SmtArithExpr) (e3 : SmtArithExpr) (e4 : SmtArithExpr).
 
 (* Evaluate a SMT Bool expression given a valuation *)
 Definition unwrap_val (v : Check_T CrVal) : CrVal :=
@@ -99,9 +98,17 @@ with eval_smt_arith (e : SmtArithExpr) (v : SmtValuation) : CrVal :=
     | SmtBitMod e1 e2 => CrVal.modu
         (eval_smt_arith e1 v)
         (eval_smt_arith e2 v)
-    | SmtPtrLd e1 e2 => CrVal.ld (eval_smt_mem e1 v) (eval_smt_ptr e2 v)
+    | SmtPtrLd e1 e2 e3 => CrVal.ld
+        (eval_smt_mem e1 v)
+        ((*eval_smt_ptr*) eval_smt_arith e2 v)
+        (eval_smt_arith e3 v)
+    | SmtPtrVal value => Legal (PtrVal value)
+    | SmtPtrVar name => match v name with
+      | PtrVal v' => Legal (PtrVal v')
+      | _ => Illegal
+      end
     end
-with eval_smt_ptr (e : SmtPtrExpr) (v : SmtValuation) : CrVal :=
+(* with eval_smt_ptr (e : SmtPtrExpr) (v : SmtValuation) : CrVal :=
     unwrap_val match e with
     | SmtPtrVal value => Legal (PtrVal value)
     | SmtPtrVar name => match v name with
@@ -109,13 +116,13 @@ with eval_smt_ptr (e : SmtPtrExpr) (v : SmtValuation) : CrVal :=
       | _ => Illegal
       end
     | SmtPtrAdd e1 e2 => CrVal.add (eval_smt_ptr e1 v) (eval_smt_arith e2 v)
-    end
+    end *)
 with eval_smt_mem (e : SmtMemExpr) (v : SmtValuation) : Memory CrVal :=
     unwrap_mem match e with
     | SmtMemInit => Legal (@CrVal.tabula_rasa CrVal)
-    | SmtMemAlloc e1 e2 => CrVal.alloc (eval_smt_mem e1 v) (eval_smt_ptr e2 v)
-    | SmtMemFree e1 e2 => CrVal.free (eval_smt_mem e1 v) (eval_smt_ptr e2 v)
-    | SmtPtrSt e1 e2 e3 => CrVal.st (eval_smt_mem e1 v) (eval_smt_ptr e2 v) (eval_smt_arith e3 v)
+    | SmtMemAlloc e1 e2 e3 => CrVal.alloc (eval_smt_mem e1 v) ((*eval_smt_ptr*) eval_smt_arith e2 v) (eval_smt_arith e3 v)
+    | SmtMemFree e1 e2 => CrVal.free (eval_smt_mem e1 v) ((*eval_smt_ptr*) eval_smt_arith e2 v)
+    | SmtPtrSt e1 e2 e3 e4 => CrVal.st (eval_smt_mem e1 v) ((*eval_smt_ptr*) eval_smt_arith e2 v) (eval_smt_arith e3 v) (eval_smt_arith e4 v)
     end.
 
 (* InitStatus: might be unnecessary and error prone because Z3 may not map 1-to-1 to this. *)
