@@ -44,7 +44,7 @@ Arguments Mem {T} _.
 Arguments Invalid {T}.
 
 (* requires S to prevent collision @ 0 *)
-Definition pkey_to_mkey (p : uintptr) : positive :=
+Definition pkey_to_mkey {w} (p : @bit_int w) : positive :=
   Pos.of_nat (S (Z.to_nat (unsigned p))).
 
 Definition eqb (x y : CrVal) : bool :=
@@ -140,6 +140,19 @@ Definition modu (x y : CrVal) : Check_T CrVal :=
   | _, _ => Illegal
   end.
 
+Definition ld_arr (a : Array) (i : CrVal) : Check_T CrVal :=
+  match a, i with
+  | Allocated array, IntVal (CrUInt32 idx) =>
+    if (Integers.ltu idx (arr_len array)) then
+      match (arr_bytes array) !! (pkey_to_mkey idx) with
+      | Init v => Legal v
+      | Uninit => Illegal
+      end
+    else
+      Illegal
+  | _, _ => Illegal
+  end.
+
 Definition ld (m : Memory CrVal) (p : CrVal) (i : CrVal) : Check_T CrVal :=
   match m with
   | Mem m' =>
@@ -159,6 +172,19 @@ Definition ld (m : Memory CrVal) (p : CrVal) (i : CrVal) : Check_T CrVal :=
     | _, _ => Illegal
     end 
   | Invalid => Illegal
+  end.
+
+Definition st_arr (a : Array) (i : CrVal) (v : CrVal) : Check_T Array :=
+  match a, i with
+  | Allocated array, IntVal (CrUInt32 idx) =>
+    if (Integers.ltu idx (arr_len array)) then
+      Legal (Allocated {|
+        arr_len := arr_len array;
+        arr_bytes := PMap.set (pkey_to_mkey idx) (Init v) (arr_bytes array);
+      |})
+    else
+      Illegal
+  | _, _ => Illegal
   end.
 
 Definition st (m : Memory CrVal) (p : CrVal) (i : CrVal) (v : CrVal) : Check_T (Memory CrVal) :=
