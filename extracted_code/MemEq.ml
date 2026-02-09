@@ -22,15 +22,14 @@ let () =
   let sexp1 = Sexp.of_string f1_str in
   let sexp2 = Sexp.of_string f2_str in
 
-  let prog1 = coq_MemProgram_of_sexp sexp1 in
-  let prog2 = coq_MemProgram_of_sexp sexp2 in
+  let prog1 = coq_IM_Program_of_sexp sexp1 in
+  let prog2 = coq_IM_Program_of_sexp sexp2 in
 
-  let eq_query = CrMem.query_expression prog1 prog2 in
+  (* let eq_query = CrMem.query_expression prog1 prog2 in *)
+  (* let eqq_s = sexp_of_coq_Z3Bool eq_query in *)
+  (* print_endline(Sexp.to_string_hum eqq_s); *)
 
-  (* let eqq_s = sexp_of_coq_Z3Bool eq_query in
-  print_endline(Sexp.to_string_hum eqq_s); *)
-
-  let res = MemSolver.mem_solve eq_query in
+  let res = MemSolver.mem_solve prog1 prog2 in
   match res with
   | Z3Sat (_, _) -> print_endline("sat")
   | Z3Unsat -> print_endline("unsat")

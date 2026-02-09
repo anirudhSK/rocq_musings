@@ -26,12 +26,12 @@
       (StOp
         (TmpArg Coq_xH)
         (ValArg (Coq_imm_u32 (Zpos(Coq_xO(Coq_xO Coq_xH)))))
-        (ValArg (Coq_imm_u8 (Zpos Coq_xH))))
+        (TmpArg(Coq_xO Coq_xH)))
     (Coq_cons
       (StOp
         (TmpArg Coq_xH)
         (ValArg (Coq_imm_u32 (Zpos(Coq_xO(Coq_xO Coq_xH)))))
-        (TmpArg(Coq_xO Coq_xH)))
+        (ValArg (Coq_imm_u8 (Zpos Coq_xH))))
     (Coq_cons
       (LdOp
         (TmpArg(Coq_xI Coq_xH))

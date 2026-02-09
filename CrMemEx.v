@@ -23,7 +23,7 @@ Definition b_plus_c := (TmpArg 2%positive).
 Definition x4_val := (TmpArg 3%positive).
 Definition two_plus_two := (TmpArg 4%positive).
 
-Definition p1 : MemProgram := {|
+Definition p1 : IM_Program := {|
   fn_in := [
     (rdi, uintptr_t);
     (rsi, uint8_t);
@@ -51,9 +51,9 @@ Definition p1 : MemProgram := {|
   fn_out_vaddrs := [(rdi, (repr 0))];
 |}.
 
-Compute List.map (vptr_val (compile_sym p1)) (fn_out_vaddrs p1).
+(* Compute List.map (vptr_val (compile_sym p1)) (fn_out_vaddrs p1). *)
 
-Definition p2 : MemProgram := {|
+Definition p2 : IM_Program := {|
   fn_in := [
     (rdi, uintptr_t);
     (rsi, uint8_t);
@@ -82,4 +82,36 @@ Definition p2 : MemProgram := {|
   fn_out_vars := [];
   fn_out_iaddrs := [];
   fn_out_vaddrs := [(rdi, (repr 0))];
+|}.
+
+Definition p3 : IM_Program := {|
+  fn_in := [
+    (rdi, uintptr_t);
+    (rax, uint8_t)
+  ];
+  fn_body := [
+    LdOp (IOArg rax)
+      (IOArg rdi)
+      (ValArg (imm_u32 (repr 0)))
+  ];
+  fn_out_vars := [rax];
+  fn_out_iaddrs := [];
+  fn_out_vaddrs := [];
+|}.
+Definition p4 : IM_Program := {|
+  fn_in := [
+    (rdi, uintptr_t);
+    (rax, uint8_t)
+  ];
+  fn_body := [
+    LdOp (TmpArg 1%positive)
+      (IOArg rdi)
+      (ValArg (imm_u32 (repr 1)));
+    LdOp (IOArg rax)
+      (IOArg rdi)
+      (ValArg (imm_u32 (repr 0)))
+  ];
+  fn_out_vars := [rax];
+  fn_out_iaddrs := [];
+  fn_out_vaddrs := [];
 |}.

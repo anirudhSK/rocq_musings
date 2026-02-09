@@ -1,4 +1,5 @@
 open CrMem
+open CrVal
 
 module CoqStringOrd = struct
   type t = Stdlib.String.t
@@ -62,6 +63,10 @@ and parse_arith_expr
   | Z3_arr_ld (e1, e2) -> Z3.Z3Array.mk_select ctx
     (parse_array_expr e1 ctx vars)
     (parse_arith_expr e2 ctx vars)
+  | Z3_arith_max (e1, e2) ->
+    let v1 = (parse_arith_expr e1 ctx vars) in
+    let v2 = (parse_arith_expr e2 ctx vars) in
+    Z3.Boolean.mk_ite ctx (Z3.BitVector.mk_ult ctx v1 v2) v2 v1
 and parse_array_expr
   (_e : arr_expr)
   (ctx : Z3.context)
@@ -96,24 +101,150 @@ and parse_ptr_expr
   let _ = vars in
   Z3.BitVector.mk_numeral ctx "0" 8
 
-let mem_solve (b : coq_Z3Bool) : coq_Z3Res =
-  let _ = b in
+(* Helper to extract value from Z3 model for scalar variables *)
+let eval_scalar_var (m : Z3.Model.model) (name : string) (z3_var : Z3.Expr.expr) : coq_CrVal option =
+  match Z3.Model.eval m z3_var true with
+  | Some value ->
+      (match Z3.Expr.get_sort value with
+      | sort when Z3.Sort.get_sort_kind sort = Z3enums.BV_SORT ->
+          let bv_size = Z3.BitVector.get_size sort in
+          let num_str = Z3.BitVector.numeral_to_string value in
+          let num_val = 
+            try int_of_string num_str
+            with _ -> 0
+          in
+          (* Strip the "0" suffix for display *)
+          let display_name = 
+            if Stdlib.String.ends_with ~suffix:"0" name then
+              Stdlib.String.sub name 0 (Stdlib.String.length name - 1)
+            else
+              name
+          in
+          Printf.printf "| var( \027[1m%s\027[0m ) := %d\n" display_name num_val;
+          if bv_size = 8 then
+            Some (IntVal (CrUInt8 (Shim.int_to_coq_uint8 num_val)))
+          else if bv_size = 32 then
+            Some (IntVal (CrUInt32 (Shim.int_to_coq_uint8 num_val)))
+          else
+            None
+      | _ -> None)
+  | None -> None
 
+(* Helper to build sval map from scalar variables (suffix "0") *)
+let build_sval_map (m : Z3.Model.model) (var_bindings : (string * Z3.Expr.expr) list) 
+  : (string * coq_CrVal) list =
+  Stdlib.List.fold_left
+    (fun acc (name, z3_var) ->
+      if Stdlib.String.ends_with ~suffix:"0" name then
+        match eval_scalar_var m name z3_var with
+        | Some value ->
+            let base_name = Stdlib.String.sub name 0 (Stdlib.String.length name - 1) in
+            (base_name, value) :: acc
+        | None -> acc
+      else
+        acc)
+    []
+    var_bindings
+
+(* Helper to build aval map from array variables (suffix "1") *)
+let build_aval_map (m : Z3.Model.model) (var_bindings : (string * Z3.Expr.expr) list)
+  : (string * coq_CrVal coq_Array) list =
+  let _ = m in
+  Stdlib.List.fold_left
+    (fun acc (name, _z3_var) ->
+      if Stdlib.String.ends_with ~suffix:"1" name then
+        let base_name = Stdlib.String.sub name 0 (Stdlib.String.length name - 1) in
+        (* For now, return Unallocated for all arrays *)
+        (base_name, Unallocated) :: acc
+      else
+        acc)
+    []
+    var_bindings
+
+(* Evaluate a Z3Bool expression under a concrete model *)
+let rec eval_z3_bool_concrete
+  (ctx : Z3.context)
+  (m : Z3.Model.model)
+  (vars : var_tracker)
+  (expr : coq_Z3Bool) : bool =
+  match expr with
+  | Z3_T -> true
+  | Z3_F -> false
+  | Z3_Neg e -> not (eval_z3_bool_concrete ctx m vars e)
+  | Z3_Conj (e1, e2) ->
+      (eval_z3_bool_concrete ctx m vars e1) && (eval_z3_bool_concrete ctx m vars e2)
+  | Z3_Disj (e1, e2) ->
+      (eval_z3_bool_concrete ctx m vars e1) || (eval_z3_bool_concrete ctx m vars e2)
+  | Z3_Eq (e1, e2) ->
+      let z3_e1 = parse_expr e1 ctx vars in
+      let z3_e2 = parse_expr e2 ctx vars in
+      let v1_opt = Z3.Model.eval m z3_e1 true in
+      let v2_opt = Z3.Model.eval m z3_e2 true in
+      (match v1_opt, v2_opt with
+       | Some v1, Some v2 -> 
+           (* Convert both values to strings and compare *)
+           let s1 = Z3.Expr.to_string v1 in
+           let s2 = Z3.Expr.to_string v2 in
+           Stdlib.String.equal s1 s2
+       | _ -> false)
+
+let sat_check 
+  (solver : Z3.Solver.solver) 
+  (ctx : Z3.context)
+  (tracked_vars : var_tracker)
+  (p1 : coq_IM_Program)
+  (p2 : coq_IM_Program) : coq_Z3Res =
+  match Z3.Solver.check solver [] with
+  | Z3.Solver.UNSATISFIABLE -> Z3Unsat
+  | Z3.Solver.UNKNOWN -> Z3Unknown
+  | Z3.Solver.SATISFIABLE -> (
+    let model = Z3.Solver.get_model solver in
+    match model with
+    | Some m -> (
+      Printf.printf "┌ SAT Valuation\n";
+      let var_bindings = StringMap.bindings !tracked_vars in
+      
+      (* Build maps for sval and aval *)
+      let sval_map = build_sval_map m var_bindings in
+      let aval_map = build_aval_map m var_bindings in
+      
+      (* Check which part failed *)
+      let outputs_expr = CrMem.query_outputs p1 p2 in
+      let bounds_expr = CrMem.query_bounds p1 p2 in
+      
+      let outputs_holds = eval_z3_bool_concrete ctx m tracked_vars outputs_expr in
+      let bounds_holds = eval_z3_bool_concrete ctx m tracked_vars bounds_expr in
+      
+      Printf.printf "| \027[1mOutputs equal:\027[0m %s\n" (if outputs_holds then "\027[32mtrue\027[0m" else "\027[31mfalse\027[0m");
+      Printf.printf "| \027[1mBounds equal:\027[0m %s\n" (if bounds_holds then "\027[32mtrue\027[0m" else "\027[31mfalse\027[0m");
+      
+      Printf.printf "└\n";
+      
+      (* Create sval function *)
+      let sval (var : var_id) : coq_CrVal =
+        let var_name = Shim.pos_to_str var in
+        match Stdlib.List.assoc_opt var_name sval_map with
+        | Some value -> value
+        | None -> UninitVal
+      in
+      
+      (* Create aval function *)
+      let aval (var : var_id) : coq_CrVal coq_Array =
+        let var_name = Shim.pos_to_str var in
+        match Stdlib.List.assoc_opt var_name aval_map with
+        | Some value -> value
+        | None -> Unallocated
+      in
+      
+      Z3Sat (sval, aval))
+    | None -> raise (Failure "Z3 returned SAT, but no model."))
+
+let mem_solve (p1 : coq_IM_Program) (p2 : coq_IM_Program) : coq_Z3Res =
+  let b = CrMem.query_expression p1 p2 in
   let ctx = Z3.mk_context [] in
   let solver = Z3.Solver.mk_solver ctx None in
   let tracked_vars = ref StringMap.empty in
   let z3_expr = parse_bool_expr b ctx tracked_vars in
   Z3.Solver.add solver [z3_expr];
 
-  (* print out solver's state for debugging *)
-  (* print_endline("Z3 Solver State:");
-  print_endline(Z3.Solver.to_string solver);
-  print_endline(""); *)
-
-  match Z3.Solver.check solver [] with
-  | Z3.Solver.UNSATISFIABLE -> Z3Unsat
-  | Z3.Solver.UNKNOWN -> Z3Unknown
-  | Z3.Solver.SATISFIABLE -> (
-    print_endline("sat");
-    Z3Unknown
-  )
+  sat_check solver ctx tracked_vars p1 p2

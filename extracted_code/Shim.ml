@@ -5,13 +5,13 @@ include Datatypes
 include MyInts
 include String
 type coq_ValueMap =
-| VMap of string * uint8 * coq_ValueMap
+| VMap of string * CrVal.coq_CrVal * coq_ValueMap
 | VMap_DNE
 let rec coq_TraverseMap (vm : coq_ValueMap) (s : string) : CrVal.coq_CrVal =
   match vm with
   | VMap (var_, val_, nxt_) ->
     if (s = var_) then
-      (IntVal (CrUInt8 val_))
+      val_
     else
       coq_TraverseMap nxt_ s
   | VMap_DNE -> UninitVal

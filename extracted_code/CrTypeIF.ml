@@ -78,7 +78,7 @@ module CrMem = struct
   [@@deriving sexp]
   type coq_ValType = [%import: CrMem.coq_ValType]
   [@@deriving sexp]
-  type coq_MemProgram = [%import: CrMem.coq_MemProgram]
+  type coq_IM_Program = [%import: CrMem.coq_IM_Program]
   [@@deriving sexp]
 
   type arith_expr = [%import: CrMem.arith_expr]
