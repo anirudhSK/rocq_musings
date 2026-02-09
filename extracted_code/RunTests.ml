@@ -5,7 +5,7 @@ let get_program f =
   let len = in_channel_length x in
   let str = really_input_string x len in
   close_in x;
-  str |> Sexp.of_string |> Interface.coq_CaracaraProgram_of_sexp
+  str |> Sexp.of_string |> CrTypeIF.coq_CaracaraProgram_of_sexp
 
 let programs = [|
   get_program "./test/prog1.out";

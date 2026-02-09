@@ -10,23 +10,6 @@ From MyProject Require Import Maps.
 From MyProject Require Import Integers.
 From MyProject Require Import MyInts.
 
-
-Inductive Imm : Type :=
-| imm_u8 (v : uint8)
-| imm_u32 (v : uint32)
-| imm_ptr (b : uintptr).
-Inductive FnArg : Type :=
-| IOArg (vid : positive)
-| TmpArg (tid : positive)
-| ValArg (v : Imm).
-
-Inductive Instruction : Type :=
-| AllocOp (dst a1 a2 : FnArg)
-  (* dst cannot be val *)
-| LdOp (dst a1 a2 : FnArg)
-| StOp (a1 a2 a3 : FnArg)
-| AddOp (dst a1 a2 : FnArg).
-
 Inductive ValType : Type :=
 | uint8_t
 | uint32_t
@@ -34,7 +17,29 @@ Inductive ValType : Type :=
 | array_t
 | nil_t
 | err_t.
-Definition MemProgram : Type := (list (positive * ValType)) * (list Instruction).
+
+Definition var_id := positive.
+Inductive Imm : Type :=
+| imm_u8 (v : uint8)
+| imm_u32 (v : uint32)
+| imm_ptr (b : uintptr).
+Inductive FnArg : Type :=
+| IOArg (vid : var_id)
+| TmpArg (tid : var_id)
+| ValArg (v : Imm).
+Inductive Instruction : Type :=
+| AllocOp (dst a1 a2 : FnArg)
+| LdOp (dst a1 a2 : FnArg)
+| StOp (a1 a2 a3 : FnArg)
+| AddOp (dst a1 a2 : FnArg).
+
+Record MemProgram := {
+  fn_in : list (var_id * ValType);
+  fn_body : list Instruction;
+  fn_out_vars : list var_id;
+  fn_out_iaddrs : list (uintptr * uint32);
+  fn_out_vaddrs : list (var_id * uint32);
+}.
 
 Definition HasError : Type := bool.
 Definition TypedExpr (T : Type) : Type := ValType * T.
@@ -46,7 +51,6 @@ Record machine_state {T : Type} := {
   flag : HasError;
 }.
 Arguments machine_state T : clear implicits.
-
 Definition set_io {T : Type} (m : machine_state T) (k : positive) (v : ValType * T) := {|
   io_map := PMap.set k v (io_map m);
   tmp_map := tmp_map m;
@@ -83,27 +87,6 @@ Definition set_flag {T : Type} (m : machine_state T) (b : bool) := {|
   flag := b;
 |}.
 
-Inductive map_select :=
-| select_io
-| select_tmp
-| select_iarr
-| select_varr.
-
-Definition get_from {T : Type} (m : machine_state T) (sel : map_select) (k : positive) : ValType * T :=
-  match sel with
-  | select_io => (io_map m) !! k
-  | select_tmp => (tmp_map m) !! k
-  | select_iarr => (iarr_map m) !! k
-  | select_varr => (varr_map m) !! k
-  end.
-Definition set_to {T : Type} (m : machine_state T) (sel : map_select) (k : positive) (v : ValType * T) : machine_state T :=
-  match sel with
-  | select_io => set_io m k v
-  | select_tmp => set_tmp m k v
-  | select_iarr => set_iarr m k v
-  | select_varr => set_varr m k v
-  end.
-
 Inductive arith_expr :=
 | Z3_u8 (x : uint8)
 | Z3_u32 (x : uint32)
@@ -124,16 +107,15 @@ Inductive Z3Expr :=
 | Z3Array (e : arr_expr)
 | Z3Nil.
 Definition sym_state := machine_state Z3Expr.
-Definition TypedZ3Expr := TypedExpr Z3Expr.
 Definition init_sym : sym_state := {|
-  io_map := PMap.init (nil_t, Z3Arith (Z3_u8 (repr 0)));
-  tmp_map := PMap.init (nil_t, Z3Arith (Z3_u8 (repr 0)));
-  iarr_map := PMap.init (nil_t, Z3Array (Z3_arr_init (Z3_u32 (repr 0))));
-  varr_map := PMap.init (nil_t, Z3Array (Z3_arr_init (Z3_u32 (repr 0))));
-  flag := false; (* TODO: don't hardcode *)
+  io_map := PMap.init (nil_t, Z3Nil);
+  tmp_map := PMap.init (nil_t, Z3Nil);
+  iarr_map := PMap.init (nil_t, Z3Nil);
+  varr_map := PMap.init (nil_t, Z3Nil);
+  flag := false;
 |}.
 
-Fixpoint apply_io_helper (io : PMap.t TypedZ3Expr) (input : list (positive * ValType)) : PMap.t TypedZ3Expr :=
+Fixpoint apply_io_helper (io : PMap.t (TypedExpr Z3Expr)) (input : list (positive * ValType)) : PMap.t (TypedExpr Z3Expr) :=
   match input with
   | [] => io
   | (k, uint8_t) :: rest =>
@@ -142,18 +124,14 @@ Fixpoint apply_io_helper (io : PMap.t TypedZ3Expr) (input : list (positive * Val
     apply_io_helper (PMap.set k (uint32_t, Z3Arith (Z3_u32_var k)) io) rest
   | (k, uintptr_t) :: rest =>
     apply_io_helper (PMap.set k (uintptr_t, Z3Ptr (Z3_ptr_var k)) io) rest
-  | (k, t) :: rest => match io !! k with
-    | (_, v) => apply_io_helper (PMap.set k (t, v) io) rest
-    end
+  | (k, _) :: rest => apply_io_helper (PMap.set k (err_t, Z3Nil) io) rest
   end.
-Fixpoint apply_varr_helper (varr : PMap.t TypedZ3Expr) (input : list (positive * ValType)) : PMap.t TypedZ3Expr :=
+Fixpoint apply_varr_helper (varr : PMap.t (TypedExpr Z3Expr)) (input : list (positive * ValType)) : PMap.t (TypedExpr Z3Expr) :=
   match input with
   | [] => varr
   | (k, uintptr_t) :: rest =>
     apply_varr_helper (PMap.set k (array_t, Z3Array (Z3_arr_var k)) varr) rest
-  | (k, t) :: rest => match varr !! k with
-    | (_, v) => apply_varr_helper varr rest
-    end
+  | _ :: rest => apply_varr_helper varr rest
   end.
 Definition apply_input (m : sym_state) (iv : list (positive * ValType)) : sym_state := {|
   io_map := apply_io_helper (io_map init_sym) iv;
@@ -163,17 +141,16 @@ Definition apply_input (m : sym_state) (iv : list (positive * ValType)) : sym_st
   flag := flag init_sym;
 |}.
 
-Definition imm_to_z3 (x : Imm) : TypedZ3Expr :=
-  match x with
-  | imm_u8 x' => (uint8_t, Z3Arith (Z3_u8 x'))
-  | imm_u32 x' => (uint32_t, Z3Arith (Z3_u32 x'))
-  | imm_ptr x' => (uintptr_t, Z3Ptr (Z3_ptr_lit x'))
-  end.
-Definition sym_interp_arg (m : sym_state) (a : FnArg) : TypedZ3Expr :=
+Definition sym_interp_arg (m : sym_state) (a : FnArg) : TypedExpr Z3Expr :=
   match a with
   | IOArg x => (io_map m) !! x
   | TmpArg x => (tmp_map m) !! x
-  | ValArg x => (imm_to_z3 x)
+  | ValArg x =>
+    match x with
+    | imm_u8 x' => (uint8_t, Z3Arith (Z3_u8 x'))
+    | imm_u32 x' => (uint32_t, Z3Arith (Z3_u32 x'))
+    | imm_ptr x' => (uintptr_t, Z3Ptr (Z3_ptr_lit x'))
+    end
   end.
 
 Definition uptr_to_key (p : uintptr) : positive :=
@@ -234,6 +211,7 @@ Definition apply_sym_op (i : Instruction) (m : sym_state) : sym_state :=
 
 
     | StOp a1 a2 a3 =>
+      (* TODO: handle case where a1 is a ValArg imm_ptr *)
       let arr_a1 :=
       match local_lookup a1 with
       | (uintptr_t, Z3Ptr (Z3_ptr_lit x)) =>
@@ -251,7 +229,7 @@ Definition apply_sym_op (i : Instruction) (m : sym_state) : sym_state :=
 
 
     | AddOp dst a1 a2 =>
-      let new_val : TypedZ3Expr :=
+      let new_val : TypedExpr Z3Expr :=
       match local_lookup a1, local_lookup a2 with
       | (uint8_t, Z3Arith e1), (uint8_t, Z3Arith e2) =>
         (uint8_t, Z3Arith (Z3_bitadd e1 e2))
@@ -267,6 +245,14 @@ Definition apply_sym_op (i : Instruction) (m : sym_state) : sym_state :=
       end
     end.
 
+Record output_valuation {T : Type} : Type := {
+  errored : HasError;
+  var_val : var_id -> TypedExpr T;
+  iptr_val : (uintptr * uint32) -> TypedExpr T;
+  vptr_val : (var_id * uint32) -> TypedExpr T;
+}.
+Arguments output_valuation T : clear implicits.
+
 Fixpoint compile_sym_helper (p : list Instruction) (m : sym_state) : sym_state :=
   match p with
   | [] => m
@@ -275,51 +261,26 @@ Fixpoint compile_sym_helper (p : list Instruction) (m : sym_state) : sym_state :
     compile_sym_helper rest m'
   end.
 
-Definition compile_sym (p : MemProgram) : sym_state :=
-  let '(inp, inst) := p in
-  compile_sym_helper inst (apply_input init_sym inp).
-
-Record output_space := {
-  var_list : list positive;
-  iptr_list : list (uintptr * uint32);
-  vptr_list : list (positive * uint32);
-}.
-Record PrintOut {T : Type} : Type := {
-  errored : bool;
-  out_vars : list (TypedExpr T);
-  out_iptr : list (TypedExpr T);
-  out_vptr : list (TypedExpr T);
-}.
-Arguments PrintOut T : clear implicits.
-
-Definition get_output (p : MemProgram) (out : output_space) : PrintOut Z3Expr :=
-  let m := compile_sym p in
-  {|
-    errored := flag m;
-    out_vars :=
-      List.map (fun k => match (io_map m) !! k with
+Definition compile_sym (p : MemProgram) : output_valuation Z3Expr :=
+  let m' := compile_sym_helper (fn_body p) (apply_input init_sym (fn_in p)) in {|
+    errored := flag m';
+    var_val := fun k => match (io_map m') !! k with
       | (nil_t, _) => (nil_t, Z3Nil)
       | (err_t, _) => (err_t, Z3Nil)
       | (t, e) => (t, e)
-      end) (var_list out);
-    out_iptr :=
-      List.map (fun k => match k with
-      | (b, i) => match (iarr_map m) !! (uptr_to_key b) with
-        | (array_t, Z3Array e) => (uint8_t, Z3Arith (Z3_arr_ld e (Z3_u32 i)))
-        | _ => (err_t, Z3Nil)
-        end
-      end) (iptr_list out);
-    out_vptr :=
-      List.map (fun k => match k with
-      | (k', i) => match (varr_map m) !! k' with
-        | (array_t, Z3Array e) => (uint8_t, Z3Arith (Z3_arr_ld e (Z3_u32 i)))
-        | _ => (err_t, Z3Nil)
+      end;
+    iptr_val := fun '(b, i) => match (iarr_map m') !! (uptr_to_key b) with
+      | (array_t, Z3Array e) => (uint8_t, Z3Arith (Z3_arr_ld e (Z3_u32 i)))
+      | _ => (err_t, Z3Nil)
+      end;
+    vptr_val := fun '(k, i) => match (varr_map m') !! k with
+      | (array_t, Z3Array e) => (uint8_t, Z3Arith (Z3_arr_ld e (Z3_u32 i)))
+      | _ => (err_t, Z3Nil)
       end
-      end) (vptr_list out)
   |}.
 
-Definition z3_s_val : Type := positive -> CrVal.
-Definition z3_a_val : Type := positive -> @Array CrVal.
+Definition z3_s_val : Type := var_id -> CrVal.
+Definition z3_a_val : Type := var_id -> @Array CrVal.
 
 Definition eval_z3_ptr (e : ptr_expr) (sval : z3_s_val) : CrVal :=
   match e with
@@ -387,27 +348,42 @@ Inductive Z3Bool :=
 | Z3_Disj (e1 e2 : Z3Bool)
 | Z3_Eq (e1 e2 : Z3Expr).
 
-Definition out_cmp (p1 p2 : MemProgram) (out : output_space) : Z3Bool :=
-  let o1 := get_output p1 out in
-  let o2 := get_output p2 out in
+Definition query_expression (p1 p2 : MemProgram) : Z3Bool :=
+  let val1 := compile_sym p1 in
+  let val2 := compile_sym p2 in
+
+  let o1 := (errored val1,
+             List.map (var_val val1) (fn_out_vars p1),
+             List.map (iptr_val val1) (fn_out_iaddrs p1),
+             List.map (vptr_val val1) (fn_out_vaddrs p1)) in
+  let o2 := (errored val2,
+             List.map (var_val val2) (fn_out_vars p2),
+             List.map (iptr_val val2) (fn_out_iaddrs p2),
+             List.map (vptr_val val2) (fn_out_vaddrs p2)) in
   match o1, o2 with
-  | {| errored := e1; out_vars := v1; out_iptr := ip1; out_vptr := vp1 |},
-    {| errored := e2; out_vars := v2; out_iptr := ip2; out_vptr := vp2 |} =>
-      let e_expr : Z3Bool := if
-        (orb (andb e1 e2)
-             (andb (negb e1) (negb e2)))
-      then Z3_T else Z3_F in
-      let v_expr : Z3Bool := fold_right Z3_Conj Z3_T
-        (map (fun '((_, x), (_, y)) => Z3_Eq x y) (combine v1 v2)) in
-      let ip_expr := fold_right Z3_Conj Z3_T
-        (map (fun '((_, x), (_, y)) => Z3_Eq x y) (combine ip1 ip2)) in
-      let vp_expr := fold_right Z3_Conj Z3_T
-        (map (fun '((_, x), (_, y)) => Z3_Eq x y) (combine vp1 vp2)) in
-      Z3_Conj e_expr (
-      Z3_Conj v_expr (
-      Z3_Conj ip_expr
-              vp_expr))
+  | (e1, v1, ip1, vp1),
+    (e2, v2, ip2, vp2)  =>
+    let e_expr : Z3Bool :=
+      if (orb (andb e1 e2) (andb (negb e1) (negb e2)))
+      then Z3_T
+      else Z3_F in
+    let v_expr : Z3Bool := fold_right Z3_Conj Z3_T
+      (map (fun '((_, x), (_, y)) => Z3_Eq x y) (combine v1 v2)) in
+    let ip_expr := fold_right Z3_Conj Z3_T
+      (map (fun '((_, x), (_, y)) => Z3_Eq x y) (combine ip1 ip2)) in
+    let vp_expr := fold_right Z3_Conj Z3_T
+      (map (fun '((_, x), (_, y)) => Z3_Eq x y) (combine vp1 vp2)) in
+    Z3_Neg (Z3_Conj e_expr (
+            Z3_Conj v_expr (
+            Z3_Conj ip_expr
+                    vp_expr)))
   end.
+
+Inductive Z3Res :=
+| Z3Sat (s : z3_s_val) (a : z3_a_val)
+| Z3Unsat
+| Z3Unknown.
+Parameter z3_query : Z3Bool -> Z3Res.
 
 Fixpoint eval_z3_bool (e : Z3Bool) (sval : z3_s_val) (aval : z3_a_val) : bool :=
   match e with
@@ -422,142 +398,6 @@ Fixpoint eval_z3_bool (e : Z3Bool) (sval : z3_s_val) (aval : z3_a_val) : bool :=
     CrVal.eqb v1 v2
   end.
 
-Definition rdi : positive := 1.
-Definition rsi : positive := 2.
-Definition rdx : positive := 3.
-Definition rcx : positive := 4.
-Definition rax : positive := 5.
-
-Definition test0 : MemProgram := ([
-  (rdi, uint8_t)
-], [
-  AllocOp (TmpArg 1)
-    (ValArg (imm_ptr (repr 0xffff)))
-    (ValArg (imm_u32 (repr 128)));
-  StOp (TmpArg 1)
-    (ValArg (imm_u32 (repr 0)))
-    (ValArg (imm_u8 (repr 67)));
-  LdOp (IOArg rax) (TmpArg 1) (ValArg (imm_u32 (repr 0)))
-]).
-Compute get_output test0 {|
-  var_list := [rdi; rax];
-  iptr_list := [];
-  vptr_list := [];
-|}.
-
-Definition test1 : MemProgram := ([
-  (rdi, uintptr_t)
-], [
-  LdOp (IOArg rax)
-    (IOArg rdi)
-    (ValArg (imm_u32 (repr 0)));
-  StOp (IOArg rdi)
-    (ValArg (imm_u32 (repr 0)))
-    (ValArg (imm_u8 (repr 67)));
-  LdOp (IOArg rsi)
-    (IOArg rdi)
-    (ValArg (imm_u32 (repr 0)))
-]).
-Compute get_output test1 {|
-  var_list := [rax; rsi]%positive;
-  iptr_list := [];
-  vptr_list := [(rdi, (repr 0))];
-|}.
-
-Definition p1 : MemProgram := ([
-  (rdi, uintptr_t);
-  (rsi, uint8_t);
-  (rdx, uint8_t)
-], [
-  (* f(a, b, c) {
-   *   x = alloc(0x400, 16);
-   *   x[4] = b + c;
-   *   *a = x[4];
-   * } *)
-  AllocOp (TmpArg 1)
-    (ValArg (imm_ptr (repr 0x400)))
-    (ValArg (imm_u32 (repr 16)));
-  AddOp (TmpArg 2)
-    (IOArg rsi)
-    (IOArg rdx);
-  StOp (TmpArg 1)
-    (ValArg (imm_u32 (repr 4)))
-    (TmpArg 2);
-  LdOp (TmpArg 3)
-    (TmpArg 1)
-    (ValArg (imm_u32 (repr 4)));
-  StOp (IOArg rdi)
-    (ValArg (imm_u32 (repr 0)))
-    (TmpArg 3)
-]).
-
-Definition p2 : MemProgram := ([
-  (1%positive, uintptr_t);
-  (2%positive, uint8_t);
-  (3%positive, uint8_t)
-], [
-  AllocOp (TmpArg 1)
-    (ValArg (imm_ptr (repr 0x400)))
-    (ValArg (imm_u32 (repr 16)));
-  AddOp (TmpArg 2)
-    (IOArg rsi)
-    (IOArg rdx);
-  StOp (IOArg rdi)
-    (ValArg (imm_u32 (repr 0)))
-    (TmpArg 2)
-]).
-
-Definition p1_out := get_output p1 {|
-  var_list := [];
-  iptr_list := [];
-  vptr_list := [(rdi, (repr 0))];
-|}.
-Definition p2_out := get_output p2 {|
-  var_list := [];
-  iptr_list := [];
-  vptr_list := [(rdi, (repr 0))];
-|}.
-
-Definition exp : MemProgram := ([
-  (1%positive, uint8_t)
-], [
-  AddOp (TmpArg 1)
-    (ValArg (imm_u8 (repr 1)))
-    (ValArg (imm_u8 (repr 1)));
-  AddOp (IOArg 1)
-    (ValArg (imm_u8 (repr 1)))
-    (ValArg (imm_u8 (repr 1)));
-  AddOp (IOArg 2)
-    (TmpArg 1)
-    (TmpArg 1);
-  AddOp (IOArg 3)
-    (IOArg 1)
-    (IOArg 1)
-]).
-Definition exp_out := get_output exp {|
-  var_list := [2%positive; 3%positive];
-  iptr_list := [];
-  vptr_list := [];
-|}.
-Compute exp_out.
-
-Definition ex_expr := match out_vptr p2_out with
-| [] => (nil_t, Z3Nil)
-| x :: xs => x
-end.
-Compute ex_expr.
-
-
-Definition query_expression (p1 p2 : MemProgram) (o : output_space) : Z3Bool :=
-  let cmp := out_cmp p1 p2 o in
-  Z3_Neg cmp.
-
-Inductive Z3Res :=
-| Z3Sat (s : z3_s_val) (a : z3_a_val)
-| Z3Unsat
-| Z3Unknown.
-Parameter z3_query : Z3Bool -> Z3Res.
-
 Axiom z3_sound_some:
   forall e sval aval,
     z3_query e = Z3Sat sval aval ->
@@ -567,11 +407,43 @@ Axiom z3_sound_none:
     z3_query e = Z3Unsat ->
     forall sval aval,
     eval_z3_bool e sval aval = false.
-
-(* Lemma mem_prog_soundness:
-  forall
-    (p1 p2 : MemProgram) (out : output_space)
-    (out_vars : list positive)
-    (out_iptr : list (uintptr * uint32))
-    (out_vptr : list (positive * uint32)),
-  z3_query (query_expression p1 p2 out) = Z3Unsat -> *)
+    
+Lemma mem_prog_soundness:
+  (* for all programs, p1 and p2 *)
+  forall (p1 p2 : MemProgram),
+  (* with identical IO *)
+  (fn_in p1) = (fn_in p2) ->
+  (fn_out_vars p1) = (fn_out_vars p2) ->
+  (fn_out_iaddrs p1) = (fn_out_iaddrs p2) ->
+  (fn_out_vaddrs p1) = (fn_out_vaddrs p2) ->
+  (* if z3 returns unsat *)
+  z3_query (query_expression p1 p2) = Z3Unsat ->
+  (* then under every possible valuation *)
+  forall (sval : z3_s_val) (aval : z3_a_val),
+    let res1 := compile_sym p1 in
+    let res2 := compile_sym p2 in
+    (* they have the same error value *)
+    (errored res1 = errored res2) /\
+    (* they have the same output variable assignments *)
+    (forall (v : var_id),
+      In v (fn_out_vars p1) ->
+      let '(_, x1) := (var_val res1) v in
+      let '(_, x2) := (var_val res2) v in
+      eval_z3_expr x1 sval aval = eval_z3_expr x2 sval aval
+    ) /\
+    (* they write to the same absolute addresses *)
+    (forall (ia : uintptr) (ix1 : uint32),
+      In (ia, ix1) (fn_out_iaddrs p1) ->
+      let '(_, x1) := (iptr_val res1) (ia, ix1) in
+      let '(_, x2) := (iptr_val res2) (ia, ix1) in
+      eval_z3_expr x1 sval aval = eval_z3_expr x2 sval aval
+    ) /\
+    (* and they write to the same relative addresses *)
+    (forall (va : var_id) (ix2 : uint32),
+      In (va, ix2) (fn_out_vaddrs p1) ->
+      let '(_, x1) := (vptr_val res1) (va, ix2) in
+      let '(_, x2) := (vptr_val res2) (va, ix2) in
+      eval_z3_expr x1 sval aval = eval_z3_expr x2 sval aval
+    ).
+Proof.
+Admitted.

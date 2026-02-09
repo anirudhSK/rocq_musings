@@ -1,0 +1,51 @@
+(
+  (fn_in
+    (Coq_cons (Coq_pair
+      Coq_xH
+      Coq_uintptr_t
+    ) (Coq_cons (Coq_pair
+      (Coq_xO Coq_xH)
+      Coq_uint8_t
+    ) (Coq_cons (Coq_pair
+      (Coq_xI Coq_xH)
+      Coq_uint8_t
+    ) Coq_nil))))
+
+  (fn_body
+    (Coq_cons
+      (AllocOp
+        (TmpArg Coq_xH)
+        (ValArg (Coq_imm_ptr (Zpos(Coq_xO(Coq_xO(Coq_xO(Coq_xO(Coq_xO(Coq_xO(Coq_xO(Coq_xO(Coq_xO(Coq_xO Coq_xH)))))))))))))
+        (ValArg (Coq_imm_u32 (Zpos(Coq_xO(Coq_xO(Coq_xO(Coq_xO Coq_xH))))))))
+    (Coq_cons
+      (AddOp
+        (TmpArg (Coq_xO Coq_xH))
+        (IOArg(Coq_xO Coq_xH))
+        (IOArg(Coq_xI Coq_xH)))
+    (Coq_cons
+      (StOp
+        (TmpArg Coq_xH)
+        (ValArg (Coq_imm_u32 (Zpos(Coq_xO(Coq_xO Coq_xH)))))
+        (TmpArg(Coq_xO Coq_xH)))
+    (Coq_cons
+      (LdOp
+        (TmpArg(Coq_xI Coq_xH))
+        (TmpArg Coq_xH)
+        (ValArg (Coq_imm_u32 (Zpos(Coq_xO(Coq_xO Coq_xH))))))
+    (Coq_cons
+      (StOp
+        (IOArg Coq_xH)
+        (ValArg (Coq_imm_u32 Z0))
+        (TmpArg (Coq_xI Coq_xH)))
+    Coq_nil))))))
+
+  (fn_out_vars Coq_nil)
+
+  (fn_out_iaddrs Coq_nil)
+  
+  (fn_out_vaddrs (Coq_cons
+    (Coq_pair
+      Coq_xH
+      Z0
+    ) Coq_nil))
+)
