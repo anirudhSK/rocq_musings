@@ -84,9 +84,7 @@ module CrMem = struct
   type arith_expr = [%import: CrMem.arith_expr]
   and ptr_expr = [%import: CrMem.ptr_expr]
   and arr_expr = [%import: CrMem.arr_expr]
-  [@@deriving sexp]
-  type coq_Z3Expr = [%import: CrMem.coq_Z3Expr]
-  [@@deriving sexp]
-  type coq_Z3Bool = [%import: CrMem.coq_Z3Bool]
+  and bool_expr = [%import: CrMem.bool_expr]
+  and coq_Z3Expr = [%import: CrMem.coq_Z3Expr]
   [@@deriving sexp]
 end

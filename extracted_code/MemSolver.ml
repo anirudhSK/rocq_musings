@@ -9,7 +9,7 @@ module StringMap = Stdlib.Map.Make(CoqStringOrd)
 type var_tracker = Z3.Expr.expr StringMap.t ref
 
 let rec parse_bool_expr
-  (_e : coq_Z3Bool)
+  (_e : bool_expr)
   (ctx : Z3.context)
   (vars : var_tracker) : Z3.Expr.expr =
   match _e with
@@ -23,6 +23,9 @@ let rec parse_bool_expr
   | Z3_Eq (e1, e2) -> Z3.Boolean.mk_eq ctx
       (parse_expr e1 ctx vars)
       (parse_expr e2 ctx vars)
+  | Z3_Lt (e1, e2) -> Z3.BitVector.mk_ult ctx
+      (parse_arith_expr e1 ctx vars)
+      (parse_arith_expr e2 ctx vars)
 and parse_expr
   (_e : coq_Z3Expr)
   (ctx : Z3.context)
@@ -31,6 +34,7 @@ and parse_expr
   | Z3Arith e -> parse_arith_expr e ctx vars
   | Z3Ptr e -> parse_ptr_expr e ctx vars
   | Z3Array e -> parse_array_expr e ctx vars
+  | Z3Bool e -> parse_bool_expr e ctx vars
   | Z3Nil ->
     print_endline("something has gone horribly wrong :(((");
     Z3.BitVector.mk_numeral ctx "0" 8
@@ -63,10 +67,10 @@ and parse_arith_expr
   | Z3_arr_ld (e1, e2) -> Z3.Z3Array.mk_select ctx
     (parse_array_expr e1 ctx vars)
     (parse_arith_expr e2 ctx vars)
-  | Z3_arith_max (e1, e2) ->
+  | Z3_arith_ite (c, e1, e2) ->
     let v1 = (parse_arith_expr e1 ctx vars) in
     let v2 = (parse_arith_expr e2 ctx vars) in
-    Z3.Boolean.mk_ite ctx (Z3.BitVector.mk_ult ctx v1 v2) v2 v1
+    Z3.Boolean.mk_ite ctx (parse_bool_expr c ctx vars) v1 v2
 and parse_array_expr
   (_e : arr_expr)
   (ctx : Z3.context)
@@ -166,7 +170,7 @@ let rec eval_z3_bool_concrete
   (ctx : Z3.context)
   (m : Z3.Model.model)
   (vars : var_tracker)
-  (expr : coq_Z3Bool) : bool =
+  (expr : bool_expr) : bool =
   match expr with
   | Z3_T -> true
   | Z3_F -> false
@@ -186,6 +190,20 @@ let rec eval_z3_bool_concrete
            let s1 = Z3.Expr.to_string v1 in
            let s2 = Z3.Expr.to_string v2 in
            Stdlib.String.equal s1 s2
+       | _ -> false)
+  | Z3_Lt (e1, e2) ->
+      let z3_e1 = parse_arith_expr e1 ctx vars in
+      let z3_e2 = parse_arith_expr e2 ctx vars in
+      let v1_opt = Z3.Model.eval m z3_e1 true in
+      let v2_opt = Z3.Model.eval m z3_e2 true in
+      (match v1_opt, v2_opt with
+       | Some v1, Some v2 -> 
+           (* Get the numerical values from bit-vectors and compare *)
+           (try
+              let n1 = int_of_string (Z3.BitVector.numeral_to_string v1) in
+              let n2 = int_of_string (Z3.BitVector.numeral_to_string v2) in
+              n1 < n2
+            with _ -> false)
        | _ -> false)
 
 let sat_check 

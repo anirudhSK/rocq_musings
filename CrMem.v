@@ -1,3 +1,5 @@
+(* TODO: Add Comments *)
+
 Require Import ZArith.
 From Coq.Strings Require Import String.
 From Coq.Strings Require Import Ascii.
@@ -108,18 +110,27 @@ Inductive arith_expr :=
 | Z3_u32_var (name : positive)
 | Z3_bitadd (e1 e2 : arith_expr)
 | Z3_arr_ld (e1 : arr_expr) (e2 : arith_expr)
-| Z3_arith_max (e1 e2 : arith_expr)
+| Z3_arith_ite (c : bool_expr) (e1 e2 : arith_expr)
 with ptr_expr :=
 | Z3_ptr_lit (x : uintptr)
 | Z3_ptr_var (name : positive)
 with arr_expr :=
 | Z3_arr_init (len : arith_expr)
 | Z3_arr_var (name : positive)
-| Z3_arr_st (A : arr_expr) (idx : arith_expr) (item : arith_expr).
-Inductive Z3Expr :=
+| Z3_arr_st (A : arr_expr) (idx : arith_expr) (item : arith_expr)
+with bool_expr :=
+| Z3_T
+| Z3_F
+| Z3_Neg (e : bool_expr)
+| Z3_Conj (e1 e2 : bool_expr)
+| Z3_Disj (e1 e2 : bool_expr)
+| Z3_Eq (e1 e2 : Z3Expr)
+| Z3_Lt (e1 e2 : arith_expr)
+with Z3Expr :=
 | Z3Arith (e : arith_expr)
 | Z3Ptr (e : ptr_expr)
 | Z3Array (e : arr_expr)
+| Z3Bool (e : bool_expr)
 | Z3Nil.
 Definition sym_state := machine_state Z3Expr.
 Definition init_sym : sym_state := {|
@@ -221,7 +232,11 @@ Definition apply_sym_op (i : Instruction) (m : sym_state) : sym_state :=
         let m' := match e1 with 
         | Z3_ptr_var x => match (bound_map m) !! x with
           | (uint32_t, Z3Arith prev_bound) =>
-              set_bound m x (uint32_t, Z3Arith (Z3_arith_max e2 prev_bound))
+              set_bound m x
+              (uint32_t, Z3Arith (Z3_arith_ite
+                (Z3_Lt e2 prev_bound)
+                prev_bound
+                e2))
           | _ => set_bound m x (a2_t, a2_v)
           end
         | _ => m
@@ -256,7 +271,11 @@ Definition apply_sym_op (i : Instruction) (m : sym_state) : sym_state :=
         | (array_t, Z3Array A) =>
           match (bound_map m) !! x with
           | (uint32_t, Z3Arith prev_bound) =>
-              set_varr (set_bound m x (uint32_t, Z3Arith (Z3_arith_max e2 prev_bound))) x (array_t, Z3Array (Z3_arr_st A e2 e3))
+              set_varr (set_bound m x
+                (uint32_t, Z3Arith (Z3_arith_ite
+                  (Z3_Lt e2 prev_bound)
+                  prev_bound
+                  e2))) x (array_t, Z3Array (Z3_arr_st A e2 e3))
           | _ => set_varr (set_bound m x st_idx) x (array_t, Z3Array (Z3_arr_st A e2 e3))
           end
         | _ => set_flag m true
@@ -350,25 +369,10 @@ Fixpoint eval_z3_arith (e : arith_expr) (sval : z3_s_val) (aval : z3_a_val) : Cr
     | Legal v => v
     | Illegal => ErrorVal
     end
-  | Z3_arith_max e1 e2 =>
-    let v1 := eval_z3_arith e1 sval aval in
-    let v2 := eval_z3_arith e2 sval aval in
-    match v1, v2 with
-    | IntVal (CrUInt8 x1), IntVal (CrUInt8 x2) =>
-      IntVal (CrUInt8 (
-        if (Integers.lt x1 x2) then
-          x2
-        else
-          x1
-      ))
-    | IntVal (CrUInt32 x1), IntVal (CrUInt32 x2) =>
-      IntVal (CrUInt32 (
-        if (Integers.lt x1 x2) then
-          x2
-        else
-          x1
-      ))
-    | _, _ => ErrorVal
+  | Z3_arith_ite c e1 e2 =>
+    match eval_z3_bool c sval aval with
+    | true => eval_z3_arith e1 sval aval
+    | false => eval_z3_arith e2 sval aval
     end
   end
 with eval_z3_array (e : arr_expr) (sval : z3_s_val) (aval : z3_a_val) : Array :=
@@ -391,8 +395,24 @@ with eval_z3_array (e : arr_expr) (sval : z3_s_val) (aval : z3_a_val) : Array :=
     | Legal a' => a'
     | Illegal => Unallocated
     end
-  end.
-Definition eval_z3_expr (e : Z3Expr) (sval : z3_s_val) (aval : z3_a_val) : CrVal :=
+  end
+with eval_z3_bool (e : bool_expr) (sval : z3_s_val) (aval : z3_a_val) : bool :=
+  match e with
+  | Z3_T => true
+  | Z3_F => false
+  | Z3_Neg e' => negb (eval_z3_bool e' sval aval)
+  | Z3_Conj e1 e2 => andb (eval_z3_bool e1 sval aval) (eval_z3_bool e2 sval aval)
+  | Z3_Disj e1 e2 => orb (eval_z3_bool e1 sval aval) (eval_z3_bool e2 sval aval)
+  | Z3_Eq e1 e2 =>
+    let v1 := eval_z3_expr e1 sval aval in
+    let v2 := eval_z3_expr e2 sval aval in
+    CrVal.eqb v1 v2
+  | Z3_Lt e1 e2 =>
+    let v1 := eval_z3_arith e1 sval aval in
+    let v2 := eval_z3_arith e2 sval aval in
+    CrVal.ltb v1 v2
+  end
+with eval_z3_expr (e : Z3Expr) (sval : z3_s_val) (aval : z3_a_val) : CrVal :=
   match e with
   | Z3Arith e' =>
     eval_z3_arith e' sval aval
@@ -401,16 +421,8 @@ Definition eval_z3_expr (e : Z3Expr) (sval : z3_s_val) (aval : z3_a_val) : CrVal
   | _ => ErrorVal
   end.
 
-Inductive Z3Bool :=
-| Z3_T
-| Z3_F
-| Z3_Neg (e : Z3Bool)
-| Z3_Conj (e1 e2 : Z3Bool)
-| Z3_Disj (e1 e2 : Z3Bool)
-| Z3_Eq (e1 e2 : Z3Expr).
-
 (* Check that bounds are equal for all variable arrays *)
-Definition query_bounds (p1 p2 : IM_Program) : Z3Bool :=
+Definition query_bounds (p1 p2 : IM_Program) : bool_expr :=
   let val1 := sym_eval_program p1 in
   let val2 := sym_eval_program p2 in
 
@@ -426,7 +438,7 @@ Definition query_bounds (p1 p2 : IM_Program) : Z3Bool :=
     (map (fun '((_, x), (_, y)) => Z3_Eq x y) (combine b1 b2)).
 
 (* Check that outputs are equal (error flag, variables, and memory writes) *)
-Definition query_outputs (p1 p2 : IM_Program) : Z3Bool :=
+Definition query_outputs (p1 p2 : IM_Program) : bool_expr :=
   let val1 := sym_eval_program p1 in
   let val2 := sym_eval_program p2 in
 
@@ -441,11 +453,11 @@ Definition query_outputs (p1 p2 : IM_Program) : Z3Bool :=
   match o1, o2 with
   | (e1, v1, ip1, vp1),
     (e2, v2, ip2, vp2)  =>
-    let e_expr : Z3Bool :=
+    let e_expr :=
       if (orb (andb e1 e2) (andb (negb e1) (negb e2)))
       then Z3_T
       else Z3_F in
-    let v_expr : Z3Bool := fold_right Z3_Conj Z3_T
+    let v_expr := fold_right Z3_Conj Z3_T
       (map (fun '((_, x), (_, y)) => Z3_Eq x y) (combine v1 v2)) in
     let ip_expr := fold_right Z3_Conj Z3_T
       (map (fun '((_, x), (_, y)) => Z3_Eq x y) (combine ip1 ip2)) in
@@ -458,27 +470,14 @@ Definition query_outputs (p1 p2 : IM_Program) : Z3Bool :=
   end.
 
 (* Main query: check if outputs and bounds differ *)
-Definition query_expression (p1 p2 : IM_Program) : Z3Bool :=
+Definition query_expression (p1 p2 : IM_Program) : bool_expr :=
   Z3_Neg (Z3_Conj (query_outputs p1 p2) (query_bounds p1 p2)).
 
 Inductive Z3Res :=
 | Z3Sat (s : z3_s_val) (a : z3_a_val)
 | Z3Unsat
 | Z3Unknown.
-Parameter z3_query : Z3Bool -> Z3Res.
-
-Fixpoint eval_z3_bool (e : Z3Bool) (sval : z3_s_val) (aval : z3_a_val) : bool :=
-  match e with
-  | Z3_T => true
-  | Z3_F => false
-  | Z3_Neg e' => negb (eval_z3_bool e' sval aval)
-  | Z3_Conj e1 e2 => andb (eval_z3_bool e1 sval aval) (eval_z3_bool e2 sval aval)
-  | Z3_Disj e1 e2 => orb (eval_z3_bool e1 sval aval) (eval_z3_bool e2 sval aval)
-  | Z3_Eq e1 e2 =>
-    let v1 := eval_z3_expr e1 sval aval in
-    let v2 := eval_z3_expr e2 sval aval in
-    CrVal.eqb v1 v2
-  end.
+Parameter z3_query : bool_expr -> Z3Res.
 
 Axiom z3_sound_some:
   forall e sval aval,

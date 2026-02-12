@@ -59,6 +59,18 @@ Definition eqb (x y : CrVal) : bool :=
   | _, _ => false
   end.
 
+Definition ltb (x y : CrVal) : bool :=
+  match x, y with
+  | IntVal (CrUInt8 x'), IntVal (CrUInt8 y')
+  | IntVal (CrUInt32 x'), IntVal (CrUInt32 y')
+  | PtrVal (CrPtr x'), PtrVal (CrPtr y')
+    => Integers.lt x' y'
+  | IntVal (CrNilInt), IntVal (CrNilInt)
+  | PtrVal (CrNilPtr), PtrVal (CrNilPtr)
+    => true
+  | _, _ => false
+  end.
+
 Definition add (x y : CrVal) : Check_T CrVal :=
   match x, y with
   | IntVal (CrUInt8 x'), IntVal (CrUInt8 y')
