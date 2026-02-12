@@ -528,10 +528,19 @@ Lemma mem_prog_soundness:
       let '(_, x1) := (vptr_val res1) (va, ix2) in
       let '(_, x2) := (vptr_val res2) (va, ix2) in
       eval_z3_expr x1 sval aval = eval_z3_expr x2 sval aval
+    ) /\
+    (* and they have the same access bounds for all variable arrays *)
+    (forall (va : var_id),
+      In va (List.map fst (List.filter (fun '(_, t) => match t with uintptr_t => true | _ => false end) (fn_in p1))) \/
+      In va (List.map fst (fn_out_vaddrs p1)) ->
+      let '(_, x1) := (vptr_bound res1) va in
+      let '(_, x2) := (vptr_bound res2) va in
+      eval_z3_expr x1 sval aval = eval_z3_expr x2 sval aval
     ).
 Proof.
   intros p1 p2 Hio Hz3 sval aval res1 res2.
   repeat split.
+  - admit.
   - admit.
   - admit.
   - admit.
@@ -560,6 +569,12 @@ Lemma mem_prog_completeness:
     In (va, ix2) (fn_out_vaddrs p1) /\
     let '(_, x1) := (vptr_val res1) (va, ix2) in
     let '(_, x2) := (vptr_val res2) (va, ix2) in
+    eval_z3_expr x1 sval aval <> eval_z3_expr x2 sval aval) \/
+  (exists (va : var_id),
+    (In va (List.map fst (List.filter (fun '(_, t) => match t with uintptr_t => true | _ => false end) (fn_in p1))) \/
+     In va (List.map fst (fn_out_vaddrs p1))) /\
+    let '(_, x1) := (vptr_bound res1) va in
+    let '(_, x2) := (vptr_bound res2) va in
     eval_z3_expr x1 sval aval <> eval_z3_expr x2 sval aval).
 Proof.
   intros p1 p2 sval aval Hio Hz3.
