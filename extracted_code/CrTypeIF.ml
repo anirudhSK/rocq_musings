@@ -21,9 +21,13 @@ module MyInts = struct
   include MyInts
   type uint8 = [%import: MyInts.uint8]
   [@@deriving sexp]
+  type uint16 = [%import: MyInts.uint16]
+  [@@deriving sexp]
   type uint32 = [%import: MyInts.uint32]
   [@@deriving sexp]
-  type uintptr = [%import: MyInts.uintptr]
+  type uint64 = [%import: MyInts.uint64]
+  [@@deriving sexp]
+  type uintbptr = [%import: MyInts.uintbptr]
   [@@deriving sexp]
 end
 module CrVal = struct

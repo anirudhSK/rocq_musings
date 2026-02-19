@@ -24,7 +24,7 @@ Definition var_id := positive.
 Inductive Imm : Type :=
 | imm_u8 (v : uint8)
 | imm_u32 (v : uint32)
-| imm_ptr (b : uintptr).
+| imm_ptr (b : uintbptr).
 Inductive FnArg : Type :=
 | IOArg (vid : var_id)
 | TmpArg (tid : var_id)
@@ -39,7 +39,7 @@ Record IM_Program := {
   fn_in : list (var_id * ValType);
   fn_body : list Instruction;
   fn_out_vars : list var_id;
-  fn_out_iaddrs : list (uintptr * uint32);
+  fn_out_iaddrs : list (uintbptr * uint32);
   fn_out_vaddrs : list (var_id * uint32);
 }.
 
@@ -112,7 +112,7 @@ Inductive arith_expr :=
 | Z3_arr_ld (e1 : arr_expr) (e2 : arith_expr)
 | Z3_arith_ite (c : bool_expr) (e1 e2 : arith_expr)
 with ptr_expr :=
-| Z3_ptr_lit (x : uintptr)
+| Z3_ptr_lit (x : uintbptr)
 | Z3_ptr_var (name : positive)
 with arr_expr :=
 | Z3_arr_init (len : arith_expr)
@@ -181,7 +181,7 @@ Definition sym_interp_arg (m : sym_state) (a : FnArg) : TypedExpr Z3Expr :=
     end
   end.
 
-Definition uptr_to_key (p : uintptr) : positive :=
+Definition uptr_to_key (p : uintbptr) : positive :=
   Pos.of_nat (S (Z.to_nat (unsigned p))).
 
 Definition apply_sym_op (i : Instruction) (m : sym_state) : sym_state :=
@@ -303,7 +303,7 @@ Definition apply_sym_op (i : Instruction) (m : sym_state) : sym_state :=
 Record output_valuation {T : Type} : Type := {
   errored : HasError;
   var_val : var_id -> TypedExpr T;
-  iptr_val : (uintptr * uint32) -> TypedExpr T;
+  iptr_val : (uintbptr * uint32) -> TypedExpr T;
   vptr_val : (var_id * uint32) -> TypedExpr T;
   vptr_bound : var_id -> TypedExpr T;
 }.
@@ -515,7 +515,7 @@ Lemma mem_prog_soundness:
       eval_z3_expr x1 sval aval = eval_z3_expr x2 sval aval
     ) /\
     (* they write to the same absolute addresses *)
-    (forall (ia : uintptr) (ix1 : uint32),
+    (forall (ia : uintbptr) (ix1 : uint32),
       In (ia, ix1) (fn_out_iaddrs p1) ->
       let '(_, x1) := (iptr_val res1) (ia, ix1) in
       let '(_, x2) := (iptr_val res2) (ia, ix1) in
@@ -559,7 +559,7 @@ Lemma mem_prog_completeness:
     let '(_, x1) := (var_val res1) v in
     let '(_, x2) := (var_val res2) v in
     eval_z3_expr x1 sval aval <> eval_z3_expr x2 sval aval) \/
-  (exists (ia : uintptr) (ix1 : uint32),
+  (exists (ia : uintbptr) (ix1 : uint32),
     In (ia, ix1) (fn_out_iaddrs p1) /\
     let '(_, x1) := (iptr_val res1) (ia, ix1) in
     let '(_, x2) := (iptr_val res2) (ia, ix1) in

@@ -28,22 +28,8 @@ Lemma commute_sym_conc_expr:
     eval_smt_arith (eval_hdr_op_expr_smt ho s) f.
 Proof.
   intros ho s f.
-  destruct ho eqn:Hs, arg1 eqn:H1, arg2 eqn:H2, f0 eqn:Hbop;
-  unfold eval_hdr_op_expr_concrete;
-  unfold apply_bin_op;
-  simpl;
+  destruct ho, f0, arg1, arg2; simpl;
   try repeat (rewrite PMapHelperLemmas.commute_lookup_eval_generic);
-  try destruct (eval_smt_arith (lookup_varlike_map (map_from_ps s) c) f);
-  try destruct (eval_smt_arith (lookup_varlike_map (map_from_ps s) c0) f);
-  try destruct (eval_smt_arith (lookup_varlike_map (map_from_ps s) h) f);
-  try destruct (eval_smt_arith (lookup_varlike_map (map_from_ps s) h0) f);
-  try destruct (eval_smt_arith (lookup_varlike_map (map_from_ps s) s) f);
-  try destruct (eval_smt_arith (lookup_varlike_map (map_from_ps s) s0) f);
-  try destruct (eval_smt_arith (lookup_varlike_map (map_from_ps s) s1) f);
-  try destruct val; try destruct val0;
-  try destruct n; try destruct n0;
-  simpl;
-  try rewrite Integers.repr_unsigned;
   try reflexivity.
 Qed.
 

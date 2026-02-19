@@ -2,9 +2,12 @@ From MyProject Require Import Integers.
 Require Import ZArith.
 
 (* Various kinds of fixed-bit-width integers *)
-Definition uint8   := @bit_int  8%positive.
-Definition uint32  := @bit_int 32%positive.
-Definition uintptr := @bit_int 32%positive.
+Definition uint8  := @bit_int  8%positive.
+Definition uint16 := @bit_int 16%positive.
+Definition uint32 := @bit_int 32%positive.
+Definition uint64 := @bit_int 64%positive.
+
+Definition uintbptr := @bit_int 32%positive.
 
 Lemma uintw_eq_from_unsigned :
   forall (w : positive) (v1 v2 : @bit_int w),

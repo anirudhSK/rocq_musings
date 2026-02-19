@@ -40,18 +40,6 @@ with SmtMemExpr : Type :=
     | SmtPtrSt (e1 : SmtMemExpr) (e2 : (*SmtPtrExpr*) SmtArithExpr) (e3 : SmtArithExpr) (e4 : SmtArithExpr).
 
 (* Evaluate a SMT Bool expression given a valuation *)
-Definition unwrap_val (v : Check_T CrVal) : CrVal :=
-  match v with
-  | Legal v' => v'
-  | _ => ErrorVal
-  end.
-Transparent unwrap_val.
-Definition unwrap_mem (v : Check_T (Memory CrVal)) : Memory CrVal :=
-  match v with
-  | Legal v' => v'
-  | _ => Invalid
-  end.
-Transparent unwrap_mem.
 Fixpoint eval_smt_bool (e : SmtBoolExpr) (v : SmtValuation) : bool :=
     match e with
     | SmtTrue => true
@@ -63,16 +51,16 @@ Fixpoint eval_smt_bool (e : SmtBoolExpr) (v : SmtValuation) : bool :=
       (eval_smt_arith e1 v) (eval_smt_arith e2 v)) then true else false
     end
 with eval_smt_arith (e : SmtArithExpr) (v : SmtValuation) : CrVal :=
-    unwrap_val match e with
-    | SmtConst value => Legal (IntVal value)
+    match e with
+    | SmtConst value => IntVal value
     | SmtArithVar name => match v name with
-      | IntVal v' => Legal (IntVal v')
-      | _ => Illegal
+      | IntVal v' => IntVal v'
+      | _ => ErrorVal
       end
-    | SmtConditional cond then_expr else_expr => Legal
-        (if eval_smt_bool cond v 
+    | SmtConditional cond then_expr else_expr =>
+        if eval_smt_bool cond v 
         then (eval_smt_arith then_expr v)
-        else (eval_smt_arith else_expr v))
+        else (eval_smt_arith else_expr v)
     | SmtBitAdd e1 e2 => CrVal.add
         (eval_smt_arith e1 v)
         (eval_smt_arith e2 v)
@@ -98,14 +86,19 @@ with eval_smt_arith (e : SmtArithExpr) (v : SmtValuation) : CrVal :=
     | SmtBitMod e1 e2 => CrVal.modu
         (eval_smt_arith e1 v)
         (eval_smt_arith e2 v)
-    | SmtPtrLd e1 e2 e3 => CrVal.ld
-        (eval_smt_mem e1 v)
-        ((*eval_smt_ptr*) eval_smt_arith e2 v)
-        (eval_smt_arith e3 v)
-    | SmtPtrVal value => Legal (PtrVal value)
+    | SmtPtrLd e1 e2 e3 =>
+        match CrVal.ld
+            (eval_smt_mem e1 v)
+            (eval_smt_arith e2 v)
+            (eval_smt_arith e3 v)
+        with
+        | Legal v' => v'
+        | Illegal => ErrorVal
+        end
+    | SmtPtrVal value => PtrVal value
     | SmtPtrVar name => match v name with
-      | PtrVal v' => Legal (PtrVal v')
-      | _ => Illegal
+      | PtrVal v' => PtrVal v'
+      | _ => ErrorVal
       end
     end
 (* with eval_smt_ptr (e : SmtPtrExpr) (v : SmtValuation) : CrVal :=
@@ -118,8 +111,8 @@ with eval_smt_arith (e : SmtArithExpr) (v : SmtValuation) : CrVal :=
     | SmtPtrAdd e1 e2 => CrVal.add (eval_smt_ptr e1 v) (eval_smt_arith e2 v)
     end *)
 with eval_smt_mem (e : SmtMemExpr) (v : SmtValuation) : Memory CrVal :=
-    unwrap_mem match e with
-    | SmtMemInit => Legal (@CrVal.tabula_rasa CrVal)
+    match e with
+    | SmtMemInit => @CrVal.tabula_rasa CrVal
     | SmtMemAlloc e1 e2 e3 => CrVal.alloc (eval_smt_mem e1 v) ((*eval_smt_ptr*) eval_smt_arith e2 v) (eval_smt_arith e3 v)
     | SmtMemFree e1 e2 => CrVal.free (eval_smt_mem e1 v) ((*eval_smt_ptr*) eval_smt_arith e2 v)
     | SmtPtrSt e1 e2 e3 e4 => CrVal.st (eval_smt_mem e1 v) ((*eval_smt_ptr*) eval_smt_arith e2 v) (eval_smt_arith e3 v) (eval_smt_arith e4 v)

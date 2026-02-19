@@ -12,32 +12,17 @@ From MyProject Require Import ListUtils.
 From MyProject Require Import CrVal.
 Require Import ZArith.
 
-Definition apply_int_int_op {w : positive} (f : BinaryOp) (arg1 arg2 : @Integers.bit_int w) : Check_T (@Integers.bit_int w) :=
-  match f with
-  | AddOp => Legal (Integers.add arg1 arg2)
-  | SubOp => Legal (Integers.sub arg1 arg2)
-  | AndOp => Legal (Integers.and arg1 arg2)
-  | OrOp =>  Legal (Integers.or arg1 arg2)
-  | XorOp => Legal (Integers.xor arg1 arg2)
-  | MulOp => Legal (Integers.mul arg1 arg2)
-  | DivOp => Legal (Integers.divu arg1 arg2)
-  | ModOp => Legal (Integers.modu arg1 arg2)
-  end.
-
 (* Apply binary operation *)
 Definition apply_bin_op (ps: ConcreteState) (f : BinaryOp) (arg1 : CrVal) (arg2 : CrVal) : CrVal :=
-  match arg1, arg2 with
-  | IntVal (CrUInt8 x), IntVal (CrUInt8 y)
-    => match apply_int_int_op f x y with
-       | Legal z => IntVal (CrUInt8 z)
-       | Illegal => ErrorVal
-       end
-  | IntVal (CrUInt32 x), IntVal (CrUInt32 y)
-    => match apply_int_int_op f x y with
-       | Legal z => IntVal (CrUInt32 z)
-       | Illegal => ErrorVal
-       end
-  | _, _ => ErrorVal
+  match f with
+  | AddOp => CrVal.add arg1 arg2
+  | SubOp => CrVal.sub arg1 arg2
+  | AndOp => CrVal.and arg1 arg2
+  | OrOp =>  CrVal.or arg1 arg2
+  | XorOp => CrVal.xor arg1 arg2
+  | MulOp => CrVal.mul arg1 arg2
+  | DivOp => CrVal.divu arg1 arg2
+  | ModOp => CrVal.modu arg1 arg2
   end.
 
 Definition lookup_concrete (arg : FunctionArgument) (ps : ConcreteState) : CrVal :=

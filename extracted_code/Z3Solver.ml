@@ -24,7 +24,9 @@ and z3_expr_from_coq_smt_arith_expr (expr : SmtExpr.coq_SmtArithExpr) (ctx : Z3.
   | SmtExpr.SmtConst n -> (
       match n with
       | CrVal.CrUInt8 val8 -> Z3.BitVector.mk_numeral ctx (string_of_int (Shim.coq_Z_to_int val8)) 8
+      | CrVal.CrUInt16 val16 -> Z3.BitVector.mk_numeral ctx (string_of_int (Shim.coq_Z_to_int val16)) 16
       | CrVal.CrUInt32 val32 -> Z3.BitVector.mk_numeral ctx (string_of_int (Shim.coq_Z_to_int val32)) 32
+      | CrVal.CrUInt64 val64 -> Z3.BitVector.mk_numeral ctx (string_of_int (Shim.coq_Z_to_int val64)) 64
       | CrVal.CrNilInt -> Z3.BitVector.mk_numeral ctx "0" 8)
   | SmtExpr.SmtArithVar name -> (
     let name_str = Shim.coq_str_to_str name in

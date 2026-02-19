@@ -11,10 +11,12 @@ Arguments Illegal {T}.
 
 Inductive CrInt_T : Type :=
 | CrUInt8 (val : uint8)
+| CrUInt16 (val : uint16)
 | CrUInt32 (val : uint32)
+| CrUInt64 (val : uint64)
 | CrNilInt.
 Inductive CrPtr_T : Type :=
-| CrPtr (addr : uintptr)
+| CrPtr (addr : uintbptr)
 | CrNilPtr.
 Inductive CrVal : Type :=
 | IntVal (val : CrInt_T)
@@ -47,109 +49,122 @@ Arguments Invalid {T}.
 Definition pkey_to_mkey {w} (p : @bit_int w) : positive :=
   Pos.of_nat (S (Z.to_nat (unsigned p))).
 
+Definition iveqb (x y : CrInt_T) : bool :=
+  match x, y with
+  | CrUInt8 x', CrUInt8 y'
+  | CrUInt16 x', CrUInt16 y'
+  | CrUInt32 x', CrUInt32 y'
+  | CrUInt64 x', CrUInt64 y' => Integers.eq x' y'
+  | CrNilInt, CrNilInt => true
+  | _, _ => false
+  end.
+Transparent iveqb.
 Definition eqb (x y : CrVal) : bool :=
   match x, y with
-  | IntVal (CrUInt8 x'), IntVal (CrUInt8 y')
-  | IntVal (CrUInt32 x'), IntVal (CrUInt32 y')
+  | IntVal x', IntVal y' => iveqb x' y'
   | PtrVal (CrPtr x'), PtrVal (CrPtr y') => Integers.eq x' y'
-  | UninitVal, UninitVal
-  | ErrorVal, ErrorVal
-  | IntVal (CrNilInt), IntVal (CrNilInt)
   | PtrVal (CrNilPtr), PtrVal (CrNilPtr) => true
+  | UninitVal, UninitVal
+  | ErrorVal, ErrorVal => true
   | _, _ => false
   end.
 
+Definition ivltb (x y : CrInt_T) : bool :=
+  match x, y with
+  | CrUInt8 x', CrUInt8 y'
+  | CrUInt16 x', CrUInt16 y'
+  | CrUInt32 x', CrUInt32 y'
+  | CrUInt64 x', CrUInt64 y' => Integers.lt x' y'
+  | CrNilInt, CrNilInt => true
+  | _, _ => false
+  end.
+Transparent ivltb.
 Definition ltb (x y : CrVal) : bool :=
   match x, y with
-  | IntVal (CrUInt8 x'), IntVal (CrUInt8 y')
-  | IntVal (CrUInt32 x'), IntVal (CrUInt32 y')
+  | IntVal x', IntVal y'
+    => ivltb x' y'
   | PtrVal (CrPtr x'), PtrVal (CrPtr y')
     => Integers.lt x' y'
-  | IntVal (CrNilInt), IntVal (CrNilInt)
   | PtrVal (CrNilPtr), PtrVal (CrNilPtr)
     => true
   | _, _ => false
   end.
 
-Definition add (x y : CrVal) : Check_T CrVal :=
+Definition apply_iv_binop
+  (f :forall (w : positive), @bit_int w -> @bit_int w -> @bit_int w)
+  (x y : CrInt_T) : CrVal :=
   match x, y with
-  | IntVal (CrUInt8 x'), IntVal (CrUInt8 y')
-    => Legal (IntVal (CrUInt8 (Integers.add x' y')))
-  | IntVal (CrUInt32 x'), IntVal (CrUInt32 y')
-    => Legal (IntVal (CrUInt32 (Integers.add x' y')))
-  | _, _ => Illegal
+  | CrUInt8 x', CrUInt8 y'
+    => IntVal (CrUInt8 (@f _ x' y'))
+  | CrUInt16 x', CrUInt16 y'
+    => IntVal (CrUInt16 (@f _ x' y'))
+  | CrUInt32 x', CrUInt32 y'
+    => IntVal (CrUInt32 (@f _ x' y'))
+  | CrUInt64 x', CrUInt64 y'
+    => IntVal (CrUInt64 (@f _ x' y'))
+  | _, _ => ErrorVal
+  end.
+Transparent apply_iv_binop.
+
+Definition add (x y : CrVal) : CrVal :=
+  match x, y with
+  | IntVal x', IntVal y' => apply_iv_binop (fun w => @Integers.add w) x' y'
+  | _, _ => ErrorVal
   end.
 
-Definition sub (x y : CrVal) : Check_T CrVal :=
+Definition sub (x y : CrVal) : CrVal :=
   match x, y with
-  | IntVal (CrUInt8 x'), IntVal (CrUInt8 y')
-    => Legal (IntVal (CrUInt8 (Integers.sub x' y')))
-  | IntVal (CrUInt32 x'), IntVal (CrUInt32 y')
-    => Legal (IntVal (CrUInt32 (Integers.sub x' y')))
-  | _, _ => Illegal
+  | IntVal x', IntVal y' => apply_iv_binop (fun w => @Integers.sub w) x' y'
+  | _, _ => ErrorVal
   end.
 
-Definition and (x y : CrVal) : Check_T CrVal :=
+Definition and (x y : CrVal) : CrVal :=
   match x, y with
-  | IntVal (CrUInt8 x'), IntVal (CrUInt8 y')
-    => Legal (IntVal (CrUInt8 (Integers.and x' y')))
-  | IntVal (CrUInt32 x'), IntVal (CrUInt32 y')
-    => Legal (IntVal (CrUInt32 (Integers.and x' y')))
-  | _, _ => Illegal
+  | IntVal x', IntVal y' => apply_iv_binop (fun w => @Integers.and w) x' y'
+  | _, _ => ErrorVal
   end.
 
-Definition or (x y : CrVal) : Check_T CrVal :=
+Definition or (x y : CrVal) : CrVal :=
   match x, y with
-  | IntVal (CrUInt8 x'), IntVal (CrUInt8 y')
-    => Legal (IntVal (CrUInt8 (Integers.or x' y')))
-  | IntVal (CrUInt32 x'), IntVal (CrUInt32 y')
-    => Legal (IntVal (CrUInt32 (Integers.or x' y')))
-  | _, _ => Illegal
+  | IntVal x', IntVal y' => apply_iv_binop (fun w => @Integers.or w) x' y'
+  | _, _ => ErrorVal
   end.
 
-Definition xor (x y : CrVal) : Check_T CrVal :=
+Definition xor (x y : CrVal) : CrVal :=
   match x, y with
-  | IntVal (CrUInt8 x'), IntVal (CrUInt8 y')
-    => Legal (IntVal (CrUInt8 (Integers.xor x' y')))
-  | IntVal (CrUInt32 x'), IntVal (CrUInt32 y')
-    => Legal (IntVal (CrUInt32 (Integers.xor x' y')))
-  | _, _ => Illegal
+  | IntVal x', IntVal y' => apply_iv_binop (fun w => @Integers.xor w) x' y'
+  | _, _ => ErrorVal
   end.
 
-Definition not (x : CrVal) : Check_T CrVal :=
+Definition not (x : CrVal) : CrVal :=
   match x with
   | IntVal (CrUInt8 x')
-    => Legal (IntVal (CrUInt8 (Integers.not x')))
+    => IntVal (CrUInt8 (Integers.not x'))
+  | IntVal (CrUInt16 x')
+    => IntVal (CrUInt16 (Integers.not x'))
   | IntVal (CrUInt32 x')
-    => Legal (IntVal (CrUInt32 (Integers.not x')))
-  | _ => Illegal
+    => IntVal (CrUInt32 (Integers.not x'))
+  | IntVal (CrUInt64 x')
+    => IntVal (CrUInt64 (Integers.not x'))
+  | _ => ErrorVal
   end.
 
-Definition mul (x y : CrVal) : Check_T CrVal :=
+Definition mul (x y : CrVal) : CrVal :=
   match x, y with
-  | IntVal (CrUInt8 x'), IntVal (CrUInt8 y')
-    => Legal (IntVal (CrUInt8 (Integers.mul x' y')))
-  | IntVal (CrUInt32 x'), IntVal (CrUInt32 y')
-    => Legal (IntVal (CrUInt32 (Integers.mul x' y')))
-  | _, _ => Illegal
+  | IntVal x', IntVal y' => apply_iv_binop (fun w => @Integers.mul w) x' y'
+  | _, _ => ErrorVal
   end.
 
-Definition divu (x y : CrVal) : Check_T CrVal :=
+Definition divu (x y : CrVal) : CrVal :=
   match x, y with
-  | IntVal (CrUInt8 x'), IntVal (CrUInt8 y')
-    => Legal (IntVal (CrUInt8 (Integers.divu x' y')))
-  | IntVal (CrUInt32 x'), IntVal (CrUInt32 y')
-    => Legal (IntVal (CrUInt32 (Integers.divu x' y')))
-  | _, _ => Illegal
+  | IntVal x', IntVal y' => apply_iv_binop (fun w => @Integers.divu w) x' y'
+  | _, _ => ErrorVal
   end.
 
-Definition modu (x y : CrVal) : Check_T CrVal :=
+Definition modu (x y : CrVal) : CrVal :=
   match x, y with
-  | IntVal (CrUInt8 x'), IntVal (CrUInt8 y')
-    => Legal (IntVal (CrUInt8 (Integers.modu x' y')))
-  | IntVal (CrUInt32 x'), IntVal (CrUInt32 y')
-    => Legal (IntVal (CrUInt32 (Integers.modu x' y')))
-  | _, _ => Illegal
+  | IntVal x', IntVal y' => apply_iv_binop (fun w => @Integers.modu w) x' y'
+  | _, _ => ErrorVal
   end.
 
 Definition ld_arr (a : Array) (i : CrVal) : Check_T CrVal :=
@@ -158,7 +173,7 @@ Definition ld_arr (a : Array) (i : CrVal) : Check_T CrVal :=
     if (Integers.ltu idx (arr_len array)) then
       match (arr_bytes array) !! (pkey_to_mkey idx) with
       | Init v => Legal v
-      | Uninit => Illegal
+      | Uninit => Legal UninitVal
       end
     else
       Illegal
@@ -168,20 +183,10 @@ Definition ld_arr (a : Array) (i : CrVal) : Check_T CrVal :=
 Definition ld (m : Memory CrVal) (p : CrVal) (i : CrVal) : Check_T CrVal :=
   match m with
   | Mem m' =>
-    match p, i with
-    | PtrVal (CrPtr addr), IntVal (CrUInt32 idx) =>
-      match m' !! (pkey_to_mkey addr) with
-      | Allocated array =>
-        if (Integers.ltu idx (arr_len array)) then
-          match (arr_bytes array) !! (pkey_to_mkey idx) with
-          | Init v => Legal v
-          | Uninit => Illegal
-          end
-        else
-          Illegal
-      | Unallocated => Illegal
-      end
-    | _, _ => Illegal
+    match p with
+    | PtrVal (CrPtr addr) =>
+      ld_arr (m' !! (pkey_to_mkey addr)) i
+    | _ => Illegal
     end 
   | Invalid => Illegal
   end.
@@ -199,55 +204,48 @@ Definition st_arr (a : Array) (i : CrVal) (v : CrVal) : Check_T Array :=
   | _, _ => Illegal
   end.
 
-Definition st (m : Memory CrVal) (p : CrVal) (i : CrVal) (v : CrVal) : Check_T (Memory CrVal) :=
+Definition st (m : Memory CrVal) (p : CrVal) (i : CrVal) (v : CrVal) : Memory CrVal :=
   match m with
   | Mem m' =>
-    match p, i with
-    | PtrVal (CrPtr addr), IntVal (CrUInt32 idx) =>
-      match m' !! (pkey_to_mkey addr) with
-      | Allocated array =>
-        if (Integers.ltu idx (arr_len array)) then
-          Legal (Mem (PMap.set (pkey_to_mkey addr) (Allocated {|
-            arr_len := arr_len array;
-            arr_bytes := PMap.set (pkey_to_mkey idx) (Init v) (arr_bytes array);
-          |}) m'))
-        else
-          Illegal
-      | Unallocated => Illegal
+    match p with
+    | PtrVal (CrPtr addr) =>
+      match st_arr (m' !! (pkey_to_mkey addr)) i v with
+      | Legal arr => Mem (PMap.set (pkey_to_mkey addr) arr m')
+      | Illegal => Invalid
       end
-    | _, _ => Illegal
+    | _ => Invalid
     end
-  | Invalid => Illegal
+  | Invalid => Invalid
   end.
 
 Definition tabula_rasa {T : Type} : Memory T :=
   Mem (PMap.init Unallocated).
 
 (* TODO: Handle allocation collisions i.e. set mem to Invalid *)
-Definition alloc {T : Type} (m : Memory T) (arg1 : CrVal) (arg2 : CrVal) : Check_T (Memory T) :=
+Definition alloc {T : Type} (m : Memory T) (arg1 : CrVal) (arg2 : CrVal) : Memory T :=
   match m with
   | Mem m' =>
     match arg1, arg2 with
-    | PtrVal (CrPtr addr), IntVal (CrUInt32 idx) => Legal (Mem
+    | PtrVal (CrPtr addr), IntVal (CrUInt32 idx) => Mem
         (PMap.set (pkey_to_mkey addr) (Allocated {|
           arr_len := idx;
           arr_bytes := PMap.init Uninit;
-      |}) m'))
-    | _, _ => Illegal
+      |}) m')
+    | _, _ => Invalid
     end
-  | Invalid => Illegal
+  | Invalid => Invalid
   end.
 
 (* TODO: Handle double free *)
-Definition free {T : Type} (m : Memory T) (arg1 : CrVal) : Check_T (Memory T) :=
+Definition free {T : Type} (m : Memory T) (arg1 : CrVal) : Memory T :=
   match m with
   | Mem m' =>
     match arg1 with
-    | PtrVal (CrPtr b) => Legal (Mem
-        (PMap.set (pkey_to_mkey b) Unallocated m'))
-    | _ => Illegal
+    | PtrVal (CrPtr b) => Mem
+        (PMap.set (pkey_to_mkey b) Unallocated m')
+    | _ => Invalid
     end
-  | Invalid => Illegal
+  | Invalid => Invalid
   end.
 
 Lemma crval_concrete_if_else : forall (v1 v2 : CrVal),
@@ -258,10 +256,11 @@ Proof.
   unfold eqb, eq, Rocqlib.zeq in H.
   destruct v1, v2; try reflexivity; try discriminate;
   try (destruct val; exfalso; congruence);
-  destruct val; destruct val0; try discriminate; try reflexivity;
+  destruct val; destruct val0; try discriminate; try reflexivity; simpl in *; unfold eq in *;
   try destruct (BinInt.Z.eq_dec (unsigned val) (unsigned val0)); try discriminate;
   try destruct (BinInt.Z.eq_dec (unsigned addr) (unsigned addr0)); try discriminate;
-  apply uintw_eq_from_unsigned in e; rewrite e; reflexivity.
+  try apply uintw_eq_from_unsigned in e; try rewrite e; try reflexivity;
+  destruct (Rocqlib.zeq (unsigned val) (unsigned val0)); try congruence.
 Qed.
 
 Lemma crval_concrete_if_else2 : forall (v1 v2 : CrVal),
@@ -271,12 +270,12 @@ Proof.
   intros v1 v2 H.
   destruct v1, v2; try discriminate;
   unfold eqb in H;
+  unfold iveqb in H;
   unfold eq in H;
   unfold Rocqlib.zeq in H;
   injection;
   destruct val, val0; try congruence;
   try destruct (BinInt.Z.eq_dec (unsigned val) (unsigned val0)); try discriminate;
   try destruct (BinInt.Z.eq_dec (unsigned addr) (unsigned addr0)); try discriminate;
-  intros;
   apply uintw_neq_from_unsigned in n; congruence.
 Qed.
