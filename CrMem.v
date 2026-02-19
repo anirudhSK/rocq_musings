@@ -56,51 +56,27 @@ Record machine_state {T : Type} := {
 Arguments machine_state T : clear implicits.
 Definition set_io {T : Type} (m : machine_state T) (k : positive) (v : ValType * T) := {|
   io_map := PMap.set k v (io_map m);
-  tmp_map := tmp_map m;
-  iarr_map := iarr_map m;
-  varr_map := varr_map m;
-  bound_map := bound_map m;
-  flag := flag m;
+  tmp_map := tmp_map m; iarr_map := iarr_map m; varr_map := varr_map m; bound_map := bound_map m; flag := flag m;
 |}.
 Definition set_tmp {T : Type} (m : machine_state T) (k : positive) (v : ValType * T) := {|
-  io_map := io_map m;
   tmp_map := PMap.set k v (tmp_map m);
-  iarr_map := iarr_map m;
-  varr_map := varr_map m;
-  bound_map := bound_map m;
-  flag := flag m;
+  io_map := io_map m; iarr_map := iarr_map m; varr_map := varr_map m; bound_map := bound_map m; flag := flag m;
 |}.
 Definition set_iarr {T : Type} (m : machine_state T) (k : positive) (v : ValType * T) := {|
-  io_map := io_map m;
-  tmp_map := tmp_map m;
   iarr_map := PMap.set k v (iarr_map m);
-  varr_map := varr_map m;
-  bound_map := bound_map m;
-  flag := flag m;
+  io_map := io_map m; tmp_map := tmp_map m; varr_map := varr_map m; bound_map := bound_map m; flag := flag m;
 |}.
 Definition set_varr {T : Type} (m : machine_state T) (k : positive) (v : ValType * T) := {|
-  io_map := io_map m;
-  tmp_map := tmp_map m;
-  iarr_map := iarr_map m;
   varr_map := PMap.set k v (varr_map m);
-  bound_map := bound_map m;
-  flag := flag m;
+  io_map := io_map m; tmp_map := tmp_map m; iarr_map := iarr_map m; bound_map := bound_map m; flag := flag m;
 |}.
 Definition set_bound {T : Type} (m : machine_state T) (k : positive) (v : ValType * T) := {|
-  io_map := io_map m;
-  tmp_map := tmp_map m;
-  iarr_map := iarr_map m;
-  varr_map := varr_map m;
   bound_map := PMap.set k v (bound_map m);
-  flag := flag m;
+  io_map := io_map m; tmp_map := tmp_map m; iarr_map := iarr_map m; varr_map := varr_map m; flag := flag m;
 |}.
 Definition set_flag {T : Type} (m : machine_state T) (b : bool) := {|
-  io_map := io_map m;
-  tmp_map := tmp_map m;
-  iarr_map := iarr_map m;
-  varr_map := varr_map m;
-  bound_map := bound_map m;
   flag := b;
+  io_map := io_map m; tmp_map := tmp_map m; iarr_map := iarr_map m; varr_map := varr_map m; bound_map := bound_map m;
 |}.
 
 Inductive arith_expr :=
@@ -132,6 +108,7 @@ with Z3Expr :=
 | Z3Array (e : arr_expr)
 | Z3Bool (e : bool_expr)
 | Z3Nil.
+
 Definition sym_state := machine_state Z3Expr.
 Definition init_sym : sym_state := {|
   io_map := PMap.init (nil_t, Z3Nil);
@@ -184,120 +161,126 @@ Definition sym_interp_arg (m : sym_state) (a : FnArg) : TypedExpr Z3Expr :=
 Definition uptr_to_key (p : uintbptr) : positive :=
   Pos.of_nat (S (Z.to_nat (unsigned p))).
 
-Definition apply_sym_op (i : Instruction) (m : sym_state) : sym_state :=
+Definition sym_alloc (m : sym_state) (dst a1 a2: FnArg) :=
   let local_lookup := sym_interp_arg m in
+  let m' :=
+    match local_lookup a2 with
+    | (uint32_t, Z3Arith e2) =>
+      match local_lookup a1 with
+      | (uintptr_t, Z3Ptr (Z3_ptr_lit x)) =>
+        (set_iarr m (uptr_to_key x) (array_t, Z3Array (Z3_arr_init e2)))
+      | (uintptr_t, Z3Ptr (Z3_ptr_var x)) =>
+        (set_varr m x (array_t, Z3Array (Z3_arr_init e2)))
+      | _ => set_flag m true
+      end
+    | _ => set_flag m true
+    end
+  in
+  match dst with
+  | IOArg x => set_io m' x (local_lookup a1)
+  | TmpArg x => set_tmp m' x (local_lookup a1)
+  | _ => set_flag m' true
+  end.
+
+Definition get_sym_ld_val (m : sym_state) (dst : FnArg) (e1 : ptr_expr) (e2 : arith_expr) :=
+  let lookup := match e1 with
+  | Z3_ptr_lit x =>
+    (iarr_map m) !! (uptr_to_key x)
+  | Z3_ptr_var x =>
+    (varr_map m) !! x
+  end in
+  let val := match lookup with
+  | (array_t, Z3Array A) => (uint8_t, Z3Arith (Z3_arr_ld A e2))
+  | _ => (err_t, Z3Nil)
+  end in
+  let m' := match e1 with 
+  | Z3_ptr_var x => match (bound_map m) !! x with
+    | (uint32_t, Z3Arith prev_bound) =>
+        set_bound m x
+        (uint32_t, Z3Arith (Z3_arith_ite
+          (Z3_Lt e2 prev_bound)
+          prev_bound
+          e2))
+    | _ => set_bound m x (uint32_t, Z3Arith e2)
+    end
+  | _ => m
+  end in
+  match val, dst with
+  | (uint8_t, Z3Arith _), IOArg x => set_io m' x val
+  | (uint8_t, Z3Arith _), TmpArg x => set_tmp m' x val
+  | _, _ => set_flag m true
+  end.
+Definition sym_ld (m : sym_state) (dst a1 a2 : FnArg) :=
+  let local_lookup := sym_interp_arg m in
+  let '(a1_t, a1_v) := local_lookup a1 in
+  let '(a2_t, a2_v) := local_lookup a2 in
+  match a1_t, a1_v, a2_t, a2_v with
+  | uintptr_t, Z3Ptr e1, int32_t, Z3Arith e2 =>
+    get_sym_ld_val m dst e1 e2
+  | _, _, _, _ => set_flag m true
+  end.
+
+Definition sym_st (m : sym_state) (a1 a2 a3 : FnArg) :=
+  let local_lookup := sym_interp_arg m in
+  (* TODO: handle case where a1 is a ValArg imm_ptr *)
+  let st_idx := match local_lookup a2 with
+  | (uint32_t, Z3Arith e2) => (uint32_t, Z3Arith e2)
+  | _ => (err_t, Z3Nil)
+  end in
+  let st_val := match local_lookup a3 with
+  | (uint8_t, Z3Arith e3) => (uint8_t, Z3Arith e3)
+  | _ => (err_t, Z3Nil)
+  end in
+  match local_lookup a1, st_idx, st_val with
+  | (uintptr_t, Z3Ptr (Z3_ptr_lit x)), (uint32_t, Z3Arith e2), (uint8_t, Z3Arith e3) =>
+    match (iarr_map m) !! (uptr_to_key x) with
+    | (array_t, Z3Array A) =>
+      set_iarr m (uptr_to_key x) (array_t, Z3Array (Z3_arr_st A e2 e3))
+    | _ => set_flag m true
+    end
+  | (uintptr_t, Z3Ptr (Z3_ptr_var x)), (uint32_t, Z3Arith e2), (uint8_t, Z3Arith e3) =>
+    match (varr_map m) !! x with
+    | (array_t, Z3Array A) =>
+      match (bound_map m) !! x with
+      | (uint32_t, Z3Arith prev_bound) =>
+          set_varr (set_bound m x
+            (uint32_t, Z3Arith (Z3_arith_ite
+              (Z3_Lt e2 prev_bound)
+              prev_bound
+              e2))) x (array_t, Z3Array (Z3_arr_st A e2 e3))
+      | _ => set_varr (set_bound m x st_idx) x (array_t, Z3Array (Z3_arr_st A e2 e3))
+      end
+    | _ => set_flag m true
+    end
+  | _, _, _ => set_flag m true
+  end.
+
+Definition sym_add (m : sym_state) (dst a1 a2 : FnArg) :=
+  let local_lookup := sym_interp_arg m in
+  let new_val : TypedExpr Z3Expr :=
+  match local_lookup a1, local_lookup a2 with
+  | (uint8_t, Z3Arith e1), (uint8_t, Z3Arith e2) =>
+    (uint8_t, Z3Arith (Z3_bitadd e1 e2))
+  | (uint32_t, Z3Arith e1), (uint32_t, Z3Arith e2) =>
+    (uint32_t, Z3Arith (Z3_bitadd e1 e2))
+  | (_, e1), _ => (err_t, e1)
+  end in
+  match new_val, dst with
+  | (err_t, _), _ => set_flag m true
+  | _, IOArg x => set_io m x new_val
+  | _, TmpArg x => set_tmp m x new_val
+  | _, ValArg _ => set_flag m true
+  end.
+
+Definition apply_sym_op (i : Instruction) (m : sym_state) : sym_state :=
   if (flag m) then
     m
   else
     match i with
-    | AllocOp dst a1 a2 =>
-      (* m' = updated state with new array *)
-      let m' : sym_state :=
-      match local_lookup a2 with
-      | (uint32_t, Z3Arith e2) =>
-        (* a2 is a valid length *)
-        match local_lookup a1 with
-        | (uintptr_t, Z3Ptr (Z3_ptr_lit x)) =>
-          (set_iarr m (uptr_to_key x) (array_t, Z3Array (Z3_arr_init e2)))
-        | (uintptr_t, Z3Ptr (Z3_ptr_var x)) =>
-          (set_varr m x (array_t, Z3Array (Z3_arr_init e2)))
-        | _ => set_flag m true
-        end
-      | _ => set_flag m true
-      end in
-      match dst with
-      | IOArg x => set_io m' x (local_lookup a1)
-      | TmpArg x => set_tmp m' x (local_lookup a1)
-      | _ => set_flag m' true
-      end
-
-    | LdOp dst a1 a2 =>
-      let '(a1_t, a1_v) := local_lookup a1 in
-      let '(a2_t, a2_v) := local_lookup a2 in
-      match a1_t, a1_v, a2_t, a2_v with
-      | uintptr_t, Z3Ptr e1, int32_t, Z3Arith e2 =>
-        (* a1 is a pointer w/ value e1 *)
-        (* a2 is a uint32_t w/ value e2 *)
-        let lookup := match e1 with
-        | Z3_ptr_lit x =>
-          (iarr_map m) !! (uptr_to_key x)
-        | Z3_ptr_var x =>
-          (varr_map m) !! x
-        end in
-        let val := match lookup with
-        | (array_t, Z3Array A) => (uint8_t, Z3Arith (Z3_arr_ld A e2))
-        | _ => (err_t, Z3Nil)
-        end in
-        (* val is the value stored at a1[a2] *)
-        let m' := match e1 with 
-        | Z3_ptr_var x => match (bound_map m) !! x with
-          | (uint32_t, Z3Arith prev_bound) =>
-              set_bound m x
-              (uint32_t, Z3Arith (Z3_arith_ite
-                (Z3_Lt e2 prev_bound)
-                prev_bound
-                e2))
-          | _ => set_bound m x (a2_t, a2_v)
-          end
-        | _ => m
-        end in
-        match val, dst with
-        | (uint8_t, Z3Arith _), IOArg x => set_io m' x val
-        | (uint8_t, Z3Arith _), TmpArg x => set_tmp m' x val
-        | _, _ => set_flag m true
-        end
-      | _, _, _, _ => set_flag m true
-      end
-
-    | StOp a1 a2 a3 =>
-      (* TODO: handle case where a1 is a ValArg imm_ptr *)
-      let st_idx := match local_lookup a2 with
-      | (uint32_t, Z3Arith e2) => (uint32_t, Z3Arith e2)
-      | _ => (err_t, Z3Nil)
-      end in
-      let st_val := match local_lookup a3 with
-      | (uint8_t, Z3Arith e3) => (uint8_t, Z3Arith e3)
-      | _ => (err_t, Z3Nil)
-      end in
-      match local_lookup a1, st_idx, st_val with
-      | (uintptr_t, Z3Ptr (Z3_ptr_lit x)), (uint32_t, Z3Arith e2), (uint8_t, Z3Arith e3) =>
-        match (iarr_map m) !! (uptr_to_key x) with
-        | (array_t, Z3Array A) =>
-          set_iarr m (uptr_to_key x) (array_t, Z3Array (Z3_arr_st A e2 e3))
-        | _ => set_flag m true
-        end
-      | (uintptr_t, Z3Ptr (Z3_ptr_var x)), (uint32_t, Z3Arith e2), (uint8_t, Z3Arith e3) =>
-        match (varr_map m) !! x with
-        | (array_t, Z3Array A) =>
-          match (bound_map m) !! x with
-          | (uint32_t, Z3Arith prev_bound) =>
-              set_varr (set_bound m x
-                (uint32_t, Z3Arith (Z3_arith_ite
-                  (Z3_Lt e2 prev_bound)
-                  prev_bound
-                  e2))) x (array_t, Z3Array (Z3_arr_st A e2 e3))
-          | _ => set_varr (set_bound m x st_idx) x (array_t, Z3Array (Z3_arr_st A e2 e3))
-          end
-        | _ => set_flag m true
-        end
-      | _, _, _ => set_flag m true
-      end
-
-    | AddOp dst a1 a2 =>
-      let new_val : TypedExpr Z3Expr :=
-      match local_lookup a1, local_lookup a2 with
-      | (uint8_t, Z3Arith e1), (uint8_t, Z3Arith e2) =>
-        (uint8_t, Z3Arith (Z3_bitadd e1 e2))
-      | (uint32_t, Z3Arith e1), (uint32_t, Z3Arith e2) =>
-        (uint32_t, Z3Arith (Z3_bitadd e1 e2))
-      | (_, e1), _ => (err_t, e1)
-      end in
-      match new_val, dst with
-      | (err_t, _), _ => set_flag m true
-      | _, IOArg x => set_io m x new_val
-      | _, TmpArg x => set_tmp m x new_val
-      | _, ValArg _ => set_flag m true
-      end
+    | AllocOp dst a1 a2 => sym_alloc m dst a1 a2
+    | LdOp dst a1 a2 => sym_ld m dst a1 a2
+    | StOp a1 a2 a3 => sym_st m a1 a2 a3
+    | AddOp dst a1 a2 => sym_add m dst a1 a2
     end.
 
 Record output_valuation {T : Type} : Type := {
@@ -489,93 +472,168 @@ Axiom z3_sound_none:
     forall sval aval,
     eval_z3_bool e sval aval = false.
 
-Definition matching_io (p1 p2 : IM_Program) : Prop :=
+Definition matching_fn_io (p1 p2 : IM_Program) : Prop :=
   (fn_in p1) = (fn_in p2) /\
   (fn_out_vars p1) = (fn_out_vars p2) /\
   (fn_out_iaddrs p1) = (fn_out_iaddrs p2) /\
   (fn_out_vaddrs p1) = (fn_out_vaddrs p2).
 
-Lemma mem_prog_soundness:
-  (* for all programs, p1 and p2 *)
-  forall (p1 p2 : IM_Program),
-  matching_io p1 p2 ->
-  (* if z3 returns unsat *)
-  z3_query (query_expression p1 p2) = Z3Unsat ->
-  (* then under every possible valuation *)
+Definition matching_error (p1 p2 : IM_Program) : Prop :=
   forall (sval : z3_s_val) (aval : z3_a_val),
-    let res1 := sym_eval_program p1 in
-    let res2 := sym_eval_program p2 in
-    (* they have the same error value *)
-    (errored res1 = errored res2) /\
-    (* they have the same output variable assignments *)
-    (forall (v : var_id),
-      In v (fn_out_vars p1) ->
-      let '(_, x1) := (var_val res1) v in
-      let '(_, x2) := (var_val res2) v in
-      eval_z3_expr x1 sval aval = eval_z3_expr x2 sval aval
-    ) /\
-    (* they write to the same absolute addresses *)
-    (forall (ia : uintbptr) (ix1 : uint32),
-      In (ia, ix1) (fn_out_iaddrs p1) ->
-      let '(_, x1) := (iptr_val res1) (ia, ix1) in
-      let '(_, x2) := (iptr_val res2) (ia, ix1) in
-      eval_z3_expr x1 sval aval = eval_z3_expr x2 sval aval
-    ) /\
-    (* and they write to the same relative addresses *)
-    (forall (va : var_id) (ix2 : uint32),
-      In (va, ix2) (fn_out_vaddrs p1) ->
-      let '(_, x1) := (vptr_val res1) (va, ix2) in
-      let '(_, x2) := (vptr_val res2) (va, ix2) in
-      eval_z3_expr x1 sval aval = eval_z3_expr x2 sval aval
-    ) /\
-    (* and they have the same access bounds for all variable arrays *)
-    (forall (va : var_id),
-      In va (List.map fst (List.filter (fun '(_, t) => match t with uintptr_t => true | _ => false end) (fn_in p1))) \/
-      In va (List.map fst (fn_out_vaddrs p1)) ->
-      let '(_, x1) := (vptr_bound res1) va in
-      let '(_, x2) := (vptr_bound res2) va in
-      eval_z3_expr x1 sval aval = eval_z3_expr x2 sval aval
-    ).
+    errored (sym_eval_program p1) = errored (sym_eval_program p2).
+Lemma mem_prog_soundness_error:
+  forall (p1 p2 : IM_Program),
+  matching_fn_io p1 p2 ->
+  z3_query (query_expression p1 p2) = Z3Unsat ->
+  matching_error p1 p2.
 Proof.
-  intros p1 p2 Hio Hz3 sval aval res1 res2.
-  repeat split.
-  - admit.
-  - admit.
-  - admit.
-  - admit.
+  intros.
 Admitted.
+
+Definition matching_io_vars (p1 p2 : IM_Program) : Prop :=
+  forall (sval : z3_s_val) (aval : z3_a_val) (v : var_id),
+    In v (fn_out_vars p1) ->
+    eval_z3_expr
+      (snd ((var_val (sym_eval_program p1)) v))
+      sval aval =
+    eval_z3_expr
+      (snd ((var_val (sym_eval_program p2)) v))
+      sval aval.
+Lemma mem_prog_soundness_io_vars:
+  forall (p1 p2 : IM_Program),
+  matching_fn_io p1 p2 ->
+  z3_query (query_expression p1 p2) = Z3Unsat ->
+  matching_io_vars p1 p2.
+Proof.
+  intros.
+Admitted.
+
+Definition matching_abs_addrs (p1 p2 : IM_Program) : Prop :=
+  forall (sval : z3_s_val) (aval : z3_a_val) (ia : uintbptr) (ix1 : uint32),
+    In (ia, ix1) (fn_out_iaddrs p1) ->
+    eval_z3_expr
+      (snd ((iptr_val (sym_eval_program p1)) (ia, ix1)))
+      sval aval =
+    eval_z3_expr
+      (snd ((iptr_val (sym_eval_program p2)) (ia, ix1)))
+      sval aval.
+Lemma mem_prog_soundness_abs_addrs:
+  forall (p1 p2 : IM_Program),
+  matching_fn_io p1 p2 ->
+  z3_query (query_expression p1 p2) = Z3Unsat ->
+  matching_abs_addrs p1 p2.
+Proof.
+  intros.
+Admitted.
+
+Definition matching_var_addrs (p1 p2 : IM_Program) : Prop :=
+  forall (sval : z3_s_val) (aval : z3_a_val) (va : var_id) (ix2 : uint32),
+    In (va, ix2) (fn_out_vaddrs p1) ->
+    eval_z3_expr
+      (snd ((vptr_val (sym_eval_program p1)) (va, ix2)))
+      sval aval =
+    eval_z3_expr
+      (snd ((vptr_val (sym_eval_program p2)) (va, ix2)))
+      sval aval.
+Lemma mem_prog_soundness_var_addrs:
+  forall (p1 p2 : IM_Program),
+  matching_fn_io p1 p2 ->
+  z3_query (query_expression p1 p2) = Z3Unsat ->
+  matching_var_addrs p1 p2.
+Proof.
+  intros.
+Admitted.
+
+Definition matching_access_bounds (p1 p2 : IM_Program) : Prop :=
+  forall (sval : z3_s_val) (aval : z3_a_val) (va : var_id),
+    (In va (List.map fst (List.filter (fun '(_, t) => match t with uintptr_t => true | _ => false end) (fn_in p1))) \/
+     In va (List.map fst (fn_out_vaddrs p1))) ->
+    eval_z3_expr
+      (snd ((vptr_bound (sym_eval_program p1)) va))
+      sval aval =
+    eval_z3_expr
+      (snd ((vptr_bound (sym_eval_program p2)) va))
+      sval aval.
+Lemma mem_prog_soundness_access_bounds:
+  forall (p1 p2 : IM_Program),
+  matching_fn_io p1 p2 ->
+  z3_query (query_expression p1 p2) = Z3Unsat ->
+  matching_access_bounds p1 p2.
+Proof.
+  intros.
+Admitted.
+
+Lemma mem_prog_soundness:
+  forall (p1 p2 : IM_Program),
+  matching_fn_io p1 p2 ->
+  z3_query (query_expression p1 p2) = Z3Unsat ->
+    matching_error p1 p2 /\
+    matching_io_vars p1 p2 /\
+    matching_abs_addrs p1 p2 /\
+    matching_var_addrs p1 p2 /\
+    matching_access_bounds p1 p2.
+Proof with assumption.
+  intros. repeat split.
+  - apply mem_prog_soundness_error...
+  - apply mem_prog_soundness_io_vars...
+  - apply mem_prog_soundness_abs_addrs...
+  - apply mem_prog_soundness_var_addrs...
+  - apply mem_prog_soundness_access_bounds...
+Qed.
+
+Definition differing_error (p1 p2 : IM_Program) (sval : z3_s_val) (aval : z3_a_val) : Prop :=
+  errored (sym_eval_program p1) <> errored (sym_eval_program p2).
+
+Definition differing_io_vars (p1 p2 : IM_Program) (sval : z3_s_val) (aval : z3_a_val) : Prop :=
+  exists (v : var_id),
+    In v (fn_out_vars p1) /\
+    eval_z3_expr
+      (snd ((var_val (sym_eval_program p1)) v))
+      sval aval <>
+    eval_z3_expr
+      (snd ((var_val (sym_eval_program p2)) v))
+      sval aval.
+
+Definition differing_abs_addrs (p1 p2 : IM_Program) (sval : z3_s_val) (aval : z3_a_val) : Prop :=
+  exists (ia : uintbptr) (ix1 : uint32),
+    In (ia, ix1) (fn_out_iaddrs p1) /\
+    eval_z3_expr
+      (snd ((iptr_val (sym_eval_program p1)) (ia, ix1)))
+      sval aval <>
+    eval_z3_expr
+      (snd ((iptr_val (sym_eval_program p2)) (ia, ix1)))
+      sval aval.
+
+Definition differing_var_addrs (p1 p2 : IM_Program) (sval : z3_s_val) (aval : z3_a_val) : Prop :=
+  exists (va : var_id) (ix2 : uint32),
+    In (va, ix2) (fn_out_vaddrs p1) /\
+    eval_z3_expr
+      (snd ((vptr_val (sym_eval_program p1)) (va, ix2)))
+      sval aval <>
+    eval_z3_expr
+      (snd ((vptr_val (sym_eval_program p2)) (va, ix2)))
+      sval aval.
+
+Definition differing_access_bounds (p1 p2 : IM_Program) (sval : z3_s_val) (aval : z3_a_val) : Prop :=
+  exists (va : var_id),
+    (In va (List.map fst (List.filter (fun '(_, t) => match t with uintptr_t => true | _ => false end) (fn_in p1))) \/
+     In va (List.map fst (fn_out_vaddrs p1))) /\
+    eval_z3_expr
+      (snd ((vptr_bound (sym_eval_program p1)) va))
+      sval aval <>
+    eval_z3_expr
+      (snd ((vptr_bound (sym_eval_program p2)) va))
+      sval aval.
 
 Lemma mem_prog_completeness:
   forall (p1 p2 : IM_Program) sval aval,
-  matching_io p1 p2 ->
-  (* if z3 returns sat *)
+  matching_fn_io p1 p2 ->
   z3_query (query_expression p1 p2) = Z3Sat sval aval ->
-  (* at least one of the outputs differ under the sat valuation *)
-  let res1 := sym_eval_program p1 in
-  let res2 := sym_eval_program p2 in
-  (errored res1 <> errored res2) \/
-  (exists (v : var_id),
-    In v (fn_out_vars p1) /\
-    let '(_, x1) := (var_val res1) v in
-    let '(_, x2) := (var_val res2) v in
-    eval_z3_expr x1 sval aval <> eval_z3_expr x2 sval aval) \/
-  (exists (ia : uintbptr) (ix1 : uint32),
-    In (ia, ix1) (fn_out_iaddrs p1) /\
-    let '(_, x1) := (iptr_val res1) (ia, ix1) in
-    let '(_, x2) := (iptr_val res2) (ia, ix1) in
-    eval_z3_expr x1 sval aval <> eval_z3_expr x2 sval aval) \/
-  (exists (va : var_id) (ix2 : uint32),
-    In (va, ix2) (fn_out_vaddrs p1) /\
-    let '(_, x1) := (vptr_val res1) (va, ix2) in
-    let '(_, x2) := (vptr_val res2) (va, ix2) in
-    eval_z3_expr x1 sval aval <> eval_z3_expr x2 sval aval) \/
-  (exists (va : var_id),
-    (In va (List.map fst (List.filter (fun '(_, t) => match t with uintptr_t => true | _ => false end) (fn_in p1))) \/
-     In va (List.map fst (fn_out_vaddrs p1))) /\
-    let '(_, x1) := (vptr_bound res1) va in
-    let '(_, x2) := (vptr_bound res2) va in
-    eval_z3_expr x1 sval aval <> eval_z3_expr x2 sval aval).
+  differing_error p1 p2 sval aval \/
+  differing_io_vars p1 p2 sval aval \/
+  differing_abs_addrs p1 p2 sval aval \/
+  differing_var_addrs p1 p2 sval aval \/
+  differing_access_bounds p1 p2 sval aval.
 Proof.
-  intros p1 p2 sval aval Hio Hz3.
+  intros.
 Admitted.
-
