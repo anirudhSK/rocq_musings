@@ -70,3 +70,24 @@ To prevent pushing old versions of the P4C compiler due to git not updating it, 
 // Apparently the vscoq language server needs to be
 // bumped up in version. Don't know why. But it still 
 // works with the old version.
+
+## Adding Tests
+
+In `./extracted_code/RunTests.ml`, to add a new test, write a new
+```
+let () = register "<test_name>" (fun () ->
+  <test_body>)
+```
+where test_body should return `1` if it passes and `0` if it fails.
+
+`get_program` and `get_mem_program` are useful helpers for reading in s-expression program representations.
+
+# Memory IR
+
+The memory IR mirrors a subset of the base IR but introduces the notion of loads, stores, and data types (e.g. you can have a uint8, but you can also have a pointer). 
+
+The notion of a "program" in this IR is a function body, a set of IO variables, absolute memory addresses, and variable memory addresses. That is, it contains both the state transformer as well as possible side effects.
+
+A new type, CrVal, was introduced that encodes integers of various byte widths as well as pointers.
+
+The notion of equivalence for two programs has been extended for memory programs to include equivalence of memory access extents, that is, if you pass in a pointer for example, for two programs to be identical, the greatest offset into that pointer used by the programs should be the same (since otherwise there could be a segfault on one and not the other).
