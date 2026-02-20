@@ -456,15 +456,20 @@ Definition query_outputs (p1 p2 : IM_Program) : bool_expr :=
 Definition query_expression (p1 p2 : IM_Program) : bool_expr :=
   Z3_Neg (Z3_Conj (query_outputs p1 p2) (query_bounds p1 p2)).
 
+Inductive FailureMode :=
+| ValueMismatch
+| BoundsMismatch
+| FullMismatch.
+
 Inductive Z3Res :=
-| Z3Sat (s : z3_s_val) (a : z3_a_val)
+| Z3Sat (s : z3_s_val) (a : z3_a_val) (f : FailureMode)
 | Z3Unsat
 | Z3Unknown.
 Parameter z3_query : bool_expr -> Z3Res.
 
 Axiom z3_sound_some:
-  forall e sval aval,
-    z3_query e = Z3Sat sval aval ->
+  forall e sval aval f,
+    z3_query e = Z3Sat sval aval f ->
     eval_z3_bool e sval aval = true.
 Axiom z3_sound_none:
   forall e,
@@ -626,9 +631,9 @@ Definition differing_access_bounds (p1 p2 : IM_Program) (sval : z3_s_val) (aval 
       sval aval.
 
 Lemma mem_prog_completeness:
-  forall (p1 p2 : IM_Program) sval aval,
+  forall (p1 p2 : IM_Program) sval aval f,
   matching_fn_io p1 p2 ->
-  z3_query (query_expression p1 p2) = Z3Sat sval aval ->
+  z3_query (query_expression p1 p2) = Z3Sat sval aval f ->
   differing_error p1 p2 sval aval \/
   differing_io_vars p1 p2 sval aval \/
   differing_abs_addrs p1 p2 sval aval \/

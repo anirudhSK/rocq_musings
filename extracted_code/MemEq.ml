@@ -33,6 +33,6 @@ let () =
   
   let res = MemSolver.mem_solve prog1 prog2 in
   match res with
-  | Z3Sat (_, _) -> print_endline("sat")
+  | Z3Sat (_, _, _) -> print_endline("sat")
   | Z3Unsat -> print_endline("unsat")
   | Z3Unknown -> print_endline("unknown")

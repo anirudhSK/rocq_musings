@@ -7,13 +7,30 @@ let get_program f =
   close_in x;
   str |> Sexp.of_string |> CrTypeIF.coq_CaracaraProgram_of_sexp
 
+let get_mem_program f =
+  let x = open_in f in
+  let len = in_channel_length x in
+  let str = really_input_string x len in
+  close_in x;
+  str |> Sexp.of_string |> CrTypeIF.CrMem.coq_IM_Program_of_sexp
+
 let programs = [|
-  get_program "./test/prog1.out";
-  get_program "./test/prog2.out";
-  get_program "./test/subtract1.out"; (* -2*)
-  get_program "./test/subtract2.out";
-  get_program "./test/complex1a.out"; (* -1, +2*)
-  get_program "./test/complex1b.out"; (* +2, -1*)
+(* 0 *) get_program "./test/prog1.out";
+(* 1 *) get_program "./test/prog2.out";
+
+(* 2 *) get_program "./test/subtract1.out"; (* -2*)
+(* 3 *) get_program "./test/subtract2.out";
+
+(* 4 *) get_program "./test/complex1a.out"; (* -1, +2*)
+(* 5 *) get_program "./test/complex1b.out"; (* +2, -1*)
+|]
+let mem_programs = [|
+(* 0 *) get_mem_program "./test/mem1a.out";
+(* 1 *) get_mem_program "./test/mem1b.out";
+(* 2 *) get_mem_program "./test/mem1c.out";
+
+(* 3 *) get_mem_program "./test/mem2a.out";
+(* 4 *) get_mem_program "./test/mem2b.out";
 |]
 
 let tests = ref []
@@ -70,6 +87,41 @@ let () = register "complex_add/sub NOT equal" (fun () ->
   let res = SmtQuery.equivalence_checker_cr_dsl p1 p2 in
   match res with
   | NotEquivalent _ -> 1
+  | _ -> 0)
+
+let () = register "basic address alias" (fun () ->
+  let p1 = mem_programs.(0) in
+  let p2 = mem_programs.(1) in
+
+  let res = MemSolver.mem_solve p1 p2 in
+  match res with
+  | Z3Unsat -> 1
+  | _ -> 0)
+
+let () = register "basic memory overwrite" (fun () ->
+  let p1 = mem_programs.(0) in
+  let p2 = mem_programs.(2) in
+  
+  let res = MemSolver.mem_solve p1 p2 in
+  match res with
+  | Z3Sat (_, _, f) -> (
+    match f with
+    | ValueMismatch -> 1
+    | _ -> 0
+    )
+  | _ -> 0)
+
+let () = register "divergent load extents" (fun () ->
+  let p1 = mem_programs.(3) in
+  let p2 = mem_programs.(4) in
+  
+  let res = MemSolver.mem_solve p1 p2 in
+  match res with
+  | Z3Sat (_, _, f) -> (
+    match f with
+    | BoundsMismatch -> 1
+    | _ -> 0
+    )
   | _ -> 0)
 
 let () =

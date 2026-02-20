@@ -253,8 +253,15 @@ let sat_check
         | Some value -> value
         | None -> Unallocated
       in
+
+      let fmode = match (outputs_holds, bounds_holds) with
+      | (false, true) -> ValueMismatch
+      | (true, false) -> BoundsMismatch
+      | (false, false) -> FullMismatch
+      | (true, true) -> raise (Failure "a cosmic ray must have flipped a bit")
+      in
       
-      Z3Sat (sval, aval))
+      Z3Sat (sval, aval, fmode))
     | None -> raise (Failure "Z3 returned SAT, but no model."))
 
 let mem_solve (p1 : coq_IM_Program) (p2 : coq_IM_Program) : coq_Z3Res =
