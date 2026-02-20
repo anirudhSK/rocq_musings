@@ -7,7 +7,7 @@ Definition uint16 := @bit_int 16%positive.
 Definition uint32 := @bit_int 32%positive.
 Definition uint64 := @bit_int 64%positive.
 
-Definition uintbptr := @bit_int 32%positive.
+Definition uintbptr := @bit_int 64%positive.
 
 Lemma uintw_eq_from_unsigned :
   forall (w : positive) (v1 v2 : @bit_int w),

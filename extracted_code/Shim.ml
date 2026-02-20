@@ -31,15 +31,23 @@ let rec pos_to_str (n : BinNums.positive) : Stdlib.String.t =
   | Coq_xH -> "1"
   | Coq_xO n_ -> (pos_to_str n_) ^ "0"
   | Coq_xI n_ -> (pos_to_str n_) ^ "1"
-let int_to_coq_uint8 (n : int) : BinNums.coq_Z =
-  let rec int_to_pos (n : int) : BinNums.positive =
-    if (n = 1) then Coq_xH
-    else if (n mod 2 = 0) then
-      Coq_xO (int_to_pos (n lsr 1))
-    else
-      Coq_xI (int_to_pos (n lsr 1)) in
 
+let rec int_to_pos (n : int) : BinNums.positive =
+  if (n = 1) then Coq_xH
+  else if (n mod 2 = 0) then
+    Coq_xO (int_to_pos (n lsr 1))
+  else
+    Coq_xI (int_to_pos (n lsr 1))
+let int_to_coq_uint8 (n : int) : BinNums.coq_Z =
   repr (Coq_xO (Coq_xO (Coq_xO Coq_xH))) (
+    if (n = 0) then Z0
+    else Zpos (int_to_pos n))
+let int_to_coq_uint32 (n : int) : BinNums.coq_Z =
+  repr (Coq_xO (Coq_xO (Coq_xO (Coq_xO (Coq_xO Coq_xH))))) (
+    if (n = 0) then Z0
+    else Zpos (int_to_pos n))
+let int_to_coq_uint64 (n : int) : BinNums.coq_Z =
+  repr (Coq_xO (Coq_xO (Coq_xO (Coq_xO (Coq_xO (Coq_xO Coq_xH)))))) (
     if (n = 0) then Z0
     else Zpos (int_to_pos n))
 let rec coq_str_to_str (s : string) : Stdlib.String.t =

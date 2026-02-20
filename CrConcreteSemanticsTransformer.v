@@ -13,7 +13,7 @@ From MyProject Require Import CrVal.
 Require Import ZArith.
 
 (* Apply binary operation *)
-Definition apply_bin_op (ps: ConcreteState) (f : BinaryOp) (arg1 : CrVal) (arg2 : CrVal) : CrVal :=
+Definition apply_bin_op (f : BinaryOp) (arg1 : CrVal) (arg2 : CrVal) : CrVal :=
   match f with
   | AddOp => CrVal.add arg1 arg2
   | SubOp => CrVal.sub arg1 arg2
@@ -35,8 +35,8 @@ Definition lookup_concrete (arg : FunctionArgument) (ps : ConcreteState) : CrVal
 
 Definition eval_hdr_op_expr_concrete (op : HdrOp) (ps : ConcreteState) : CrVal :=
   match op with
-  | StatefulOp f arg1 arg2 _ => apply_bin_op ps f (lookup_concrete arg1 ps) (lookup_concrete arg2 ps)
-  | StatelessOp f arg1 arg2 _ => apply_bin_op ps f (lookup_concrete arg1 ps) (lookup_concrete arg2 ps)
+  | StatefulOp f arg1 arg2 _ => apply_bin_op f (lookup_concrete arg1 ps) (lookup_concrete arg2 ps)
+  | StatelessOp f arg1 arg2 _ => apply_bin_op f (lookup_concrete arg1 ps) (lookup_concrete arg2 ps)
   end.
 
 Definition eval_hdr_op_assign_concrete (op : HdrOp) (ps: ConcreteState) : ConcreteState :=

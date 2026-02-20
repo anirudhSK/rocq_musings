@@ -78,7 +78,6 @@ and parse_array_expr
   match _e with
     (* TODO: handle array length *)
   | Z3_arr_init _ ->
-    (* The LLM made this and I don't know what it does: *)
     let arr_sort = Z3.Z3Array.mk_sort ctx
       (Z3.BitVector.mk_sort ctx 32)  (* index is 32-bit *)
       (Z3.BitVector.mk_sort ctx 8) in (* values are 8-bit *)
@@ -102,8 +101,10 @@ and parse_ptr_expr
   (_e : ptr_expr)
   (ctx : Z3.context)
   (vars : var_tracker) : Z3.Expr.expr =
+  (* TODO: get around to doing this *)
   let _ = vars in
-  Z3.BitVector.mk_numeral ctx "0" 8
+  print_endline("dummy pointer handler called");
+  Z3.BitVector.mk_numeral ctx "0" 64
 
 (* Helper to extract value from Z3 model for scalar variables *)
 let eval_scalar_var (m : Z3.Model.model) (name : string) (z3_var : Z3.Expr.expr) : coq_CrVal option =

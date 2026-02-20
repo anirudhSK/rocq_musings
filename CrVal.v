@@ -75,7 +75,6 @@ Definition ivltb (x y : CrInt_T) : bool :=
   | CrUInt16 x', CrUInt16 y'
   | CrUInt32 x', CrUInt32 y'
   | CrUInt64 x', CrUInt64 y' => Integers.lt x' y'
-  | CrNilInt, CrNilInt => true
   | _, _ => false
   end.
 Transparent ivltb.
@@ -85,8 +84,6 @@ Definition ltb (x y : CrVal) : bool :=
     => ivltb x' y'
   | PtrVal (CrPtr x'), PtrVal (CrPtr y')
     => Integers.lt x' y'
-  | PtrVal (CrNilPtr), PtrVal (CrNilPtr)
-    => true
   | _, _ => false
   end.
 

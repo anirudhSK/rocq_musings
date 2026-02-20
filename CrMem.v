@@ -215,7 +215,7 @@ Definition sym_ld (m : sym_state) (dst a1 a2 : FnArg) :=
   let '(a1_t, a1_v) := local_lookup a1 in
   let '(a2_t, a2_v) := local_lookup a2 in
   match a1_t, a1_v, a2_t, a2_v with
-  | uintptr_t, Z3Ptr e1, int32_t, Z3Arith e2 =>
+  | uintptr_t, Z3Ptr e1, uint32_t, Z3Arith e2 =>
     get_sym_ld_val m dst e1 e2
   | _, _, _, _ => set_flag m true
   end.

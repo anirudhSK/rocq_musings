@@ -76,9 +76,9 @@ let to_vmap (m : Z3.Model.model) (acc : Shim.coq_ValueMap) (name : string) (z3_v
         if bv_size = 8 then
           CrVal.IntVal (CrVal.CrUInt8 (Shim.int_to_coq_uint8 var_val))
         else if bv_size = 32 then
-          CrVal.IntVal (CrVal.CrUInt32 (Shim.int_to_coq_uint8 var_val))
+          CrVal.IntVal (CrVal.CrUInt32 (Shim.int_to_coq_uint32 var_val))
         else if bv_size = 64 then
-          CrVal.PtrVal (CrVal.CrPtr (Shim.int_to_coq_uint8 var_val))
+          CrVal.PtrVal (CrVal.CrPtr (Shim.int_to_coq_uint64 var_val))
         else
           CrVal.UninitVal
       in
@@ -87,7 +87,7 @@ let to_vmap (m : Z3.Model.model) (acc : Shim.coq_ValueMap) (name : string) (z3_v
         cr_val,
         acc)
     else
-      raise (Failure ("Expects uint8 but got non-numeral value for " ^ name))
+      raise (Failure ("Expects uint but got non-numeral value for " ^ name))
   | None -> raise (Failure ("Z3 failed to return valuation for " ^ name))
 
 let sat_check solver tracked_vars =
