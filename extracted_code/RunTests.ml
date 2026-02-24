@@ -123,6 +123,19 @@ let () = register "degenerate branch" (fun () ->
   | Z3Unsat -> 1
   | _ -> 0)
 
+let () = register "sat aval" (fun () ->
+  let p1 = get_mem_program "./test/mem4a.out" in
+  let p2 = get_mem_program "./test/mem4b.out" in
+  
+  let res = MemSolver.mem_solve p1 p2 in
+  match res with
+  | Z3Sat (_, _, f) -> (
+    match f with
+    | ValueMismatch -> 1
+    | _ -> 0
+    )
+  | _ -> 0)
+
 let () =
   let test_stats = Stdlib.List.fold_left
     (fun (acc : int * int) (name, test) -> (

@@ -8,6 +8,19 @@ end
 module StringMap = Stdlib.Map.Make(CoqStringOrd)
 type var_tracker = Z3.Expr.expr StringMap.t ref
 
+let u8_sfx = 0
+let u16_sfx = 1
+let u32_sfx = 2
+let u64_sfx = 3
+let arr_sfx = 4
+let suffixes = [|
+  "000";
+  "001";
+  "010";
+  "011";
+  "100";
+|]
+
 let rec parse_bool_expr
   (_e : bool_expr)
   (ctx : Z3.context)
@@ -46,7 +59,7 @@ and parse_arith_expr
   | Z3_u8 n -> Z3.BitVector.mk_numeral ctx (string_of_int (Shim.coq_Z_to_int n)) 8
   | Z3_u32 n -> Z3.BitVector.mk_numeral ctx (string_of_int (Shim.coq_Z_to_int n)) 32
   | Z3_u8_var name -> (
-    let name_str = (Shim.pos_to_str name) ^ "0" in
+    let name_str = (Shim.pos_to_str name) ^ suffixes.(u8_sfx) in
     match StringMap.find_opt name_str !vars with
     | Some s_var -> s_var
     | None ->
@@ -54,7 +67,7 @@ and parse_arith_expr
         vars := StringMap.add name_str s_var !vars;
         s_var)
   | Z3_u32_var name -> (
-    let name_str = (Shim.pos_to_str name) ^ "0" in
+    let name_str = (Shim.pos_to_str name) ^ suffixes.(u32_sfx) in
     match StringMap.find_opt name_str !vars with
     | Some s_var -> s_var
     | None ->
@@ -94,7 +107,7 @@ and parse_array_expr
       (Z3.BitVector.mk_sort ctx 8) in (* values are 8-bit *)
     Z3.Expr.mk_fresh_const ctx "arr_init" arr_sort
   | Z3_arr_var name -> (
-    let name_str = (Shim.pos_to_str name) ^ "1" in
+    let name_str = (Shim.pos_to_str name) ^ suffixes.(arr_sfx) in
     match StringMap.find_opt name_str !vars with
     | Some a_var -> a_var
     | None ->
@@ -145,7 +158,7 @@ let eval_scalar_var (m : Z3.Model.model) (name : string) (z3_var : Z3.Expr.expr)
           if bv_size = 8 then
             Some (IntVal (CrUInt8 (Shim.int_to_coq_uint8 num_val)))
           else if bv_size = 32 then
-            Some (IntVal (CrUInt32 (Shim.int_to_coq_uint8 num_val)))
+            Some (IntVal (CrUInt32 (Shim.int_to_coq_uint32 num_val)))
           else
             None
       | _ -> None)
@@ -167,16 +180,81 @@ let build_sval_map (m : Z3.Model.model) (var_bindings : (string * Z3.Expr.expr) 
     []
     var_bindings
 
-(* Helper to build aval map from array variables (suffix "1") *)
-let build_aval_map (m : Z3.Model.model) (var_bindings : (string * Z3.Expr.expr) list)
+(* Helper to build aval map from array variables (suffix matching arr_sfx).
+   We extract the Z3 function interpretation of each array, read out
+   the explicitly-defined entries, and build a coq_MemBlock. *)
+let build_aval_map (_ctx : Z3.context) (m : Z3.Model.model) (var_bindings : (string * Z3.Expr.expr) list)
   : (string * coq_CrVal coq_Array) list =
-  let _ = m in
   Stdlib.List.fold_left
-    (fun acc (name, _z3_var) ->
-      if Stdlib.String.ends_with ~suffix:"1" name then
-        let base_name = Stdlib.String.sub name 0 (Stdlib.String.length name - 1) in
-        (* For now, return Unallocated for all arrays *)
-        (base_name, Unallocated) :: acc
+    (fun acc (name, z3_var) ->
+      if Stdlib.String.ends_with ~suffix:suffixes.(arr_sfx) name then
+        let base_name = Stdlib.String.sub name 0
+          (Stdlib.String.length name - Stdlib.String.length suffixes.(arr_sfx)) in
+        (* Try to extract the array interpretation from the model *)
+        let arr =
+          match Z3.Model.eval m z3_var true with
+          | Some arr_expr ->
+            (* Read entries by walking the Z3 expression for store chains.
+               Z3 array models are typically: (store (store ... (const v) i1 v1) i2 v2)
+               We collect all index-value pairs, plus the default value from
+               a (const ...) base if present. *)
+            let rec extract_stores expr acc_entries =
+              if Z3.Z3Array.is_store expr then
+                let args = Z3.Expr.get_args expr in
+                match args with
+                | [base_arr; idx_expr; val_expr] ->
+                  let idx =
+                    try int_of_string (Z3.BitVector.numeral_to_string idx_expr)
+                    with _ -> -1 in
+                  let v =
+                    try int_of_string (Z3.BitVector.numeral_to_string val_expr)
+                    with _ -> 0 in
+                  if idx >= 0 then
+                    extract_stores base_arr ((idx, v) :: acc_entries)
+                  else
+                    extract_stores base_arr acc_entries
+                | _ -> (acc_entries, None)
+              else
+                (* Check if the base is a const array — extract default value *)
+                let default_val =
+                  try
+                    let decl = Z3.Expr.get_func_decl expr in
+                    let dk = Z3.FuncDecl.get_decl_kind decl in
+                    if dk = Z3enums.OP_CONST_ARRAY then
+                      match Z3.Expr.get_args expr with
+                      | [default_expr] ->
+                        let v = int_of_string (Z3.BitVector.numeral_to_string default_expr) in
+                        Some v
+                      | _ -> None
+                    else None
+                  with _ -> None
+                in
+                (acc_entries, default_val)
+            in
+            let (entries, default_val) = extract_stores arr_expr [] in
+            if entries = [] && default_val = None then
+              Unallocated
+            else
+              (* Determine length as max index + 1 *)
+              let max_idx = Stdlib.List.fold_left
+                (fun mx (i, _) -> max mx i) 0 entries in
+              let len = max_idx + 1 in
+              (* Initialize PMap with the default value if we have one *)
+              let init_status = match default_val with
+                | Some v -> Init (IntVal (CrUInt8 (Shim.int_to_coq_uint8 v)))
+                | None -> Uninit
+              in
+              let bytes = Stdlib.List.fold_left
+                (fun pmap (i, v) ->
+                  let key = Shim.int_to_pos (i + 1) in (* PMap keys are 1-indexed positives *)
+                  let cval = IntVal (CrUInt8 (Shim.int_to_coq_uint8 v)) in
+                  Maps.PMap.set key (Init cval) pmap)
+                (Maps.PMap.init init_status)
+                entries in
+              Allocated { arr_len = Shim.int_to_coq_uint32 len; arr_bytes = bytes }
+          | None -> Unallocated
+        in
+        (base_name, arr) :: acc
       else
         acc)
     []
@@ -202,11 +280,19 @@ let rec eval_z3_bool_concrete
       let v1_opt = Z3.Model.eval m z3_e1 true in
       let v2_opt = Z3.Model.eval m z3_e2 true in
       (match v1_opt, v2_opt with
-       | Some v1, Some v2 -> 
-           (* Convert both values to strings and compare *)
-           let s1 = Z3.Expr.to_string v1 in
-           let s2 = Z3.Expr.to_string v2 in
-           Stdlib.String.equal s1 s2
+       | Some v1, Some v2 ->
+           let sort1 = Z3.Expr.get_sort v1 in
+           let sort2 = Z3.Expr.get_sort v2 in
+           if Z3.Sort.get_sort_kind sort1 = Z3enums.BV_SORT &&
+              Z3.Sort.get_sort_kind sort2 = Z3enums.BV_SORT
+           then
+             (try
+                let n1 = int_of_string (Z3.BitVector.numeral_to_string v1) in
+                let n2 = int_of_string (Z3.BitVector.numeral_to_string v2) in
+                n1 = n2
+              with _ -> false)
+           else
+             Z3.Sort.equal sort1 sort2 && Z3.Expr.equal v1 v2
        | _ -> false)
   | Z3_Lt (e1, e2) ->
       let z3_e1 = parse_arith_expr e1 ctx vars in
@@ -241,7 +327,27 @@ let sat_check
       
       (* Build maps for sval and aval *)
       let sval_map = build_sval_map m var_bindings in
-      let aval_map = build_aval_map m var_bindings in
+      let aval_map = build_aval_map ctx m var_bindings in
+      
+      (* Print array valuations *)
+      Stdlib.List.iter (fun (name, arr) ->
+        match arr with
+        | Unallocated ->
+          Printf.printf "| arr( \027[1m%s\027[0m ) := <unallocated>\n" name
+        | Allocated { arr_len; arr_bytes } ->
+          let len = Shim.coq_Z_to_int arr_len in
+          Printf.printf "| arr( \027[1m%s\027[0m ) := [" name;
+          for i = 0 to len - 1 do
+            let key = Shim.int_to_pos (i + 1) in
+            let v = match Maps.PMap.get key arr_bytes with
+              | Init (IntVal (CrUInt8 n)) -> Shim.coq_Z_to_int n
+              | _ -> 0
+            in
+            if i > 0 then Printf.printf ", ";
+            Printf.printf "%d" v
+          done;
+          Printf.printf "] (len=%d)\n" len
+      ) aval_map;
       
       (* Check which part failed *)
       let outputs_expr = CrMem.query_outputs p1 p2 in

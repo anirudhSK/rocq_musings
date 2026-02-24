@@ -202,3 +202,45 @@ Definition p3b : IM_Program := {|
   fn_out_iaddrs := [];
   fn_out_vaddrs := [];
 |}.
+
+Definition p4a : IM_Program := {|
+  fn_in := [
+    (rdi, uintptr_t);
+    (rax, uint8_t)
+  ];
+  fn_body := [
+    LdOp (IOArg rax)
+      (IOArg rdi)
+      (ValArg (imm_u32 (repr 1)));
+    LdOp (IOArg rax)
+      (IOArg rdi)
+      (ValArg (imm_u32 (repr 0)))
+  ];
+  fn_out_vars := [rax];
+  fn_out_iaddrs := [];
+  fn_out_vaddrs := [];
+|}.
+Definition p4b : IM_Program := {|
+  fn_in := [
+    (rdi, uintptr_t);
+    (rax, uint8_t)
+  ];
+  fn_body := [
+    LdOp (IOArg rax)
+      (IOArg rdi)
+      (ValArg (imm_u32 (repr 0)));
+    LdOp (IOArg rax)
+      (IOArg rdi)
+      (ValArg (imm_u32 (repr 1)))
+  ];
+  fn_out_vars := [rax];
+  fn_out_iaddrs := [];
+  fn_out_vaddrs := [];
+|}.
+
+Definition example_programs := [
+  p1a; p1b; p1c;
+  p2a; p2b; p2c;
+  p3a; p3b;
+  p4a; p4b
+].

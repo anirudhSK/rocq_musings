@@ -9,8 +9,8 @@ let load f =
   str
 
 let () =
-  if Array.length Sys.argv != 3 then (
-    prerr_endline "usage: ./bin <file_a> <file_b>";
+  if Array.length Sys.argv <> 3 then (
+    prerr_endline "usage: dune exec mem_eq <file_a> <file_b>";
     exit 1
   );
 

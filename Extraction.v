@@ -17,7 +17,5 @@ Set Extraction Output Directory "extracted_code".
 (* Extract everything else normally *)
 Separate Extraction
   CrMem.query_expression CrMem.Z3Res
-  CrMemEx.p1a CrMemEx.p1b CrMemEx.p1c
-  CrMemEx.p2a CrMemEx.p2b CrMemEx.p2c
-  CrMemEx.p3a CrMemEx.p3b
+  CrMemEx.example_programs
   CrDsl.CaracaraProgram Integers.repr SmtQuery.equivalence_checker_cr_dsl SmtTypes.SmtResult.

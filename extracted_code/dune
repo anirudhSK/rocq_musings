@@ -11,6 +11,12 @@
   (libraries extracted_code_lib))
 
 (executable
+  (public_name dump_mem_ex)
+  (name DumpMemEx)
+  (modules DumpMemEx)
+  (libraries extracted_code_lib))
+
+(executable
  (public_name run_tests)
  (name RunTests)
  (modules RunTests)

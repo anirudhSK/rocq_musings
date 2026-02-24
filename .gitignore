@@ -24,6 +24,7 @@ smt_query
 !/extracted_code/CrTypeIF.ml
 !/extracted_code/Shim.ml
 !/extracted_code/MemEq.ml
+!/extracted_code/DumpMemEx.ml
 !/extracted_code/MemSolver.ml
 !/extracted_code/Z3Solver.ml
 !/extracted_code/EqCheck.ml

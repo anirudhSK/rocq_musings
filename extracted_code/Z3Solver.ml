@@ -72,6 +72,7 @@ let to_vmap (m : Z3.Model.model) (acc : Shim.coq_ValueMap) (name : string) (z3_v
       let var_str = Z3.BitVector.numeral_to_string v in
       let var_val = int_of_string var_str in
       Printf.printf "| var( \027[1m%s\027[0m ) := %d\n" name var_val;
+      (* TODO: Better casting *)
       let cr_val = 
         if bv_size = 8 then
           CrVal.IntVal (CrVal.CrUInt8 (Shim.int_to_coq_uint8 var_val))
