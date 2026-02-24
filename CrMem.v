@@ -33,8 +33,9 @@ Inductive Instruction : Type :=
 | AllocOp (dst a1 a2 : FnArg)
 | LdOp (dst a1 a2 : FnArg)
 | StOp (a1 a2 a3 : FnArg)
-| AddOp (dst a1 a2 : FnArg).
-
+| AddOp (dst a1 a2 : FnArg)
+| BitOrOp (dst a1 a2 : FnArg)
+| BitFlipOp (dst a1 : FnArg).
 Record IM_Program := {
   fn_in : list (var_id * ValType);
   fn_body : list Instruction;
@@ -85,6 +86,8 @@ Inductive arith_expr :=
 | Z3_u8_var (name : positive)
 | Z3_u32_var (name : positive)
 | Z3_bitadd (e1 e2 : arith_expr)
+| Z3_bitor (e1 e2 : arith_expr)
+| Z3_bitflip (e : arith_expr)
 | Z3_arr_ld (e1 : arr_expr) (e2 : arith_expr)
 | Z3_arith_ite (c : bool_expr) (e1 e2 : arith_expr)
 with ptr_expr :=
@@ -255,6 +258,14 @@ Definition sym_st (m : sym_state) (a1 a2 a3 : FnArg) :=
   | _, _, _ => set_flag m true
   end.
 
+Definition set_ (dst : FnArg) (m : sym_state) (val : TypedExpr Z3Expr) :=
+  match val, dst with
+  | (err_t, _), _ => set_flag m true
+  | _, IOArg x => set_io m x val
+  | _, TmpArg x => set_tmp m x val
+  | _, ValArg _ => set_flag m true
+  end.
+
 Definition sym_add (m : sym_state) (dst a1 a2 : FnArg) :=
   let local_lookup := sym_interp_arg m in
   let new_val : TypedExpr Z3Expr :=
@@ -265,12 +276,31 @@ Definition sym_add (m : sym_state) (dst a1 a2 : FnArg) :=
     (uint32_t, Z3Arith (Z3_bitadd e1 e2))
   | (_, e1), _ => (err_t, e1)
   end in
-  match new_val, dst with
-  | (err_t, _), _ => set_flag m true
-  | _, IOArg x => set_io m x new_val
-  | _, TmpArg x => set_tmp m x new_val
-  | _, ValArg _ => set_flag m true
-  end.
+  set_ dst m new_val.
+
+  Definition sym_bitor (m : sym_state) (dst a1 a2 : FnArg) :=
+  let local_lookup := sym_interp_arg m in
+  let new_val : TypedExpr Z3Expr :=
+  match local_lookup a1, local_lookup a2 with
+  | (uint8_t, Z3Arith e1), (uint8_t, Z3Arith e2) =>
+    (uint8_t, Z3Arith (Z3_bitor e1 e2))
+  | (uint32_t, Z3Arith e1), (uint32_t, Z3Arith e2) =>
+    (uint32_t, Z3Arith (Z3_bitor e1 e2))
+  | (_, e1), _ => (err_t, e1)
+  end in
+  set_ dst m new_val.
+
+Definition sym_bitflip (m : sym_state) (dst a1 : FnArg) :=
+  let local_lookup := sym_interp_arg m in
+  let new_val : TypedExpr Z3Expr :=
+  match local_lookup a1 with
+  | (uint8_t, Z3Arith e1) =>
+    (uint8_t, Z3Arith (Z3_bitflip e1))
+  | (uint32_t, Z3Arith e1) =>
+    (uint32_t, Z3Arith (Z3_bitflip e1))
+  | (_, e1) => (err_t, e1)
+  end in
+  set_ dst m new_val.
 
 Definition apply_sym_op (i : Instruction) (m : sym_state) : sym_state :=
   if (flag m) then
@@ -281,6 +311,8 @@ Definition apply_sym_op (i : Instruction) (m : sym_state) : sym_state :=
     | LdOp dst a1 a2 => sym_ld m dst a1 a2
     | StOp a1 a2 a3 => sym_st m a1 a2 a3
     | AddOp dst a1 a2 => sym_add m dst a1 a2
+    | BitOrOp dst a1 a2 => sym_bitor m dst a1 a2
+    | BitFlipOp dst a1 => sym_bitflip m dst a1
     end.
 
 Record output_valuation {T : Type} : Type := {
@@ -345,6 +377,23 @@ Fixpoint eval_z3_arith (e : arith_expr) (sval : z3_s_val) (aval : z3_a_val) : Cr
     | IntVal (CrUInt32 x1), IntVal (CrUInt32 x2) =>
       IntVal (CrUInt32 (Integers.add x1 x2))
     | _, _ => ErrorVal
+    end
+  | Z3_bitor e1 e2 =>
+    let v1 := eval_z3_arith e1 sval aval in
+    let v2 := eval_z3_arith e2 sval aval in
+    match v1, v2 with
+    | IntVal (CrUInt8 x1), IntVal (CrUInt8 x2) =>
+      IntVal (CrUInt8 (Integers.or x1 x2))
+    | IntVal (CrUInt32 x1), IntVal (CrUInt32 x2) =>
+      IntVal (CrUInt32 (Integers.or x1 x2))
+    | _, _ => ErrorVal
+    end
+  | Z3_bitflip e1 =>
+    let v := eval_z3_arith e1 sval aval in
+    match v with
+    | IntVal (CrUInt8 x) => IntVal (CrUInt8 (Integers.not x))
+    | IntVal (CrUInt32 x) => IntVal (CrUInt32 (Integers.not x))
+    | _ => ErrorVal
     end
   | Z3_arr_ld e1 e2 =>
     let res := CrVal.ld_arr (eval_z3_array e1 sval aval) (eval_z3_arith e2 sval aval) in

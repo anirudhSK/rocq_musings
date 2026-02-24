@@ -64,6 +64,10 @@ and parse_arith_expr
   | Z3_bitadd (e1, e2) -> Z3.BitVector.mk_add ctx
     (parse_arith_expr e1 ctx vars)
     (parse_arith_expr e2 ctx vars)
+  | Z3_bitor (e1, e2) -> Z3.BitVector.mk_or ctx
+    (parse_arith_expr e1 ctx vars)
+    (parse_arith_expr e2 ctx vars)
+  | Z3_bitflip e1 -> Z3.BitVector.mk_not ctx (parse_arith_expr e1 ctx vars)
   | Z3_arr_ld (e1, e2) -> Z3.Z3Array.mk_select ctx
     (parse_array_expr e1 ctx vars)
     (parse_arith_expr e2 ctx vars)
