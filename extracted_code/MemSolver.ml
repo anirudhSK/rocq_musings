@@ -36,7 +36,7 @@ and parse_expr
   | Z3Array e -> parse_array_expr e ctx vars
   | Z3Bool e -> parse_bool_expr e ctx vars
   | Z3Nil ->
-    print_endline("something has gone horribly wrong :(((");
+    print_endline("Met nil expression");
     Z3.BitVector.mk_numeral ctx "0" 8
 and parse_arith_expr
   (_e : arith_expr)
@@ -64,6 +64,12 @@ and parse_arith_expr
   | Z3_bitadd (e1, e2) -> Z3.BitVector.mk_add ctx
     (parse_arith_expr e1 ctx vars)
     (parse_arith_expr e2 ctx vars)
+  | Z3_bitasl (e1, e2) -> Z3.BitVector.mk_shl ctx
+    (parse_arith_expr e1 ctx vars)
+    (parse_arith_expr e2 ctx vars)
+  | Z3_bitasr (e1, e2) -> Z3.BitVector.mk_ashr ctx
+    (parse_arith_expr e1 ctx vars)
+    (parse_arith_expr e2 ctx vars)
   | Z3_bitor (e1, e2) -> Z3.BitVector.mk_or ctx
     (parse_arith_expr e1 ctx vars)
     (parse_arith_expr e2 ctx vars)
@@ -72,9 +78,10 @@ and parse_arith_expr
     (parse_array_expr e1 ctx vars)
     (parse_arith_expr e2 ctx vars)
   | Z3_arith_ite (c, e1, e2) ->
-    let v1 = (parse_arith_expr e1 ctx vars) in
-    let v2 = (parse_arith_expr e2 ctx vars) in
-    Z3.Boolean.mk_ite ctx (parse_bool_expr c ctx vars) v1 v2
+    Z3.Boolean.mk_ite ctx
+      (parse_bool_expr c ctx vars)
+      (parse_arith_expr e1 ctx vars)
+      (parse_arith_expr e2 ctx vars)
 and parse_array_expr
   (_e : arr_expr)
   (ctx : Z3.context)
@@ -101,6 +108,11 @@ and parse_array_expr
       (parse_array_expr e1 ctx vars)
       (parse_arith_expr e2 ctx vars)
       (parse_arith_expr e3 ctx vars)
+  | Z3_arr_ite (c, e1, e2) ->
+      Z3.Boolean.mk_ite ctx
+        (parse_bool_expr c ctx vars)
+        (parse_array_expr e1 ctx vars)
+        (parse_array_expr e2 ctx vars)
 and parse_ptr_expr
   (_e : ptr_expr)
   (ctx : Z3.context)

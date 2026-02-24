@@ -105,6 +105,24 @@ let () = register "divergent load extents" (fun () ->
     )
   | _ -> 0)
 
+let () = register "mem nop are equiv" (fun () ->
+  let p1 = get_mem_program "./test/mem2b.out" in
+  let p2 = get_mem_program "./test/mem2c.out" in
+  
+  let res = MemSolver.mem_solve p1 p2 in
+  match res with
+  | Z3Unsat -> 1
+  | _ -> 0)
+
+let () = register "degenerate branch" (fun () ->
+  let p1 = get_mem_program "./test/mem3a.out" in
+  let p2 = get_mem_program "./test/mem3b.out" in
+  
+  let res = MemSolver.mem_solve p1 p2 in
+  match res with
+  | Z3Unsat -> 1
+  | _ -> 0)
+
 let () =
   let test_stats = Stdlib.List.fold_left
     (fun (acc : int * int) (name, test) -> (

@@ -1,27 +1,10 @@
-(
-  (fn_in
-    (Coq_cons (Coq_pair
-      Coq_xH
-      Coq_uintptr_t)
-    (Coq_cons (Coq_pair
-      (Coq_xO Coq_xH)
-      Coq_uint8_t)
-    Coq_nil)))
-
-  (fn_body
-    (Coq_cons
-      (LdOp
-        (IOArg (Coq_xO Coq_xH))
-        (IOArg Coq_xH)
-        (ValArg (Coq_imm_u32 Z0)))
-    Coq_nil))
-
-  (fn_out_vars
-    (Coq_cons
-      (Coq_xO Coq_xH)
-    Coq_nil))
-
-  (fn_out_iaddrs Coq_nil)
-  
-  (fn_out_vaddrs Coq_nil)
-)
+((fn_in                               
+  (Coq_cons (Coq_pair Coq_xH Coq_uintptr_t)
+   (Coq_cons (Coq_pair (Coq_xI (Coq_xO Coq_xH)) Coq_uint8_t) Coq_nil)))
+ (fn_body
+  (Coq_cons
+   (LdOp (IOArg (Coq_xI (Coq_xO Coq_xH))) (IOArg Coq_xH)
+    (ValArg (Coq_imm_u32 Z0)))
+   Coq_nil))
+ (fn_out_vars (Coq_cons (Coq_xI (Coq_xO Coq_xH)) Coq_nil))
+ (fn_out_iaddrs Coq_nil) (fn_out_vaddrs Coq_nil))

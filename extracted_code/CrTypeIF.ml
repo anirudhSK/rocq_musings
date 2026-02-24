@@ -78,6 +78,8 @@ module CrMem = struct
   [@@deriving sexp]
   type coq_FnArg = [%import: CrMem.coq_FnArg]
   [@@deriving sexp]
+  type coq_ArithBinOp = [%import: CrMem.coq_ArithBinOp]
+  [@@deriving sexp]
   type coq_Instruction = [%import: CrMem.coq_Instruction]
   [@@deriving sexp]
   type coq_ValType = [%import: CrMem.coq_ValType]
