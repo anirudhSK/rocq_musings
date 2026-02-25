@@ -164,19 +164,40 @@ let eval_scalar_var (m : Z3.Model.model) (name : string) (z3_var : Z3.Expr.expr)
       | _ -> None)
   | None -> None
 
-(* Helper to build sval map from scalar variables (suffix "0") *)
+(* Helper suffix list and stripping for scalar variables. *)
+let scalar_suffixes =
+  [| suffixes.(u8_sfx); suffixes.(u16_sfx); suffixes.(u32_sfx); suffixes.(u64_sfx) |]
+
+(* Given a variable name, return the base name if it ends with a known scalar suffix. *)
+let strip_scalar_suffix (name : string) : string option =
+  let open Stdlib in
+  let name_len = String.length name in
+  let rec find_suffix i =
+    if i >= Array.length scalar_suffixes then
+      None
+    else
+      let sfx = scalar_suffixes.(i) in
+      let sfx_len = String.length sfx in
+      if sfx_len <= name_len
+         && String.sub name (name_len - sfx_len) sfx_len = sfx
+      then
+        Some (String.sub name 0 (name_len - sfx_len))
+      else
+        find_suffix (i + 1)
+  in
+  find_suffix 0
+
+(* Helper to build sval map from scalar variables (suffixes defined in [scalar_suffixes]). *)
 let build_sval_map (m : Z3.Model.model) (var_bindings : (string * Z3.Expr.expr) list) 
   : (string * coq_CrVal) list =
   Stdlib.List.fold_left
     (fun acc (name, z3_var) ->
-      if Stdlib.String.ends_with ~suffix:"0" name then
-        match eval_scalar_var m name z3_var with
-        | Some value ->
-            let base_name = Stdlib.String.sub name 0 (Stdlib.String.length name - 1) in
-            (base_name, value) :: acc
-        | None -> acc
-      else
-        acc)
+      match strip_scalar_suffix name with
+      | Some base_name -> (
+          match eval_scalar_var m name z3_var with
+          | Some value -> (base_name, value) :: acc
+          | None -> acc)
+      | None -> acc)
     []
     var_bindings
 
