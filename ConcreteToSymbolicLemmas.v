@@ -11,6 +11,7 @@ From MyProject Require Import CrProgramState.
 From MyProject Require Import MyInts.
 From MyProject Require Import ListUtils.
 From MyProject Require Import SmtTypes.
+From MyProject Require Import CrVal.
 Require Import ZArith.
 Require Import Coq.Strings.String.
 Local Open Scope string_scope.
@@ -28,7 +29,8 @@ Lemma commute_sym_conc_expr:
 Proof.
   intros ho s f.
   destruct ho, f0, arg1, arg2; simpl;
-  try repeat (rewrite PMapHelperLemmas.commute_lookup_eval_generic); try reflexivity.
+  try repeat (rewrite PMapHelperLemmas.commute_lookup_eval_generic);
+  try reflexivity.
 Qed.
 
 Lemma commute_update_eval_varlike:
@@ -38,7 +40,7 @@ Lemma commute_update_eval_varlike:
 Proof.
   intros s f h v.
   unfold eval_sym_state.
-  specialize (commute_mapper_update_varlike (T1 := SmtArithExpr) (T2 := uint8)).
+  specialize (commute_mapper_update_varlike (T1 := SmtArithExpr) (T2 := CrVal)).
   intros.
   apply H.
 Qed.
@@ -80,7 +82,7 @@ Qed.
    concrete and symbolic execution match up. *)
 Transparent lookup_varlike.
 Lemma commute_sym_vs_conc_match_cond :
-  forall (hv_pair: Header * uint8) (f : SmtValuation)
+  forall (hv_pair: Header * CrInt_T) (f : SmtValuation)
          (s1 : SymbolicState)
          (c1 : ConcreteState),
     c1 = eval_sym_state s1 f ->
@@ -99,9 +101,11 @@ Proof.
     rewrite commute_lookup_varlike.
     reflexivity. }
   rewrite H.
-  destruct (Integers.eq (eval_smt_arith (lookup_varlike s1 h) f) v).
-  - reflexivity.
-  - reflexivity.
+  destruct (eval_smt_arith (lookup_varlike s1 h) f).
+  - destruct (CrVal.eqb (IntVal val) (IntVal v)); reflexivity.
+  - destruct (CrVal.eqb (PtrVal val) (IntVal v)); reflexivity.
+  - destruct (CrVal.eqb UninitVal (IntVal v)); reflexivity.
+  - destruct (CrVal.eqb ErrorVal (IntVal v)); reflexivity.
 Qed.
 
 (* The same lemma as above, but
@@ -130,9 +134,8 @@ Proof.
     destruct hv_pair as [h v].
     simpl.
     destruct (eval_match_smt rest s1); try reflexivity.
-    destruct (Integers.eq (eval_smt_arith (lookup_varlike s1 h) f) v) eqn:des.
-    -- rewrite andb_true_r. simpl. rewrite des. reflexivity.
-    -- rewrite andb_false_l. simpl. rewrite des. reflexivity.
+    simpl.
+    rewrite andb_true_r. reflexivity.
 Qed.
 
 Lemma commute_sym_vs_conc_helper_seq_par_rule_hdr :

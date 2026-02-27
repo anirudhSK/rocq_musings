@@ -10,6 +10,7 @@ From MyProject Require Import SmtTypes.
 From MyProject Require Import Integers.
 From MyProject Require Import MyInts.
 From MyProject Require Import PMapHelperLemmas.
+From MyProject Require Import CrVal.
 Require Import Classical.
 Require Import Coq.Lists.List.
 Require Import Coq.Bool.Bool.
@@ -296,7 +297,7 @@ Qed.
 
 Class CrVarProg A := {
   get_vars_from_prog : CaracaraProgram -> list A;
-  lookup_var : ConcreteState -> A -> uint8;
+  lookup_var : ConcreteState -> A -> CrVal;
   get_vars_invariant_of_transformer:
     forall h s c t1 t2,
     get_vars_from_prog (CaracaraProgramDef h s c t1) =

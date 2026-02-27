@@ -28,7 +28,7 @@ def parse_smt(tokens):
         expr1 = parse_smt(tokens)
         expr2 = parse_smt(tokens)
         return f"(bvadd {expr1} {expr2})"
-    elif token == 'SmtConst':
+    elif token == 'SmtArithConst':
         # Extract the integer value from the constant definition
         # This is a simplified extraction, assuming the format is consistent
         const_def = tokens.pop(0)
@@ -38,7 +38,7 @@ def parse_smt(tokens):
             # Format as a 32-bit hex value for Z3
             return f"#x{val:08x}"
         else:
-            raise ValueError(f"Could not parse SmtConst value from: {const_def}")
+            raise ValueError(f"Could not parse SmtArithConst value from: {const_def}")
     elif token == 'SmtTrue':
         return "true"
     else:
@@ -70,7 +70,7 @@ def compile_rocq_to_z3(rocq_string):
     rocq_string = rocq_string.replace('{', ' { ').replace('}', ' } ')
 
     # Tokenize the input string based on whitespace
-    # We also group the SmtConst value block into a single "token"
+    # We also group the SmtArithConst value block into a single "token"
     tokens = []
     in_const_block = False
     block = ""

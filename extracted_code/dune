@@ -5,6 +5,18 @@
  (libraries extracted_code_lib))
 
 (executable
+  (public_name mem_eq)
+  (name MemEq)
+  (modules MemEq)
+  (libraries extracted_code_lib))
+
+(executable
+  (public_name dump_mem_ex)
+  (name DumpMemEx)
+  (modules DumpMemEx)
+  (libraries extracted_code_lib))
+
+(executable
  (public_name run_tests)
  (name RunTests)
  (modules RunTests)
@@ -15,9 +27,9 @@
  (wrapped false)
  (modules
   Ascii BinInt BinNums BinPos Coqlib CrDsl CrIdentifiers CrProgramState CrVarLike
-  CrSymbolicSemanticsTransformer CrTransformer Datatypes EquivDec
-  Integers Interface List Maps MyInts Nat Rocqlib SmtTypes SmtExpr SmtQuery
-  Specif String Z3Solver Zpower)
+  CrSymbolicSemanticsTransformer CrTransformer CrVal CrMem CrMemEx Datatypes EquivDec
+  Integers CrTypeIF Shim List Maps MyInts Nat Rocqlib SmtTypes SmtExpr SmtQuery
+  Specif String Z3Solver MemSolver Zpower)
  (preprocess (staged_pps ppx_import ppx_sexp_conv))
  (libraries z3 sexplib)
  (flags (:standard -w -33)))

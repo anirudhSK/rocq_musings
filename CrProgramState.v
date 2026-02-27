@@ -4,6 +4,7 @@ From MyProject Require Import Maps.
 From MyProject Require Import UtilLemmas.
 From MyProject Require Import MyInts.
 From MyProject Require Import Integers.
+From MyProject Require Import CrVal.
 Require Import Strings.String.
 Require Import ZArith.
 From Coq Require Import FunctionalExtensionality.
@@ -22,5 +23,5 @@ Arguments header_map {T} _.
 Arguments state_map {T} _.  
 Arguments ctrl_map {T} _.
 
-Definition ConcreteState := ProgramState uint8.
+Definition ConcreteState := ProgramState CrVal.
 Definition SymbolicState := ProgramState SmtArithExpr.

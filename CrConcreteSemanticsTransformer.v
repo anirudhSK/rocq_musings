@@ -9,29 +9,31 @@ Require Import Strings.String.
 From MyProject Require Import CrIdentifiers.
 From MyProject Require Import CrVarLike.
 From MyProject Require Import ListUtils.
+From MyProject Require Import CrVal.
+Require Import ZArith.
 
 (* Apply binary operation *)
-Definition apply_bin_op (f : BinaryOp) (arg1 : uint8) (arg2 : uint8) : uint8 :=
+Definition apply_bin_op (f : BinaryOp) (arg1 : CrVal) (arg2 : CrVal) : CrVal :=
   match f with
-      | AddOp => Integers.add arg1 arg2
-      | SubOp => Integers.sub arg1 arg2
-      | AndOp => Integers.and arg1 arg2
-      | OrOp =>  Integers.or arg1 arg2
-      | XorOp => Integers.xor arg1 arg2
-      | MulOp => Integers.mul arg1 arg2
-      | DivOp => Integers.divu arg1 arg2
-      | ModOp => Integers.modu arg1 arg2
+  | AddOp => CrVal.add arg1 arg2
+  | SubOp => CrVal.sub arg1 arg2
+  | AndOp => CrVal.and arg1 arg2
+  | OrOp =>  CrVal.or arg1 arg2
+  | XorOp => CrVal.xor arg1 arg2
+  | MulOp => CrVal.mul arg1 arg2
+  | DivOp => CrVal.divu arg1 arg2
+  | ModOp => CrVal.modu arg1 arg2
   end.
 
-Definition lookup_concrete (arg : FunctionArgument) (ps : ConcreteState) : uint8 :=
+Definition lookup_concrete (arg : FunctionArgument) (ps : ConcreteState) : CrVal :=
   match arg with
   | CtrlPlaneArg c => lookup_varlike_map (@map_from_ps Ctrl _ _ ps) c
   | HeaderArg h    => lookup_varlike_map (@map_from_ps Header _ _ ps) h
-  | ConstantArg n  => n
+  | ConstantArg n  => IntVal n
   | StatefulArg s  => lookup_varlike_map (@map_from_ps State _ _ ps) s
   end.
 
-Definition eval_hdr_op_expr_concrete (op : HdrOp) (ps : ConcreteState) : uint8 :=
+Definition eval_hdr_op_expr_concrete (op : HdrOp) (ps : ConcreteState) : CrVal :=
   match op with
   | StatefulOp f arg1 arg2 _ => apply_bin_op f (lookup_concrete arg1 ps) (lookup_concrete arg2 ps)
   | StatelessOp f arg1 arg2 _ => apply_bin_op f (lookup_concrete arg1 ps) (lookup_concrete arg2 ps)
@@ -47,7 +49,7 @@ Definition eval_hdr_op_assign_concrete (op : HdrOp) (ps: ConcreteState) : Concre
 
 Definition eval_match_concrete (match_pattern : MatchPattern) (ps : ConcreteState) : bool :=
   (* For every list element, check if the Header's current value (determined by ps) equals the uint8 *)
-  List.forallb (fun '(h, v) => Integers.eq (lookup_varlike ps h) v) match_pattern.
+  List.forallb (fun '(h, v) => CrVal.eqb (lookup_varlike ps h) (IntVal v)) match_pattern.
 
 (* Define evaluation over a list of HdrOp *)
 (* Note we are evaluating the list from right to left (fold_right) because it simplifies proving. *)

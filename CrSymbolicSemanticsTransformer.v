@@ -1,5 +1,6 @@
 From MyProject Require Import CrTransformer.
 From MyProject Require Import CrIdentifiers.
+From MyProject Require Import CrVal.
 From MyProject Require Import CrVarLike.
 From MyProject Require Import CrProgramState.
 From MyProject Require Import SmtExpr.
@@ -15,7 +16,7 @@ Definition lookup_smt (arg : FunctionArgument) (ps : SymbolicState) : SmtArithEx
   match arg with
   | CtrlPlaneArg c => lookup_varlike_map (@map_from_ps Ctrl _ _ ps) c
   | HeaderArg h    => lookup_varlike_map (@map_from_ps Header _ _ ps) h
-  | ConstantArg n  => SmtConst n
+  | ConstantArg n  => SmtArithConst n
   | StatefulArg s  => lookup_varlike_map (@map_from_ps State _ _ ps) s
   end.
 
@@ -69,8 +70,8 @@ Definition eval_match_smt (match_pattern : MatchPattern) (ps : SymbolicState) : 
   (* Note that because SmtBoolAnd is associative and commutative, both fold_left and fold_right give the same answer. *)
   List.fold_right (fun '(h, v) acc =>
     match acc with
-    | SmtTrue => SmtBoolEq (lookup_varlike ps h) (SmtConst v)
-    | _ => SmtBoolAnd (SmtBoolEq (lookup_varlike ps h) (SmtConst v)) acc
+    | SmtTrue => SmtBoolEq (lookup_varlike ps h) (SmtArithConst v)
+    | _ => SmtBoolAnd (SmtBoolEq (lookup_varlike ps h) (SmtArithConst v)) acc
     end) SmtTrue match_pattern.
 
 (* Maybe there's an intermediate function that evaluates a *single* HdrOp conditionally? *)

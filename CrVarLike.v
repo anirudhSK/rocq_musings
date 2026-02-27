@@ -8,6 +8,7 @@ From MyProject Require Import SmtExpr.
 From MyProject Require Import CrDsl.
 From MyProject Require Import Maps.
 From MyProject Require Import UtilLemmas.
+From MyProject Require Import CrVal.
 Require Import ZArith.
 Require Import Bool.
 Require Import List.
@@ -338,15 +339,9 @@ Definition init_concrete_state (p : CaracaraProgram) : ConcreteState :=
   let h := get_headers_from_prog p in
   let s := get_states_from_prog p in
   let c := get_ctrls_from_prog p in
-  {|ctrl_map    :=  (repr 0, (* TODO: Need better default, but think this doesn't matter *)
-                    PTree_Properties.of_list
-                    (List.map (fun x => (match x with | CtrlCtr x_id => x_id end, repr 0)) c));
-     header_map :=  (repr 0, (* TODO: Need better default, but think this doesn't matter *)
-                    PTree_Properties.of_list
-                    (List.map (fun x => (match x with | HeaderCtr x_id => x_id end, repr 0)) h));
-     state_map  :=  (repr 0,
-                    PTree_Properties.of_list
-                    (List.map (fun x => (match x with | StateCtr x_id => x_id end, repr 0)) s));|}.
+  {|ctrl_map    :=  PMap.init UninitVal;
+     header_map :=  PMap.init UninitVal;
+     state_map  :=  PMap.init UninitVal;|}.
 
 (* Convert positive to string *)
 Fixpoint pos_to_string (p : positive) : string :=
