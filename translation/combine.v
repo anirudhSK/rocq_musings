@@ -11,9 +11,9 @@ From MyProject Require Import SmtQuery.
 (* THE SIMPLEST POSSIBLE ProgramState SmtArithExpr *)
 (* We have been operating on stateless only so far so this is a dummy instance to satisfy the compiler.*)
 Definition simplest_state : ProgramState SmtArithExpr := {|
-ctrl_plane_map := fun _ => SmtConst (repr 0%Z);
-header_map := fun _ => SmtConst (repr 0%Z);
-state_var_map := fun _ => SmtConst (repr 0%Z)
+ctrl_plane_map := fun _ => SmtArithConst (repr 0%Z);
+header_map := fun _ => SmtArithConst (repr 0%Z);
+state_var_map := fun _ => SmtArithConst (repr 0%Z)
 |}.
 
 Definition headers_to_check : list Header := [first_generated.header_H; second_generated.header_H].

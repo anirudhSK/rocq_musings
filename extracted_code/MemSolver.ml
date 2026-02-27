@@ -56,9 +56,9 @@ and parse_arith_expr
   (ctx : Z3.context)
   (vars : var_tracker) : Z3.Expr.expr =
   match _e with
-  | Z3_u8 n -> Z3.BitVector.mk_numeral ctx (string_of_int (Shim.coq_Z_to_int n)) 8
-  | Z3_u32 n -> Z3.BitVector.mk_numeral ctx (string_of_int (Shim.coq_Z_to_int n)) 32
-  | Z3_u8_var name -> (
+  | Z3_int8 n -> Z3.BitVector.mk_numeral ctx (string_of_int (Shim.coq_Z_to_int n)) 8
+  | Z3_int32 n -> Z3.BitVector.mk_numeral ctx (string_of_int (Shim.coq_Z_to_int n)) 32
+  | Z3_int8_var name -> (
     let name_str = (Shim.pos_to_str name) ^ suffixes.(u8_sfx) in
     match StringMap.find_opt name_str !vars with
     | Some s_var -> s_var
@@ -66,7 +66,7 @@ and parse_arith_expr
         let s_var = Z3.BitVector.mk_const ctx (Z3.Symbol.mk_string ctx name_str) 8 in
         vars := StringMap.add name_str s_var !vars;
         s_var)
-  | Z3_u32_var name -> (
+  | Z3_int32_var name -> (
     let name_str = (Shim.pos_to_str name) ^ suffixes.(u32_sfx) in
     match StringMap.find_opt name_str !vars with
     | Some s_var -> s_var
@@ -74,20 +74,30 @@ and parse_arith_expr
         let s_var = Z3.BitVector.mk_const ctx (Z3.Symbol.mk_string ctx name_str) 32 in
         vars := StringMap.add name_str s_var !vars;
         s_var)
-  | Z3_bitadd (e1, e2) -> Z3.BitVector.mk_add ctx
+  | Z3_bv_add (e1, e2) -> Z3.BitVector.mk_add ctx
     (parse_arith_expr e1 ctx vars)
     (parse_arith_expr e2 ctx vars)
-  | Z3_bitasl (e1, e2) -> Z3.BitVector.mk_shl ctx
+  | Z3_bv_sub (e1, e2) -> Z3.BitVector.mk_sub ctx
     (parse_arith_expr e1 ctx vars)
     (parse_arith_expr e2 ctx vars)
-  | Z3_bitasr (e1, e2) -> Z3.BitVector.mk_ashr ctx
+  | Z3_bv_shl (e1, e2) -> Z3.BitVector.mk_shl ctx
     (parse_arith_expr e1 ctx vars)
     (parse_arith_expr e2 ctx vars)
-  | Z3_bitor (e1, e2) -> Z3.BitVector.mk_or ctx
+  | Z3_bv_ashr (e1, e2) -> Z3.BitVector.mk_ashr ctx
     (parse_arith_expr e1 ctx vars)
     (parse_arith_expr e2 ctx vars)
-  | Z3_bitflip e1 -> Z3.BitVector.mk_not ctx (parse_arith_expr e1 ctx vars)
-  | Z3_arr_ld (e1, e2) -> Z3.Z3Array.mk_select ctx
+  | Z3_bv_and (e1, e2) -> Z3.BitVector.mk_and ctx
+    (parse_arith_expr e1 ctx vars)
+    (parse_arith_expr e2 ctx vars)
+  | Z3_bv_or (e1, e2) -> Z3.BitVector.mk_or ctx
+    (parse_arith_expr e1 ctx vars)
+    (parse_arith_expr e2 ctx vars)
+  | Z3_bv_xor (e1, e2) -> Z3.BitVector.mk_xor ctx
+    (parse_arith_expr e1 ctx vars)
+    (parse_arith_expr e2 ctx vars)
+(* TODO: rename such that it mirrors Z3 *)
+  | Z3_bv_not e1 -> Z3.BitVector.mk_not ctx (parse_arith_expr e1 ctx vars)
+  | Z3_arr_sel (e1, e2) -> Z3.Z3Array.mk_select ctx
     (parse_array_expr e1 ctx vars)
     (parse_arith_expr e2 ctx vars)
   | Z3_arith_ite (c, e1, e2) ->
@@ -413,7 +423,10 @@ let mem_solve (p1 : coq_IM_Program) (p2 : coq_IM_Program) : coq_Z3Res =
   let ctx = Z3.mk_context [] in
   let solver = Z3.Solver.mk_solver ctx None in
   let tracked_vars = ref StringMap.empty in
+  print_endline("casting query to z3 expression...");
   let z3_expr = parse_bool_expr b ctx tracked_vars in
+  print_endline("adding query to solver...");
   Z3.Solver.add solver [z3_expr];
 
+  print_endline("running query...");
   sat_check solver ctx tracked_vars p1 p2

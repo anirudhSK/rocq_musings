@@ -21,7 +21,7 @@ let rec z3_expr_from_coq_smt_bool_expr (expr : SmtExpr.coq_SmtBoolExpr) (ctx : Z
 and z3_expr_from_coq_smt_arith_expr (expr : SmtExpr.coq_SmtArithExpr) (ctx : Z3.context) (vars : var_tracker)
   : Z3.Expr.expr =
   match expr with
-  | SmtExpr.SmtConst n -> (
+  | SmtExpr.SmtArithConst n -> (
       match n with
       | CrVal.CrUInt8 val8 -> Z3.BitVector.mk_numeral ctx (string_of_int (Shim.coq_Z_to_int val8)) 8
       | CrVal.CrUInt16 val16 -> Z3.BitVector.mk_numeral ctx (string_of_int (Shim.coq_Z_to_int val16)) 16
@@ -47,10 +47,10 @@ and z3_expr_from_coq_smt_arith_expr (expr : SmtExpr.coq_SmtArithExpr) (ctx : Z3.
   | SmtExpr.SmtBitMul (e1, e2) -> Z3.BitVector.mk_mul ctx (z3_expr_from_coq_smt_arith_expr e1 ctx vars) (z3_expr_from_coq_smt_arith_expr e2 ctx vars)
   | SmtExpr.SmtBitDiv (e1, e2) -> Z3.BitVector.mk_udiv ctx (z3_expr_from_coq_smt_arith_expr e1 ctx vars) (z3_expr_from_coq_smt_arith_expr e2 ctx vars)
   | SmtExpr.SmtBitMod (e1, e2) -> Z3.BitVector.mk_smod ctx (z3_expr_from_coq_smt_arith_expr e1 ctx vars) (z3_expr_from_coq_smt_arith_expr e2 ctx vars)
-  | SmtExpr.SmtPtrLd (_, _, _) -> 
+  | SmtExpr.SmtArrSel (_, _, _) -> 
       (* TODO: Implement pointer load from memory *)
       Z3.BitVector.mk_numeral ctx "0" 8
-  | SmtExpr.SmtPtrVal ptr -> (
+  | SmtExpr.SmtPtrConst ptr -> (
       match ptr with
       | CrVal.CrPtr addr -> Z3.BitVector.mk_numeral ctx (string_of_int (Shim.coq_Z_to_int addr)) 64
       | CrVal.CrNilPtr -> Z3.BitVector.mk_numeral ctx "0" 64)
