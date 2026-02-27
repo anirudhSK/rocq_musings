@@ -24,8 +24,7 @@ let register test_label test_fn =
 let () = register "refl_0" (fun () ->
   let p = get_program "./test/prog1.out" in
 
-  let res = SmtQuery.equivalence_checker_cr_dsl p p in
-  match res with
+  match SmtQuery.equivalence_checker_cr_dsl p p with
   | Equivalent -> 1
   | _ -> 0)
 
@@ -38,8 +37,7 @@ let () = register "hdr_diff" (fun () ->
   let p1 = get_program "./test/prog1.out" in
   let p2 = get_program "./test/prog2.out" in
 
-  let res = SmtQuery.equivalence_checker_cr_dsl p1 p2 in
-  match res with
+  match SmtQuery.equivalence_checker_cr_dsl p1 p2 with
   | NotEquivalent _ -> 1
   | _ -> 0)
 
@@ -52,8 +50,7 @@ let () = register "sub_1comp" (fun () ->
   let p1 = get_program "./test/subtract1.out" in
   let p2 = get_program "./test/subtract2.out" in
 
-  let res = SmtQuery.equivalence_checker_cr_dsl p1 p2 in
-   match res with
+  match SmtQuery.equivalence_checker_cr_dsl p1 p2 with
   | Equivalent -> 1
   | _ -> 0)
 
@@ -66,8 +63,7 @@ let () = register "complex_add/sub equal" (fun () ->
   let p1 = get_program "./test/complex1a.out" in
   let p2 = get_program "./test/complex1b.out" in
 
-  let res = SmtQuery.equivalence_checker_cr_dsl p1 p2 in
-   match res with
+  match SmtQuery.equivalence_checker_cr_dsl p1 p2 with
   | Equivalent -> 1
   | _ -> 0)
 
@@ -80,8 +76,7 @@ let () = register "complex_add/sub NOT equal" (fun () ->
   let p1 = get_program "./test/complex1b.out" in
   let p2 = get_program "./test/subtract1.out" in
 
-  let res = SmtQuery.equivalence_checker_cr_dsl p1 p2 in
-  match res with
+  match SmtQuery.equivalence_checker_cr_dsl p1 p2 with
   | NotEquivalent _ -> 1
   | _ -> 0)
 
@@ -94,8 +89,7 @@ let () = register "basic address alias" (fun () ->
   let p1 = get_mem_program "./test/mem1a.out" in
   let p2 = get_mem_program "./test/mem1b.out" in
 
-  let res = MemSolver.mem_solve p1 p2 in
-  match res with
+  match MemSolver.mem_solve p1 p2 with
   | Z3Unsat -> 1
   | _ -> 0)
 
@@ -107,9 +101,8 @@ let () = register "basic address alias" (fun () ->
 let () = register "basic memory overwrite" (fun () ->
   let p1 = get_mem_program "./test/mem1a.out" in
   let p2 = get_mem_program "./test/mem1c.out" in
-  
-  let res = MemSolver.mem_solve p1 p2 in
-  match res with
+
+  match MemSolver.mem_solve p1 p2 with
   | Z3Sat (_, _, f) -> (
     match f with
     | ValueMismatch -> 1
@@ -125,9 +118,8 @@ let () = register "basic memory overwrite" (fun () ->
 let () = register "divergent load extents" (fun () ->
   let p1 = get_mem_program "./test/mem2a.out" in
   let p2 = get_mem_program "./test/mem2b.out" in
-  
-  let res = MemSolver.mem_solve p1 p2 in
-  match res with
+
+  match MemSolver.mem_solve p1 p2 with
   | Z3Sat (_, _, f) -> (
     match f with
     | BoundsMismatch -> 1
@@ -143,9 +135,8 @@ let () = register "divergent load extents" (fun () ->
 let () = register "mem nop are equiv" (fun () ->
   let p1 = get_mem_program "./test/mem2b.out" in
   let p2 = get_mem_program "./test/mem2c.out" in
-  
-  let res = MemSolver.mem_solve p1 p2 in
-  match res with
+
+  match MemSolver.mem_solve p1 p2 with
   | Z3Unsat -> 1
   | _ -> 0)
 
@@ -157,9 +148,8 @@ let () = register "mem nop are equiv" (fun () ->
 let () = register "degenerate branch" (fun () ->
   let p1 = get_mem_program "./test/mem3a.out" in
   let p2 = get_mem_program "./test/mem3b.out" in
-  
-  let res = MemSolver.mem_solve p1 p2 in
-  match res with
+
+  match MemSolver.mem_solve p1 p2 with
   | Z3Unsat -> 1
   | _ -> 0)
 
@@ -172,8 +162,7 @@ let () = register "sat aval" (fun () ->
   let p1 = get_mem_program "./test/mem4a.out" in
   let p2 = get_mem_program "./test/mem4b.out" in
   
-  let res = MemSolver.mem_solve p1 p2 in
-  match res with
+  match MemSolver.mem_solve p1 p2 with
   | Z3Sat (_, _, f) -> (
     match f with
     | ValueMismatch -> 1
