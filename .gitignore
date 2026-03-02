@@ -30,3 +30,6 @@ smt_query
 !/extracted_code/EqCheck.ml
 !/extracted_code/RunTests.ml
 /.vscode/
+/.idea/
+/.claude/
+/.mcp.json
