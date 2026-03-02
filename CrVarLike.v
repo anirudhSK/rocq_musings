@@ -1,4 +1,4 @@
-Require Import Strings.String.
+From Stdlib Require Import Strings.String.
 From MyProject Require Import Integers.
 From MyProject Require Import MyInts.
 From MyProject Require Import InitStatus.
@@ -9,9 +9,9 @@ From MyProject Require Import CrDsl.
 From MyProject Require Import Maps.
 From MyProject Require Import UtilLemmas.
 From MyProject Require Import CrVal.
-Require Import ZArith.
-Require Import Bool.
-Require Import List.
+From Stdlib Require Import ZArith.
+From Stdlib Require Import Bool.
+From Stdlib Require Import List.
 Import ListNotations.
 
 Definition injective_contravariant {A B} (f : A -> B) : Prop :=

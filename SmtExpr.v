@@ -4,7 +4,7 @@ From MyProject Require Import CrIdentifiers.
 From MyProject Require Import MyInts.
 From MyProject Require Import SmtTypes.
 From MyProject Require Import CrVal.
-From Coq.Strings Require Import String.
+From Stdlib.Strings Require Import String.
 
 (* TODO: Look through K2 code *)
 Inductive SmtBoolExpr : Type :=

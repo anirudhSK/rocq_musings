@@ -1,10 +1,10 @@
-Require Import Strings.String.
+From Stdlib Require Import Strings.String.
 From MyProject Require Import Integers.
 From MyProject Require Import MyInts.
 From MyProject Require Import InitStatus.
-Require Import ZArith.
-Require Import Bool.
-Require Import List.
+From Stdlib Require Import ZArith.
+From Stdlib Require Import Bool.
+From Stdlib Require Import List.
 Import ListNotations.
 
 (* Define the different types of identifiers in the Caracara DSL *)

@@ -1,7 +1,7 @@
 From MyProject Require Import CrDsl.
 From MyProject Require Import CrVarLike.
 From MyProject Require Import ListUtils.
-From Coq Require Import PArith.BinPos.
+From Stdlib Require Import PArith.BinPos.
 
 (* Check for duplicate identifiers in the header, state, and control lists *)
 Definition check_for_duplicate_identifiers (program : CaracaraProgram) : bool :=
@@ -13,7 +13,7 @@ Definition check_for_duplicate_identifiers (program : CaracaraProgram) : bool :=
       has_duplicates varlike_equal c
   end.
 
-From Coq Require Import Sorting.Sorted.
+From Stdlib Require Import Sorting.Sorted.
 Check Sorted.
 
 (* Compare two headers based on their uids *)

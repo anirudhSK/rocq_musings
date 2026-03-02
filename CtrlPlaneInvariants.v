@@ -6,7 +6,7 @@ From MyProject Require Import SmtExpr.
 From MyProject Require Import CrSymbolicSemanticsTransformer.
 From MyProject Require Import CrProgramState.
 From MyProject Require Import ListUtils.
-Require Import Coq.Lists.List.
+From Stdlib Require Import Lists.List.
 
 (* Effectively, ctrl plane doesn't change *)
 Lemma ctrl_plane_invariant_hdr_op:

@@ -5,10 +5,10 @@ From MyProject Require Import SmtExpr.
 From MyProject Require Import Maps.
 From MyProject Require Import Integers.
 From MyProject Require Import MyInts.
-Require Import ZArith.
-From Coq.Strings Require Import String.
-From Coq.Strings Require Import Ascii.
-Require Import List.
+From Stdlib Require Import ZArith.
+From Stdlib.Strings Require Import String.
+From Stdlib.Strings Require Import Ascii.
+From Stdlib Require Import List.
 Import ListNotations.
 
 

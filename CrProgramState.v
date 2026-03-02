@@ -5,10 +5,10 @@ From MyProject Require Import UtilLemmas.
 From MyProject Require Import MyInts.
 From MyProject Require Import Integers.
 From MyProject Require Import CrVal.
-Require Import Strings.String.
-Require Import ZArith.
-From Coq Require Import FunctionalExtensionality.
-Require Import Coq.Lists.List.
+From Stdlib Require Import Strings.String.
+From Stdlib Require Import ZArith.
+From Stdlib Require Import FunctionalExtensionality.
+From Stdlib Require Import Lists.List.
 Import ListNotations.
 
 (* The ProgramState is a record containing three maps:,

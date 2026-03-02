@@ -6,8 +6,8 @@ From MyProject Require Import CrVarLike.
 From MyProject Require Import CrProgramState.
 From MyProject Require Import MyInts.
 From MyProject Require Import CrVal.
-Require Import Bool.
-Require Import List.
+From Stdlib Require Import Bool.
+From Stdlib Require Import List.
 
 Lemma eval_smt_bool_smt_bool_not_false :
   forall e1 e2 f,

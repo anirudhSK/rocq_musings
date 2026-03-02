@@ -1,9 +1,9 @@
 (* TODO: Add Comments *)
 
-Require Import ZArith.
-From Coq.Strings Require Import String.
-From Coq.Strings Require Import Ascii.
-Require Import List.
+From Stdlib Require Import ZArith.
+From Stdlib.Strings Require Import String.
+From Stdlib.Strings Require Import Ascii.
+From Stdlib Require Import List.
 Import ListNotations.
 From MyProject Require Import CrVal.
 From MyProject Require Import CrIdentifiers.

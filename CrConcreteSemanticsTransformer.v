@@ -3,14 +3,14 @@ From MyProject Require Import CrTransformer.
 From MyProject Require Import CrProgramState.
 From MyProject Require Import CrDsl.
 From MyProject Require Import MyInts.
-Require Import List.
+From Stdlib Require Import List.
 Import ListNotations.
-Require Import Strings.String.
+From Stdlib Require Import Strings.String.
 From MyProject Require Import CrIdentifiers.
 From MyProject Require Import CrVarLike.
 From MyProject Require Import ListUtils.
 From MyProject Require Import CrVal.
-Require Import ZArith.
+From Stdlib Require Import ZArith.
 
 (* Apply binary operation *)
 Definition apply_bin_op (f : BinaryOp) (arg1 : CrVal) (arg2 : CrVal) : CrVal :=
