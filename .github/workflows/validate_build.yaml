@@ -30,7 +30,7 @@ jobs:
 
       - name: Install Switch
         run: |
-          opam install -y coq.8.20.1 z3 ppx_import sexplib ppx_sexp_conv
+          opam install -y rocq-runtime rocq-stdlib z3 ppx_import sexplib ppx_sexp_conv
 
   validate-build:
     runs-on: ubuntu-latest
@@ -59,7 +59,7 @@ jobs:
       - name: Build Project
         run: |
           eval $(opam env)
-          coq_makefile -f _CoqProject *.v -o Makefile
+          rocq makefile -f _CoqProject *.v -o Makefile
           make -j
           dune build --profile release
 
