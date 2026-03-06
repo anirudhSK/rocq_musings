@@ -36,13 +36,13 @@ Definition p1a : IM_Program := {|
     Binary AddOp b_plus_c
       (IOArg rsi)
       (IOArg rdx);
-    StOp local_x
+    StOp uint8_t local_x
       (ValArg (imm_u32 (repr 4)))
       b_plus_c;
-    LdOp x4_val
+    LdOp uint8_t x4_val
       local_x
       (ValArg (imm_u32 (repr 4)));
-    StOp (IOArg rdi)
+    StOp uint8_t (IOArg rdi)
       (ValArg (imm_u32 (repr 0)))
       x4_val
   ];
@@ -69,13 +69,13 @@ Definition p1b : IM_Program := {|
     Binary AddOp two_plus_two
       (ValArg (imm_u32 (repr 2)))
       (ValArg (imm_u32 (repr 2)));
-    StOp local_x
+    StOp uint8_t local_x
       (ValArg (imm_u32 (repr 4)))
       b_plus_c;
-    LdOp x4_val
+    LdOp uint8_t x4_val
       local_x
       two_plus_two;
-    StOp (IOArg rdi)
+    StOp uint8_t (IOArg rdi)
       (ValArg (imm_u32 (repr 0)))
       x4_val
   ];
@@ -97,16 +97,16 @@ Definition p1c : IM_Program := {|
     Binary AddOp b_plus_c
       (IOArg rsi)
       (IOArg rdx);
-    StOp local_x
+    StOp uint8_t local_x
       (ValArg (imm_u32 (repr 4)))
       b_plus_c;
-    LdOp x4_val
+    LdOp uint8_t x4_val
       local_x
       (ValArg (imm_u32 (repr 4)));
-    StOp (IOArg rdi)
+    StOp uint8_t (IOArg rdi)
       (ValArg (imm_u32 (repr 0)))
       x4_val;
-    StOp (IOArg rdi)
+    StOp uint8_t (IOArg rdi)
       (ValArg (imm_u32 (repr 0)))
       (ValArg (imm_u8 (repr 1)))
   ];
@@ -121,7 +121,7 @@ Definition p2a : IM_Program := {|
     (rax, uint8_t)
   ];
   fn_body := [
-    LdOp (IOArg rax)
+    LdOp uint8_t (IOArg rax)
       (IOArg rdi)
       (ValArg (imm_u32 (repr 0)))
   ];
@@ -135,10 +135,10 @@ Definition p2b : IM_Program := {|
     (rax, uint8_t)
   ];
   fn_body := [
-    LdOp (TmpArg 1%positive)
+    LdOp uint8_t (TmpArg 1%positive)
       (IOArg rdi)
       (ValArg (imm_u32 (repr 1)));
-    LdOp (IOArg rax)
+    LdOp uint8_t (IOArg rax)
       (IOArg rdi)
       (ValArg (imm_u32 (repr 0)))
   ];
@@ -152,10 +152,10 @@ Definition p2c : IM_Program := {|
     (rax, uint8_t)
   ];
   fn_body := [
-    LdOp (IOArg rax)
+    LdOp uint8_t (IOArg rax)
       (IOArg rdi)
       (ValArg (imm_u32 (repr 0)));
-    StOp (IOArg rdi)
+    StOp uint8_t (IOArg rdi)
       (ValArg (imm_u32 (repr 1)))
       (ValArg (imm_u8 (repr 0)))
   ];
@@ -178,7 +178,7 @@ Definition p3a : IM_Program := {|
           (ValArg (imm_u8 (repr 0)))
       ]
       [
-        LdOp (IOArg rax)
+        LdOp uint8_t (IOArg rax)
           (IOArg rsi)
           (ValArg (imm_u32 (repr 0)))
       ]
@@ -209,10 +209,10 @@ Definition p4a : IM_Program := {|
     (rax, uint8_t)
   ];
   fn_body := [
-    LdOp (IOArg rax)
+    LdOp uint8_t (IOArg rax)
       (IOArg rdi)
       (ValArg (imm_u32 (repr 1)));
-    LdOp (IOArg rax)
+    LdOp uint8_t (IOArg rax)
       (IOArg rdi)
       (ValArg (imm_u32 (repr 0)))
   ];
@@ -226,10 +226,10 @@ Definition p4b : IM_Program := {|
     (rax, uint8_t)
   ];
   fn_body := [
-    LdOp (IOArg rax)
+    LdOp uint8_t (IOArg rax)
       (IOArg rdi)
       (ValArg (imm_u32 (repr 0)));
-    LdOp (IOArg rax)
+    LdOp uint8_t (IOArg rax)
       (IOArg rdi)
       (ValArg (imm_u32 (repr 1)))
   ];
@@ -244,3 +244,104 @@ Definition example_programs := [
   p3a; p3b;
   p4a; p4b
 ].
+
+(* ================================================================= *)
+(* Multi-byte load/store test programs                                *)
+(* ================================================================= *)
+
+Definition mb8 : IM_Program := {|
+  fn_in := [
+    (rdi, uintptr_t);
+    (rsi, uint8_t);
+    (rdx, uint8_t);
+    (rax, uint8_t)
+  ];
+  fn_body := [
+    Binary AddOp (IOArg rax)
+      (IOArg rsi)
+      (IOArg rdx);
+    StOp uint8_t (IOArg rdi)
+      (ValArg (imm_u32 (repr 0)))
+      (IOArg rax);
+    LdOp uint8_t (IOArg rax)
+      (IOArg rdi)
+      (ValArg (imm_u32 (repr 0)))
+  ];
+  fn_out_vars := [rax];
+  fn_out_iaddrs := [];
+  fn_out_vaddrs := [];
+|}.
+
+Definition mb16 : IM_Program := {|
+  fn_in := [
+    (rdi, uintptr_t);
+    (rsi, uint16_t);
+    (rdx, uint16_t);
+    (rax, uint16_t)
+  ];
+  fn_body := [
+    Binary AddOp (IOArg rax)
+      (IOArg rsi)
+      (IOArg rdx);
+    StOp uint16_t (IOArg rdi)
+      (ValArg (imm_u32 (repr 0)))
+      (IOArg rax);
+    LdOp uint16_t (IOArg rax)
+      (IOArg rdi)
+      (ValArg (imm_u32 (repr 0)))
+  ];
+  fn_out_vars := [rax];
+  fn_out_iaddrs := [];
+  fn_out_vaddrs := [];
+|}.
+
+Definition mb32 : IM_Program := {|
+  fn_in := [
+    (rdi, uintptr_t);
+    (rsi, uint32_t);
+    (rdx, uint32_t);
+    (rax, uint32_t)
+  ];
+  fn_body := [
+    Binary AddOp (IOArg rax)
+      (IOArg rsi)
+      (IOArg rdx);
+    StOp uint32_t (IOArg rdi)
+      (ValArg (imm_u32 (repr 0)))
+      (IOArg rax);
+    LdOp uint32_t (IOArg rax)
+      (IOArg rdi)
+      (ValArg (imm_u32 (repr 0)))
+  ];
+  fn_out_vars := [rax];
+  fn_out_iaddrs := [];
+  fn_out_vaddrs := [];
+|}.
+
+Definition mb64 : IM_Program := {|
+  fn_in := [
+    (rdi, uintptr_t);
+    (rsi, uint64_t);
+    (rdx, uint64_t);
+    (rax, uint64_t)
+  ];
+  fn_body := [
+    Binary AddOp (IOArg rax)
+      (IOArg rsi)
+      (IOArg rdx);
+    StOp uint64_t (IOArg rdi)
+      (ValArg (imm_u32 (repr 0)))
+      (IOArg rax);
+    LdOp uint64_t (IOArg rax)
+      (IOArg rdi)
+      (ValArg (imm_u32 (repr 0)))
+  ];
+  fn_out_vars := [rax];
+  fn_out_iaddrs := [];
+  fn_out_vaddrs := [];
+|}.
+
+Compute (var_val (sym_eval_program mb8) rax).
+Compute (var_val (sym_eval_program mb16) rax).
+Compute (var_val (sym_eval_program mb32) rax).
+Compute (var_val (sym_eval_program mb64) rax).

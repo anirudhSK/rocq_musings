@@ -14,16 +14,31 @@ From MyProject Require Import MyInts.
 
 Inductive ValType : Type :=
 | uint8_t
+| uint16_t
 | uint32_t
+| uint64_t
 | uintptr_t
 | array_t
 | nil_t
 | err_t.
 
 Definition var_id := positive.
+
+(* Number of bytes for a given value type *)
+Definition valtype_num_bytes (ty : ValType) : option nat :=
+  match ty with
+  | uint8_t  => Some 1
+  | uint16_t => Some 2
+  | uint32_t => Some 4
+  | uint64_t => Some 8
+  | _        => None
+  end.
+
 Inductive Imm : Type :=
 | imm_u8 (v : uint8)
+| imm_u16 (v : uint16)
 | imm_u32 (v : uint32)
+| imm_u64 (v : uint64)
 | imm_ptr (b : uintbptr).
 Inductive FnArg : Type :=
 | IOArg (vid : var_id)
@@ -39,10 +54,11 @@ Inductive ArithBinOp : Type :=
 | BitXorOp.
 Inductive Instruction : Type :=
 | AllocOp (dst a1 a2 : FnArg)
-| LdOp (dst a1 a2 : FnArg)
-| StOp (a1 a2 a3 : FnArg)
+| LdOp (ty : ValType) (dst a1 a2 : FnArg)   (* ty = type to load, e.g. uint64_t => 8-byte load *)
+| StOp (ty : ValType) (a1 a2 a3 : FnArg)    (* ty = type to store, e.g. uint64_t => 8-byte store *)
 | Binary (op : ArithBinOp) (dst a1 a2 : FnArg)
 | BitFlipOp (dst a1 : FnArg)
+| CastOp (dst : FnArg) (src : FnArg) (ty : ValType)
 | BrzOp (cond : FnArg) (zero_br : list Instruction) (nonzero_br : list Instruction).
 Record IM_Program := {
   fn_in : list (var_id * ValType);
@@ -54,45 +70,69 @@ Record IM_Program := {
 
 Definition HasError : Type := bool.
 Definition TypedExpr (T : Type) : Type := ValType * T.
+(* Per-byte type tag: records what ValType was used for the store that wrote each byte *)
+Definition TagMap : Type := PMap.t (PMap.t ValType).
 Record machine_state {T : Type} := {
   io_map : PMap.t (TypedExpr T);
   tmp_map : PMap.t (TypedExpr T);
   iarr_map : PMap.t (TypedExpr T);
   varr_map : PMap.t (TypedExpr T);
   bound_map : PMap.t (TypedExpr T);
+  itag_map : TagMap;   (* type tags for immediate-pointer arrays *)
+  vtag_map : TagMap;   (* type tags for variable-pointer arrays *)
   flag : HasError;
 }.
 Arguments machine_state T : clear implicits.
 Definition set_io {T : Type} (m : machine_state T) (k : positive) (v : ValType * T) := {|
   io_map := PMap.set k v (io_map m);
-  tmp_map := tmp_map m; iarr_map := iarr_map m; varr_map := varr_map m; bound_map := bound_map m; flag := flag m;
+  tmp_map := tmp_map m; iarr_map := iarr_map m; varr_map := varr_map m; bound_map := bound_map m;
+  itag_map := itag_map m; vtag_map := vtag_map m; flag := flag m;
 |}.
 Definition set_tmp {T : Type} (m : machine_state T) (k : positive) (v : ValType * T) := {|
   tmp_map := PMap.set k v (tmp_map m);
-  io_map := io_map m; iarr_map := iarr_map m; varr_map := varr_map m; bound_map := bound_map m; flag := flag m;
+  io_map := io_map m; iarr_map := iarr_map m; varr_map := varr_map m; bound_map := bound_map m;
+  itag_map := itag_map m; vtag_map := vtag_map m; flag := flag m;
 |}.
 Definition set_iarr {T : Type} (m : machine_state T) (k : positive) (v : ValType * T) := {|
   iarr_map := PMap.set k v (iarr_map m);
-  io_map := io_map m; tmp_map := tmp_map m; varr_map := varr_map m; bound_map := bound_map m; flag := flag m;
+  io_map := io_map m; tmp_map := tmp_map m; varr_map := varr_map m; bound_map := bound_map m;
+  itag_map := itag_map m; vtag_map := vtag_map m; flag := flag m;
 |}.
 Definition set_varr {T : Type} (m : machine_state T) (k : positive) (v : ValType * T) := {|
   varr_map := PMap.set k v (varr_map m);
-  io_map := io_map m; tmp_map := tmp_map m; iarr_map := iarr_map m; bound_map := bound_map m; flag := flag m;
+  io_map := io_map m; tmp_map := tmp_map m; iarr_map := iarr_map m; bound_map := bound_map m;
+  itag_map := itag_map m; vtag_map := vtag_map m; flag := flag m;
 |}.
 Definition set_bound {T : Type} (m : machine_state T) (k : positive) (v : ValType * T) := {|
   bound_map := PMap.set k v (bound_map m);
-  io_map := io_map m; tmp_map := tmp_map m; iarr_map := iarr_map m; varr_map := varr_map m; flag := flag m;
+  io_map := io_map m; tmp_map := tmp_map m; iarr_map := iarr_map m; varr_map := varr_map m;
+  itag_map := itag_map m; vtag_map := vtag_map m; flag := flag m;
+|}.
+Definition set_itag {T : Type} (m : machine_state T) (arr_key : positive) (byte_off : positive) (ty : ValType) := {|
+  itag_map := PMap.set arr_key (PMap.set byte_off ty ((itag_map m) !! arr_key)) (itag_map m);
+  io_map := io_map m; tmp_map := tmp_map m; iarr_map := iarr_map m; varr_map := varr_map m;
+  bound_map := bound_map m; vtag_map := vtag_map m; flag := flag m;
+|}.
+Definition set_vtag {T : Type} (m : machine_state T) (arr_key : positive) (byte_off : positive) (ty : ValType) := {|
+  vtag_map := PMap.set arr_key (PMap.set byte_off ty ((vtag_map m) !! arr_key)) (vtag_map m);
+  io_map := io_map m; tmp_map := tmp_map m; iarr_map := iarr_map m; varr_map := varr_map m;
+  bound_map := bound_map m; itag_map := itag_map m; flag := flag m;
 |}.
 Definition set_flag {T : Type} (m : machine_state T) (b : bool) := {|
   flag := b;
-  io_map := io_map m; tmp_map := tmp_map m; iarr_map := iarr_map m; varr_map := varr_map m; bound_map := bound_map m;
+  io_map := io_map m; tmp_map := tmp_map m; iarr_map := iarr_map m; varr_map := varr_map m;
+  bound_map := bound_map m; itag_map := itag_map m; vtag_map := vtag_map m;
 |}.
 
 Inductive arith_expr :=
 | Z3_int8 (x : uint8)
+| Z3_int16 (x : uint16)
 | Z3_int32 (x : uint32)
+| Z3_int64 (x : uint64)
 | Z3_int8_var (name : positive)
+| Z3_int16_var (name : positive)
 | Z3_int32_var (name : positive)
+| Z3_int64_var (name : positive)
 | Z3_bv_add (e1 e2 : arith_expr)
 | Z3_bv_sub (e1 e2 : arith_expr)
 | Z3_bv_shl (e1 e2 : arith_expr)
@@ -134,6 +174,8 @@ Definition init_sym : sym_state := {|
   iarr_map := PMap.init (nil_t, Z3Nil);
   varr_map := PMap.init (nil_t, Z3Nil);
   bound_map := PMap.init (nil_t, Z3Nil);
+  itag_map := PMap.init (PMap.init nil_t);
+  vtag_map := PMap.init (PMap.init nil_t);
   flag := false;
 |}.
 
@@ -142,8 +184,12 @@ Fixpoint apply_io_helper (io : PMap.t (TypedExpr Z3Expr)) (input : list (positiv
   | [] => io
   | (k, uint8_t) :: rest =>
     apply_io_helper (PMap.set k (uint8_t, Z3Arith (Z3_int8_var k)) io) rest
+  | (k, uint16_t) :: rest =>
+    apply_io_helper (PMap.set k (uint16_t, Z3Arith (Z3_int16_var k)) io) rest
   | (k, uint32_t) :: rest =>
     apply_io_helper (PMap.set k (uint32_t, Z3Arith (Z3_int32_var k)) io) rest
+  | (k, uint64_t) :: rest =>
+    apply_io_helper (PMap.set k (uint64_t, Z3Arith (Z3_int64_var k)) io) rest
   | (k, uintptr_t) :: rest =>
     apply_io_helper (PMap.set k (uintptr_t, Z3Ptr (Z3_ptr_var k)) io) rest
   | (k, _) :: rest => apply_io_helper (PMap.set k (err_t, Z3Nil) io) rest
@@ -161,6 +207,8 @@ Definition apply_input (m : sym_state) (iv : list (positive * ValType)) : sym_st
   iarr_map := iarr_map init_sym;
   varr_map := apply_varr_helper (varr_map init_sym) iv;
   bound_map := bound_map init_sym;
+  itag_map := itag_map init_sym;
+  vtag_map := vtag_map init_sym;
   flag := flag init_sym;
 |}.
 
@@ -171,13 +219,111 @@ Definition sym_interp_arg (m : sym_state) (a : FnArg) : TypedExpr Z3Expr :=
   | ValArg x =>
     match x with
     | imm_u8 x' => (uint8_t, Z3Arith (Z3_int8 x'))
+    | imm_u16 x' => (uint16_t, Z3Arith (Z3_int16 x'))
     | imm_u32 x' => (uint32_t, Z3Arith (Z3_int32 x'))
+    | imm_u64 x' => (uint64_t, Z3Arith (Z3_int64 x'))
     | imm_ptr x' => (uintptr_t, Z3Ptr (Z3_ptr x'))
     end
   end.
 
 Definition uptr_to_key (p : uintbptr) : positive :=
   Pos.of_nat (S (Z.to_nat (unsigned p))).
+
+(* Convert a uint32 offset to a key for the per-byte tag map *)
+Definition u32_to_tagkey (off : uint32) : positive :=
+  Pos.of_nat (S (Z.to_nat (unsigned off))).
+
+(* Helper: generate list [0; 1; ... ; n-1] as Z values *)
+Fixpoint z_range_nat (n : nat) : list Z :=
+  match n with
+  | O => []
+  | S n' => z_range_nat n' ++ [Z.of_nat n']
+  end.
+
+(* ---- Multi-byte store helpers ---- *)
+
+(* Extract byte i from a symbolic expression: (e >> (8*i)) & 0xFF
+   All byte extractions produce a uint8-width expression via Z3_arr_sel semantics,
+   but here we just build the shift-and-mask expression trees. *)
+Definition extract_byte (e : arith_expr) (byte_idx : Z) : arith_expr :=
+  let shift_amt := Z3_int8 (repr (byte_idx * 8)) in
+  Z3_bv_and (Z3_bv_ashr e shift_amt) (Z3_int8 (repr 255)).
+
+(* Store N bytes of value e into array A starting at symbolic offset base_off.
+   Returns the updated array expression. Uses little-endian byte order. *)
+Fixpoint multi_byte_store_arr (A : arr_expr) (base_off : arith_expr) (e : arith_expr) (byte_indices : list Z) : arr_expr :=
+  match byte_indices with
+  | [] => A
+  | i :: rest =>
+    let off_i := Z3_bv_add base_off (Z3_int32 (repr i)) in
+    let byte_i := extract_byte e i in
+    multi_byte_store_arr (Z3_arr_st A off_i byte_i) base_off e rest
+  end.
+
+(* Set type tags for N consecutive bytes in a tag map.
+   arr_tags is the per-byte tag map for one array. *)
+Fixpoint set_tags_for_bytes (arr_tags : PMap.t ValType) (base_off : uint32) (ty : ValType) (byte_indices : list Z) : PMap.t ValType :=
+  match byte_indices with
+  | [] => arr_tags
+  | i :: rest =>
+    let off := repr (unsigned base_off + i) : uint32 in
+    set_tags_for_bytes (PMap.set (u32_to_tagkey off) ty arr_tags) base_off ty rest
+  end.
+
+(* Check that all N consecutive bytes have the expected type tag.
+   Returns true if all match, false if any mismatch. *)
+Fixpoint check_tags_for_bytes (arr_tags : PMap.t ValType) (base_off : uint32) (expected : ValType) (byte_indices : list Z) : bool :=
+  match byte_indices with
+  | [] => true
+  | i :: rest =>
+    let off := repr (unsigned base_off + i) : uint32 in
+    let actual := arr_tags !! (u32_to_tagkey off) in
+    match actual, expected with
+    | nil_t, _ => (* uninitialized byte — allow loading it but it's "untagged" *)
+        check_tags_for_bytes arr_tags base_off expected rest
+    | t1, t2 =>
+      if valtype_num_bytes t1 then
+        if valtype_num_bytes t2 then
+          (* both are valid integer types — check they match *)
+          match valtype_num_bytes t1, valtype_num_bytes t2 with
+          | Some n1, Some n2 => if Nat.eqb n1 n2
+              then check_tags_for_bytes arr_tags base_off expected rest
+              else false
+          | _, _ => false
+          end
+        else false
+      else false
+    end
+  end.
+
+(* ---- Multi-byte load helpers ---- *)
+
+(* Load byte i from array and shift it left: (arr[base+i]) << (8*i) *)
+Definition load_and_shift_byte (A : arr_expr) (base_off : arith_expr) (byte_idx : Z) : arith_expr :=
+  let off_i := Z3_bv_add base_off (Z3_int32 (repr byte_idx)) in
+  let byte_val := Z3_arr_sel A off_i in
+  let shift_amt := Z3_int8 (repr (byte_idx * 8)) in
+  Z3_bv_shl byte_val shift_amt.
+
+(* Reassemble N bytes from an array into a single value by ORing shifted bytes.
+   Little-endian: byte 0 is LSB. *)
+Fixpoint multi_byte_load_expr (A : arr_expr) (base_off : arith_expr) (byte_indices : list Z) : arith_expr :=
+  match byte_indices with
+  | [] => Z3_int8 (repr 0)  (* should not happen *)
+  | [i] => load_and_shift_byte A base_off i
+  | i :: rest =>
+    Z3_bv_or (load_and_shift_byte A base_off i) (multi_byte_load_expr A base_off rest)
+  end.
+
+(* Map ValType to the corresponding Z3Expr type tag *)
+Definition valtype_to_arith_tag (ty : ValType) : ValType :=
+  match ty with
+  | uint8_t  => uint8_t
+  | uint16_t => uint16_t
+  | uint32_t => uint32_t
+  | uint64_t => uint64_t
+  | _        => err_t
+  end.
 
 Definition sym_alloc (m : sym_state) (dst a1 a2: FnArg) :=
   let local_lookup := sym_interp_arg m in
@@ -200,78 +346,105 @@ Definition sym_alloc (m : sym_state) (dst a1 a2: FnArg) :=
   | _ => set_flag m' true
   end.
 
-Definition get_sym_ld_val (m : sym_state) (dst : FnArg) (e1 : ptr_expr) (e2 : arith_expr) :=
-  let lookup := match e1 with
-  | Z3_ptr x =>
-    (iarr_map m) !! (uptr_to_key x)
-  | Z3_ptr_var x =>
-    (varr_map m) !! x
-  | Z3_ptr_ite _ _ _ => (err_t, Z3Nil)
-  end in
-  let val := match lookup with
-  | (array_t, Z3Array A) => (uint8_t, Z3Arith (Z3_arr_sel A e2))
-  | _ => (err_t, Z3Nil)
-  end in
-  let m' := match e1 with 
-  | Z3_ptr_var x => match (bound_map m) !! x with
-    | (uint32_t, Z3Arith prev_bound) =>
-        set_bound m x
-        (uint32_t, Z3Arith (Z3_arith_ite
-          (Z3_Lt e2 prev_bound)
-          prev_bound
-          e2))
-    | _ => set_bound m x (uint32_t, Z3Arith e2)
+Definition get_sym_ld_val (m : sym_state) (ty : ValType) (dst : FnArg) (e1 : ptr_expr) (e2 : arith_expr) :=
+  let n_bytes := valtype_num_bytes ty in
+  match n_bytes with
+  | None => set_flag m true
+  | Some n =>
+    let byte_indices := z_range_nat n in
+    let ptr_arr := match e1 with
+    | Z3_ptr x => (iarr_map m) !! (uptr_to_key x)
+    | Z3_ptr_var x => (varr_map m) !! x
+    | Z3_ptr_ite _ _ _ => (err_t, Z3Nil)
+    end in
+    let val := match ptr_arr with
+    | (array_t, Z3Array A) =>
+        (ty, Z3Arith (multi_byte_load_expr A e2 byte_indices))
+    | _ => (err_t, Z3Nil)
+    end in
+    let m' := match e1 with
+    | Z3_ptr_var x => match (bound_map m) !! x with
+      | (uint32_t, Z3Arith prev_bound) =>
+          (* Track max offset accessed = base + n_bytes - 1 *)
+          let max_off := Z3_bv_add e2 (Z3_int32 (repr (Z.of_nat n - 1))) in
+          set_bound m x
+          (uint32_t, Z3Arith (Z3_arith_ite
+            (Z3_Lt max_off prev_bound)
+            prev_bound
+            max_off))
+      | _ =>
+          let max_off := Z3_bv_add e2 (Z3_int32 (repr (Z.of_nat n - 1))) in
+          set_bound m x (uint32_t, Z3Arith max_off)
+      end
+    | _ => m
+    end in
+    match val, dst with
+    | (_, Z3Arith _), IOArg x => set_io m' x val
+    | (_, Z3Arith _), TmpArg x => set_tmp m' x val
+    | _, _ => set_flag m true
     end
-  | _ => m
-  end in
-  match val, dst with
-  | (uint8_t, Z3Arith _), IOArg x => set_io m' x val
-  | (uint8_t, Z3Arith _), TmpArg x => set_tmp m' x val
-  | _, _ => set_flag m true
   end.
-Definition sym_ld (m : sym_state) (dst a1 a2 : FnArg) :=
+Definition sym_ld (m : sym_state) (ty : ValType) (dst a1 a2 : FnArg) :=
   let local_lookup := sym_interp_arg m in
   let '(a1_t, a1_v) := local_lookup a1 in
   let '(a2_t, a2_v) := local_lookup a2 in
   match a1_t, a1_v, a2_t, a2_v with
   | uintptr_t, Z3Ptr e1, uint32_t, Z3Arith e2 =>
-    get_sym_ld_val m dst e1 e2
+    get_sym_ld_val m ty dst e1 e2
   | _, _, _, _ => set_flag m true
   end.
 
-Definition sym_st (m : sym_state) (a1 a2 a3 : FnArg) :=
+Definition sym_st (m : sym_state) (ty : ValType) (a1 a2 a3 : FnArg) :=
   let local_lookup := sym_interp_arg m in
-  (* TODO: handle case where a1 is a ValArg imm_ptr *)
-  let st_idx := match local_lookup a2 with
-  | (uint32_t, Z3Arith e2) => (uint32_t, Z3Arith e2)
-  | _ => (err_t, Z3Nil)
-  end in
-  let st_val := match local_lookup a3 with
-  | (uint8_t, Z3Arith e3) => (uint8_t, Z3Arith e3)
-  | _ => (err_t, Z3Nil)
-  end in
-  match local_lookup a1, st_idx, st_val with
-  | (uintptr_t, Z3Ptr (Z3_ptr x)), (uint32_t, Z3Arith e2), (uint8_t, Z3Arith e3) =>
-    match (iarr_map m) !! (uptr_to_key x) with
-    | (array_t, Z3Array A) =>
-      set_iarr m (uptr_to_key x) (array_t, Z3Array (Z3_arr_st A e2 e3))
-    | _ => set_flag m true
-    end
-  | (uintptr_t, Z3Ptr (Z3_ptr_var x)), (uint32_t, Z3Arith e2), (uint8_t, Z3Arith e3) =>
-    match (varr_map m) !! x with
-    | (array_t, Z3Array A) =>
-      match (bound_map m) !! x with
-      | (uint32_t, Z3Arith prev_bound) =>
-          set_varr (set_bound m x
-            (uint32_t, Z3Arith (Z3_arith_ite
-              (Z3_Lt e2 prev_bound)
-              prev_bound
-              e2))) x (array_t, Z3Array (Z3_arr_st A e2 e3))
-      | _ => set_varr (set_bound m x st_idx) x (array_t, Z3Array (Z3_arr_st A e2 e3))
+  let n_bytes := valtype_num_bytes ty in
+  match n_bytes with
+  | None => set_flag m true  (* unsupported type for store *)
+  | Some n =>
+    let byte_indices := z_range_nat n in
+    (* The value to store must match the declared type *)
+    let st_val := match local_lookup a3 with
+    | (vt, Z3Arith e3) =>
+        match valtype_num_bytes vt, valtype_num_bytes ty with
+        | Some nv, Some nt => if Nat.eqb nv nt then Some e3 else None
+        | _, _ => None
+        end
+    | _ => None
+    end in
+    let st_idx := match local_lookup a2 with
+    | (uint32_t, Z3Arith e2) => Some e2
+    | _ => None
+    end in
+    match local_lookup a1, st_idx, st_val with
+    | (uintptr_t, Z3Ptr (Z3_ptr x)), Some e2, Some e3 =>
+      let arr_key := uptr_to_key x in
+      match (iarr_map m) !! arr_key with
+      | (array_t, Z3Array A) =>
+        let A' := multi_byte_store_arr A e2 e3 byte_indices in
+        set_iarr m arr_key (array_t, Z3Array A')
+      | _ => set_flag m true
       end
-    | _ => set_flag m true
+    | (uintptr_t, Z3Ptr (Z3_ptr_var x)), Some e2, Some e3 =>
+      match (varr_map m) !! x with
+      | (array_t, Z3Array A) =>
+        let A' := multi_byte_store_arr A e2 e3 byte_indices in
+        let m' := match (bound_map m) !! x with
+        | (uint32_t, Z3Arith prev_bound) =>
+            (* Track the max offset accessed = base + n_bytes - 1 *)
+            let max_off := Z3_bv_add e2 (Z3_int32 (repr (Z.of_nat n - 1))) in
+            set_bound m x
+              (uint32_t, Z3Arith (Z3_arith_ite
+                (Z3_Lt max_off prev_bound)
+                prev_bound
+                max_off))
+        | _ =>
+            let max_off := Z3_bv_add e2 (Z3_int32 (repr (Z.of_nat n - 1))) in
+            set_bound m x (uint32_t, Z3Arith max_off)
+        end in
+        set_varr m' x (array_t, Z3Array A')
+      | _ => set_flag m true
+      end
+    | _, _, _ => set_flag m true
     end
-  | _, _, _ => set_flag m true
   end.
 
 Definition set_ (dst : FnArg) (m : sym_state) (val : TypedExpr Z3Expr) :=
@@ -299,8 +472,12 @@ Definition sym_binop (m : sym_state) (op : ArithBinOp) (dst a1 a2 : FnArg) :=
   match local_lookup a1, local_lookup a2 with
   | (uint8_t, Z3Arith e1), (uint8_t, Z3Arith e2) =>
     (uint8_t, bin_to_expr op e1 e2)
+  | (uint16_t, Z3Arith e1), (uint16_t, Z3Arith e2) =>
+    (uint16_t, bin_to_expr op e1 e2)
   | (uint32_t, Z3Arith e1), (uint32_t, Z3Arith e2) =>
     (uint32_t, bin_to_expr op e1 e2)
+  | (uint64_t, Z3Arith e1), (uint64_t, Z3Arith e2) =>
+    (uint64_t, bin_to_expr op e1 e2)
   | (_, e1), _ => (err_t, e1)
   end in
   set_ dst m new_val.
@@ -311,8 +488,12 @@ Definition sym_bitflip (m : sym_state) (dst a1 : FnArg) :=
   match local_lookup a1 with
   | (uint8_t, Z3Arith e1) =>
     (uint8_t, Z3Arith (Z3_bv_not e1))
+  | (uint16_t, Z3Arith e1) =>
+    (uint16_t, Z3Arith (Z3_bv_not e1))
   | (uint32_t, Z3Arith e1) =>
     (uint32_t, Z3Arith (Z3_bv_not e1))
+  | (uint64_t, Z3Arith e1) =>
+    (uint64_t, Z3Arith (Z3_bv_not e1))
   | (_, e1) => (err_t, e1)
   end in
   set_ dst m new_val.
@@ -347,6 +528,8 @@ Definition as_ite (c : bool_expr) (keys : list positive) (m1 m2 : sym_state) : s
   iarr_map := merge_var_maps c keys (iarr_map m1) (iarr_map m2) (iarr_map m2);
   varr_map := merge_var_maps c keys (varr_map m1) (varr_map m2) (varr_map m2);
   bound_map := merge_var_maps c keys (bound_map m1) (bound_map m2) (bound_map m2);
+  itag_map := itag_map m1;  (* TODO: merge tag maps for branches *)
+  vtag_map := vtag_map m1;
   flag := orb (flag m1) (flag m2);
 |}.
 
@@ -355,10 +538,11 @@ Fixpoint collect_dst_keys_instr (i : Instruction) : list positive :=
   let ptr_key_of := fun a => match a with IOArg x | TmpArg x => [x] | _ => [] end in
   match i with
   | AllocOp dst a1 _ => dst_key_of dst ++ ptr_key_of a1
-  | LdOp dst a1 _ => dst_key_of dst ++ ptr_key_of a1
-  | StOp a1 _ _ => ptr_key_of a1
+  | LdOp _ dst a1 _ => dst_key_of dst ++ ptr_key_of a1
+  | StOp _ a1 _ _ => ptr_key_of a1
   | Binary _ dst _ _ => dst_key_of dst
   | BitFlipOp dst _ => dst_key_of dst
+  | CastOp dst _ _ => dst_key_of dst
   | BrzOp _ if_z if_nz =>
     (fix go (l : list Instruction) :=
       match l with [] => [] | x :: xs => collect_dst_keys_instr x ++ go xs end) if_z
@@ -375,10 +559,11 @@ Fixpoint apply_sym_op (i : Instruction) (m : sym_state) {struct i} : sym_state :
   else
     match i with
     | AllocOp dst a1 a2 => sym_alloc m dst a1 a2
-    | LdOp dst a1 a2 => sym_ld m dst a1 a2
-    | StOp a1 a2 a3 => sym_st m a1 a2 a3
+    | LdOp ty dst a1 a2 => sym_ld m ty dst a1 a2
+    | StOp ty a1 a2 a3 => sym_st m ty a1 a2 a3
     | Binary op dst a1 a2 => sym_binop m op dst a1 a2
     | BitFlipOp dst a1 => sym_bitflip m dst a1
+    | CastOp _ _ _ => set_flag m true (* TODO: implement CastOp *)
     | BrzOp cond zero_br nonzero_br =>
       let eval_list :=
         fix go (p : list Instruction) (m : sym_state) : sym_state :=
@@ -454,6 +639,16 @@ Definition eval_z3_arith_binop (op : ArithBinOp) (v1 v2 : CrVal) : CrVal :=
     | BitOrOp => IntVal (CrUInt8 (Integers.or x1 x2))
     | BitXorOp => IntVal (CrUInt8 (Integers.xor x1 x2))
     end
+  | IntVal (CrUInt16 x1), IntVal (CrUInt16 x2) =>
+    match op with
+    | AddOp => IntVal (CrUInt16 (Integers.add x1 x2))
+    | SubOp => IntVal (CrUInt16 (Integers.sub x1 x2))
+    | ASLOp => IntVal (CrUInt16 (Integers.shl x1 x2))
+    | ASROp => IntVal (CrUInt16 (Integers.shr x1 x2))
+    | BitAndOp => IntVal (CrUInt16 (Integers.and x1 x2))
+    | BitOrOp => IntVal (CrUInt16 (Integers.or x1 x2))
+    | BitXorOp => IntVal (CrUInt16 (Integers.xor x1 x2))
+    end
   | IntVal (CrUInt32 x1), IntVal (CrUInt32 x2) =>
     match op with
     | AddOp => IntVal (CrUInt32 (Integers.add x1 x2))
@@ -464,15 +659,29 @@ Definition eval_z3_arith_binop (op : ArithBinOp) (v1 v2 : CrVal) : CrVal :=
     | BitOrOp => IntVal (CrUInt32 (Integers.or x1 x2))
     | BitXorOp => IntVal (CrUInt32 (Integers.xor x1 x2))
     end
+  | IntVal (CrUInt64 x1), IntVal (CrUInt64 x2) =>
+    match op with
+    | AddOp => IntVal (CrUInt64 (Integers.add x1 x2))
+    | SubOp => IntVal (CrUInt64 (Integers.sub x1 x2))
+    | ASLOp => IntVal (CrUInt64 (Integers.shl x1 x2))
+    | ASROp => IntVal (CrUInt64 (Integers.shr x1 x2))
+    | BitAndOp => IntVal (CrUInt64 (Integers.and x1 x2))
+    | BitOrOp => IntVal (CrUInt64 (Integers.or x1 x2))
+    | BitXorOp => IntVal (CrUInt64 (Integers.xor x1 x2))
+    end
   | _, _ => ErrorVal
   end.
 
 Fixpoint eval_z3_arith (e : arith_expr) (sval : z3_s_val) (aval : z3_a_val) : CrVal :=
   match e with
   | Z3_int8 x => IntVal (CrUInt8 x)
+  | Z3_int16 x => IntVal (CrUInt16 x)
   | Z3_int32 x => IntVal (CrUInt32 x)
+  | Z3_int64 x => IntVal (CrUInt64 x)
   | Z3_int8_var name
-  | Z3_int32_var name => sval name
+  | Z3_int16_var name
+  | Z3_int32_var name
+  | Z3_int64_var name => sval name
   | Z3_bv_add e1 e2 =>
     eval_z3_arith_binop AddOp
       (eval_z3_arith e1 sval aval)
@@ -505,7 +714,9 @@ Fixpoint eval_z3_arith (e : arith_expr) (sval : z3_s_val) (aval : z3_a_val) : Cr
     let v := eval_z3_arith e1 sval aval in
     match v with
     | IntVal (CrUInt8 x) => IntVal (CrUInt8 (Integers.not x))
+    | IntVal (CrUInt16 x) => IntVal (CrUInt16 (Integers.not x))
     | IntVal (CrUInt32 x) => IntVal (CrUInt32 (Integers.not x))
+    | IntVal (CrUInt64 x) => IntVal (CrUInt64 (Integers.not x))
     | _ => ErrorVal
     end
   | Z3_arr_sel e1 e2 =>
