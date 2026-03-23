@@ -85,12 +85,12 @@ Proof. reflexivity. Qed.
 Lemma eval_bool_fold_lemma:
   forall {T} (f1 f2 : T -> TypedExpr Z3Expr) a A b B,
   fold_right Z3_Conj Z3_T
-    (map (fun '(_, x, (_, y)) => Z3_Eq x y)
+    (map (fun '((_, x), (_, y)) => Z3_Eq x y)
       (combine (map f1 (a :: A)) (map f2 (b :: B)))) =
   Z3_Conj
     (Z3_Eq (snd (f1 a)) (snd (f2 b)))
     (fold_right Z3_Conj Z3_T
-      (map (fun '(_, x, (_, y)) => Z3_Eq x y)
+      (map (fun '((_, x), (_, y)) => Z3_Eq x y)
         (combine (map f1 A) (map f2 B)))).
 Proof.
   intros. simpl. destruct (f1 a), (f2 b).
@@ -101,7 +101,7 @@ Lemma eval_fold_conj_true:
   forall {T} (f1 f2 : T -> TypedExpr Z3Expr) l sval aval,
   eval_z3_bool
     (fold_right Z3_Conj Z3_T
-      (map (fun '(_, x, (_, y)) => Z3_Eq x y)
+      (map (fun '((_, x), (_, y)) => Z3_Eq x y)
         (combine (map f1 l) (map f2 l)))) sval aval = true ->
   forall v,
     In v l -> eval_z3_expr (snd (f1 v)) sval aval = eval_z3_expr (snd (f2 v)) sval aval.
@@ -369,7 +369,7 @@ Lemma eval_fold_conj_false:
   forall {T} (f1 f2 : T -> TypedExpr Z3Expr) l sval aval,
   eval_z3_bool
     (fold_right Z3_Conj Z3_T
-      (map (fun '(_, x, (_, y)) => Z3_Eq x y)
+      (map (fun '((_, x), (_, y)) => Z3_Eq x y)
         (combine (map f1 l) (map f2 l)))) sval aval = false ->
   exists v,
     In v l /\ eval_z3_expr (snd (f1 v)) sval aval <> eval_z3_expr (snd (f2 v)) sval aval.
@@ -416,7 +416,7 @@ Lemma mem_prog_completeness_io_vars:
   forall p1 p2 sval aval,
   eval_z3_bool
     (fold_right Z3_Conj Z3_T
-      (map (fun '(_, x, (_, y)) => Z3_Eq x y)
+      (map (fun '((_, x), (_, y)) => Z3_Eq x y)
         (combine
           (map (var_val (sym_eval_program p1)) (fn_out_vars p1))
           (map (var_val (sym_eval_program p2)) (fn_out_vars p1))))
@@ -431,7 +431,7 @@ Lemma mem_prog_completeness_abs_addrs:
   forall p1 p2 sval aval,
   eval_z3_bool
     (fold_right Z3_Conj Z3_T
-      (map (fun '(_, x, (_, y)) => Z3_Eq x y)
+      (map (fun '((_, x), (_, y)) => Z3_Eq x y)
         (combine
           (map (iptr_val (sym_eval_program p1)) (fn_out_iaddrs p1))
           (map (iptr_val (sym_eval_program p2)) (fn_out_iaddrs p1))))
@@ -450,7 +450,7 @@ Lemma mem_prog_completeness_var_addrs:
   forall p1 p2 sval aval,
   eval_z3_bool
     (fold_right Z3_Conj Z3_T
-      (map (fun '(_, x, (_, y)) => Z3_Eq x y)
+      (map (fun '((_, x), (_, y)) => Z3_Eq x y)
         (combine
           (map (vptr_val (sym_eval_program p1)) (fn_out_vaddrs p1))
           (map (vptr_val (sym_eval_program p2)) (fn_out_vaddrs p1))))
