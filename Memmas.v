@@ -303,6 +303,16 @@ Proof.
   apply in_or_app in H. assumption.
 Qed.
 
+(*
+For any two programs, p1 and p2,
+If they have the same inputs and outputs,
+and if Z3 cannot find a satisfying assignment,
+then the two programs must:
+- have the same static error behavior
+- make the same variable assignments
+- make the same memory assignments
+- have the same memory access extents 
+*)
 Lemma mem_prog_soundness:
   forall (p1 p2 : IM_Program),
   matching_fn_io p1 p2 ->
@@ -465,6 +475,18 @@ Proof.
   assumption.
 Qed.
 
+(*
+For any two programs, p1 and p2,
+If Z3 returns a satisfying assignment, that is,
+- a specific scalar variable valuation (sval)
+- a specific array variable valuation (aval)
+- a specific failure mode under those valuations (f)
+Then the two program must either
+- lead to different static errors
+- lead to different final variable assignments
+- lead to different final memory assignments
+- lead to different memory access extents
+*)
 Lemma mem_prog_completeness:
   forall (p1 p2 : IM_Program) sval aval f,
   matching_fn_io p1 p2 ->
