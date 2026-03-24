@@ -488,7 +488,9 @@ Then the two program must either
 - lead to different memory access extents
 *)
 Lemma mem_prog_completeness:
-  forall (p1 p2 : IM_Program) sval aval f,
+  forall (p1 p2 : IM_Program)
+    (sval : z3_s_val) (aval : z3_a_val)
+    (f : FailureMode),
   matching_fn_io p1 p2 ->
   z3_query (query_expression p1 p2) = Z3Sat sval aval f ->
   differing_error p1 p2 sval aval \/
