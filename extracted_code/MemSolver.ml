@@ -485,7 +485,8 @@ let sat_check
     | None -> raise (Failure "Z3 returned SAT, but no model."))
 
 let rec positive_to_sexp n =
-  if n <= 1 then Sexp.Atom "Coq_xH"
+  if n <= 0 then failwith "positive_to_sexp: non-positive integer"
+  else if n = 1 then Sexp.Atom "Coq_xH"
   else if n mod 2 = 0 then Sexp.List [Sexp.Atom "Coq_xO"; positive_to_sexp (n / 2)]
   else Sexp.List [Sexp.Atom "Coq_xI"; positive_to_sexp (n / 2)]
 
