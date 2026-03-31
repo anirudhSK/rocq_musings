@@ -1,5 +1,6 @@
 open CrMem
 open CrVal
+open Sexplib
 
 module CoqStringOrd = struct
   type t = Stdlib.String.t
@@ -26,25 +27,21 @@ module BoolExprHash = Stdlib.Hashtbl.Make(struct
   let equal = ( == )
   let hash = Stdlib.Hashtbl.hash
 end)
-
 module ArithExprHash = Stdlib.Hashtbl.Make(struct
   type t = arith_expr
   let equal = ( == )
   let hash = Stdlib.Hashtbl.hash
 end)
-
 module ArrayExprHash = Stdlib.Hashtbl.Make(struct
   type t = arr_expr
   let equal = ( == )
   let hash = Stdlib.Hashtbl.hash
 end)
-
 module ExprHash = Stdlib.Hashtbl.Make(struct
   type t = coq_Z3Expr
   let equal = ( == )
   let hash = Stdlib.Hashtbl.hash
 end)
-
 type m_caches = {
   bool_cache : Z3.Expr.expr BoolExprHash.t;
   arith_cache : Z3.Expr.expr ArithExprHash.t;
@@ -486,6 +483,41 @@ let sat_check
       
       Z3Sat (sval, aval, fmode))
     | None -> raise (Failure "Z3 returned SAT, but no model."))
+
+let rec positive_to_sexp n =
+  if n <= 1 then Sexp.Atom "Coq_xH"
+  else if n mod 2 = 0 then Sexp.List [Sexp.Atom "Coq_xO"; positive_to_sexp (n / 2)]
+  else Sexp.List [Sexp.Atom "Coq_xI"; positive_to_sexp (n / 2)]
+
+let rec expand_integers sexp =
+  match sexp with
+  | Sexp.Atom s -> Sexp.Atom s
+  | Sexp.List [Sexp.Atom "Zpos"; Sexp.Atom n] ->
+      (try Sexp.List [Sexp.Atom "Zpos"; positive_to_sexp (int_of_string n)]
+       with Failure _ -> sexp)
+  | Sexp.List [Sexp.Atom "Zneg"; Sexp.Atom n] ->
+      (try Sexp.List [Sexp.Atom "Zneg"; positive_to_sexp (int_of_string n)]
+       with Failure _ -> sexp)
+  | Sexp.List ((Sexp.Atom hd) :: tl) ->
+      if Stdlib.List.mem hd ["IOArg"; "TmpArg"; "Coq_pair"; "Coq_cons"] && Stdlib.List.length tl > 0 then
+        match Stdlib.List.hd tl with
+        | Sexp.Atom n_str ->
+            (try
+              let n = int_of_string n_str in
+              Sexp.List ([Sexp.Atom hd; positive_to_sexp n] @ (Stdlib.List.map expand_integers (Stdlib.List.tl tl)))
+             with Failure _ -> Sexp.List (Stdlib.List.map expand_integers ((Sexp.Atom hd) :: tl)))
+        | _ -> Sexp.List (Stdlib.List.map expand_integers ((Sexp.Atom hd) :: tl))
+      else
+        Sexp.List (Stdlib.List.map expand_integers ((Sexp.Atom hd) :: tl))
+  | Sexp.List l ->
+      Sexp.List (Stdlib.List.map expand_integers l)
+
+let load_program (f : string) : coq_IM_Program =
+  let x = open_in f in
+  let len = in_channel_length x in
+  let str = really_input_string x len in
+  close_in x;
+  str |> Sexp.of_string |> expand_integers |> CrTypeIF.CrMem.coq_IM_Program_of_sexp
 
 let mem_solve (p1 : coq_IM_Program) (p2 : coq_IM_Program) : coq_Z3Res =
   let b = CrMem.query_expression p1 p2 in

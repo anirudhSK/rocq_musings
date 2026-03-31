@@ -7,12 +7,7 @@ let get_program f =
   close_in x;
   str |> Sexp.of_string |> CrTypeIF.coq_CaracaraProgram_of_sexp
 
-let get_mem_program f =
-  let x = open_in f in
-  let len = in_channel_length x in
-  let str = really_input_string x len in
-  close_in x;
-  str |> Sexp.of_string |> CrTypeIF.CrMem.coq_IM_Program_of_sexp
+let get_mem_program f = MemSolver.load_program f
 
 let tests = ref []
 let register test_label test_fn =
@@ -168,6 +163,18 @@ let () = register "sat aval" (fun () ->
     | ValueMismatch -> 1
     | _ -> 0
     )
+  | _ -> 0)
+
+(* Test 12:
+ * end to end test of -O0 and -O2 compilation
+ * of a basic bpf program
+ *)
+let () = register "e2e bpf test" (fun () ->
+  let p1 = get_mem_program "./test/O0.ir" in
+  let p2 = get_mem_program "./test/O2.ir" in
+
+  match MemSolver.mem_solve p1 p2 with
+  | Z3Unsat -> 1
   | _ -> 0)
 
 let () =
