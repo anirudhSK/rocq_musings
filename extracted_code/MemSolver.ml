@@ -490,6 +490,9 @@ let rec positive_to_sexp n =
   else if n mod 2 = 0 then Sexp.List [Sexp.Atom "Coq_xO"; positive_to_sexp (n / 2)]
   else Sexp.List [Sexp.Atom "Coq_xI"; positive_to_sexp (n / 2)]
 
+(* Technically this can overflow, but for now I'm going to say that
+ * if it overflows, the program is invalid -> don't care about that case :/
+ *)
 let rec expand_integers sexp =
   match sexp with
   | Sexp.Atom s -> Sexp.Atom s
