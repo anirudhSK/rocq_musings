@@ -96,55 +96,23 @@ Definition downstream_modules (net : ModuleNetwork) (src : ModuleName)
   map get_conn_dst (outgoing_connections net src).
 
 (* ------------------------------------------------------------------ *)
-(* 7.  Well-formedness                                                *)
+(* 7b. Reachability and DAG check                                     *)
 (* ------------------------------------------------------------------ *)
 
-(* Every module is stored at the key matching its name UID. *)
-Definition mod_names_consistent (net : ModuleNetwork) : Prop :=
-  List.Forall (fun '(k, opt_m) =>
-    match opt_m with
-    | Some m => (k = (unwrap (get_mod_name m)))
-    | None   => True
-    end) (PTree.elements (snd (net_modules net))).
+(* `reachable net src dst` holds when dst is reachable from src by
+   following one or more connections forward through the network. *)
+Inductive reachable (net : ModuleNetwork) : ModuleName -> ModuleName -> Prop :=
+| reachable_step : forall src dst,
+  In dst (downstream_modules net src) ->
+  reachable net src dst
+| reachable_trans : forall src mid dst,
+  reachable net src mid ->
+  reachable net mid dst ->
+  reachable net src dst.
 
-(* Every endpoint of every connection refers to a known module. *)
-Definition endpoints_defined (net : ModuleNetwork) : Prop :=
-  List.Forall (fun c =>
-    match lookup_module net (get_conn_src c),
-          lookup_module net (get_conn_dst c) with
-    | Some _, Some _ => True
-    | _,      _      => False
-    end) (all_connections net) /\
-    match lookup_module net (start_module net) with
-    | Some _ => True
-    | None   => False
-    end.
-
-(* Predicate: every connection is stored at the key matching its name UID. *)
-Definition conn_names_consistent (net : ModuleNetwork) : Prop :=
-  List.Forall (fun '(k, opt_c) =>
-    match opt_c with
-    | Some c => k = (unwrap (get_conn_name c))
-    | None   => True
-    end) (PTree.elements (snd (net_connections net))).
-
-Definition max_mod_is_max (net : ModuleNetwork) : Prop :=
-  forall m,
-    In m (all_modules net) ->
-    Pos.le (unwrap (get_mod_name m)) (max_mod_id net).
-
-Definition max_conn_is_max (net : ModuleNetwork) : Prop :=
-  forall c,
-    In c (all_connections net) ->
-    Pos.le (unwrap (get_conn_name c)) (max_conn_id net).
-
-(* A well-formed ModuleNetwork satisfies all three conditions. *)
-Definition wf_module_network (net : ModuleNetwork) : Prop :=
-  mod_names_consistent net /\
-  endpoints_defined net /\
-  conn_names_consistent net /\
-  max_mod_is_max net /\
-  max_conn_is_max net.
+(* A network is a DAG when no module can reach itself. *)
+Definition is_dag (net : ModuleNetwork) : Prop :=
+  forall m, ~ reachable net m m.
 
 (* ------------------------------------------------------------------ *)
 (* 8.  Module classification                                          *)
@@ -194,6 +162,60 @@ Definition source_modules (net : ModuleNetwork) : list CrModule :=
 
 Definition sink_modules (net : ModuleNetwork) : list CrModule :=
   filter (is_sink net) (all_modules net).
+
+(* ------------------------------------------------------------------ *)
+(* 7.  Well-formedness                                                *)
+(* ------------------------------------------------------------------ *)
+
+(* Every module is stored at the key matching its name UID. *)
+Definition mod_names_consistent (net : ModuleNetwork) : Prop :=
+  List.Forall (fun '(k, opt_m) =>
+    match opt_m with
+    | Some m => (k = (unwrap (get_mod_name m)))
+    | None   => True
+    end) (PTree.elements (snd (net_modules net))).
+
+(* Every endpoint of every connection refers to a known module. *)
+Definition endpoints_defined (net : ModuleNetwork) : Prop :=
+  List.Forall (fun c =>
+    match lookup_module net (get_conn_src c),
+          lookup_module net (get_conn_dst c) with
+    | Some _, Some _ => True
+    | _,      _      => False
+    end) (all_connections net) /\
+    match lookup_module net (start_module net) with
+    | Some _ => True
+    | None   => False
+    end.
+
+(* Predicate: every connection is stored at the key matching its name UID. *)
+Definition conn_names_consistent (net : ModuleNetwork) : Prop :=
+  List.Forall (fun '(k, opt_c) =>
+    match opt_c with
+    | Some c => k = (unwrap (get_conn_name c))
+    | None   => True
+    end) (PTree.elements (snd (net_connections net))).
+
+Definition max_mod_is_max (net : ModuleNetwork) : Prop :=
+  forall m,
+    In m (all_modules net) ->
+    Pos.le (unwrap (get_mod_name m)) (max_mod_id net).
+
+Definition max_conn_is_max (net : ModuleNetwork) : Prop :=
+  forall c,
+    In c (all_connections net) ->
+    Pos.le (unwrap (get_conn_name c)) (max_conn_id net).
+
+
+
+(* A well-formed ModuleNetwork satisfies all conditions. *)
+Definition wf_module_network (net : ModuleNetwork) : Prop :=
+  mod_names_consistent net /\
+  endpoints_defined net /\
+  conn_names_consistent net /\
+  max_mod_is_max net /\
+  max_conn_is_max net /\
+  is_dag net.
 
 (* ------------------------------------------------------------------ *)
 (* 10. GeneralCaracaraProgram                                         *)
@@ -303,6 +325,34 @@ Lemma add_transformer_wf_lemma_5 :
 Proof.
 Admitted.
 
+Lemma add_transformer_downstream_eq :
+  forall (n : ModuleNetwork) (t : Transformer) (src : ModuleName),
+    downstream_modules (add_transformer_module n t) src = downstream_modules n src.
+Proof.
+  intros. unfold downstream_modules, outgoing_connections, all_connections, add_transformer_module.
+  simpl. reflexivity.
+Qed.
+Lemma reachable_transfer :
+  forall (n : ModuleNetwork) (t : Transformer) src dst,
+    reachable (add_transformer_module n t) src dst -> reachable n src dst.
+Proof.
+  intros n t src dst H.
+  induction H as [s d Hstep | s mid d H1 IH1 H2 IH2].
+  - apply reachable_step.
+    rewrite add_transformer_downstream_eq in Hstep. exact Hstep.
+  - exact (reachable_trans n s mid d IH1 IH2).
+Qed.
+Lemma add_transformers_wf_lemma_6 :
+  forall (n : ModuleNetwork) (t : Transformer),
+    is_dag n ->
+    is_dag (add_transformer_module n t).
+Proof.
+  intros n t Hdag.
+  unfold is_dag in *.
+  intros m Hreach.
+  exact (Hdag m (reachable_transfer n t m m Hreach)).
+Qed.
+
 Lemma add_transformer_wf_lemma :
   forall (n : ModuleNetwork) (t : Transformer),
     wf_module_network n ->
@@ -311,9 +361,11 @@ Proof with try assumption.
   unfold wf_module_network, add_transformer_module.
   simpl.
   intros.
-  destruct H as [H1 [H2 [H3 [H4 H5]]]].
+  destruct H as [H1 [H2 [H3 [H4 [H5 H6]]]]].
   split; [apply add_transformer_wf_lemma_1 |]...
   split; [apply add_transformer_wf_lemma_2 |]...
   split; [apply add_transformer_wf_lemma_3 |]...
   split; [apply add_transformer_wf_lemma_4 |]...
+  split; [apply add_transformer_wf_lemma_5 |]...
+  apply add_transformers_wf_lemma_6...
 Qed.
