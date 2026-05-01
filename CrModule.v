@@ -12,8 +12,8 @@ From MyProject Require Import PosWrapper.
 
 Definition get_mod_name (m : CrModule) : ModuleName :=
   match m with
-  | ParserModule     name _ => name
-  | TransformerModule name _ => name
+  | ParserModule name _ => name
+  | TransformerModule name _ _ _ => name
   end.
 
 Definition get_conn_src (c : Connection) : ModuleName :=
@@ -34,14 +34,15 @@ Definition get_conn_name (c : Connection) : ConnectionName :=
 (* A ModuleNetwork is a directed graph of CrModules connected by typed edges
    (Connections).  Each module occupies one slot in net_modules, keyed by the
    positive integer wrapped inside its ModuleName.  Each connection occupies
-   one slot in net_connections, keyed by its ConnectionName's id.  The
-   option wrapper lets keys be logically deleted without rebalancing the tree.
+   one slot in net_connections, keyed by its ConnectionName's id.
 
+   Presence is checked via ?? (PTree access, returns option); the PMap
+   default is a dummy value that is never semantically meaningful.
    max_mod_id and max_conn_id track the highest key ever allocated so that
    new insertions can pick a fresh key without scanning the whole map. *)
 Record ModuleNetwork : Type := mkModuleNetwork {
-  net_modules     : PMap.t (option CrModule);
-  net_connections : PMap.t (option Connection);
+  net_modules     : PMap.t CrModule;
+  net_connections : PMap.t Connection;
   start_module    : ModuleName;
   max_mod_id      : positive;
   max_conn_id     : positive;
@@ -49,29 +50,22 @@ Record ModuleNetwork : Type := mkModuleNetwork {
 
 Definition lookup_module (net : ModuleNetwork) (name : ModuleName)
     : option CrModule :=
-  PMap.get (unwrap name) (net_modules net).
+  (net_modules net) ?? (unwrap name).
 
 (* ------------------------------------------------------------------ *)
 (* 5b. PMap iteration helpers                                         *)
 (* ------------------------------------------------------------------ *)
 
-(* Extract all present (Some) modules from net_modules. *)
-Definition all_modules (net : ModuleNetwork) : list CrModule :=
-  List.flat_map
-    (fun '(_, opt_m) => match opt_m with
-    | Some m => [m]
-    | None => []
-    end)
-    (PTree.elements (snd (net_modules net))).
+Definition listify_map {T : Type} (m : PMap.t T) : list T :=
+  List.map snd (PTree.elements (snd m)).
 
-(* Extract all present (Some) connections from net_connections. *)
+(* Extract all modules from net_modules. *)
+Definition all_modules (net : ModuleNetwork) : list CrModule :=
+  listify_map (net_modules net).
+
+(* Extract all connections from net_connections. *)
 Definition all_connections (net : ModuleNetwork) : list Connection :=
-  List.flat_map
-    (fun '(_, opt_c) => match opt_c with
-    | Some c => [c]
-    | None => []
-    end)
-    (PTree.elements (snd (net_connections net))).
+  listify_map (net_connections net).
 
 (* ------------------------------------------------------------------ *)
 (* 6.  Connection traversal                                           *)
@@ -121,14 +115,14 @@ Definition is_dag (net : ModuleNetwork) : Prop :=
 (* Decide whether a module is a parser or transformer. *)
 Definition is_parser_module (m : CrModule) : bool :=
   match m with
-  | ParserModule     _ _ => true
-  | TransformerModule _ _ => false
+  | ParserModule _ _ => true
+  | TransformerModule _ _ _ _ => false
   end.
 
 Definition is_transformer_module (m : CrModule) : bool :=
   match m with
-  | ParserModule     _ _ => false
-  | TransformerModule _ _ => true
+  | ParserModule _ _ => false
+  | TransformerModule _ _ _ _ => true
   end.
 
 (* Collect all parser modules in a network. *)
@@ -169,11 +163,9 @@ Definition sink_modules (net : ModuleNetwork) : list CrModule :=
 
 (* Every module is stored at the key matching its name UID. *)
 Definition mod_names_consistent (net : ModuleNetwork) : Prop :=
-  List.Forall (fun '(k, opt_m) =>
-    match opt_m with
-    | Some m => (k = (unwrap (get_mod_name m)))
-    | None   => True
-    end) (PTree.elements (snd (net_modules net))).
+  List.Forall (fun '(k, m) =>
+    k = unwrap (get_mod_name m))
+    (PTree.elements (snd (net_modules net))).
 
 (* Every endpoint of every connection refers to a known module. *)
 Definition endpoints_defined (net : ModuleNetwork) : Prop :=
@@ -190,11 +182,9 @@ Definition endpoints_defined (net : ModuleNetwork) : Prop :=
 
 (* Predicate: every connection is stored at the key matching its name UID. *)
 Definition conn_names_consistent (net : ModuleNetwork) : Prop :=
-  List.Forall (fun '(k, opt_c) =>
-    match opt_c with
-    | Some c => k = (unwrap (get_conn_name c))
-    | None   => True
-    end) (PTree.elements (snd (net_connections net))).
+  List.Forall (fun '(k, c) =>
+    k = unwrap (get_conn_name c))
+    (PTree.elements (snd (net_connections net))).
 
 Definition max_mod_is_max (net : ModuleNetwork) : Prop :=
   forall m,
@@ -205,8 +195,6 @@ Definition max_conn_is_max (net : ModuleNetwork) : Prop :=
   forall c,
     In c (all_connections net) ->
     Pos.le (unwrap (get_conn_name c)) (max_conn_id net).
-
-
 
 (* A well-formed ModuleNetwork satisfies all conditions. *)
 Definition wf_module_network (net : ModuleNetwork) : Prop :=
@@ -229,22 +217,35 @@ Definition wf_module_network (net : ModuleNetwork) : Prop :=
 Inductive GeneralCaracaraProgram : Type :=
   | GeneralCaracaraProgramDef :
       list Header ->
-      list State  ->
-      list Ctrl   ->
       ModuleNetwork ->
       GeneralCaracaraProgram.
 
 Definition get_headers_from_general (p : GeneralCaracaraProgram) : list Header :=
-  match p with GeneralCaracaraProgramDef h _ _ _ => h end.
-
-Definition get_states_from_general (p : GeneralCaracaraProgram) : list State :=
-  match p with GeneralCaracaraProgramDef _ s _ _ => s end.
-
-Definition get_ctrls_from_general (p : GeneralCaracaraProgram) : list Ctrl :=
-  match p with GeneralCaracaraProgramDef _ _ c _ => c end.
+  match p with GeneralCaracaraProgramDef h _ => h end.
 
 Definition get_network_from_general (p : GeneralCaracaraProgram) : ModuleNetwork :=
-  match p with GeneralCaracaraProgramDef _ _ _ net => net end.
+  match p with GeneralCaracaraProgramDef _ net => net end.
+
+Definition get_states_from_general (p : GeneralCaracaraProgram) (m : ModuleName) : option (list State) :=
+  let modnet := get_network_from_general p in
+  match (net_modules modnet) ?? (unwrap m) with
+  | Some (TransformerModule _ states _ _) => Some states
+  | _ => None
+  end.
+
+Definition get_ctrls_from_general (p : GeneralCaracaraProgram) (m : ModuleName) : option (list Ctrl) :=
+  let modnet := get_network_from_general p in
+  match (net_modules modnet) ?? (unwrap m) with
+  | Some (TransformerModule _ _ ctrls _) => Some ctrls
+  | _ => None
+  end.
+
+Definition get_transformer_from_general (p : GeneralCaracaraProgram) (m : ModuleName) : option Transformer :=
+  let modnet := get_network_from_general p in
+  match (net_modules modnet) ?? (unwrap m) with
+  | Some (TransformerModule _ _ _ t) => Some t
+  | _ => None
+  end.
 
 (* Well-formedness of a GeneralCaracaraProgram requires a well-formed network. *)
 Definition wf_general_program (p : GeneralCaracaraProgram) : Prop :=
@@ -254,118 +255,56 @@ Definition wf_general_program (p : GeneralCaracaraProgram) : Prop :=
 (* 11. Embedding the original CaracaraProgram                         *)
 (* ------------------------------------------------------------------ *)
 
-(* The original single-transformer program is a special case: a network
-   with exactly one TransformerModule and no connections. *)
-Definition add_transformer_module (net : ModuleNetwork) (t : Transformer) : ModuleNetwork :=
-  let mod_id := Pos.add (max_mod_id net) 1 in
-  let m := TransformerModule (wrap mod_id) t in
-  let mods_map := PMap.set mod_id (Some m) (net_modules net) in {|
-    net_modules := mods_map;
+Definition add_program_to_network (net : ModuleNetwork) (p : CaracaraProgram) : ModuleNetwork :=
+  let max_mod_id' := Pos.add (max_mod_id net) 1 in
+  let tm := TransformerModule
+    (wrap max_mod_id')
+    (get_states_from_prog p)
+    (get_ctrls_from_prog p)
+    (get_transformer_from_prog p) in
+  let net_modules' := PMap.set max_mod_id' tm (net_modules net) in
+  {|
+    net_modules := net_modules';
+    max_mod_id := max_mod_id';
+    (* * * * *)
     net_connections := net_connections net;
     start_module := start_module net;
-    max_mod_id := mod_id;
-    max_conn_id := max_conn_id net
+    max_conn_id := max_conn_id net;
   |}.
 
-(* ------------------------------------------------------------------ *)
-(* 12. Basic lemmas                                                   *)
-(* ------------------------------------------------------------------ *)
+Definition add_connection_to_network (net : ModuleNetwork) (c : Connection) : ModuleNetwork :=
+  let max_conn_id' := Pos.add (max_conn_id net) 1 in
+  let net_connections' := PMap.set max_conn_id' c (net_connections net) in
+  {|
+    net_connections := net_connections';
+    max_conn_id := max_conn_id';
+    (* * * * *)
+    net_modules := net_modules net;
+    start_module := start_module net;
+    max_mod_id := max_mod_id net;
+  |}.
+
+Definition set_start_module (net : ModuleNetwork) (m : ModuleName) : ModuleNetwork :=
+  {|
+    start_module := m;
+    (* * * * *)
+    net_modules := net_modules net;
+    net_connections := net_connections net;
+    max_mod_id := max_mod_id net;
+    max_conn_id := max_conn_id net;
+  |}.
+
+Definition init_general_from_net (net : ModuleNetwork) : GeneralCaracaraProgram :=
+  GeneralCaracaraProgramDef [] net.
+
+(* Dummy values used only as PMap defaults; never semantically accessed. *)
+Definition dummy_module : CrModule :=
+  TransformerModule (ModuleNameCtr 1) [] [] [].
+Definition dummy_connection : Connection :=
+  ConnectionDef (ModuleNameCtr 1) (ModuleNameCtr 1) (ConnectionNameCtr 1).
 
 Definition empty_net : ModuleNetwork :=
-  mkModuleNetwork (PMap.init None) (PMap.init None) (ModuleNameCtr 1) 1 1.
-
-Lemma add_transformer_wf_lemma_1 :
-  forall (n : ModuleNetwork) (t : Transformer),
-    mod_names_consistent n ->
-    mod_names_consistent (add_transformer_module n t).
-Proof.
-  intros n t H.
-  unfold mod_names_consistent, add_transformer_module in *.
-  simpl.
-  apply Forall_forall.
-  intros [k opt_m] Hin.
-  (* Convert list membership to a tree lookup. *)
-  apply PTree.elements_complete in Hin.
-  set (mod_id := Pos.add (max_mod_id n) 1) in *.
-  destruct (Pos.eq_dec k mod_id) as [Heq | Hne].
-  - (* k is the freshly inserted key: check consistency for the new module. *)
-    subst k. rewrite PTree.gss in Hin. injection Hin as <-.
-    simpl. reflexivity.
-  - (* k is an old key: the tree entry is unchanged, so the hypothesis applies. *)
-    rewrite PTree.gso in Hin by exact Hne.
-    apply PTree.elements_correct in Hin.
-    exact (proj1 (Forall_forall _ _) H (k, opt_m) Hin).
-Qed.
-
-Lemma add_transformer_wf_lemma_2 :
-  forall (n : ModuleNetwork) (t : Transformer),
-    endpoints_defined n ->
-    endpoints_defined (add_transformer_module n t).
-Proof.
-Admitted.
-
-Lemma add_transformer_wf_lemma_3 :
-  forall (n : ModuleNetwork) (t : Transformer),
-    conn_names_consistent n ->
-    conn_names_consistent (add_transformer_module n t).
-Proof.
-Admitted.
-
-Lemma add_transformer_wf_lemma_4 :
-  forall (n : ModuleNetwork) (t : Transformer),
-    max_mod_is_max n ->
-    max_mod_is_max (add_transformer_module n t).
-Proof.
-Admitted.
-
-Lemma add_transformer_wf_lemma_5 :
-  forall (n : ModuleNetwork) (t : Transformer),
-    max_conn_is_max n ->
-    max_conn_is_max (add_transformer_module n t).
-Proof.
-Admitted.
-
-Lemma add_transformer_downstream_eq :
-  forall (n : ModuleNetwork) (t : Transformer) (src : ModuleName),
-    downstream_modules (add_transformer_module n t) src = downstream_modules n src.
-Proof.
-  intros. unfold downstream_modules, outgoing_connections, all_connections, add_transformer_module.
-  simpl. reflexivity.
-Qed.
-Lemma reachable_transfer :
-  forall (n : ModuleNetwork) (t : Transformer) src dst,
-    reachable (add_transformer_module n t) src dst -> reachable n src dst.
-Proof.
-  intros n t src dst H.
-  induction H as [s d Hstep | s mid d H1 IH1 H2 IH2].
-  - apply reachable_step.
-    rewrite add_transformer_downstream_eq in Hstep. exact Hstep.
-  - exact (reachable_trans n s mid d IH1 IH2).
-Qed.
-Lemma add_transformers_wf_lemma_6 :
-  forall (n : ModuleNetwork) (t : Transformer),
-    is_dag n ->
-    is_dag (add_transformer_module n t).
-Proof.
-  intros n t Hdag.
-  unfold is_dag in *.
-  intros m Hreach.
-  exact (Hdag m (reachable_transfer n t m m Hreach)).
-Qed.
-
-Lemma add_transformer_wf_lemma :
-  forall (n : ModuleNetwork) (t : Transformer),
-    wf_module_network n ->
-    wf_module_network (add_transformer_module n t).
-Proof with try assumption.
-  unfold wf_module_network, add_transformer_module.
-  simpl.
-  intros.
-  destruct H as [H1 [H2 [H3 [H4 [H5 H6]]]]].
-  split; [apply add_transformer_wf_lemma_1 |]...
-  split; [apply add_transformer_wf_lemma_2 |]...
-  split; [apply add_transformer_wf_lemma_3 |]...
-  split; [apply add_transformer_wf_lemma_4 |]...
-  split; [apply add_transformer_wf_lemma_5 |]...
-  apply add_transformers_wf_lemma_6...
-Qed.
+  mkModuleNetwork
+    (PMap.init dummy_module)
+    (PMap.init dummy_connection)
+    (ModuleNameCtr 1) 1 1.

@@ -16,7 +16,7 @@ From Stdlib Require Import ZArith.
 (* A Module has a module name and either a parser or transformer definition *)
 Inductive CrModule : Type := 
   | ParserModule (m : ModuleName) (p : Parser)
-  | TransformerModule (m : ModuleName) (t : Transformer).
+  | TransformerModule (m : ModuleName) (s : list State) (c : list Ctrl) (t : Transformer).
 
 (* A Connection is a pair of module names *)
 (* and a connection name *)
