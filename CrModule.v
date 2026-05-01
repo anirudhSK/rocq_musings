@@ -44,8 +44,8 @@ Record ModuleNetwork : Type := mkModuleNetwork {
   net_modules     : PMap.t CrModule;
   net_connections : PMap.t Connection;
   start_module    : ModuleName;
-  max_mod_id      : positive;
-  max_conn_id     : positive;
+  max_mod_id      : N;
+  max_conn_id     : N;
 }.
 
 Definition lookup_module (net : ModuleNetwork) (name : ModuleName)
@@ -189,12 +189,12 @@ Definition conn_names_consistent (net : ModuleNetwork) : Prop :=
 Definition max_mod_is_max (net : ModuleNetwork) : Prop :=
   forall m,
     In m (all_modules net) ->
-    Pos.le (unwrap (get_mod_name m)) (max_mod_id net).
+    N.le (N.pos (unwrap (get_mod_name m))) (max_mod_id net).
 
 Definition max_conn_is_max (net : ModuleNetwork) : Prop :=
   forall c,
     In c (all_connections net) ->
-    Pos.le (unwrap (get_conn_name c)) (max_conn_id net).
+    N.le (N.pos (unwrap (get_conn_name c))) (max_conn_id net).
 
 (* A well-formed ModuleNetwork satisfies all conditions. *)
 Definition wf_module_network (net : ModuleNetwork) : Prop :=
@@ -256,13 +256,14 @@ Definition wf_general_program (p : GeneralCaracaraProgram) : Prop :=
 (* ------------------------------------------------------------------ *)
 
 Definition add_program_to_network (net : ModuleNetwork) (p : CaracaraProgram) : ModuleNetwork :=
-  let max_mod_id' := Pos.add (max_mod_id net) 1 in
+  let max_mod_id' := N.succ (max_mod_id net) in
+  let mod_id := Z.to_pos (Z.of_N max_mod_id') in
   let tm := TransformerModule
-    (wrap max_mod_id')
+    (wrap mod_id)
     (get_states_from_prog p)
     (get_ctrls_from_prog p)
     (get_transformer_from_prog p) in
-  let net_modules' := PMap.set max_mod_id' tm (net_modules net) in
+  let net_modules' := PMap.set mod_id tm (net_modules net) in
   {|
     net_modules := net_modules';
     max_mod_id := max_mod_id';
@@ -273,8 +274,9 @@ Definition add_program_to_network (net : ModuleNetwork) (p : CaracaraProgram) : 
   |}.
 
 Definition add_connection_to_network (net : ModuleNetwork) (c : Connection) : ModuleNetwork :=
-  let max_conn_id' := Pos.add (max_conn_id net) 1 in
-  let net_connections' := PMap.set max_conn_id' c (net_connections net) in
+  let max_conn_id' := N.succ (max_conn_id net) in
+  let conn_id := Z.to_pos (Z.of_N max_conn_id') in
+  let net_connections' := PMap.set conn_id c (net_connections net) in
   {|
     net_connections := net_connections';
     max_conn_id := max_conn_id';
@@ -307,4 +309,4 @@ Definition empty_net : ModuleNetwork :=
   mkModuleNetwork
     (PMap.init dummy_module)
     (PMap.init dummy_connection)
-    (ModuleNameCtr 1) 1 1.
+    (ModuleNameCtr 1) 0%N 0%N.
