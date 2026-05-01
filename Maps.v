@@ -2021,3 +2021,4 @@ Module PTree_Properties := Tree_Properties(PTree).
 
 Notation "a ! b" := (PTree.get b a) (at level 1).
 Notation "a !! b" := (PMap.get b a) (at level 1).
+Notation "a ?? b" := (snd a) ! b (at level 1).
