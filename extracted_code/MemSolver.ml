@@ -1,5 +1,6 @@
 open CrMem
 open CrVal
+open Sexplib
 
 module CoqStringOrd = struct
   type t = Stdlib.String.t
@@ -21,127 +22,185 @@ let suffixes = [|
   "100";
 |]
 
+(* Tables for memoizing parser results for repeated subexpressions *)
+module BoolExprHash = Stdlib.Hashtbl.Make(struct
+  type t = bool_expr
+  let equal = ( == )
+  let hash = Stdlib.Hashtbl.hash
+end)
+module ArithExprHash = Stdlib.Hashtbl.Make(struct
+  type t = arith_expr
+  let equal = ( == )
+  let hash = Stdlib.Hashtbl.hash
+end)
+module ArrayExprHash = Stdlib.Hashtbl.Make(struct
+  type t = arr_expr
+  let equal = ( == )
+  let hash = Stdlib.Hashtbl.hash
+end)
+module ExprHash = Stdlib.Hashtbl.Make(struct
+  type t = coq_Z3Expr
+  let equal = ( == )
+  let hash = Stdlib.Hashtbl.hash
+end)
+type m_caches = {
+  bool_cache : Z3.Expr.expr BoolExprHash.t;
+  arith_cache : Z3.Expr.expr ArithExprHash.t;
+  array_cache : Z3.Expr.expr ArrayExprHash.t;
+  expr_cache : Z3.Expr.expr ExprHash.t;
+}
+
 let rec parse_bool_expr
   (_e : bool_expr)
   (ctx : Z3.context)
-  (vars : var_tracker) : Z3.Expr.expr =
-  match _e with
-  | Z3_T -> Z3.Boolean.mk_true ctx
-  | Z3_F -> Z3.Boolean.mk_false ctx
-  | Z3_Neg e1 -> Z3.Boolean.mk_not ctx (parse_bool_expr e1 ctx vars)
-  | Z3_Conj (e1, e2) -> Z3.Boolean.mk_and ctx
-      [parse_bool_expr e1 ctx vars; parse_bool_expr e2 ctx vars]
-  | Z3_Disj (e1, e2) -> Z3.Boolean.mk_or ctx
-      [parse_bool_expr e1 ctx vars; parse_bool_expr e2 ctx vars]
-  | Z3_Eq (e1, e2) -> Z3.Boolean.mk_eq ctx
-      (parse_expr e1 ctx vars)
-      (parse_expr e2 ctx vars)
-  | Z3_Lt (e1, e2) -> Z3.BitVector.mk_ult ctx
-      (parse_arith_expr e1 ctx vars)
-      (parse_arith_expr e2 ctx vars)
+  (vars : var_tracker)
+  (caches : m_caches) : Z3.Expr.expr =
+  match BoolExprHash.find_opt caches.bool_cache _e with
+  | Some res -> res
+  | None ->
+    let res = match _e with
+    | Z3_T -> Z3.Boolean.mk_true ctx
+    | Z3_F -> Z3.Boolean.mk_false ctx
+    | Z3_Neg e1 -> Z3.Boolean.mk_not ctx (parse_bool_expr e1 ctx vars caches)
+    | Z3_Conj (e1, e2) -> Z3.Boolean.mk_and ctx
+        [parse_bool_expr e1 ctx vars caches; parse_bool_expr e2 ctx vars caches]
+    | Z3_Disj (e1, e2) -> Z3.Boolean.mk_or ctx
+        [parse_bool_expr e1 ctx vars caches; parse_bool_expr e2 ctx vars caches]
+    | Z3_Eq (e1, e2) -> Z3.Boolean.mk_eq ctx
+        (parse_expr e1 ctx vars caches)
+        (parse_expr e2 ctx vars caches)
+    | Z3_Lt (e1, e2) -> Z3.BitVector.mk_ult ctx
+        (parse_arith_expr e1 ctx vars caches)
+        (parse_arith_expr e2 ctx vars caches)
+    in
+    BoolExprHash.add caches.bool_cache _e res;
+    res
 and parse_expr
   (_e : coq_Z3Expr)
   (ctx : Z3.context)
-  (vars : var_tracker) : Z3.Expr.expr =
-  match _e with
-  | Z3Arith e -> parse_arith_expr e ctx vars
-  | Z3Ptr e -> parse_ptr_expr e ctx vars
-  | Z3Array e -> parse_array_expr e ctx vars
-  | Z3Bool e -> parse_bool_expr e ctx vars
-  | Z3Nil ->
-    print_endline("Met nil expression");
-    Z3.BitVector.mk_numeral ctx "0" 8
+  (vars : var_tracker)
+  (caches : m_caches) : Z3.Expr.expr =
+  match ExprHash.find_opt caches.expr_cache _e with
+  | Some res -> res
+  | None ->
+    let res = match _e with
+    | Z3Arith e -> parse_arith_expr e ctx vars caches
+    | Z3Ptr e -> parse_ptr_expr e ctx vars caches
+    | Z3Array e -> parse_array_expr e ctx vars caches
+    | Z3Bool e -> parse_bool_expr e ctx vars caches
+    | Z3Nil ->
+      print_endline("Met nil expression");
+      Z3.BitVector.mk_numeral ctx "0" 8
+    in
+    ExprHash.add caches.expr_cache _e res;
+    res
 and parse_arith_expr
   (_e : arith_expr)
   (ctx : Z3.context)
-  (vars : var_tracker) : Z3.Expr.expr =
-  match _e with
-  | Z3_int8 n -> Z3.BitVector.mk_numeral ctx (string_of_int (Shim.coq_Z_to_int n)) 8
-  | Z3_int32 n -> Z3.BitVector.mk_numeral ctx (string_of_int (Shim.coq_Z_to_int n)) 32
-  | Z3_int8_var name -> (
-    let name_str = (Shim.pos_to_str name) ^ suffixes.(u8_sfx) in
-    match StringMap.find_opt name_str !vars with
-    | Some s_var -> s_var
-    | None ->
-        let s_var = Z3.BitVector.mk_const ctx (Z3.Symbol.mk_string ctx name_str) 8 in
-        vars := StringMap.add name_str s_var !vars;
-        s_var)
-  | Z3_int32_var name -> (
-    let name_str = (Shim.pos_to_str name) ^ suffixes.(u32_sfx) in
-    match StringMap.find_opt name_str !vars with
-    | Some s_var -> s_var
-    | None ->
-        let s_var = Z3.BitVector.mk_const ctx (Z3.Symbol.mk_string ctx name_str) 32 in
-        vars := StringMap.add name_str s_var !vars;
-        s_var)
-  | Z3_bv_add (e1, e2) -> Z3.BitVector.mk_add ctx
-    (parse_arith_expr e1 ctx vars)
-    (parse_arith_expr e2 ctx vars)
-  | Z3_bv_sub (e1, e2) -> Z3.BitVector.mk_sub ctx
-    (parse_arith_expr e1 ctx vars)
-    (parse_arith_expr e2 ctx vars)
-  | Z3_bv_shl (e1, e2) -> Z3.BitVector.mk_shl ctx
-    (parse_arith_expr e1 ctx vars)
-    (parse_arith_expr e2 ctx vars)
-  | Z3_bv_ashr (e1, e2) -> Z3.BitVector.mk_ashr ctx
-    (parse_arith_expr e1 ctx vars)
-    (parse_arith_expr e2 ctx vars)
-  | Z3_bv_and (e1, e2) -> Z3.BitVector.mk_and ctx
-    (parse_arith_expr e1 ctx vars)
-    (parse_arith_expr e2 ctx vars)
-  | Z3_bv_or (e1, e2) -> Z3.BitVector.mk_or ctx
-    (parse_arith_expr e1 ctx vars)
-    (parse_arith_expr e2 ctx vars)
-  | Z3_bv_xor (e1, e2) -> Z3.BitVector.mk_xor ctx
-    (parse_arith_expr e1 ctx vars)
-    (parse_arith_expr e2 ctx vars)
-(* TODO: rename such that it mirrors Z3 *)
-  | Z3_bv_not e1 -> Z3.BitVector.mk_not ctx (parse_arith_expr e1 ctx vars)
-  | Z3_arr_sel (e1, e2) -> Z3.Z3Array.mk_select ctx
-    (parse_array_expr e1 ctx vars)
-    (parse_arith_expr e2 ctx vars)
-  | Z3_arith_ite (c, e1, e2) ->
-    Z3.Boolean.mk_ite ctx
-      (parse_bool_expr c ctx vars)
-      (parse_arith_expr e1 ctx vars)
-      (parse_arith_expr e2 ctx vars)
+  (vars : var_tracker)
+  (caches : m_caches) : Z3.Expr.expr =
+  match ArithExprHash.find_opt caches.arith_cache _e with
+  | Some res -> res
+  | None ->
+    let res = match _e with
+    | Z3_int8 n -> Z3.BitVector.mk_numeral ctx (string_of_int (Shim.coq_Z_to_int n)) 8
+    | Z3_int32 n -> Z3.BitVector.mk_numeral ctx (string_of_int (Shim.coq_Z_to_int n)) 32
+    | Z3_int8_var name -> (
+      let name_str = (Shim.pos_to_str name) ^ suffixes.(u8_sfx) in
+      match StringMap.find_opt name_str !vars with
+      | Some s_var -> s_var
+      | None ->
+          let s_var = Z3.BitVector.mk_const ctx (Z3.Symbol.mk_string ctx name_str) 8 in
+          vars := StringMap.add name_str s_var !vars;
+          s_var)
+    | Z3_int32_var name -> (
+      let name_str = (Shim.pos_to_str name) ^ suffixes.(u32_sfx) in
+      match StringMap.find_opt name_str !vars with
+      | Some s_var -> s_var
+      | None ->
+          let s_var = Z3.BitVector.mk_const ctx (Z3.Symbol.mk_string ctx name_str) 32 in
+          vars := StringMap.add name_str s_var !vars;
+          s_var)
+    | Z3_bv_add (e1, e2) -> Z3.BitVector.mk_add ctx
+      (parse_arith_expr e1 ctx vars caches)
+      (parse_arith_expr e2 ctx vars caches)
+    | Z3_bv_sub (e1, e2) -> Z3.BitVector.mk_sub ctx
+      (parse_arith_expr e1 ctx vars caches)
+      (parse_arith_expr e2 ctx vars caches)
+    | Z3_bv_shl (e1, e2) -> Z3.BitVector.mk_shl ctx
+      (parse_arith_expr e1 ctx vars caches)
+      (parse_arith_expr e2 ctx vars caches)
+    | Z3_bv_ashr (e1, e2) -> Z3.BitVector.mk_ashr ctx
+      (parse_arith_expr e1 ctx vars caches)
+      (parse_arith_expr e2 ctx vars caches)
+    | Z3_bv_and (e1, e2) -> Z3.BitVector.mk_and ctx
+      (parse_arith_expr e1 ctx vars caches)
+      (parse_arith_expr e2 ctx vars caches)
+    | Z3_bv_or (e1, e2) -> Z3.BitVector.mk_or ctx
+      (parse_arith_expr e1 ctx vars caches)
+      (parse_arith_expr e2 ctx vars caches)
+    | Z3_bv_xor (e1, e2) -> Z3.BitVector.mk_xor ctx
+      (parse_arith_expr e1 ctx vars caches)
+      (parse_arith_expr e2 ctx vars caches)
+  (* TODO: rename such that it mirrors Z3 *)
+    | Z3_bv_not e1 -> Z3.BitVector.mk_not ctx (parse_arith_expr e1 ctx vars caches)
+    | Z3_arr_sel (e1, e2) -> Z3.Z3Array.mk_select ctx
+      (parse_array_expr e1 ctx vars caches)
+      (parse_arith_expr e2 ctx vars caches)
+    | Z3_arith_ite (c, e1, e2) ->
+      Z3.Boolean.mk_ite ctx
+        (parse_bool_expr c ctx vars caches)
+        (parse_arith_expr e1 ctx vars caches)
+        (parse_arith_expr e2 ctx vars caches)
+    in
+    ArithExprHash.add caches.arith_cache _e res;
+    res
 and parse_array_expr
   (_e : arr_expr)
   (ctx : Z3.context)
-  (vars : var_tracker) : Z3.Expr.expr =
-  match _e with
-    (* TODO: handle array length *)
-  | Z3_arr_init _ ->
-    let arr_sort = Z3.Z3Array.mk_sort ctx
-      (Z3.BitVector.mk_sort ctx 32)  (* index is 32-bit *)
-      (Z3.BitVector.mk_sort ctx 8) in (* values are 8-bit *)
-    Z3.Expr.mk_fresh_const ctx "arr_init" arr_sort
-  | Z3_arr_var name -> (
-    let name_str = (Shim.pos_to_str name) ^ suffixes.(arr_sfx) in
-    match StringMap.find_opt name_str !vars with
-    | Some a_var -> a_var
-    | None ->
-      let a_var = Z3.Z3Array.mk_const ctx
-        (Z3.Symbol.mk_string ctx name_str)
-        (Z3.BitVector.mk_sort ctx 32)
-        (Z3.BitVector.mk_sort ctx 8) in
-      vars := StringMap.add name_str a_var !vars;
-      a_var)
-  | Z3_arr_st (e1, e2, e3) -> Z3.Z3Array.mk_store ctx
-      (parse_array_expr e1 ctx vars)
-      (parse_arith_expr e2 ctx vars)
-      (parse_arith_expr e3 ctx vars)
-  | Z3_arr_ite (c, e1, e2) ->
-      Z3.Boolean.mk_ite ctx
-        (parse_bool_expr c ctx vars)
-        (parse_array_expr e1 ctx vars)
-        (parse_array_expr e2 ctx vars)
+  (vars : var_tracker)
+  (caches : m_caches) : Z3.Expr.expr =
+  match ArrayExprHash.find_opt caches.array_cache _e with
+  | Some res -> res
+  | None ->
+    let res = match _e with
+      (* TODO: handle array length *)
+    | Z3_arr_init _ ->
+      let arr_sort = Z3.Z3Array.mk_sort ctx
+        (Z3.BitVector.mk_sort ctx 32)  (* index is 32-bit *)
+        (Z3.BitVector.mk_sort ctx 8) in (* values are 8-bit *)
+      Z3.Expr.mk_fresh_const ctx "arr_init" arr_sort
+    | Z3_arr_var name -> (
+      let name_str = (Shim.pos_to_str name) ^ suffixes.(arr_sfx) in
+      match StringMap.find_opt name_str !vars with
+      | Some a_var -> a_var
+      | None ->
+        let a_var = Z3.Z3Array.mk_const ctx
+          (Z3.Symbol.mk_string ctx name_str)
+          (Z3.BitVector.mk_sort ctx 32)
+          (Z3.BitVector.mk_sort ctx 8) in
+        vars := StringMap.add name_str a_var !vars;
+        a_var)
+    | Z3_arr_st (e1, e2, e3) -> Z3.Z3Array.mk_store ctx
+        (parse_array_expr e1 ctx vars caches)
+        (parse_arith_expr e2 ctx vars caches)
+        (parse_arith_expr e3 ctx vars caches)
+    | Z3_arr_ite (c, e1, e2) ->
+        Z3.Boolean.mk_ite ctx
+          (parse_bool_expr c ctx vars caches)
+          (parse_array_expr e1 ctx vars caches)
+          (parse_array_expr e2 ctx vars caches)
+    in
+    ArrayExprHash.add caches.array_cache _e res;
+    res
 and parse_ptr_expr
   (_e : ptr_expr)
   (ctx : Z3.context)
-  (vars : var_tracker) : Z3.Expr.expr =
+  (vars : var_tracker)
+  (caches : m_caches) : Z3.Expr.expr =
   (* TODO: get around to doing this *)
   let _ = vars in
+  let _ = caches in
   print_endline("dummy pointer handler called");
   Z3.BitVector.mk_numeral ctx "0" 64
 
@@ -296,18 +355,19 @@ let rec eval_z3_bool_concrete
   (ctx : Z3.context)
   (m : Z3.Model.model)
   (vars : var_tracker)
+  (caches : m_caches)
   (expr : bool_expr) : bool =
   match expr with
   | Z3_T -> true
   | Z3_F -> false
-  | Z3_Neg e -> not (eval_z3_bool_concrete ctx m vars e)
+  | Z3_Neg e -> not (eval_z3_bool_concrete ctx m vars caches e)
   | Z3_Conj (e1, e2) ->
-      (eval_z3_bool_concrete ctx m vars e1) && (eval_z3_bool_concrete ctx m vars e2)
+      (eval_z3_bool_concrete ctx m vars caches e1) && (eval_z3_bool_concrete ctx m vars caches e2)
   | Z3_Disj (e1, e2) ->
-      (eval_z3_bool_concrete ctx m vars e1) || (eval_z3_bool_concrete ctx m vars e2)
+      (eval_z3_bool_concrete ctx m vars caches e1) || (eval_z3_bool_concrete ctx m vars caches e2)
   | Z3_Eq (e1, e2) ->
-      let z3_e1 = parse_expr e1 ctx vars in
-      let z3_e2 = parse_expr e2 ctx vars in
+      let z3_e1 = parse_expr e1 ctx vars caches in
+      let z3_e2 = parse_expr e2 ctx vars caches in
       let v1_opt = Z3.Model.eval m z3_e1 true in
       let v2_opt = Z3.Model.eval m z3_e2 true in
       (match v1_opt, v2_opt with
@@ -326,8 +386,8 @@ let rec eval_z3_bool_concrete
              Z3.Sort.equal sort1 sort2 && Z3.Expr.equal v1 v2
        | _ -> false)
   | Z3_Lt (e1, e2) ->
-      let z3_e1 = parse_arith_expr e1 ctx vars in
-      let z3_e2 = parse_arith_expr e2 ctx vars in
+      let z3_e1 = parse_arith_expr e1 ctx vars caches in
+      let z3_e2 = parse_arith_expr e2 ctx vars caches in
       let v1_opt = Z3.Model.eval m z3_e1 true in
       let v2_opt = Z3.Model.eval m z3_e2 true in
       (match v1_opt, v2_opt with
@@ -384,8 +444,15 @@ let sat_check
       let outputs_expr = CrMem.query_outputs p1 p2 in
       let bounds_expr = CrMem.query_bounds p1 p2 in
       
-      let outputs_holds = eval_z3_bool_concrete ctx m tracked_vars outputs_expr in
-      let bounds_holds = eval_z3_bool_concrete ctx m tracked_vars bounds_expr in
+      let blank_caches = {
+        bool_cache = BoolExprHash.create 0;
+        arith_cache = ArithExprHash.create 0;
+        array_cache = ArrayExprHash.create 0;
+        expr_cache = ExprHash.create 0;
+      } in
+
+      let outputs_holds = eval_z3_bool_concrete ctx m tracked_vars blank_caches outputs_expr in
+      let bounds_holds = eval_z3_bool_concrete ctx m tracked_vars blank_caches bounds_expr in
       
       Printf.printf "| \027[1mOutputs equal:\027[0m %s\n" (if outputs_holds then "\027[32mtrue\027[0m" else "\027[31mfalse\027[0m");
       Printf.printf "| \027[1mBounds equal:\027[0m %s\n" (if bounds_holds then "\027[32mtrue\027[0m" else "\027[31mfalse\027[0m");
@@ -418,13 +485,60 @@ let sat_check
       Z3Sat (sval, aval, fmode))
     | None -> raise (Failure "Z3 returned SAT, but no model."))
 
+let rec positive_to_sexp n =
+  if n <= 0 then failwith "positive_to_sexp: non-positive integer"
+  else if n = 1 then Sexp.Atom "Coq_xH"
+  else if n mod 2 = 0 then Sexp.List [Sexp.Atom "Coq_xO"; positive_to_sexp (n / 2)]
+  else Sexp.List [Sexp.Atom "Coq_xI"; positive_to_sexp (n / 2)]
+
+(* Technically this can overflow, but for now I'm going to say that
+ * if it overflows, the program is invalid -> don't care about that case :/
+ *)
+let rec expand_integers sexp =
+  match sexp with
+  | Sexp.Atom s -> Sexp.Atom s
+  | Sexp.List [Sexp.Atom "Zpos"; Sexp.Atom n] ->
+      (try Sexp.List [Sexp.Atom "Zpos"; positive_to_sexp (int_of_string n)]
+       with Failure _ -> sexp)
+  | Sexp.List [Sexp.Atom "Zneg"; Sexp.Atom n] ->
+      (try Sexp.List [Sexp.Atom "Zneg"; positive_to_sexp (int_of_string n)]
+       with Failure _ -> sexp)
+  | Sexp.List ((Sexp.Atom hd) :: tl) ->
+      if Stdlib.List.mem hd ["IOArg"; "TmpArg"; "Coq_pair"; "Coq_cons"] && Stdlib.List.length tl > 0 then
+        match Stdlib.List.hd tl with
+        | Sexp.Atom n_str ->
+            (try
+              let n = int_of_string n_str in
+              Sexp.List ([Sexp.Atom hd; positive_to_sexp n] @ (Stdlib.List.map expand_integers (Stdlib.List.tl tl)))
+             with Failure _ -> Sexp.List (Stdlib.List.map expand_integers ((Sexp.Atom hd) :: tl)))
+        | _ -> Sexp.List (Stdlib.List.map expand_integers ((Sexp.Atom hd) :: tl))
+      else
+        Sexp.List (Stdlib.List.map expand_integers ((Sexp.Atom hd) :: tl))
+  | Sexp.List l ->
+      Sexp.List (Stdlib.List.map expand_integers l)
+
+let load_program (f : string) : coq_IM_Program =
+  let x = open_in f in
+  let len = in_channel_length x in
+  let str = really_input_string x len in
+  close_in x;
+  str |> Sexp.of_string |> expand_integers |> CrTypeIF.CrMem.coq_IM_Program_of_sexp
+
 let mem_solve (p1 : coq_IM_Program) (p2 : coq_IM_Program) : coq_Z3Res =
   let b = CrMem.query_expression p1 p2 in
   let ctx = Z3.mk_context [] in
   let solver = Z3.Solver.mk_solver ctx None in
   let tracked_vars = ref StringMap.empty in
+  
+  let caches = {
+    bool_cache = BoolExprHash.create 1024;
+    arith_cache = ArithExprHash.create 1024;
+    array_cache = ArrayExprHash.create 1024;
+    expr_cache = ExprHash.create 1024;
+  } in
+
   print_endline("casting query to z3 expression...");
-  let z3_expr = parse_bool_expr b ctx tracked_vars in
+  let z3_expr = parse_bool_expr b ctx tracked_vars caches in
   print_endline("adding query to solver...");
   Z3.Solver.add solver [z3_expr];
 
