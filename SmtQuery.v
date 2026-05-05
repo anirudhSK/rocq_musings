@@ -5,6 +5,7 @@ From MyProject Require Import CrVarLike.
 From MyProject Require Import CrDslProperties.
 From MyProject Require Import InitStatus.
 From MyProject Require Import CrProgramState.
+From MyProject Require Import CrModule.
 From MyProject Require Import Maps.
 From MyProject Require Import SmtTypes.
 From MyProject Require Import Integers.
@@ -459,3 +460,16 @@ Global Opaque get_all_varlike_from_ps.
 
 Print Assumptions equivalence_checker_cr_sound.
 Print Assumptions equivalence_checker_cr_complete.
+
+Definition HdrLoc : Type := ModuleName * Header.
+Definition StateLoc : Type := ModuleName * State.
+
+(* Definition modnet_equivalence_checker
+  (p1 : GeneralCaracaraProgram) (p2 : GeneralCaracaraProgram)
+  (header_list : list (HdrLoc * HdrLoc))
+  (state_var_list : list (StateLoc * StateLoc))
+  : EquivalenceResult :=
+  let smt1 := eval_general_program_symbolic p1 (init_symbolic_state p1) in
+  let smt2 := eval_general_program_symbolic p2 (init_symbolic_state p2) in
+  match smt1, smt2 with
+  NotEquivalentUnknown. *)

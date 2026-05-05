@@ -4,6 +4,7 @@ From MyProject Require Import MyInts.
 From MyProject Require Import InitStatus.
 From MyProject Require Import CrIdentifiers.
 From MyProject Require Import CrProgramState.
+From MyProject Require Import CrModule.
 From MyProject Require Import SmtExpr.
 From MyProject Require Import CrDsl.
 From MyProject Require Import Maps.
@@ -355,15 +356,15 @@ Definition init_symbolic_state (p: CaracaraProgram) : SymbolicState :=
   let h := get_headers_from_prog p in
   let s := get_states_from_prog p in
   let c := get_ctrls_from_prog p in
-  {|ctrl_map :=  (SmtArithVar "rndstring", (*TODO: Need better default, but think this doesn't matter *)
-                        PTree_Properties.of_list
-                        (List.map (fun x => let var := match x with | CtrlCtr x_id => x_id end in (var,  SmtArithVar (pos_to_string var))) c));
-     header_map     :=  (SmtArithVar "rndstring", (*TODO: Need better default, but think this doesn't matter *)
-                        PTree_Properties.of_list
-                        (List.map (fun x => let var := match x with | HeaderCtr x_id => x_id end in (var, SmtArithVar (pos_to_string var))) h));
-     state_map  :=  (SmtArithVar "rndstring", (*TODO: Need better default, but think this doesn't matter *)
-                        PTree_Properties.of_list
-                        (List.map (fun x => let var := match x with | StateCtr x_id => x_id end in (var, SmtArithVar (pos_to_string var))) s));|}.
+  {| ctrl_map   :=  (SmtArithConst CrNilInt,
+                      PTree_Properties.of_list
+                      (List.map (fun x => let var := match x with | CtrlCtr x_id => x_id end in (var,  SmtArithVar (pos_to_string var))) c));
+     header_map :=  (SmtArithConst CrNilInt,
+                      PTree_Properties.of_list
+                      (List.map (fun x => let var := match x with | HeaderCtr x_id => x_id end in (var, SmtArithVar (pos_to_string var))) h));
+     state_map  :=  (SmtArithConst CrNilInt,
+                      PTree_Properties.of_list
+                      (List.map (fun x => let var := match x with | StateCtr x_id => x_id end in (var, SmtArithVar (pos_to_string var))) s));|}.
 
 Definition is_init_state {T} (p : CaracaraProgram) (ps : ProgramState T) : Prop :=
   forall h sv c,
