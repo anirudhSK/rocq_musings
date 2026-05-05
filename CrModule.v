@@ -8,6 +8,7 @@ From MyProject Require Import CrParser.
 From MyProject Require Import CrTransformer.
 From MyProject Require Import CrDsl.
 From MyProject Require Import Maps.
+From MyProject Require Import CrProgramState.
 From MyProject Require Import PosWrapper.
 
 Definition get_mod_name (m : CrModule) : ModuleName :=
@@ -107,6 +108,12 @@ Inductive reachable (net : ModuleNetwork) : ModuleName -> ModuleName -> Prop :=
 (* A network is a DAG when no module can reach itself. *)
 Definition is_dag (net : ModuleNetwork) : Prop :=
   forall m, ~ reachable net m m.
+
+(* A network has no fan-in when every module has at most one upstream
+   neighbour. Combined with is_dag, this guarantees that any traversal
+   reaches each reachable module exactly once (no shared descendants). *)
+Definition no_fan_in (net : ModuleNetwork) : Prop :=
+  forall m, List.length (upstream_modules net m) <= 1.
 
 (* ------------------------------------------------------------------ *)
 (* 8.  Module classification                                          *)
@@ -246,6 +253,12 @@ Definition get_transformer_from_general (p : GeneralCaracaraProgram) (m : Module
   | Some (TransformerModule _ _ _ t) => Some t
   | _ => None
   end.
+
+Definition inject_headers {T : Type} (packet : PMap.t T) (local : ProgramState T)
+    : ProgramState T :=
+  {| ctrl_map   := ctrl_map local;
+     header_map := packet;
+     state_map  := state_map local |}.
 
 (* Well-formedness of a GeneralCaracaraProgram requires a well-formed network. *)
 Definition wf_general_program (p : GeneralCaracaraProgram) : Prop :=
