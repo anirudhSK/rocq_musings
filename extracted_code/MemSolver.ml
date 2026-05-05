@@ -22,6 +22,7 @@ let suffixes = [|
   "100";
 |]
 
+(* Tables for memoizing parser results for repeated subexpressions *)
 module BoolExprHash = Stdlib.Hashtbl.Make(struct
   type t = bool_expr
   let equal = ( == )
