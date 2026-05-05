@@ -12,6 +12,7 @@ Inductive SmtBoolExpr : Type :=
     | SmtBoolAnd (e1 e2 : SmtBoolExpr)
     | SmtBoolOr (e1 e2 : SmtBoolExpr)
     | SmtBoolEq (e1 e2 : SmtArithExpr)
+    | SmtBoolLt (e1 e2 : SmtArithExpr)
 with SmtArithExpr : Type :=
     | SmtArithConst (value : CrInt_T)
     | SmtArithVar (name : string)
@@ -45,6 +46,8 @@ Fixpoint eval_smt_bool (e : SmtBoolExpr) (v : SmtValuation) : bool :=
     | SmtBoolOr e1 e2 => orb (eval_smt_bool e1 v) (eval_smt_bool e2 v)
     | SmtBoolEq e1 e2 => if (CrVal.eqb
       (eval_smt_arith e1 v) (eval_smt_arith e2 v)) then true else false
+    | SmtBoolLt e1 e2 => CrVal.ltb
+      (eval_smt_arith e1 v) (eval_smt_arith e2 v)
     end
 with eval_smt_arith (e : SmtArithExpr) (v : SmtValuation) : CrVal :=
     match e with

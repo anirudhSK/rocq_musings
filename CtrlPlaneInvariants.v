@@ -4,6 +4,7 @@ From MyProject Require Import CrConcreteSemanticsTransformer.
 From MyProject Require Import CrProgramState.
 From MyProject Require Import ListUtils.
 From Stdlib Require Import Lists.List.
+From Stdlib Require Import Bool.Bool.
 
 (* Effectively, ctrl plane doesn't change *)
 Lemma ctrl_plane_invariant_hdr_op:
@@ -38,7 +39,7 @@ Proof.
   intros.
   unfold eval_seq_rule_concrete.
   destruct s.
-  destruct (eval_match_concrete match_pattern c).
+  destruct (eval_match_concrete match_pattern c && eval_guard_concrete guard c).
   apply ctrl_plane_invariant_hdr_op_list.
   reflexivity.
 Qed.
@@ -51,7 +52,7 @@ Proof.
   intros.
   unfold eval_par_rule_concrete.
   destruct p.
-  destruct (eval_match_concrete match_pattern c).
+  destruct (eval_match_concrete match_pattern c && eval_guard_concrete guard c).
   apply ctrl_plane_invariant_hdr_op_list.
   reflexivity.
 Qed.
