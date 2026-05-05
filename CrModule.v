@@ -255,7 +255,7 @@ Definition wf_general_program (p : GeneralCaracaraProgram) : Prop :=
 (* 11. Embedding the original CaracaraProgram                         *)
 (* ------------------------------------------------------------------ *)
 
-Definition add_program_to_network (net : ModuleNetwork) (p : CaracaraProgram) : ModuleNetwork :=
+Definition add_program_to_network (net : ModuleNetwork) (p : CaracaraProgram) : ModuleNetwork * ModuleName :=
   let max_mod_id' := N.succ (max_mod_id net) in
   let mod_id := Z.to_pos (Z.of_N max_mod_id') in
   let tm := TransformerModule
@@ -264,18 +264,19 @@ Definition add_program_to_network (net : ModuleNetwork) (p : CaracaraProgram) : 
     (get_ctrls_from_prog p)
     (get_transformer_from_prog p) in
   let net_modules' := PMap.set mod_id tm (net_modules net) in
-  {|
+  ({|
     net_modules := net_modules';
     max_mod_id := max_mod_id';
     (* * * * *)
     net_connections := net_connections net;
     start_module := start_module net;
     max_conn_id := max_conn_id net;
-  |}.
+  |}, wrap mod_id).
 
-Definition add_connection_to_network (net : ModuleNetwork) (c : Connection) : ModuleNetwork :=
+Definition add_connection_to_network (net : ModuleNetwork) (from to : ModuleName) : ModuleNetwork :=
   let max_conn_id' := N.succ (max_conn_id net) in
   let conn_id := Z.to_pos (Z.of_N max_conn_id') in
+  let c := ConnectionDef from to (wrap conn_id) in
   let net_connections' := PMap.set conn_id c (net_connections net) in
   {|
     net_connections := net_connections';

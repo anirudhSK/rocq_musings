@@ -20,6 +20,19 @@ Inductive FunctionArgument :=
   | ConstantArg (n : CrInt_T) (* TODO: Can have constant ptrs as well *)
   | StatefulArg (s : State).
 
+(* A CmpOp is a comparison primitive used in Guards.
+   Only Eq and Lt are exposed; Gt/Le/Ge/Ne are derived by swapping operands
+   (and, when GNot/GOr land later, wrapping). *)
+Inductive CmpOp :=
+  | CmpEq
+  | CmpLt.
+
+(* A Guard is a per-rule conditional gate, conjoined with the rule's
+   MatchPattern. GTrue is the no-op guard (preserves prior semantics). *)
+Inductive Guard :=
+  | GTrue
+  | GCmp (op : CmpOp) (a1 a2 : FunctionArgument).
+
 (* A BinaryOp takes two uint8 arguments and returns another uint8 *)
 Inductive BinaryOp :=
   | AddOp
@@ -42,7 +55,7 @@ Inductive HdrOp :=
 Definition MatchPattern := list (Header * CrInt_T). (* TODO: might have to change *)
 
 Inductive SeqRule :=
-  | SeqCtr (match_pattern : MatchPattern) (action : list HdrOp).
+  | SeqCtr (match_pattern : MatchPattern) (guard : Guard) (action : list HdrOp).
 
 (* Extract targets out of a HdrOp *)
 Definition extract_targets (op : HdrOp) : (list State) * (list Header) := 
@@ -59,7 +72,7 @@ Definition extract_all_targets (ops : list HdrOp) : (list State) * (list Header)
 
 (* TODO: Add masks and don't care bits *)
 Inductive ParRule :=
-  | ParCtr (match_pattern : MatchPattern)
+  | ParCtr (match_pattern : MatchPattern) (guard : Guard)
     (action : {l : list HdrOp | NoDup (fst (extract_all_targets l)) /\
                                 NoDup (snd (extract_all_targets l))}).
 
