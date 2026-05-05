@@ -127,12 +127,11 @@ Definition GetTuple (f : PacketFilter) : net_tuple :=
    List.length (dst_port f),
    List.length (protocol f)).
 
-(* TODO : Finish this *)
 (* Build the transformer for one hash table.
    Each rule: if the filter matches AND the new priority beats the current best,
-   update (label_slot, priority_slot) — exactly P4's set_if_best action. *)
-
-(* Assume that h_body > max(Header of MatchPattern) *)
+   update (label_slot, priority_slot) — exactly P4's set_if_best action.
+   Caller must pass h_body strictly greater than every Header uid mentioned in
+   any MatchPattern of [table]; tss_db enforces this via [compute_h_base]. *)
 Definition make_table_transformer (table : FilterDatabase) (h_body : Header): Transformer :=
   let sorted := sort_db table in
   List.map (fun '(f, lbl) =>
@@ -148,6 +147,33 @@ Definition make_table_transformer (table : FilterDatabase) (h_body : Header): Tr
         (ConstantArg (CrUInt8 (repr 0)))
         (incr h_body)])
   ) sorted.
+
+(* Compute h_base dynamically: pick the smallest Header uid that is strictly
+   greater than every Header uid mentioned in any MatchPattern of [db]. This
+   ensures the (label, priority) header pairs written by make_table_transformer
+   never collide with the headers tested by the filter match patterns. *)
+Definition max_pos (a b : positive) : positive :=
+  if Pos.ltb a b then b else a.
+
+Definition max_header_in_mp (mp : MatchPattern) : positive :=
+  List.fold_left
+    (fun acc '(h, _) => match h with HeaderCtr p => max_pos acc p end)
+    mp 1%positive.
+
+Definition max_header_in_filter (f : PacketFilter) : positive :=
+  max_pos (max_header_in_mp (src_ip f))
+  (max_pos (max_header_in_mp (dst_ip f))
+  (max_pos (max_header_in_mp (src_port f))
+  (max_pos (max_header_in_mp (dst_port f))
+           (max_header_in_mp (protocol f))))).
+
+Definition max_header_in_db (db : FilterDatabase) : positive :=
+  List.fold_left
+    (fun acc '(f, _) => max_pos acc (max_header_in_filter f))
+    db 1%positive.
+
+Definition compute_h_base (db : FilterDatabase) : Header :=
+  HeaderCtr ((max_header_in_db db) + 1).
 
 Fixpoint make_merge_rules (n : nat) (h_base : Header) : list MatchActionRule :=
   match n with
@@ -182,7 +208,9 @@ Definition tss_db (db : FilterDatabase) : GeneralCaracaraProgram :=
     db' (PMap.init []) in
   let ht_list : list (positive * FilterDatabase) :=
     PTree.elements (snd hashtables) in
-  let h_base : Header := HeaderCtr 128 in
+  (* h_base is one past the largest Header uid mentioned in any MatchPattern,
+     guaranteeing the (label, priority) headers don't collide with match-tested ones *)
+  let h_base : Header := compute_h_base db in
   let '(net, first_opt, prev_opt, _) := List.fold_left
     (fun '(net, first_opt, prev_opt, header_io) '(_, table) =>
       let t := make_table_transformer table header_io in
