@@ -11,6 +11,7 @@ From MyProject Require Import CrVarLike.
 From MyProject Require Import ListUtils.
 From MyProject Require Import CrVal.
 From Stdlib Require Import ZArith.
+From Stdlib Require Import Bool.Bool.
 
 (* Apply binary operation *)
 Definition apply_bin_op (f : BinaryOp) (arg1 : CrVal) (arg2 : CrVal) : CrVal :=
@@ -51,6 +52,22 @@ Definition eval_match_concrete (match_pattern : MatchPattern) (ps : ConcreteStat
   (* For every list element, check if the Header's current value (determined by ps) equals the uint8 *)
   List.forallb (fun '(h, v) => CrVal.eqb (lookup_varlike ps h) (IntVal v)) match_pattern.
 
+(* Apply a comparison primitive at the concrete level *)
+Definition eval_cmp_concrete (op : CmpOp) (v1 v2 : CrVal) : bool :=
+  match op with
+  | CmpEq => CrVal.eqb v1 v2
+  | CmpLt => CrVal.ltb v1 v2
+  end.
+
+(* Evaluate a Guard to a bool. GTrue is the no-op guard that preserves
+   prior semantics when the rule was constructed without an explicit guard. *)
+Definition eval_guard_concrete (g : Guard) (ps : ConcreteState) : bool :=
+  match g with
+  | GTrue => true
+  | GCmp op a1 a2 =>
+      eval_cmp_concrete op (lookup_concrete a1 ps) (lookup_concrete a2 ps)
+  end.
+
 (* Define evaluation over a list of HdrOp *)
 (* Note we are evaluating the list from right to left (fold_right) because it simplifies proving. *)
 Definition eval_hdr_op_list_concrete (hol : list HdrOp) (ps : ConcreteState) : ConcreteState :=
@@ -71,8 +88,8 @@ Definition eval_hdr_op_assign_concrete_conditional
    meaning header ops within an action are evaluated sequentially *)
 Definition eval_seq_rule_concrete (srule : SeqRule) (ps : ConcreteState) : (ConcreteState) :=
   match srule with
-  | SeqCtr match_pattern action =>
-      if (eval_match_concrete match_pattern ps) then
+  | SeqCtr match_pattern guard action =>
+      if (eval_match_concrete match_pattern ps && eval_guard_concrete guard ps) then
         eval_hdr_op_list_concrete action ps
       else
         ps
@@ -85,8 +102,8 @@ Definition eval_seq_rule_concrete (srule : SeqRule) (ps : ConcreteState) : (Conc
    these conditions are realized using subset types, that's why we need proj1_sig *)
 Definition eval_par_rule_concrete (prule : ParRule) (ps : ConcreteState) : (ConcreteState) :=
   match prule with
-  | ParCtr match_pattern action =>
-      if (eval_match_concrete match_pattern ps) then
+  | ParCtr match_pattern guard action =>
+      if (eval_match_concrete match_pattern ps && eval_guard_concrete guard ps) then
         eval_hdr_op_list_concrete (proj1_sig action) ps
       else
         ps
@@ -104,9 +121,11 @@ Definition eval_match_action_rule_concrete (rule : MatchActionRule) (ps : Concre
 (* lookup header against each of the match-action rules in t to see if there is a match *)
 Definition get_match_results (t : Transformer) (ps : ConcreteState) : list bool :=
   List.map (fun rule =>
-                     match rule with 
-                       | Seq (SeqCtr match_pattern _) => eval_match_concrete match_pattern ps
-                       | Par (ParCtr match_pattern _) => eval_match_concrete match_pattern ps
+                     match rule with
+                       | Seq (SeqCtr match_pattern guard _) =>
+                           eval_match_concrete match_pattern ps && eval_guard_concrete guard ps
+                       | Par (ParCtr match_pattern guard _) =>
+                           eval_match_concrete match_pattern ps && eval_guard_concrete guard ps
                      end) t.
 
 (* Function to evaluate a transformer, which is a list of match-action rules *)
@@ -125,3 +144,7 @@ Definition eval_cr_program_concrete (p : CaracaraProgram) (ps : ConcreteState) :
   | CaracaraProgramDef _ _ _ t => eval_transformer_concrete t ps
   (* TODO: Maybe do something with the various lists of headers, states, and ctrls *)
   end.
+
+(* Could be useful to have a proof about sequential vs parallel *)
+(* Relax notion of local state *)
+(* filter database = naive program *)

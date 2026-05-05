@@ -138,32 +138,73 @@ Proof.
     rewrite andb_true_r. reflexivity.
 Qed.
 
+(* New lemma: bridges concrete and symbolic evaluation of a Guard. *)
+Lemma commute_sym_vs_conc_guard :
+  forall (g : Guard) (f : SmtValuation)
+         (s1 : SymbolicState)
+         (c1 : ConcreteState),
+    c1 = eval_sym_state s1 f ->
+    eval_guard_concrete g c1 = (* first concretize, and then interpret *)
+    eval_smt_bool (eval_guard_smt g s1) f. (* first interpret, and then concretize *)
+Proof.
+  intros g f s1 c1 Hc1.
+  destruct g as [| op a1 a2].
+  - reflexivity.
+  - simpl. rewrite Hc1.
+    rewrite (commute_lookup_eval s1 f a1).
+    rewrite (commute_lookup_eval s1 f a2).
+    destruct op; simpl.
+    + destruct (CrVal.eqb (eval_smt_arith (lookup_smt a1 s1) f)
+                          (eval_smt_arith (lookup_smt a2 s1) f));
+      reflexivity.
+    + reflexivity.
+Qed.
+
+(* New combined lemma: the conjoined match-and-guard predicate
+   commutes between concrete and symbolic worlds. *)
+Lemma commute_sym_vs_conc_match_and_guard :
+  forall (mp : MatchPattern) (g : Guard) (f : SmtValuation)
+         (s1 : SymbolicState),
+    eval_match_concrete mp (eval_sym_state s1 f) && eval_guard_concrete g (eval_sym_state s1 f) =
+    eval_smt_bool (SmtBoolAnd (eval_match_smt mp s1) (eval_guard_smt g s1)) f.
+Proof.
+  intros mp g f s1.
+  simpl.
+  rewrite <- (commute_sym_vs_conc_match_pattern mp f s1 _ eq_refl).
+  rewrite <- (commute_sym_vs_conc_guard g f s1 _ eq_refl).
+  reflexivity.
+Qed.
+
+(* Updated statement: condition is now SmtBoolAnd match guard,
+   gated on eval_match_concrete && eval_guard_concrete. *)
 Lemma commute_sym_vs_conc_helper_seq_par_rule_hdr :
-  forall (mp: MatchPattern) (hol: list HdrOp) (f : SmtValuation)
+  forall (mp: MatchPattern) (g : Guard) (hol: list HdrOp) (f : SmtValuation)
          (s1 : SymbolicState) (h : Header),
          is_varlike_in_ps s1 h <> None ->
-    lookup_varlike (if eval_match_concrete mp (eval_sym_state s1 f)
+    lookup_varlike (if eval_match_concrete mp (eval_sym_state s1 f) && eval_guard_concrete g (eval_sym_state s1 f)
     then eval_hdr_op_list_concrete hol (eval_sym_state s1 f)
     else eval_sym_state s1 f) h =
     lookup_varlike (eval_sym_state (update_all_varlike
-                   (update_all_varlike s1 (fun (h : Header) => SmtConditional (eval_match_smt mp s1)
+                   (update_all_varlike s1 (fun (h : Header) => SmtConditional (SmtBoolAnd (eval_match_smt mp s1) (eval_guard_smt g s1))
                                                                 (lookup_varlike (eval_hdr_op_list_smt hol s1) h) (lookup_varlike s1 h)))
-                   (fun (s : State) => SmtConditional (eval_match_smt mp s1)
+                   (fun (s : State) => SmtConditional (SmtBoolAnd (eval_match_smt mp s1) (eval_guard_smt g s1))
                              (lookup_varlike (eval_hdr_op_list_smt hol s1) s) (lookup_varlike s1 s))) f) h.
 Proof.
-  intros mp hol f s1 h Hh.
-  unfold eval_sym_state at 4.
+  intros mp guard hol f s1 h Hh.
+  unfold eval_sym_state at 5.
   rewrite commute_lookup_varlike.
   rewrite <- commute_varlike_updates.
   rewrite lookup_varlike_after_update_all_varlike.
-  - destruct (eval_match_concrete mp (eval_sym_state s1 f)) eqn:Hmatch.
+  - destruct (andb (eval_match_concrete mp (eval_sym_state s1 f)) (eval_guard_concrete guard (eval_sym_state s1 f))) eqn:Hmatch.
      + simpl.
       rewrite <- commute_sym_vs_conc_match_pattern with (c1 := eval_sym_state s1 f); auto.
+      rewrite <- commute_sym_vs_conc_guard with (c1 := eval_sym_state s1 f); auto.
       rewrite Hmatch.
       rewrite commute_sym_vs_conc_hdr_op_list with (f := f) (s1 := s1); auto.
       apply commute_lookup_eval_varlike.
      + simpl.
       rewrite <- commute_sym_vs_conc_match_pattern with (c1 := eval_sym_state s1 f); auto.
+      rewrite <- commute_sym_vs_conc_guard with (c1 := eval_sym_state s1 f); auto.
       rewrite Hmatch.
       apply commute_lookup_eval_varlike.
   - set (fn := (fun s : State => SmtConditional (eval_match_smt mp s1)
@@ -172,41 +213,46 @@ Proof.
     rewrite is_v1_in_ps_after_update_all_v2. assumption.
 Qed.
 
+(* Updated statement: condition is now SmtBoolAnd match guard,
+   gated on eval_match_concrete && eval_guard_concrete. *)
 Lemma commute_sym_vs_conc_helper_seq_par_rule_sv :
-  forall (mp: MatchPattern) (hol: list HdrOp) (f : SmtValuation)
+  forall (mp: MatchPattern) (g : Guard) (hol: list HdrOp) (f : SmtValuation)
          (s1 : SymbolicState) (sv : State),
          is_varlike_in_ps s1 sv <> None ->
-    lookup_varlike (if eval_match_concrete mp (eval_sym_state s1 f)
+    lookup_varlike (if eval_match_concrete mp (eval_sym_state s1 f) && eval_guard_concrete g (eval_sym_state s1 f)
     then eval_hdr_op_list_concrete hol (eval_sym_state s1 f)
     else eval_sym_state s1 f) sv =
     lookup_varlike (eval_sym_state (update_all_varlike
-                   (update_all_varlike s1 (fun (h : Header) => SmtConditional (eval_match_smt mp s1)
+                   (update_all_varlike s1 (fun (h : Header) => SmtConditional (SmtBoolAnd (eval_match_smt mp s1) (eval_guard_smt g s1))
                                                                 (lookup_varlike (eval_hdr_op_list_smt hol s1) h) (lookup_varlike s1 h)))
-                   (fun (s : State) => SmtConditional (eval_match_smt mp s1)
+                   (fun (s : State) => SmtConditional (SmtBoolAnd (eval_match_smt mp s1) (eval_guard_smt g s1))
                              (lookup_varlike (eval_hdr_op_list_smt hol s1) s) (lookup_varlike s1 s))) f) sv.
 Proof.
-  intros mp hol f s1 sv Hsv.
-  unfold eval_sym_state at 4.
+  intros mp guard hol f s1 sv Hsv.
+  unfold eval_sym_state at 5.
   rewrite commute_lookup_varlike.
   rewrite lookup_varlike_after_update_all_varlike.
-  - destruct (eval_match_concrete mp (eval_sym_state s1 f)) eqn:Hmatch.
+  - destruct (andb (eval_match_concrete mp (eval_sym_state s1 f)) (eval_guard_concrete guard (eval_sym_state s1 f))) eqn:Hmatch.
     + simpl.
       rewrite <- commute_sym_vs_conc_match_pattern with (c1 := eval_sym_state s1 f); auto.
+      rewrite <- commute_sym_vs_conc_guard with (c1 := eval_sym_state s1 f); auto.
       rewrite Hmatch.
       rewrite commute_sym_vs_conc_hdr_op_list with (f := f) (s1 := s1); auto.
       rewrite commute_lookup_eval_varlike.
       reflexivity.
     + simpl.
       rewrite <- commute_sym_vs_conc_match_pattern with (c1 := eval_sym_state s1 f); auto.
+      rewrite <- commute_sym_vs_conc_guard with (c1 := eval_sym_state s1 f); auto.
       rewrite Hmatch.
       rewrite commute_lookup_eval_varlike.
       reflexivity.
   - rewrite is_v1_in_ps_after_update_all_v2. assumption.
 Qed.
 
+(* Updated: destruct now binds the new guard field as well. *)
 Ltac prove_commute_sym_vs_conc helper_lemma :=
   intros sr f s1 h Hh;
-  destruct sr as [mp hol];
+  destruct sr as [mp guard hol];
   unfold eval_seq_rule_concrete;
   unfold eval_seq_rule_smt;
   apply helper_lemma;
@@ -288,10 +334,10 @@ Proof.
   unfold eval_transformer_concrete.
   unfold eval_match_action_rule_concrete.
   destruct m as [sr | pr].
-  - simpl. destruct sr. destruct (eval_match_concrete match_pattern c) eqn:des.
+  - simpl. destruct sr. destruct (eval_match_concrete match_pattern c && eval_guard_concrete guard c) eqn:des.
     -- reflexivity.
     -- simpl. rewrite des. reflexivity.
-  - simpl. destruct pr. destruct (eval_match_concrete match_pattern c) eqn:des.
+  - simpl. destruct pr. destruct (eval_match_concrete match_pattern c && eval_guard_concrete guard c) eqn:des.
     -- reflexivity.
     -- simpl. rewrite des. reflexivity.
 Qed.
@@ -326,19 +372,19 @@ Proof.
   - simpl.
     destruct a; try destruct s; try destruct p.
     --assert (In (true, rule)  (combine
-                               (get_match_results (Seq (SeqCtr match_pattern action) :: t) (eval_sym_state s1 f))
-                               (Seq (SeqCtr match_pattern action) :: t))).
+                               (get_match_results (Seq (SeqCtr match_pattern guard action) :: t) (eval_sym_state s1 f))
+                               (Seq (SeqCtr match_pattern guard action) :: t))).
       { apply find_first_match_lemma2. assumption. }
       simpl in H0.
-      destruct (eval_smt_bool (eval_match_smt match_pattern s1) f) eqn:des.
-      + rewrite <- commute_sym_vs_conc_match_pattern with (s1 := s1) (f := f) (c1 := eval_sym_state s1 f) in des; try reflexivity.
+      destruct (eval_smt_bool (SmtBoolAnd (eval_match_smt match_pattern s1) (eval_guard_smt guard s1)) f) eqn:des.
+      + rewrite <- commute_sym_vs_conc_match_and_guard in des.
         rewrite des in H0.
         rewrite commute_sym_vs_conc_ma_rule_hdr.
         simpl in H.
         rewrite des in H.
         inversion H.
         apply commute_lookup_eval_varlike. assumption.
-      + rewrite <- commute_sym_vs_conc_match_pattern with (s1 := s1) (f := f) (c1 := eval_sym_state s1 f) in des; try reflexivity.
+      + rewrite <- commute_sym_vs_conc_match_and_guard in des.
         rewrite des in H0.
         rewrite commute_sym_vs_conc_ma_rule_hdr.
         simpl in H.
@@ -347,19 +393,19 @@ Proof.
         rewrite <- commute_sym_vs_conc_ma_rule_hdr.
         assumption. assumption. assumption.
     --assert (In (true, rule)  (combine
-                               (get_match_results (Par (ParCtr match_pattern action) :: t) (eval_sym_state s1 f))
-                               (Par (ParCtr match_pattern action) :: t))).
+                               (get_match_results (Par (ParCtr match_pattern guard action) :: t) (eval_sym_state s1 f))
+                               (Par (ParCtr match_pattern guard action) :: t))).
       { apply find_first_match_lemma2. assumption. }
       simpl in H0.
-      destruct (eval_smt_bool (eval_match_smt match_pattern s1) f) eqn:des.
-      + rewrite <- commute_sym_vs_conc_match_pattern with (s1 := s1) (f := f) (c1 := eval_sym_state s1 f) in des; try reflexivity.
+      destruct (eval_smt_bool (SmtBoolAnd (eval_match_smt match_pattern s1) (eval_guard_smt guard s1)) f) eqn:des.
+      + rewrite <- commute_sym_vs_conc_match_and_guard in des.
         rewrite des in H0.
         rewrite commute_sym_vs_conc_ma_rule_hdr.
         simpl in H.
         rewrite des in H.
         inversion H.
         apply commute_lookup_eval_varlike. assumption.
-      + rewrite <- commute_sym_vs_conc_match_pattern with (s1 := s1) (f := f) (c1 := eval_sym_state s1 f) in des; try reflexivity.
+      + rewrite <- commute_sym_vs_conc_match_and_guard in des.
         rewrite des in H0.
         rewrite commute_sym_vs_conc_ma_rule_hdr.
         simpl in H.
@@ -385,38 +431,38 @@ Proof.
   - simpl.
     destruct a; try destruct s; try destruct p.
     --assert (forall x, In x (combine
-                               (get_match_results (Seq (SeqCtr match_pattern action) :: t) (eval_sym_state s1 f))
-                               (Seq (SeqCtr match_pattern action) :: t)) -> fst x = false).
+                               (get_match_results (Seq (SeqCtr match_pattern guard action) :: t) (eval_sym_state s1 f))
+                               (Seq (SeqCtr match_pattern guard action) :: t)) -> fst x = false).
       {apply find_first_match_lemma. assumption. }
       simpl in H0.
-      specialize (H0 (eval_match_concrete match_pattern (eval_sym_state s1 f), Seq (SeqCtr match_pattern action)) ).
+      specialize (H0 (andb (eval_match_concrete match_pattern (eval_sym_state s1 f)) (eval_guard_concrete guard (eval_sym_state s1 f)), Seq (SeqCtr match_pattern guard action)) ).
       simpl in H0.
-      remember (eval_match_concrete match_pattern (eval_sym_state s1 f), Seq (SeqCtr match_pattern action))  as tmp.
+      remember (andb (eval_match_concrete match_pattern (eval_sym_state s1 f)) (eval_guard_concrete guard (eval_sym_state s1 f)), Seq (SeqCtr match_pattern guard action))  as tmp.
       assert (H_premise : tmp = tmp \/ In tmp (combine (get_match_results t (eval_sym_state s1 f)) t)). { left. reflexivity. }
       apply H0 in H_premise.
-      rewrite commute_sym_vs_conc_match_pattern with (s1 := s1) (f := f) in H_premise; try reflexivity.
+      rewrite commute_sym_vs_conc_match_and_guard in H_premise.
       rewrite H_premise.
       simpl.
       simpl in H.
-      rewrite commute_sym_vs_conc_match_pattern with (s1 := s1) (f := f) in H; try reflexivity.
+      rewrite commute_sym_vs_conc_match_and_guard in H.
       rewrite H_premise in H.
       apply IHt in H.
       assumption.
     --assert (forall x, In x (combine
-                               (get_match_results (Par (ParCtr match_pattern action) :: t) (eval_sym_state s1 f))
-                               (Par (ParCtr match_pattern action) :: t)) -> fst x = false).
+                               (get_match_results (Par (ParCtr match_pattern guard action) :: t) (eval_sym_state s1 f))
+                               (Par (ParCtr match_pattern guard action) :: t)) -> fst x = false).
       {apply find_first_match_lemma. assumption. }
       simpl in H0.
-      specialize (H0 (eval_match_concrete match_pattern (eval_sym_state s1 f), Par (ParCtr match_pattern action)) ).
+      specialize (H0 (andb (eval_match_concrete match_pattern (eval_sym_state s1 f)) (eval_guard_concrete guard (eval_sym_state s1 f)), Par (ParCtr match_pattern guard action)) ).
       simpl in H0.
-      remember (eval_match_concrete match_pattern (eval_sym_state s1 f), Par (ParCtr match_pattern action))  as tmp.
+      remember (andb (eval_match_concrete match_pattern (eval_sym_state s1 f)) (eval_guard_concrete guard (eval_sym_state s1 f)), Par (ParCtr match_pattern guard action))  as tmp.
       assert (H_premise : tmp = tmp \/ In tmp (combine (get_match_results t (eval_sym_state s1 f)) t)). { left. reflexivity. }
       apply H0 in H_premise.
-      rewrite commute_sym_vs_conc_match_pattern with (s1 := s1) (f := f) in H_premise; try reflexivity.
+      rewrite commute_sym_vs_conc_match_and_guard in H_premise.
       rewrite H_premise.
       simpl.
       simpl in H.
-      rewrite commute_sym_vs_conc_match_pattern with (s1 := s1) (f := f) in H; try reflexivity.
+      rewrite commute_sym_vs_conc_match_and_guard in H.
       rewrite H_premise in H.
       apply IHt in H.
       assumption.
@@ -443,12 +489,12 @@ Proof.
   - simpl.
     destruct a; try destruct s; try destruct p.
     --assert (In (true, rule)  (combine
-                               (get_match_results (Seq (SeqCtr match_pattern action) :: t) (eval_sym_state s1 f))
-                               (Seq (SeqCtr match_pattern action) :: t))).
+                               (get_match_results (Seq (SeqCtr match_pattern guard action) :: t) (eval_sym_state s1 f))
+                               (Seq (SeqCtr match_pattern guard action) :: t))).
       { apply find_first_match_lemma2. assumption. }
       simpl in H0.
-      destruct (eval_smt_bool (eval_match_smt match_pattern s1) f) eqn:des.
-      + rewrite <- commute_sym_vs_conc_match_pattern with (s1 := s1) (f := f) (c1 := eval_sym_state s1 f) in des; try reflexivity.
+      destruct (eval_smt_bool (SmtBoolAnd (eval_match_smt match_pattern s1) (eval_guard_smt guard s1)) f) eqn:des.
+      + rewrite <- commute_sym_vs_conc_match_and_guard in des.
         rewrite des in H0.
         rewrite commute_sym_vs_conc_ma_rule_sv.
         simpl in H.
@@ -456,7 +502,7 @@ Proof.
         inversion H.
         apply commute_lookup_eval_varlike.
         assumption.
-      + rewrite <- commute_sym_vs_conc_match_pattern with (s1 := s1) (f := f) (c1 := eval_sym_state s1 f) in des; try reflexivity.
+      + rewrite <- commute_sym_vs_conc_match_and_guard in des.
         rewrite des in H0.
         rewrite commute_sym_vs_conc_ma_rule_sv.
         simpl in H.
@@ -465,12 +511,12 @@ Proof.
         rewrite <- commute_sym_vs_conc_ma_rule_sv.
         assumption. assumption. assumption.
     --assert (In (true, rule)  (combine
-                               (get_match_results (Par (ParCtr match_pattern action) :: t) (eval_sym_state s1 f))
-                               (Par (ParCtr match_pattern action) :: t))).
+                               (get_match_results (Par (ParCtr match_pattern guard action) :: t) (eval_sym_state s1 f))
+                               (Par (ParCtr match_pattern guard action) :: t))).
       { apply find_first_match_lemma2. assumption. }
       simpl in H0.
-      destruct (eval_smt_bool (eval_match_smt match_pattern s1) f) eqn:des.
-      + rewrite <- commute_sym_vs_conc_match_pattern with (s1 := s1) (f := f) (c1 := eval_sym_state s1 f) in des; try reflexivity.
+      destruct (eval_smt_bool (SmtBoolAnd (eval_match_smt match_pattern s1) (eval_guard_smt guard s1)) f) eqn:des.
+      + rewrite <- commute_sym_vs_conc_match_and_guard in des.
         rewrite des in H0.
         rewrite commute_sym_vs_conc_ma_rule_sv.
         simpl in H.
@@ -478,7 +524,7 @@ Proof.
         inversion H.
         apply commute_lookup_eval_varlike.
         assumption.
-      + rewrite <- commute_sym_vs_conc_match_pattern with (s1 := s1) (f := f) (c1 := eval_sym_state s1 f) in des; try reflexivity.
+      + rewrite <- commute_sym_vs_conc_match_and_guard in des.
         rewrite des in H0.
         rewrite commute_sym_vs_conc_ma_rule_sv.
         simpl in H.
@@ -504,38 +550,38 @@ Proof.
   - simpl.
     destruct a; try destruct s; try destruct p.
     --assert (forall x, In x (combine
-                               (get_match_results (Seq (SeqCtr match_pattern action) :: t) (eval_sym_state s1 f))
-                               (Seq (SeqCtr match_pattern action) :: t)) -> fst x = false).
+                               (get_match_results (Seq (SeqCtr match_pattern guard action) :: t) (eval_sym_state s1 f))
+                               (Seq (SeqCtr match_pattern guard action) :: t)) -> fst x = false).
       {apply find_first_match_lemma. assumption. }
       simpl in H0.
-      specialize (H0 (eval_match_concrete match_pattern (eval_sym_state s1 f), Seq (SeqCtr match_pattern action)) ).
+      specialize (H0 (andb (eval_match_concrete match_pattern (eval_sym_state s1 f)) (eval_guard_concrete guard (eval_sym_state s1 f)), Seq (SeqCtr match_pattern guard action)) ).
       simpl in H0.
-      remember (eval_match_concrete match_pattern (eval_sym_state s1 f), Seq (SeqCtr match_pattern action))  as tmp.
+      remember (andb (eval_match_concrete match_pattern (eval_sym_state s1 f)) (eval_guard_concrete guard (eval_sym_state s1 f)), Seq (SeqCtr match_pattern guard action))  as tmp.
       assert (H_premise : tmp = tmp \/ In tmp (combine (get_match_results t (eval_sym_state s1 f)) t)). { left. reflexivity. }
       apply H0 in H_premise.
-      rewrite commute_sym_vs_conc_match_pattern with (s1 := s1) (f := f) in H_premise; try reflexivity.
+      rewrite commute_sym_vs_conc_match_and_guard in H_premise.
       rewrite H_premise.
       simpl.
       simpl in H.
-      rewrite commute_sym_vs_conc_match_pattern with (s1 := s1) (f := f) in H; try reflexivity.
+      rewrite commute_sym_vs_conc_match_and_guard in H.
       rewrite H_premise in H.
       apply IHt in H.
       assumption.
     --assert (forall x, In x (combine
-                               (get_match_results (Par (ParCtr match_pattern action) :: t) (eval_sym_state s1 f))
-                               (Par (ParCtr match_pattern action) :: t)) -> fst x = false).
+                               (get_match_results (Par (ParCtr match_pattern guard action) :: t) (eval_sym_state s1 f))
+                               (Par (ParCtr match_pattern guard action) :: t)) -> fst x = false).
       {apply find_first_match_lemma. assumption. }
       simpl in H0.
-      specialize (H0 (eval_match_concrete match_pattern (eval_sym_state s1 f ), Par (ParCtr match_pattern action)) ).
+      specialize (H0 (andb (eval_match_concrete match_pattern (eval_sym_state s1 f)) (eval_guard_concrete guard (eval_sym_state s1 f)), Par (ParCtr match_pattern guard action))).
       simpl in H0.
-      remember (eval_match_concrete match_pattern (eval_sym_state s1 f), Par (ParCtr match_pattern action))  as tmp.
+      remember (andb (eval_match_concrete match_pattern (eval_sym_state s1 f)) (eval_guard_concrete guard (eval_sym_state s1 f)), Par (ParCtr match_pattern guard action))  as tmp.
       assert (H_premise : tmp = tmp \/ In tmp (combine (get_match_results t (eval_sym_state s1 f)) t)). { left. reflexivity. }
       apply H0 in H_premise.
-      rewrite commute_sym_vs_conc_match_pattern with (s1 := s1) (f := f) in H_premise; try reflexivity.
+      rewrite commute_sym_vs_conc_match_and_guard in H_premise.
       rewrite H_premise.
       simpl.
       simpl in H.
-      rewrite commute_sym_vs_conc_match_pattern with (s1 := s1) (f := f) in H; try reflexivity.
+      rewrite commute_sym_vs_conc_match_and_guard in H.
       rewrite H_premise in H.
       apply IHt in H.
       assumption.
