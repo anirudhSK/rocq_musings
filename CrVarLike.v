@@ -7,6 +7,7 @@ From MyProject Require Import CrDsl.
 From MyProject Require Import Maps.
 From MyProject Require Import UtilLemmas.
 From MyProject Require Import CrVal.
+From MyProject Require Import PosWrapper.
 From Stdlib Require Import ZArith.
 From Stdlib Require Import Bool.
 From Stdlib Require Import List.
@@ -349,19 +350,69 @@ Fixpoint pos_to_string (p : positive) : string :=
   | xI p' => String.append (pos_to_string p') "1"
   end.
 
+Local Open Scope string_scope.
 Definition init_symbolic_state (p: CaracaraProgram) : SymbolicState :=
   let h := get_headers_from_prog p in
   let s := get_states_from_prog p in
   let c := get_ctrls_from_prog p in
   {| ctrl_map   :=  (SmtArithConst CrNilInt,
                       PTree_Properties.of_list
-                      (List.map (fun x => let var := match x with | CtrlCtr x_id => x_id end in (var,  SmtArithVar (pos_to_string var))) c));
+                      (List.map (fun x => let var := match x with | CtrlCtr x_id => x_id end in (var,  SmtArithVar ("ctrl_" ++ pos_to_string var))) c));
      header_map :=  (SmtArithConst CrNilInt,
                       PTree_Properties.of_list
-                      (List.map (fun x => let var := match x with | HeaderCtr x_id => x_id end in (var, SmtArithVar (pos_to_string var))) h));
+                      (List.map (fun x => let var := match x with | HeaderCtr x_id => x_id end in (var, SmtArithVar ("hdr_" ++ pos_to_string var))) h));
      state_map  :=  (SmtArithConst CrNilInt,
                       PTree_Properties.of_list
-                      (List.map (fun x => let var := match x with | StateCtr x_id => x_id end in (var, SmtArithVar (pos_to_string var))) s));|}.
+                      (List.map (fun x => let var := match x with | StateCtr x_id => x_id end in (var, SmtArithVar ("state_" ++ pos_to_string var))) s));|}.
+
+Definition init_module_symbolic_state
+    (prog_prefix : string)
+    (m_id        : ModuleName)
+    (h           : list Header)
+    (s           : list State)
+    (c           : list Ctrl)
+    : SymbolicState :=
+  (* e.g. p1_m4_ *)
+  let m_prefix := prog_prefix ++ "_m" ++ pos_to_string (unwrap m_id) ++ "_" in
+  {| ctrl_map :=
+       (SmtArithConst CrNilInt,
+        PTree_Properties.of_list
+          (List.map (fun x =>
+            let var := match x with | CtrlCtr x_id => x_id end in
+            (var, SmtArithVar (m_prefix ++ "ctrl_" ++ pos_to_string var))) c));
+     header_map :=
+       (SmtArithConst CrNilInt,
+        PTree_Properties.of_list
+          (List.map (fun x =>
+            let var := match x with | HeaderCtr x_id => x_id end in
+            (var, SmtArithVar ("hdr_" ++ pos_to_string var))) h));
+     state_map :=
+       (SmtArithConst CrNilInt,
+        PTree_Properties.of_list
+          (List.map (fun x =>
+            let var := match x with | StateCtr x_id => x_id end in
+            (var, SmtArithVar (m_prefix ++ "state_" ++ pos_to_string var))) s));|}.
+
+Definition init_general_symbolic_state
+    (prog_prefix : string)
+    (p : GeneralCaracaraProgram)
+    : PMap.t SymbolicState :=
+  let net := get_network_from_general p in
+  let mods := all_modules net in
+  let h := get_headers_from_general p in
+  List.fold_left
+    (fun acc m =>
+      match m with
+      | ParserModule _ _ => acc
+      | TransformerModule m_id s c t =>
+        PMap.set (unwrap m_id) (init_module_symbolic_state prog_prefix m_id h s c) acc
+      end)
+    mods
+    (PMap.init {|
+      ctrl_map := PMap.init (SmtArithConst CrNilInt);
+      header_map := PMap.init (SmtArithConst CrNilInt);
+      state_map := PMap.init (SmtArithConst CrNilInt);
+    |}).
 
 Definition is_init_state {T} (p : CaracaraProgram) (ps : ProgramState T) : Prop :=
   forall h sv c,
