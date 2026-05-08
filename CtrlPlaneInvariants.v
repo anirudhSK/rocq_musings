@@ -39,7 +39,7 @@ Proof.
   intros.
   unfold eval_seq_rule_concrete.
   destruct s.
-  destruct (eval_match_concrete match_pattern c && eval_guard_concrete guard c).
+  destruct (eval_match_concrete match_pattern c).
   apply ctrl_plane_invariant_hdr_op_list.
   reflexivity.
 Qed.
@@ -52,7 +52,7 @@ Proof.
   intros.
   unfold eval_par_rule_concrete.
   destruct p.
-  destruct (eval_match_concrete match_pattern c && eval_guard_concrete guard c).
+  destruct (eval_match_concrete match_pattern c).
   apply ctrl_plane_invariant_hdr_op_list.
   reflexivity.
 Qed.

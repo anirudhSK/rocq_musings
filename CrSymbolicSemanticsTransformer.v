@@ -61,29 +61,22 @@ Definition eval_hdr_op_assign_smt (ho : HdrOp) (ps: SymbolicState) : SymbolicSta
 Definition eval_hdr_op_list_smt (hol : list HdrOp) (ps : SymbolicState) : SymbolicState :=
   List.fold_left (fun acc op => eval_hdr_op_assign_smt op acc) hol ps.
 
-Definition eval_match_smt (match_pattern : MatchPattern) (ps : SymbolicState) : SmtBoolExpr :=
-  (* For every list element, check if the Header's current value (determined by ps) equals the uint8 *)
-  (* Note that because SmtBoolAnd is associative and commutative, both fold_left and fold_right give the same answer. *)
-  List.fold_right (fun '(h, v) acc =>
-    match acc with
-    | SmtTrue => SmtBoolEq (lookup_varlike ps h) (SmtArithConst v)
-    | _ => SmtBoolAnd (SmtBoolEq (lookup_varlike ps h) (SmtArithConst v)) acc
-    end) SmtTrue match_pattern.
-
-(* Apply a comparison primitive at the symbolic level *)
 Definition eval_cmp_smt (op : CmpOp) (e1 e2 : SmtArithExpr) : SmtBoolExpr :=
   match op with
   | CmpEq => SmtBoolEq e1 e2
+  | CmpGt => SmtBoolLt e2 e1
   | CmpLt => SmtBoolLt e1 e2
   end.
 
-(* Symbolic counterpart of eval_guard_concrete. GTrue lowers to SmtTrue;
-   GCmp lowers to the appropriate comparison primitive. *)
-Definition eval_guard_smt (g : Guard) (ps : SymbolicState) : SmtBoolExpr :=
-  match g with
-  | GTrue => SmtTrue
-  | GCmp op a1 a2 => eval_cmp_smt op (lookup_smt a1 ps) (lookup_smt a2 ps)
-  end.
+Definition eval_match_smt (match_pattern : MatchPattern) (ps : SymbolicState) : SmtBoolExpr :=
+  (* For every list element, check if the Header's current value (determined by ps) equals the uint8 *)
+  (* Note that because SmtBoolAnd is associative and commutative, both fold_left and fold_right give the same answer. *)
+  List.fold_right (fun '(h, c, v) acc =>
+    let v' := match v with
+    | MatchConst k' => SmtArithConst k'
+    | MatchHeader h' => lookup_varlike ps h'
+    end in
+    SmtBoolAnd (eval_cmp_smt c (lookup_varlike ps h) v') acc) SmtTrue match_pattern.
 
 (* Maybe there's an intermediate function that evaluates a *single* HdrOp conditionally? *)
 Definition eval_hdr_op_assign_smt_conditional
@@ -106,10 +99,8 @@ Definition eval_hdr_op_assign_smt_conditional
    meaning header ops within an action are evaluated sequentially *)
 Definition eval_seq_rule_smt (srule : SeqRule) (ps : SymbolicState) : (SymbolicState) :=
   match srule with
-  | SeqCtr match_pattern guard action =>
-        (* First evaluate the match pattern AND guard by themselves against the original state ps *)
-        let condition := SmtBoolAnd (eval_match_smt match_pattern ps)
-                                    (eval_guard_smt guard ps) in
+  | SeqCtr match_pattern action =>
+        let condition := eval_match_smt match_pattern ps in
 
         (* Second, evaluate all the hdr_ops contained in the action to get a new intermediate state ps' from ps *)
         let ps' := eval_hdr_op_list_smt (action) ps in
@@ -129,10 +120,9 @@ Definition eval_seq_rule_smt (srule : SeqRule) (ps : SymbolicState) : (SymbolicS
    these conditions are realized using subset types, that's why we need proj1_sig *)
 Definition eval_par_rule_smt (prule : ParRule) (ps : SymbolicState) : (SymbolicState) :=
   match prule with
-  | ParCtr match_pattern guard action =>
+  | ParCtr match_pattern action =>
         (* First evaluate the match pattern AND guard by themselves against the original state ps *)
-        let condition := SmtBoolAnd (eval_match_smt match_pattern ps)
-                                    (eval_guard_smt guard ps) in
+        let condition := eval_match_smt match_pattern ps in
 
         (* Second, evaluate all the hdr_ops contained in the action to get a new intermediate state ps' from ps *)
         let ps' := eval_hdr_op_list_smt (proj1_sig action) ps in
@@ -162,12 +152,10 @@ Fixpoint switch_case_expr (cases : list (SmtBoolExpr * SmtArithExpr)) (default_c
 (* Compute match results for each match pattern (one embedded in each rule) *)
 Definition get_match_results_smt (t : Transformer) (ps : SymbolicState) : list SmtBoolExpr :=
   List.map (fun rule =>
-                       match rule with
-                        | Seq (SeqCtr match_pattern guard _) =>
-                            SmtBoolAnd (eval_match_smt match_pattern ps) (eval_guard_smt guard ps)
-                        | Par (ParCtr match_pattern guard _) =>
-                            SmtBoolAnd (eval_match_smt match_pattern ps) (eval_guard_smt guard ps)
-                       end) t.
+    match rule with
+    | Seq (SeqCtr match_pattern _) => eval_match_smt match_pattern ps
+    | Par (ParCtr match_pattern _) => eval_match_smt match_pattern ps
+    end) t.
 
 Definition eval_transformer_smt (t : Transformer) (ps : SymbolicState) : SymbolicState :=
   (* get all future program states, one for each rule *)

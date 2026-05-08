@@ -22,13 +22,8 @@ Inductive FunctionArgument :=
    (and, when GNot/GOr land later, wrapping). *)
 Inductive CmpOp :=
   | CmpEq
+  | CmpGt
   | CmpLt.
-
-(* A Guard is a per-rule conditional gate, conjoined with the rule's
-   MatchPattern. GTrue is the no-op guard (preserves prior semantics). *)
-Inductive Guard :=
-  | GTrue
-  | GCmp (op : CmpOp) (a1 a2 : FunctionArgument).
 
 (* A BinaryOp takes two uint8 arguments and returns another uint8 *)
 Inductive BinaryOp :=
@@ -49,10 +44,15 @@ Inductive HdrOp :=
 (* Define MatchPattern as a list of header, pattern pairs,
    where patterns are uint8 and headers contain uint8 values,
    hence both can be compared. TODO: Need to handle wildcards. *)
-Definition MatchPattern := list (Header * CrInt_T). (* TODO: might have to change *)
+(* TODO: Explicit notion of default/fallback path *)
+(* TODO: fold guard into notion of match pattern with header cmp and bit pattern *)
+Inductive MatchValue :=
+| MatchConst (k : CrInt_T)
+| MatchHeader (h : Header).
+Definition MatchPattern := list (Header * CmpOp * MatchValue).
 
 Inductive SeqRule :=
-  | SeqCtr (match_pattern : MatchPattern) (guard : Guard) (action : list HdrOp).
+  | SeqCtr (match_pattern : MatchPattern) (action : list HdrOp).
 
 (* Extract targets out of a HdrOp *)
 Definition extract_targets (op : HdrOp) : (list State) * (list Header) := 
@@ -69,7 +69,7 @@ Definition extract_all_targets (ops : list HdrOp) : (list State) * (list Header)
 
 (* TODO: Add masks and don't care bits *)
 Inductive ParRule :=
-  | ParCtr (match_pattern : MatchPattern) (guard : Guard)
+  | ParCtr (match_pattern : MatchPattern)
     (action : {l : list HdrOp | NoDup (fst (extract_all_targets l)) /\
                                 NoDup (snd (extract_all_targets l))}).
 
