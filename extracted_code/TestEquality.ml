@@ -36,7 +36,7 @@ let%expect_test "hdr_diff: different constants are NotEquivalent" =
   print_equiv (SmtQuery.equivalence_checker_cr_dsl p1 p2);
   [%expect {|
     ┌ SAT Valuation
-    | var( 1 ) := 0
+    | var( hdr_1 ) := 0
     └
     NotEquivalent
     |}]
@@ -65,7 +65,7 @@ let%expect_test "complex_add_sub: dropping an op breaks equivalence" =
   print_equiv (SmtQuery.equivalence_checker_cr_dsl p1 p2);
   [%expect {|
     ┌ SAT Valuation
-    | var( 1 ) := 0
+    | var( hdr_1 ) := 0
     └
     NotEquivalent
     |}]

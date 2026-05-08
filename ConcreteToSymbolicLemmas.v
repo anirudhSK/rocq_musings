@@ -74,6 +74,17 @@ Proof.
     apply IHrest.
 Qed.
 
+Lemma commute_conc_and_lookup :
+  forall {A} `{CrVarLike A} (s : SymbolicState) (f : SmtValuation) (v : A),
+  eval_smt_arith (lookup_varlike s v) f =
+  lookup_varlike (eval_sym_state s f) v.
+Proof.
+  intros.
+  unfold eval_sym_state. rewrite commute_lookup_varlike. reflexivity.
+Qed.
+
+(* (Removed duplicate placeholder lemma; the original commute_conc_and_lookup above is the real one.) *)
+
 (* For any Header, uint8 pair,
    concrete and symbolic execution match up. *)
 Transparent lookup_varlike.

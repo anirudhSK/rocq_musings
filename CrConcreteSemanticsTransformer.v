@@ -6,8 +6,6 @@ From MyProject Require Import CrIdentifiers.
 From MyProject Require Import CrVarLike.
 From MyProject Require Import ListUtils.
 From MyProject Require Import CrVal.
-From Stdlib Require Import ZArith.
-From Stdlib Require Import Bool.Bool.
 
 (* Apply binary operation *)
 Definition apply_bin_op (f : BinaryOp) (arg1 : CrVal) (arg2 : CrVal) : CrVal :=
