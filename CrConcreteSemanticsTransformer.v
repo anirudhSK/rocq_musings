@@ -48,25 +48,20 @@ Definition eval_hdr_op_assign_concrete (op : HdrOp) (ps: ConcreteState) : Concre
         let op_output := eval_hdr_op_expr_concrete op ps in update_varlike ps target op_output
   end.
 
-Definition eval_match_concrete (match_pattern : MatchPattern) (ps : ConcreteState) : bool :=
-  (* For every list element, check if the Header's current value (determined by ps) equals the uint8 *)
-  List.forallb (fun '(h, v) => CrVal.eqb (lookup_varlike ps h) (IntVal v)) match_pattern.
-
-(* Apply a comparison primitive at the concrete level *)
 Definition eval_cmp_concrete (op : CmpOp) (v1 v2 : CrVal) : bool :=
   match op with
   | CmpEq => CrVal.eqb v1 v2
+  | CmpGt => CrVal.ltb v2 v1
   | CmpLt => CrVal.ltb v1 v2
   end.
 
-(* Evaluate a Guard to a bool. GTrue is the no-op guard that preserves
-   prior semantics when the rule was constructed without an explicit guard. *)
-Definition eval_guard_concrete (g : Guard) (ps : ConcreteState) : bool :=
-  match g with
-  | GTrue => true
-  | GCmp op a1 a2 =>
-      eval_cmp_concrete op (lookup_concrete a1 ps) (lookup_concrete a2 ps)
-  end.
+Definition eval_match_concrete (match_pattern : MatchPattern) (ps : ConcreteState) : bool :=
+  List.forallb (fun '(h, c, v) =>
+  let v' := match v with
+  | MatchConst k' => (IntVal k')
+  | MatchHeader h' => (lookup_varlike ps h')
+  end in
+  eval_cmp_concrete c (lookup_varlike ps h) v') match_pattern.
 
 (* Define evaluation over a list of HdrOp *)
 (* Note we are evaluating the list from right to left (fold_right) because it simplifies proving. *)
@@ -88,8 +83,8 @@ Definition eval_hdr_op_assign_concrete_conditional
    meaning header ops within an action are evaluated sequentially *)
 Definition eval_seq_rule_concrete (srule : SeqRule) (ps : ConcreteState) : (ConcreteState) :=
   match srule with
-  | SeqCtr match_pattern guard action =>
-      if (eval_match_concrete match_pattern ps && eval_guard_concrete guard ps) then
+  | SeqCtr match_pattern action =>
+      if (eval_match_concrete match_pattern ps) then
         eval_hdr_op_list_concrete action ps
       else
         ps
@@ -102,8 +97,8 @@ Definition eval_seq_rule_concrete (srule : SeqRule) (ps : ConcreteState) : (Conc
    these conditions are realized using subset types, that's why we need proj1_sig *)
 Definition eval_par_rule_concrete (prule : ParRule) (ps : ConcreteState) : (ConcreteState) :=
   match prule with
-  | ParCtr match_pattern guard action =>
-      if (eval_match_concrete match_pattern ps && eval_guard_concrete guard ps) then
+  | ParCtr match_pattern action =>
+      if (eval_match_concrete match_pattern ps) then
         eval_hdr_op_list_concrete (proj1_sig action) ps
       else
         ps
@@ -122,10 +117,10 @@ Definition eval_match_action_rule_concrete (rule : MatchActionRule) (ps : Concre
 Definition get_match_results (t : Transformer) (ps : ConcreteState) : list bool :=
   List.map (fun rule =>
                      match rule with
-                       | Seq (SeqCtr match_pattern guard _) =>
-                           eval_match_concrete match_pattern ps && eval_guard_concrete guard ps
-                       | Par (ParCtr match_pattern guard _) =>
-                           eval_match_concrete match_pattern ps && eval_guard_concrete guard ps
+                       | Seq (SeqCtr match_pattern _) =>
+                           eval_match_concrete match_pattern ps
+                       | Par (ParCtr match_pattern _) =>
+                           eval_match_concrete match_pattern ps
                      end) t.
 
 (* Function to evaluate a transformer, which is a list of match-action rules *)

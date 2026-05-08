@@ -70,7 +70,7 @@ Fixpoint lindb_helper (db : FilterDatabase) (p : CaracaraProgram) : CaracaraProg
   | [] => p
   | (f, lbl) :: rest =>
       let mp := FlattenFilter f in
-      let new_rule := Seq (SeqCtr mp GTrue [StatefulOp AddOp (ConstantArg (CrUInt8 lbl)) (ConstantArg (CrUInt8 (repr 0))) (StateCtr 1)]) in
+      let new_rule := Seq (SeqCtr mp [StatefulOp AddOp (ConstantArg (CrUInt8 lbl)) (ConstantArg (CrUInt8 (repr 0))) (StateCtr 1)]) in
       let t := get_transformer_from_prog p in
       let new_transformer := new_rule :: t in
       let new_prog := CaracaraProgramDef [] [StateCtr 1] [] new_transformer in
@@ -135,7 +135,7 @@ Definition GetTuple (f : PacketFilter) : net_tuple :=
 Definition make_table_transformer (table : FilterDatabase) (h_body : Header): Transformer :=
   let sorted := sort_db table in
   List.map (fun '(f, lbl) =>
-    Seq (SeqCtr (FlattenFilter f) GTrue
+    Seq (SeqCtr (FlattenFilter f)
       [StatelessOp
         AddOp
         (ConstantArg (CrUInt8 lbl))
@@ -157,7 +157,12 @@ Definition max_pos (a b : positive) : positive :=
 
 Definition max_header_in_mp (mp : MatchPattern) : positive :=
   List.fold_left
-    (fun acc '(h, _) => match h with HeaderCtr p => max_pos acc p end)
+    (fun acc '(h1, _, h2) =>
+      let x := match h1 with HeaderCtr p => max_pos acc p end in
+      match h2 with
+      | MatchHeader (HeaderCtr h2') => max_pos x h2'
+      | _ => xH
+      end)
     mp 1%positive.
 
 Definition max_header_in_filter (f : PacketFilter) : positive :=
@@ -175,29 +180,21 @@ Definition max_header_in_db (db : FilterDatabase) : positive :=
 Definition compute_h_base (db : FilterDatabase) : Header :=
   HeaderCtr ((max_header_in_db db) + 1).
 
-Fixpoint make_merge_rules (n : nat) (h_base : Header) : list MatchActionRule :=
-  match n with
-  | O => []
-  | S k =>
-      let h_label    := h_base in
-      let h_priority := incr h_base in
-      let rule :=
-        Seq (SeqCtr
-               []  (* no MatchPattern: gating is purely on the guard *)
-               (GCmp CmpLt (StatefulArg (StateCtr 2)) (HeaderArg h_priority))
-               [ StatefulOp AddOp (HeaderArg h_label)
-                            (ConstantArg (CrUInt8 (repr 0))) (StateCtr 1);
-                 StatefulOp AddOp (HeaderArg h_priority)
-                            (ConstantArg (CrUInt8 (repr 0))) (StateCtr 2) ]) in
-      rule :: make_merge_rules k (incr (incr h_base))
-  end.
+Definition check_match (acc_base : Header) (filter_base : Header) : Transformer :=
+  [Seq (SeqCtr
+    [((incr acc_base), CmpLt, MatchHeader (incr filter_base))]
+    [StatelessOp
+      AddOp
+      (HeaderArg filter_base)
+      (ConstantArg (CrUInt8 (repr 0)))
+      acc_base;
+    StatelessOp
+      AddOp
+      (HeaderArg (incr filter_base))
+      (ConstantArg (CrUInt8 (repr 0)))
+      (incr acc_base)
+    ])].
 
-Definition make_merge_transformer (n : nat) (h_base : Header) : Transformer :=
-  make_merge_rules n h_base.
-
-(* tss_db: one TransformerModule per tuple-group (hash table), chained in
-   sequence, terminated by a merge module that picks the highest-priority
-   match across all tables and writes its label into StateCtr 1. *)
 Definition tss_db (db : FilterDatabase) : GeneralCaracaraProgram :=
   let db' : FilterDatabase := List.map (fun '(f, lbl) =>
     (set_filter_key f (tup_to_key (GetTuple f)), lbl)) db in
@@ -227,7 +224,8 @@ Definition tss_db (db : FilterDatabase) : GeneralCaracaraProgram :=
       (net'', first', Some cur, (incr (incr header_io))))
     ht_list (empty_net, None, None, h_base) in
   let n := List.length ht_list in
-  let merge_t := make_merge_transformer n h_base in
+  
+  (* let merge_t := make_merge_transformer n h_base in
   let merge_p := CaracaraProgramDef [] [StateCtr 1; StateCtr 2] [] merge_t in
   let '(net', merge_id) := add_program_to_network net merge_p in
   let net'' := match prev_opt with
@@ -238,4 +236,5 @@ Definition tss_db (db : FilterDatabase) : GeneralCaracaraProgram :=
     | Some fst => set_start_module net'' fst
     | None     => set_start_module net'' merge_id (* no tables: start at merge *)
     end in
-  GeneralCaracaraProgramDef [] tss_net.
+  GeneralCaracaraProgramDef [] tss_net. *)
+  GeneralCaracaraProgramDef [] net.
