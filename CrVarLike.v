@@ -1,4 +1,6 @@
 From Stdlib Require Import Strings.String.
+From Stdlib Require Import Strings.Ascii.
+From Stdlib Require Import micromega.Lia.
 From MyProject Require Import Integers.
 From MyProject Require Import MyInts.
 From MyProject Require Import InitStatus.
@@ -309,6 +311,37 @@ Proof.
   reflexivity.
 Qed.
 
+(* Convert list_norepet of a list of varlikes to list_norepet of their inner ids. *)
+Lemma list_norepet_header_inner :
+  forall l : list Header,
+    Coqlib.list_norepet l ->
+    Coqlib.list_norepet (List.map (fun h : Header => match h with HeaderCtr i => i end) l).
+Proof.
+  intros l Hno.
+  apply Coqlib.list_map_norepet; auto.
+  intros [i] [j] _ _ Hneq Heq. simpl in Heq. subst. apply Hneq. reflexivity.
+Qed.
+
+Lemma list_norepet_state_inner :
+  forall l : list State,
+    Coqlib.list_norepet l ->
+    Coqlib.list_norepet (List.map (fun s : State => match s with StateCtr i => i end) l).
+Proof.
+  intros l Hno.
+  apply Coqlib.list_map_norepet; auto.
+  intros [i] [j] _ _ Hneq Heq. simpl in Heq. subst. apply Hneq. reflexivity.
+Qed.
+
+Lemma list_norepet_ctrl_inner :
+  forall l : list Ctrl,
+    Coqlib.list_norepet l ->
+    Coqlib.list_norepet (List.map (fun c : Ctrl => match c with CtrlCtr i => i end) l).
+Proof.
+  intros l Hno.
+  apply Coqlib.list_map_norepet; auto.
+  intros [i] [j] _ _ Hneq Heq. simpl in Heq. subst. apply Hneq. reflexivity.
+Qed.
+
 Definition get_all_varlike_from_ps {T A : Type} `{CrVarLike A} (s: ProgramState T) : list A :=
   List.map (fun '(key, value) => make_item key)
            (PTree.elements (snd (map_from_ps s))).
@@ -341,9 +374,9 @@ Definition init_concrete_state (p : CaracaraProgram) : ConcreteState :=
   let h := get_headers_from_prog p in
   let s := get_states_from_prog p in
   let c := get_ctrls_from_prog p in
-  {|ctrl_map    :=  PMap.init UninitVal;
-     header_map :=  PMap.init UninitVal;
-     state_map  :=  PMap.init UninitVal;|}.
+  {|ctrl_map    :=  PMap.init (IntVal CrNilInt);
+     header_map :=  PMap.init (IntVal CrNilInt);
+     state_map  :=  PMap.init (IntVal CrNilInt);|}.
 
 (* Convert positive to string *)
 Fixpoint pos_to_string (p : positive) : string :=
@@ -352,6 +385,48 @@ Fixpoint pos_to_string (p : positive) : string :=
   | xO p' => String.append (pos_to_string p') "0"
   | xI p' => String.append (pos_to_string p') "1"
   end.
+
+(* pos_to_string is injective. *)
+Lemma pos_to_string_length_ge_1 :
+  forall p, (String.length (pos_to_string p) >= 1)%nat.
+Proof.
+  induction p; simpl; try (rewrite string_length_append; simpl; lia); lia.
+Qed.
+
+Local Ltac pos_to_string_inj_same Heq :=
+  f_equal;
+  match goal with
+  | [ IH : forall q : positive, pos_to_string _ = pos_to_string q -> _ = q |- _ ] =>
+    apply IH
+  end;
+  eapply string_append_inj_r_char; exact Heq.
+Local Ltac pos_to_string_inj_diff Heq :=
+  exfalso; revert Heq;
+  apply string_append_neq_r_diff_char;
+  intro Hc; inversion Hc.
+Local Ltac pos_to_string_inj_length :=
+  exfalso;
+  match goal with
+  | [ Heq : (pos_to_string ?p ++ _)%string = _ |- _ ] =>
+    pose proof (pos_to_string_length_ge_1 p);
+    apply (f_equal String.length) in Heq;
+    rewrite string_length_append in Heq;
+    simpl in Heq; lia
+  | [ Heq : _ = (pos_to_string ?p ++ _)%string |- _ ] =>
+    pose proof (pos_to_string_length_ge_1 p);
+    apply (f_equal String.length) in Heq;
+    rewrite string_length_append in Heq;
+    simpl in Heq; lia
+  end.
+Lemma pos_to_string_inj :
+  forall p1 p2, pos_to_string p1 = pos_to_string p2 -> p1 = p2.
+Proof.
+  induction p1; intros p2 Heq; destruct p2; simpl in Heq;
+    first [ reflexivity
+          | pos_to_string_inj_same Heq
+          | pos_to_string_inj_diff Heq
+          | pos_to_string_inj_length ].
+Qed.
 
 Local Open Scope string_scope.
 Definition init_symbolic_state (p: CaracaraProgram) : SymbolicState :=

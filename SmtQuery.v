@@ -1,6 +1,7 @@
 From MyProject Require Import SmtExpr.
 From MyProject Require Import CrDsl.
 From MyProject Require Import CrIdentifiers.
+From MyProject Require Import PosWrapper.
 From MyProject Require Import CrVarLike.
 From MyProject Require Import CrDslProperties.
 From MyProject Require Import InitStatus.
@@ -17,15 +18,23 @@ From Stdlib Require Import Lists.List.
 From Stdlib Require Import Bool.Bool.
 From Stdlib Require Import ZArith.ZArith.
 From Stdlib Require Import FunctionalExtensionality.
+From Stdlib Require Import Strings.String.
+From Stdlib Require Import Strings.Ascii.
+From Stdlib Require Import micromega.Lia.
 Import ListNotations.
 
 (* Import or define SeqRule and related types *)
 From MyProject Require Import CrTransformer. (* Or replace with the correct module *)
 From MyProject Require Import CrSymbolicSemanticsTransformer.
 From MyProject Require Import CrConcreteSemanticsTransformer.
+From MyProject Require Import CrTModSymbolicSemantics.
+From MyProject Require Import CrTModConcreteSemantics.
 From MyProject Require Import ConcreteToSymbolicLemmas.
 From MyProject Require Import SmtHelperLemmas.
 From MyProject Require Import UtilLemmas.
+From MyProject Require Import HelperLemmas.
+From MyProject Require Import ListUtils.
+From MyProject Require Import ConcreteTransformerLemmas.
 
 (* An SmtQuery takes an SmtBoolExpr and returns:
    None: meaning it is false for all possible valuations (or)
@@ -461,15 +470,346 @@ Global Opaque get_all_varlike_from_ps.
 Print Assumptions equivalence_checker_cr_sound.
 Print Assumptions equivalence_checker_cr_complete.
 
-Definition HdrLoc : Type := ModuleName * Header.
-Definition StateLoc : Type := ModuleName * State.
+Definition value_is_valid (v : CrVal) : Prop :=
+  match v with
+  | IntVal CrNilInt => True
+  | IntVal (CrUInt8 _) => True
+  | _ => False
+  end.
 
-(* Definition modnet_equivalence_checker
-  (p1 : GeneralCaracaraProgram) (p2 : GeneralCaracaraProgram)
-  (header_list : list (HdrLoc * HdrLoc))
-  (state_var_list : list (StateLoc * StateLoc))
-  : EquivalenceResult :=
-  let smt1 := eval_general_program_symbolic p1 (init_symbolic_state p1) in
-  let smt2 := eval_general_program_symbolic p2 (init_symbolic_state p2) in
-  match smt1, smt2 with
-  NotEquivalentUnknown. *)
+Definition map_is_valid (m : PMap.t CrVal) : Prop :=
+  (fst m = IntVal CrNilInt) /\ (forall k, value_is_valid (m !! k)).
+
+(* A concrete state cs is valid relative to a program p when:
+   - each PMap has (IntVal CrNilInt) as its default,
+   - every value in cs is either (IntVal CrNilInt) or a uint8, and
+   - the initialized variables in cs are exactly the program variables of p. *)
+Definition concrete_state_is_valid (p : CaracaraProgram) (cs : ConcreteState) : Prop :=
+  map_is_valid (header_map cs) /\
+  map_is_valid (state_map cs) /\
+  map_is_valid (ctrl_map cs) /\
+  (forall v : Header, lookup_varlike cs v <> (IntVal CrNilInt) <-> In v (get_headers_from_prog p)) /\
+  (forall v : State,  lookup_varlike cs v <> (IntVal CrNilInt) <-> In v (get_states_from_prog p)) /\
+  (forall v : Ctrl,   lookup_varlike cs v <> (IntVal CrNilInt) <-> In v (get_ctrls_from_prog p)).
+
+(* try_match: search for a string match against prefix ++ pos_to_string id in a list. *)
+Definition try_match_prefix
+  (prefix : string) (l : list (positive * CrVal)) (name : string) : option CrVal :=
+  fold_right (fun (p : positive * CrVal) acc =>
+    let '(id, v) := p in
+    if string_dec name (prefix ++ pos_to_string id)%string then Some v else acc
+  ) None l.
+
+Lemma try_match_prefix_found :
+  forall prefix l id w,
+    Coqlib.list_norepet (List.map fst l) ->
+    In (id, w) l ->
+    try_match_prefix prefix l (prefix ++ pos_to_string id)%string = Some w.
+Proof.
+  intros prefix l id w Hno Hin.
+  induction l as [| [id' w'] rest IH].
+  - simpl in Hin. contradiction.
+  - simpl in Hno. inversion Hno; subst.
+    simpl. simpl in Hin. destruct Hin as [Heq | Hin].
+    + inversion Heq; subst. destruct (string_dec _ _); congruence.
+    + destruct (string_dec (prefix ++ pos_to_string id)%string
+                            (prefix ++ pos_to_string id')%string) as [Heqs | Hneqs].
+      * (* id <> id' (since list_norepet), but strings are equal: contradiction *)
+        exfalso.
+        (* Cancel prefix from the left *)
+        assert (Hpos : pos_to_string id = pos_to_string id').
+        { clear -Heqs. revert Heqs.
+          induction prefix as [| c pr IHpr]; simpl; intros HH.
+          - exact HH.
+          - injection HH as Hrest. apply IHpr. exact Hrest. }
+        apply pos_to_string_inj in Hpos. subst id'.
+        apply H1. apply in_map_iff. exists (id, w). split; auto.
+      * apply IH; auto.
+Qed.
+
+Lemma try_match_prefix_not_found_diff_char :
+  forall (c1 c2 : Ascii.ascii) (rest1 rest2 : string) l,
+    c1 <> c2 ->
+    try_match_prefix (String c1 rest1) l (String c2 rest2)%string = None.
+Proof.
+  intros c1 c2 rest1 rest2 l Hneq.
+  induction l as [| [id v] rest IH].
+  - reflexivity.
+  - cbn [try_match_prefix fold_right].
+    destruct (string_dec (String c2 rest2) (String c1 rest1 ++ pos_to_string id)%string) as [Heq | _].
+    + exfalso. cbn in Heq. inversion Heq. apply Hneq. symmetry. assumption.
+    + exact IH.
+Qed.
+
+Definition build_valuation_for_cs (cs : ConcreteState) : SmtValuation :=
+  fun name =>
+    match try_match_prefix "hdr_" (PTree.elements (snd (header_map cs))) name with
+    | Some v => v
+    | None =>
+      match try_match_prefix "state_" (PTree.elements (snd (state_map cs))) name with
+      | Some v => v
+      | None =>
+        match try_match_prefix "ctrl_" (PTree.elements (snd (ctrl_map cs))) name with
+        | Some v => v
+        | None => IntVal (CrUInt8 (repr 0))
+        end
+      end
+    end.
+
+Local Ltac uint8_finalize valid_lemma id_var :=
+  pose proof (valid_lemma id_var) as Hvv;
+  unfold value_is_valid in Hvv;
+  match goal with
+  | |- context [PMap.get ?i ?m] =>
+      destruct (PMap.get i m) as [i'| | |] eqn:Hpm; try contradiction;
+      destruct i'; try contradiction; reflexivity
+  end.
+Lemma valid_states_realizable :
+  (* for all concrete states *)
+  forall p cs,
+  (* where p is well-formed *)
+  well_formed_program p ->
+  (* and cs is valid for p (initialized vars are exactly p's program vars) *)
+  concrete_state_is_valid p cs ->
+  (* there is a valuation f under which init_symbolic_state p concretizes
+     to a state that agrees with cs at every variable *)
+  exists f,
+  let c := eval_sym_state (init_symbolic_state p) f in
+  (forall (v : Header), lookup_varlike c v = lookup_varlike cs v) /\
+  (forall (v : State),  lookup_varlike c v = lookup_varlike cs v) /\
+  (forall (v : Ctrl),   lookup_varlike c v = lookup_varlike cs v).
+Proof.
+  intros p cs Hwf Hvalid.
+  destruct p as [hp sp cp tp].
+  simpl in Hwf.
+  destruct Hwf as [Hwf_h [Hwf_s [Hwf_c _]]].
+  destruct Hvalid as [Hh [Hs [Hc [Hh_in [Hs_in Hc_in]]]]].
+  simpl in Hh_in, Hs_in, Hc_in.
+  destruct Hh as [Hh_def Hh_valid].
+  destruct Hs as [Hs_def Hs_valid].
+  destruct Hc as [Hc_def Hc_valid].
+  exists (build_valuation_for_cs cs).
+  simpl.
+  rewrite (init_symbolic_state_nodep_t hp sp cp tp []).
+  split; [| split].
+  - (* Headers *)
+    intros [id].
+    rewrite commute_lookup_eval_varlike.
+    rewrite lookup_varlike_header_PMap.
+    rewrite lookup_varlike_header_PMap_concrete.
+    destruct (List.in_dec header_eq_dec (HeaderCtr id) hp) as [Hin | Hnin].
+    + (* In p's list: cs is initialized at id, agrees with f *)
+      assert (Hneq : PMap.get id (header_map cs) <> IntVal CrNilInt).
+      { apply (proj2 (Hh_in (HeaderCtr id))). assumption. }
+      assert (Htree : (snd (header_map cs)) ! id = Some (PMap.get id (header_map cs))).
+      { eapply cs_initialized_in_tree_header; eauto. }
+      rewrite init_sym_header_lookup with (id := id).
+      3: { assumption. }
+      2: { apply list_norepet_header_inner. assumption. }
+      simpl.
+      unfold build_valuation_for_cs.
+      rewrite try_match_prefix_found
+        with (id := id) (w := PMap.get id (header_map cs)).
+      * uint8_finalize Hh_valid id.
+      * apply PTree.elements_keys_norepet.
+      * apply PTree.elements_correct. assumption.
+    + (* Not in p's list: both sides equal IntVal CrNilInt *)
+      rewrite (init_sym_header_lookup_default (CaracaraProgramDef hp sp cp []) id).
+      2: { simpl. assumption. }
+      simpl.
+      pose proof (Hh_in (HeaderCtr id)) as Hiff.
+      rewrite lookup_varlike_header_PMap_concrete in Hiff.
+      pose proof (Hh_valid id) as Hvv. unfold value_is_valid, PMap.get in *.
+      destruct ((snd (header_map cs)) ! id) as [w|] eqn:Htree.
+      * destruct w as [i| | |]; try contradiction.
+        destruct i; try contradiction.
+        -- exfalso. apply Hnin. apply (proj1 Hiff). discriminate.
+        -- reflexivity.
+      * symmetry. exact Hh_def.
+  - (* States *)
+    intros [id].
+    rewrite commute_lookup_eval_varlike.
+    rewrite lookup_varlike_state_PMap.
+    rewrite lookup_varlike_state_PMap_concrete.
+    destruct (List.in_dec state_eq_dec (StateCtr id) sp) as [Hin | Hnin].
+    + assert (Hneq : PMap.get id (state_map cs) <> IntVal CrNilInt).
+      { apply (proj2 (Hs_in (StateCtr id))). assumption. }
+      assert (Htree : (snd (state_map cs)) ! id = Some (PMap.get id (state_map cs))).
+      { eapply cs_initialized_in_tree_state; eauto. }
+      rewrite init_sym_state_lookup with (id := id).
+      3: { assumption. }
+      2: { apply list_norepet_state_inner. assumption. }
+      simpl.
+      unfold build_valuation_for_cs.
+      rewrite try_match_prefix_not_found_diff_char with (c1 := "h"%char) (c2 := "s"%char).
+      2: { intros H; inversion H. }
+      rewrite try_match_prefix_found
+        with (id := id) (w := PMap.get id (state_map cs)).
+      * uint8_finalize Hs_valid id.
+      * apply PTree.elements_keys_norepet.
+      * apply PTree.elements_correct. assumption.
+    + rewrite (init_sym_state_lookup_default (CaracaraProgramDef hp sp cp []) id).
+      2: { simpl. assumption. }
+      simpl.
+      pose proof (Hs_in (StateCtr id)) as Hiff.
+      rewrite lookup_varlike_state_PMap_concrete in Hiff.
+      pose proof (Hs_valid id) as Hvv. unfold value_is_valid, PMap.get in *.
+      destruct ((snd (state_map cs)) ! id) as [w|] eqn:Htree.
+      * destruct w as [i| | |]; try contradiction.
+        destruct i; try contradiction.
+        -- exfalso. apply Hnin. apply (proj1 Hiff). discriminate.
+        -- reflexivity.
+      * symmetry. exact Hs_def.
+  - (* Ctrls *)
+    intros [id].
+    rewrite commute_lookup_eval_varlike.
+    rewrite lookup_varlike_ctrl_PMap.
+    rewrite lookup_varlike_ctrl_PMap_concrete.
+    destruct (List.in_dec ctrl_eq_dec (CtrlCtr id) cp) as [Hin | Hnin].
+    + assert (Hneq : PMap.get id (ctrl_map cs) <> IntVal CrNilInt).
+      { apply (proj2 (Hc_in (CtrlCtr id))). assumption. }
+      assert (Htree : (snd (ctrl_map cs)) ! id = Some (PMap.get id (ctrl_map cs))).
+      { eapply cs_initialized_in_tree_ctrl; eauto. }
+      rewrite init_sym_ctrl_lookup with (id := id).
+      3: { assumption. }
+      2: { apply list_norepet_ctrl_inner. assumption. }
+      simpl.
+      unfold build_valuation_for_cs.
+      rewrite try_match_prefix_not_found_diff_char with (c1 := "h"%char) (c2 := "c"%char).
+      2: { intros H; inversion H. }
+      rewrite try_match_prefix_not_found_diff_char with (c1 := "s"%char) (c2 := "c"%char).
+      2: { intros H; inversion H. }
+      rewrite try_match_prefix_found
+        with (id := id) (w := PMap.get id (ctrl_map cs)).
+      * uint8_finalize Hc_valid id.
+      * apply PTree.elements_keys_norepet.
+      * apply PTree.elements_correct. assumption.
+    + rewrite (init_sym_ctrl_lookup_default (CaracaraProgramDef hp sp cp []) id).
+      2: { simpl. assumption. }
+      simpl.
+      pose proof (Hc_in (CtrlCtr id)) as Hiff.
+      rewrite lookup_varlike_ctrl_PMap_concrete in Hiff.
+      pose proof (Hc_valid id) as Hvv. unfold value_is_valid, PMap.get in *.
+      destruct ((snd (ctrl_map cs)) ! id) as [w|] eqn:Htree.
+      * destruct w as [i| | |]; try contradiction.
+        destruct i; try contradiction.
+        -- exfalso. apply Hnin. apply (proj1 Hiff). discriminate.
+        -- reflexivity.
+      * symmetry. exact Hc_def.
+Qed.
+
+Transparent get_all_varlike_from_ps.
+Transparent map_from_ps.
+Lemma in_program_implies_in_init_sym_header :
+  forall p (v : Header),
+    well_formed_program p ->
+    In v (get_headers_from_prog p) ->
+    is_varlike_in_ps (init_symbolic_state p) v <> None.
+Proof.
+  intros p v Hwf Hin.
+  apply is_varlike_in_ps_lemma.
+  unfold get_all_varlike_from_ps, map_from_ps.
+  destruct p as [h s c t]. simpl in *.
+  rewrite map_pair_split.
+  apply (@ptree_of_list_lemma_generic Header CrVarLike_Header).
+  - destruct Hwf as [Hwfh _]. assumption.
+  - assumption.
+Qed.
+
+Lemma in_program_implies_in_init_sym_state :
+  forall p (v : State),
+    well_formed_program p ->
+    In v (get_states_from_prog p) ->
+    is_varlike_in_ps (init_symbolic_state p) v <> None.
+Proof.
+  intros p v Hwf Hin.
+  apply is_varlike_in_ps_lemma.
+  unfold get_all_varlike_from_ps, map_from_ps.
+  destruct p as [h s c t]. simpl in *.
+  rewrite map_pair_split.
+  apply (@ptree_of_list_lemma_generic State CrVarLike_State).
+  - destruct Hwf as [_ [Hwfs _]]. assumption.
+  - assumption.
+Qed.
+Global Opaque get_all_varlike_from_ps.
+Global Opaque map_from_ps.
+
+Lemma stronger_equivalence_checker_cr_sound :
+  forall p1 p2 c_init,
+  well_formed_program p1 ->
+  well_formed_program p2 ->
+  equivalence_checker_cr_dsl p1 p2 = Equivalent ->
+  concrete_state_is_valid p1 c_init ->
+  let c1_f := eval_transformer_concrete (get_transformer_from_prog p1) c_init in
+  let c2_f := eval_transformer_concrete (get_transformer_from_prog p2) c_init in
+  (forall v, In v (get_headers_from_prog p1) ->
+  (lookup_varlike c1_f v) = (lookup_varlike c2_f v)) /\
+  (forall v, In v (get_states_from_prog p1) ->
+  (lookup_varlike c1_f v) = (lookup_varlike c2_f v)).
+Proof.
+  intros p1 p2 c_init Hwf1 Hwf2 Heq' Hvalid1 c1_f c2_f.
+  pose proof Hwf1 as Hwf1_orig.
+  pose proof (valid_states_realizable p1 c_init Hwf1 Hvalid1) as
+    [f [Hvsr1_hdrs [Hvsr1_states Hvsr1_ctrls]]].
+  unfold equivalence_checker_cr_dsl in Heq'.
+  destruct p1 as [h1 s1 c1 t1] eqn:desp1,
+           p2 as [h2 s2 c2 t2] eqn:desp2.
+  unfold c1_f, c2_f. simpl.
+  rewrite <- desp1 in *. rewrite <- desp2 in *.
+  destruct (varlike_list_equal h1 h2),
+           (varlike_list_equal s1 s2),
+           (varlike_list_equal c1 c2); try congruence.
+  destruct (equivalence_checker (init_symbolic_state p1) t1 t2 h1 s1) eqn:Heq; try congruence.
+  clear Heq'.
+  unfold equivalence_checker in Heq.
+  apply smt_query_sound_none with (v' := f) in Heq.
+  apply check_headers_and_state_vars_false in Heq.
+  destruct Heq as [Hheq Hseq].
+  assert (Hbridge : forall (h : Header) (s : State) (c : Ctrl),
+    lookup_varlike c_init h = lookup_varlike (eval_sym_state (init_symbolic_state p1) f) h /\
+    lookup_varlike c_init s = lookup_varlike (eval_sym_state (init_symbolic_state p1) f) s /\
+    lookup_varlike c_init c = lookup_varlike (eval_sym_state (init_symbolic_state p1) f) c).
+  { intros h s c. split; [| split].
+    - rewrite (Hvsr1_hdrs h). reflexivity.
+    - rewrite (Hvsr1_states s). reflexivity.
+    - rewrite (Hvsr1_ctrls c). reflexivity. }
+  pose proof (transformer_preserves_lookup_equality_lemma t1 _ _ Hbridge) as Hbridge_t1.
+  pose proof (transformer_preserves_lookup_equality_lemma t2 _ _ Hbridge) as Hbridge_t2.
+  split; intros v Hv.
+  - (* Headers case *)
+    specialize (Hheq v Hv).
+    apply smt_bool_eq_true in Hheq.
+    repeat rewrite commute_conc_and_lookup in Hheq.
+    assert (Hin_ps : is_varlike_in_ps (init_symbolic_state p1) v <> None).
+    { apply in_program_implies_in_init_sym_header with (p := p1).
+      - exact Hwf1_orig.
+      - rewrite desp1. simpl. exact Hv. }
+    rewrite <- commute_sym_vs_conc_transformer_header_map
+      with (t := t1) (f := f) (s1 := init_symbolic_state p1) (h := v) in Hheq;
+      try assumption.
+    rewrite <- commute_sym_vs_conc_transformer_header_map
+      with (t := t2) (f := f) (s1 := init_symbolic_state p1) (h := v) in Hheq;
+      try assumption.
+    specialize (Hbridge_t1 v (StateCtr 1) (CtrlCtr 1)) as [Hbt1 _].
+    specialize (Hbridge_t2 v (StateCtr 1) (CtrlCtr 1)) as [Hbt2 _].
+    rewrite Hbt1, Hbt2.
+    assumption.
+  - (* States case *)
+    specialize (Hseq v Hv).
+    apply smt_bool_eq_true in Hseq.
+    repeat rewrite commute_conc_and_lookup in Hseq.
+    assert (Hin_ps : is_varlike_in_ps (init_symbolic_state p1) v <> None).
+    { apply in_program_implies_in_init_sym_state with (p := p1).
+      - exact Hwf1_orig.
+      - rewrite desp1. simpl. exact Hv. }
+    rewrite <- commute_sym_vs_conc_transformer_state_var_map
+      with (t := t1) (f := f) (s1 := init_symbolic_state p1) (sv := v) in Hseq;
+      try assumption.
+    rewrite <- commute_sym_vs_conc_transformer_state_var_map
+      with (t := t2) (f := f) (s1 := init_symbolic_state p1) (sv := v) in Hseq;
+      try assumption.
+    specialize (Hbridge_t1 (HeaderCtr 1) v (CtrlCtr 1)) as [_ [Hbt1 _]].
+    specialize (Hbridge_t2 (HeaderCtr 1) v (CtrlCtr 1)) as [_ [Hbt2 _]].
+    rewrite Hbt1, Hbt2.
+    assumption.
+Qed.
