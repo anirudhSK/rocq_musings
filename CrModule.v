@@ -260,6 +260,17 @@ Definition inject_headers {T : Type} (packet : PMap.t T) (local : ProgramState T
      header_map := packet;
      state_map  := state_map local |}.
 
+Definition get_sink_states {T : Type}
+  (net : ModuleNetwork)
+  (ledger : PMap.t T)
+  : list T :=
+  List.fold_right
+    (fun m acc =>
+      match ledger ?? (unwrap (get_mod_name m)) with
+      | Some ps => ps :: acc
+      | None => acc
+      end) [] (sink_modules net).
+
 (* Well-formedness of a GeneralCaracaraProgram requires a well-formed network. *)
 Definition wf_general_program (p : GeneralCaracaraProgram) : Prop :=
   wf_module_network (get_network_from_general p).

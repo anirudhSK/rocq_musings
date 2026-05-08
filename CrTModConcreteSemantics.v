@@ -82,31 +82,12 @@ Definition eval_general_program_concrete
   let fuel := List.length mods in
   eval_general_program_concrete' p module_states fuel.
 
-(* Query the post-states of every sink module from the ledger.
-   Sinks are returned in [sink_modules] order (PTree-key order on
-   the underlying module PMap). Modules with no ledger entry are
-   silently skipped (this should not happen for sinks reachable from
-   [start_module] under the no_fan_in / DAG assumption). *)
-Definition get_sink_states
-  (net    : ModuleNetwork)
-  (ledger : PMap.t ConcreteState)
-  : list ConcreteState :=
-  List.fold_right
-    (fun m acc =>
-      match ledger ?? (unwrap (get_mod_name m)) with
-      | Some ps => ps :: acc
-      | None    => acc
-      end)
-    []
-    (sink_modules net).
-
-(* Convenience: combine evaluation and sink extraction. *)
 Definition eval_general_program_concrete_sinks
-  (p             : GeneralCaracaraProgram)
+  (p : GeneralCaracaraProgram)
   (module_states : PMap.t ConcreteState)
-  : option (list ConcreteState * PMap.t ConcreteState) :=
+  : option (list ConcreteState) :=
   match eval_general_program_concrete p module_states with
   | None        => None
   | Some ledger =>
-      Some (get_sink_states (get_network_from_general p) ledger, ledger)
+      Some (get_sink_states (get_network_from_general p) ledger)
   end.
