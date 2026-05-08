@@ -75,3 +75,13 @@ Definition eval_general_program_symbolic
   let mods := all_modules (get_network_from_general p) in
   let fuel := List.length mods in
   eval_general_program_symbolic' p module_states fuel.
+
+Definition eval_general_program_symbolic_sinks
+  (p : GeneralCaracaraProgram)
+  (module_states: PMap.t SymbolicState)
+  : option (list SymbolicState) :=
+  match eval_general_program_symbolic p module_states with
+  | None => None
+  | Some ledger =>
+      Some (get_sink_states (get_network_from_general p) ledger)
+  end.
