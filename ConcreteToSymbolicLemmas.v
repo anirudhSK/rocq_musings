@@ -87,8 +87,6 @@ Proof.
   unfold eval_sym_state. rewrite commute_lookup_varlike. reflexivity.
 Qed.
 
-(* (Removed duplicate placeholder lemma; the original commute_conc_and_lookup above is the real one.) *)
-
 (* For any Header, uint8 pair,
    concrete and symbolic execution match up. *)
 Transparent lookup_varlike.

@@ -1,10 +1,3 @@
-(* Properties of [eval_transformer_concrete] and friends.
-
-   The headline result here is [eval_transformer_concrete_preserves_eq]:
-   if two concrete states agree on every program variable (header / state /
-   ctrl) lookup, then they continue to agree on every program-variable lookup
-   after applying the same transformer to both. *)
-
 From MyProject Require Import CrIdentifiers.
 From MyProject Require Import CrVal.
 From MyProject Require Import CrTransformer.

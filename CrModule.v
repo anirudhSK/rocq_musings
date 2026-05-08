@@ -35,12 +35,7 @@ Definition get_conn_name (c : Connection) : ConnectionName :=
 (* A ModuleNetwork is a directed graph of CrModules connected by typed edges
    (Connections).  Each module occupies one slot in net_modules, keyed by the
    positive integer wrapped inside its ModuleName.  Each connection occupies
-   one slot in net_connections, keyed by its ConnectionName's id.
-
-   Presence is checked via ?? (PTree access, returns option); the PMap
-   default is a dummy value that is never semantically meaningful.
-   max_mod_id and max_conn_id track the highest key ever allocated so that
-   new insertions can pick a fresh key without scanning the whole map. *)
+   one slot in net_connections, keyed by its ConnectionName's id. *)
 Record ModuleNetwork : Type := mkModuleNetwork {
   net_modules     : PMap.t CrModule;
   net_connections : PMap.t Connection;
@@ -54,8 +49,6 @@ Definition lookup_module (net : ModuleNetwork) (name : ModuleName)
   (net_modules net) ?? (unwrap name).
 
 (* ------------------------------------------------------------------ *)
-(* 5b. PMap iteration helpers                                         *)
-(* ------------------------------------------------------------------ *)
 
 Definition listify_map {T : Type} (m : PMap.t T) : list T :=
   List.map snd (PTree.elements (snd m)).
@@ -68,8 +61,6 @@ Definition all_modules (net : ModuleNetwork) : list CrModule :=
 Definition all_connections (net : ModuleNetwork) : list Connection :=
   listify_map (net_connections net).
 
-(* ------------------------------------------------------------------ *)
-(* 6.  Connection traversal                                           *)
 (* ------------------------------------------------------------------ *)
 
 Definition outgoing_connections (net : ModuleNetwork) (src : ModuleName)
@@ -91,8 +82,6 @@ Definition downstream_modules (net : ModuleNetwork) (src : ModuleName)
   map get_conn_dst (outgoing_connections net src).
 
 (* ------------------------------------------------------------------ *)
-(* 7b. Reachability and DAG check                                     *)
-(* ------------------------------------------------------------------ *)
 
 (* `reachable net src dst` holds when dst is reachable from src by
    following one or more connections forward through the network. *)
@@ -105,21 +94,14 @@ Inductive reachable (net : ModuleNetwork) : ModuleName -> ModuleName -> Prop :=
   reachable net mid dst ->
   reachable net src dst.
 
-(* A network is a DAG when no module can reach itself. *)
 Definition is_dag (net : ModuleNetwork) : Prop :=
   forall m, ~ reachable net m m.
 
-(* A network has no fan-in when every module has at most one upstream
-   neighbour. Combined with is_dag, this guarantees that any traversal
-   reaches each reachable module exactly once (no shared descendants). *)
 Definition no_fan_in (net : ModuleNetwork) : Prop :=
   forall m, List.length (upstream_modules net m) <= 1.
 
 (* ------------------------------------------------------------------ *)
-(* 8.  Module classification                                          *)
-(* ------------------------------------------------------------------ *)
 
-(* Decide whether a module is a parser or transformer. *)
 Definition is_parser_module (m : CrModule) : bool :=
   match m with
   | ParserModule _ _ => true
@@ -132,26 +114,20 @@ Definition is_transformer_module (m : CrModule) : bool :=
   | TransformerModule _ _ _ _ => true
   end.
 
-(* Collect all parser modules in a network. *)
 Definition parser_modules (net : ModuleNetwork) : list CrModule :=
   filter is_parser_module (all_modules net).
 
-(* Collect all transformer modules in a network. *)
 Definition transformer_modules (net : ModuleNetwork) : list CrModule :=
   filter is_transformer_module (all_modules net).
 
 (* ------------------------------------------------------------------ *)
-(* 9.  Source / sink identification                                   *)
-(* ------------------------------------------------------------------ *)
 
-(* A source module has no incoming connections (packet entry point). *)
 Definition is_source (net : ModuleNetwork) (m : CrModule) : bool :=
   match incoming_connections net (get_mod_name m) with
   | [] => true
   | _  => false
   end.
 
-(* A sink module has no outgoing connections (packet exit point). *)
 Definition is_sink (net : ModuleNetwork) (m : CrModule) : bool :=
   match outgoing_connections net (get_mod_name m) with
   | [] => true
@@ -164,8 +140,6 @@ Definition source_modules (net : ModuleNetwork) : list CrModule :=
 Definition sink_modules (net : ModuleNetwork) : list CrModule :=
   filter (is_sink net) (all_modules net).
 
-(* ------------------------------------------------------------------ *)
-(* 7.  Well-formedness                                                *)
 (* ------------------------------------------------------------------ *)
 
 (* Every module is stored at the key matching its name UID. *)
@@ -213,14 +187,7 @@ Definition wf_module_network (net : ModuleNetwork) : Prop :=
   is_dag net.
 
 (* ------------------------------------------------------------------ *)
-(* 10. GeneralCaracaraProgram                                         *)
-(* ------------------------------------------------------------------ *)
 
-(* Generalises CaracaraProgramDef (which holds a single Transformer) to a
-   full ModuleNetwork, fulfilling the TODO in CrDsl.v.
-
-   Headers and States are declared globally; the network captures all
-   parsing and transformation logic as an explicit module graph. *)
 Inductive GeneralCaracaraProgram : Type :=
   | GeneralCaracaraProgramDef :
       list Header ->
@@ -274,9 +241,8 @@ Definition get_sink_states {T : Type}
 (* Well-formedness of a GeneralCaracaraProgram requires a well-formed network. *)
 Definition wf_general_program (p : GeneralCaracaraProgram) : Prop :=
   wf_module_network (get_network_from_general p).
+  (* may need more specification *)
 
-(* ------------------------------------------------------------------ *)
-(* 11. Embedding the original CaracaraProgram                         *)
 (* ------------------------------------------------------------------ *)
 
 Definition add_program_to_network (net : ModuleNetwork) (p : CaracaraProgram) : ModuleNetwork * ModuleName :=
