@@ -121,7 +121,7 @@ Definition eval_seq_rule_smt (srule : SeqRule) (ps : SymbolicState) : (SymbolicS
 Definition eval_par_rule_smt (prule : ParRule) (ps : SymbolicState) : (SymbolicState) :=
   match prule with
   | ParCtr match_pattern action =>
-        (* First evaluate the match pattern AND guard by themselves against the original state ps *)
+        (* First evaluate the match pattern by itself against the original state ps *)
         let condition := eval_match_smt match_pattern ps in
 
         (* Second, evaluate all the hdr_ops contained in the action to get a new intermediate state ps' from ps *)

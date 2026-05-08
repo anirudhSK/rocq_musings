@@ -45,7 +45,6 @@ Inductive HdrOp :=
    where patterns are uint8 and headers contain uint8 values,
    hence both can be compared. TODO: Need to handle wildcards. *)
 (* TODO: Explicit notion of default/fallback path *)
-(* TODO: fold guard into notion of match pattern with header cmp and bit pattern *)
 Inductive MatchValue :=
 | MatchConst (k : CrInt_T)
 | MatchHeader (h : Header).

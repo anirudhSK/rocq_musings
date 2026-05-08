@@ -17,12 +17,6 @@ Definition eval_module_concrete (m : CrModule) (ps : ConcreteState)
   | ParserModule _ _ => None
   end.
 
-(* Evaluate the network starting at [start], threading a single per-module
-   state ledger through the recursion. Caller is expected to provide a
-   network that is a tree (or, more generally, has no fan-in: see
-   [no_fan_in] in CrModule.v). Under that assumption every reachable
-   module is visited exactly once and the ledger contains the post-state
-   of every visited module on completion. *)
 Fixpoint eval_network_from_concrete
     (net           : ModuleNetwork)
     (start         : ModuleName)

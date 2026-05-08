@@ -809,3 +809,23 @@ Proof.
     rewrite Hbt1, Hbt2.
     assumption.
 Qed.
+
+(* Definition keys_from_map {T A : Type} (fn : positive -> A) (m : PMap.t T) : list A :=
+  List.map fn (List.map fst (PTree.elements (snd m))).
+
+Definition modnet_equivalence_checker
+  (p1 : GeneralCaracaraProgram) (p2 : GeneralCaracaraProgram)
+  : EquivalenceResult :=
+  let sym1_opt := eval_general_program_symbolic_sinks p1 (init_general_symbolic_state "p1" p1) in
+  let sym2_opt := eval_general_program_symbolic_sinks p2 (init_general_symbolic_state "p2" p2) in
+  match sym1_opt, sym2_opt with
+  | Some [sym1], Some [sym2] => (* assume one sink *)
+    let h_map : PMap.t SmtArithExpr := (header_map sym1) in
+    let header_ids : list Header := keys_from_map HeaderCtr h_map in
+    match smt_query (check_headers_and_state_vars sym1 sym2 header_ids []) with
+    | SmtUnsat => Equivalent
+    | SmtSat f => NotEquivalent f
+    | SmtUnknown => NotEquivalentUnknown
+    end
+  | _, _ => NotEquivalentVariablesDiffer
+  end. *)
