@@ -1,14 +1,10 @@
 From MyProject Require Import CrTransformer.
 From MyProject Require Import CrIdentifiers.
-From MyProject Require Import CrVal.
 From MyProject Require Import CrVarLike.
 From MyProject Require Import CrProgramState.
 From MyProject Require Import SmtExpr.
 From MyProject Require Import SmtTypes.
-From Stdlib Require Import ZArith.
-From Stdlib Require Import Strings.String.
 From Stdlib Require Import List.
-From Stdlib Require Import Lists.List.
 Import ListNotations.
 
 (* Convert FunctionArgument to SmtArithExpr *)

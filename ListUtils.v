@@ -1,8 +1,5 @@
 From Stdlib Require Import Lists.List.
-From Stdlib Require Import Arith.EqNat.
-From Stdlib Require Import Arith.PeanoNat.
 Import ListNotations.
-From Stdlib Require Import Logic.Classical_Prop.
 From Stdlib Require Import FunctionalExtensionality.
 From Stdlib Require Import Strings.String.
 Open Scope string_scope.

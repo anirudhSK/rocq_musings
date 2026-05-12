@@ -1,7 +1,5 @@
 (* Write out semantics for bitvectors in SMT,
 show that a single hdr_op evaluation can be converted to the appropriate SMT formula in Z3 *)
-From MyProject Require Import CrIdentifiers.
-From MyProject Require Import MyInts.
 From MyProject Require Import SmtTypes.
 From MyProject Require Import CrVal.
 From Stdlib.Strings Require Import String.

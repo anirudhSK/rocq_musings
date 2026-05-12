@@ -1,10 +1,6 @@
 From MyProject Require Import SmtExpr.
-From MyProject Require Import CrSymbolicSemanticsTransformer.
-From MyProject Require Import CrConcreteSemanticsTransformer.
 From MyProject Require Import CrIdentifiers.
 From MyProject Require Import CrVarLike.
-From MyProject Require Import CrProgramState.
-From MyProject Require Import MyInts.
 From MyProject Require Import CrVal.
 From Stdlib Require Import Bool.
 From Stdlib Require Import List.

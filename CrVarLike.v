@@ -1,7 +1,4 @@
 From Stdlib Require Import Strings.String.
-From MyProject Require Import Integers.
-From MyProject Require Import MyInts.
-From MyProject Require Import InitStatus.
 From MyProject Require Import CrIdentifiers.
 From MyProject Require Import CrProgramState.
 From MyProject Require Import SmtExpr.

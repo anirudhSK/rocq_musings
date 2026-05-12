@@ -8,17 +8,12 @@ From MyProject Require Import HelperLemmas.
 From MyProject Require Import PMapHelperLemmas.
 From MyProject Require Import CtrlPlaneInvariants.
 From MyProject Require Import CrProgramState.
-From MyProject Require Import MyInts.
 From MyProject Require Import ListUtils.
 From MyProject Require Import SmtTypes.
 From MyProject Require Import CrVal.
-From Stdlib Require Import ZArith.
-From Stdlib Require Import Strings.String.
-Local Open Scope string_scope.
 From Stdlib Require Import Lists.List.
 Import ListNotations.
 From Stdlib Require Import Bool.Bool.
-From Stdlib Require Import FunctionalExtensionality.
 
 (* Simpler lemma with no state update *)
 Global Opaque lookup_varlike.

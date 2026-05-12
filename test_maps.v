@@ -1,6 +1,5 @@
 From MyProject Require Import Maps.
 From Stdlib.Strings Require Import String.
-From Stdlib Require Import PArith.PArith.
 
 (* Check string_dec : forall (x y : string), {x = y} + {x <> y}. *)
 

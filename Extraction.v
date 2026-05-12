@@ -2,9 +2,7 @@ From Stdlib Require Extraction.
 Extraction Language OCaml.
 
 From MyProject Require Import SmtQuery.
-From MyProject Require Import Integers.
 
-From MyProject Require Import CrVal.
 From MyProject Require Import CrMem.
 From MyProject Require Import CrMemEx.
 
