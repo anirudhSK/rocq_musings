@@ -22,9 +22,9 @@ Fixpoint eval_network_from_symbolic
     (net           : ModuleNetwork)
     (start         : ModuleName)
     (packet        : PMap.t SmtArithExpr)
-    (module_states : PMap.t SymbolicState)
+    (module_states : GeneralSymbolicState)
     (fuel          : nat)
-    : option (PMap.t SymbolicState) :=
+    : option (GeneralSymbolicState) :=
   match fuel with
   | O => None
   | S fuel' =>
@@ -58,9 +58,9 @@ Fixpoint eval_network_from_symbolic
 
 Definition eval_general_program_symbolic'
   (p : GeneralCaracaraProgram)
-  (module_states: PMap.t SymbolicState)
+  (module_states: GeneralSymbolicState)
   (fuel : nat)
-  : option (PMap.t SymbolicState) :=
+  : option (GeneralSymbolicState) :=
   let net := get_network_from_general p in
   let start := start_module net in
   match module_states ?? (unwrap start) with
@@ -71,15 +71,15 @@ Definition eval_general_program_symbolic'
 
 Definition eval_general_program_symbolic
   (p : GeneralCaracaraProgram)
-  (module_states: PMap.t SymbolicState)
-  : option (PMap.t SymbolicState) :=
-  let mods := all_modules (get_network_from_general p) in
+  (module_states: GeneralSymbolicState)
+  : option (GeneralSymbolicState) :=
+  let mods := net_modules (get_network_from_general p) in
   let fuel := List.length mods in
   eval_general_program_symbolic' p module_states fuel.
 
 Definition eval_general_program_symbolic_sinks
   (p : GeneralCaracaraProgram)
-  (module_states: PMap.t SymbolicState)
+  (module_states: GeneralSymbolicState)
   : option (list SymbolicState) :=
   match eval_general_program_symbolic p module_states with
   | None => None
@@ -87,5 +87,5 @@ Definition eval_general_program_symbolic_sinks
       Some (get_sink_states (get_network_from_general p) ledger)
   end.
 
-Definition concretize_sym_modnet_state (s: PMap.t SymbolicState) (f : SmtValuation) : PMap.t ConcreteState :=
+Definition concretize_sym_modnet_state (s: GeneralSymbolicState) (f : SmtValuation) : GeneralConcreteState :=
   PMap.map (fun sym_st => eval_sym_state sym_st f) s.

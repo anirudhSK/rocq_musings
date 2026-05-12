@@ -2,10 +2,12 @@ From Stdlib Require Extraction.
 Extraction Language OCaml.
 
 From MyProject Require Import SmtQuery.
+From MyProject Require Import SmtModuleQuery.
 
 From MyProject Require Import CrMem.
 From MyProject Require Import CrMemEx.
 From MyProject Require Import TestPrograms.
+From MyProject Require Import PktClass.
 
 (* Tell extraction to use your external OCaml implementation *)
 Extract Constant smt_query => "Z3Solver.solve".
@@ -21,4 +23,5 @@ Separate Extraction
   CrSymbolicSemanticsTransformer.eval_sym_state
   CrConcreteSemanticsTransformer.eval_cr_program_concrete
   CrVarLike.program_state_mapper CrVarLike.init_concrete_state
-  test_programs.
+  test_programs
+  PktClass.ex_lin_prog PktClass.ex_tss_prog modnet_equivalence_checker.

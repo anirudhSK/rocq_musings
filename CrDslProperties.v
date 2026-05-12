@@ -49,21 +49,11 @@ Definition well_formed_module (m : CrModule) : Prop :=
       Sorted varlike_lt states /\ Sorted varlike_lt ctrls
   end.
 
-Definition module_states (m : CrModule) : list State :=
-  match m with
-  | ParserModule _ _ => []
-  | TransformerModule _ s _ _ => s
-  end.
 Definition all_network_states (net : ModuleNetwork) : list State :=
-  List.flat_map module_states (all_modules net).
+  List.flat_map module_states (net_modules net).
 
-Definition module_ctrls (m : CrModule) : list Ctrl :=
-  match m with
-  | ParserModule _ _ => []
-  | TransformerModule _ _ c _ => c
-  end.
 Definition all_network_ctrls (net : ModuleNetwork) : list Ctrl :=
-  List.flat_map module_ctrls (all_modules net).
+  List.flat_map module_ctrls (net_modules net).
 
 (* extend well-formedness to GeneralCaracaraProgram *)
 (* NOTE: depending on the extent to which sortedness actually matters,
@@ -74,6 +64,6 @@ Definition well_formed_general_program (p : GeneralCaracaraProgram) : Prop :=
   wf_module_network net /\
   Coqlib.list_norepet headers /\
   Sorted varlike_lt headers /\
-  List.Forall well_formed_module (all_modules net) /\
+  List.Forall well_formed_module (net_modules net) /\
   Coqlib.list_norepet (all_network_states net) /\
   Coqlib.list_norepet (all_network_ctrls net).

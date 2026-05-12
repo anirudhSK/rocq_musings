@@ -7,9 +7,11 @@ From MyProject Require Import CrIdentifiers.
 From MyProject Require Import CrParser.
 From MyProject Require Import CrTransformer.
 From MyProject Require Import CrDsl.
+From MyProject Require Import CrVal.
 From MyProject Require Import Maps.
 From MyProject Require Import CrProgramState.
 From MyProject Require Import PosWrapper.
+From MyProject Require Import SmtExpr.
 
 Definition get_mod_name (m : CrModule) : ModuleName :=
   match m with
@@ -32,46 +34,28 @@ Definition get_conn_name (c : Connection) : ConnectionName :=
     ConnectionDef _ _ n => n
   end.
 
-(* A ModuleNetwork is a directed graph of CrModules connected by typed edges
-   (Connections).  Each module occupies one slot in net_modules, keyed by the
-   positive integer wrapped inside its ModuleName.  Each connection occupies
-   one slot in net_connections, keyed by its ConnectionName's id. *)
+(* A ModuleNetwork is a directed graph of CrModules connected by typed edges (Connections). *)
 Record ModuleNetwork : Type := mkModuleNetwork {
-  net_modules     : PMap.t CrModule;
-  net_connections : PMap.t Connection;
+  net_modules     : list CrModule;
+  net_connections : list Connection;
   start_module    : ModuleName;
-  max_mod_id      : N;
-  max_conn_id     : N;
 }.
 
 Definition lookup_module (net : ModuleNetwork) (name : ModuleName)
     : option CrModule :=
-  (net_modules net) ?? (unwrap name).
-
-(* ------------------------------------------------------------------ *)
-
-Definition listify_map {T : Type} (m : PMap.t T) : list T :=
-  List.map snd (PTree.elements (snd m)).
-
-(* Extract all modules from net_modules. *)
-Definition all_modules (net : ModuleNetwork) : list CrModule :=
-  listify_map (net_modules net).
-
-(* Extract all connections from net_connections. *)
-Definition all_connections (net : ModuleNetwork) : list Connection :=
-  listify_map (net_connections net).
+  find (fun m => module_name_equal (get_mod_name m) name) (net_modules net).
 
 (* ------------------------------------------------------------------ *)
 
 Definition outgoing_connections (net : ModuleNetwork) (src : ModuleName)
     : list Connection :=
   filter (fun c => module_name_equal (get_conn_src c) src)
-         (all_connections net).
+         (net_connections net).
 
 Definition incoming_connections (net : ModuleNetwork) (dst : ModuleName)
     : list Connection :=
   filter (fun c => module_name_equal (get_conn_dst c) dst)
-         (all_connections net).
+         (net_connections net).
 
 Definition upstream_modules (net : ModuleNetwork) (dst : ModuleName)
     : list ModuleName :=
@@ -118,10 +102,10 @@ Definition is_transformer_module (m : CrModule) : bool :=
   end.
 
 Definition parser_modules (net : ModuleNetwork) : list CrModule :=
-  filter is_parser_module (all_modules net).
+  filter is_parser_module (net_modules net).
 
 Definition transformer_modules (net : ModuleNetwork) : list CrModule :=
-  filter is_transformer_module (all_modules net).
+  filter is_transformer_module (net_modules net).
 
 (* ------------------------------------------------------------------ *)
 
@@ -138,58 +122,43 @@ Definition is_sink (net : ModuleNetwork) (m : CrModule) : bool :=
   end.
 
 Definition source_modules (net : ModuleNetwork) : list CrModule :=
-  filter (is_source net) (all_modules net).
+  filter (is_source net) (net_modules net).
 
 Definition sink_modules (net : ModuleNetwork) : list CrModule :=
-  filter (is_sink net) (all_modules net).
+  filter (is_sink net) (net_modules net).
 
 Definition single_sink (net : ModuleNetwork) : Prop :=
   List.length (sink_modules net) = 1.
 
 (* ------------------------------------------------------------------ *)
 
-(* Every module is stored at the key matching its name UID. *)
-Definition mod_names_consistent (net : ModuleNetwork) : Prop :=
-  List.Forall (fun '(k, m) =>
-    k = unwrap (get_mod_name m))
-    (PTree.elements (snd (net_modules net))).
+(* Module names are pairwise distinct in net_modules. *)
+Definition mod_names_unique (net : ModuleNetwork) : Prop :=
+  Coqlib.list_norepet (map get_mod_name (net_modules net)).
 
-(* Every endpoint of every connection refers to a known module. *)
+(* Connection names are pairwise distinct in net_connections. *)
+Definition conn_names_unique (net : ModuleNetwork) : Prop :=
+  Coqlib.list_norepet (map get_conn_name (net_connections net)).
+
+(* Every endpoint of every connection refers to a known module, and the
+   designated start module exists in the network. *)
 Definition endpoints_defined (net : ModuleNetwork) : Prop :=
   List.Forall (fun c =>
     match lookup_module net (get_conn_src c),
           lookup_module net (get_conn_dst c) with
     | Some _, Some _ => True
     | _,      _      => False
-    end) (all_connections net) /\
+    end) (net_connections net) /\
     match lookup_module net (start_module net) with
     | Some _ => True
     | None   => False
     end.
 
-(* Predicate: every connection is stored at the key matching its name UID. *)
-Definition conn_names_consistent (net : ModuleNetwork) : Prop :=
-  List.Forall (fun '(k, c) =>
-    k = unwrap (get_conn_name c))
-    (PTree.elements (snd (net_connections net))).
-
-Definition max_mod_is_max (net : ModuleNetwork) : Prop :=
-  forall m,
-    In m (all_modules net) ->
-    N.le (N.pos (unwrap (get_mod_name m))) (max_mod_id net).
-
-Definition max_conn_is_max (net : ModuleNetwork) : Prop :=
-  forall c,
-    In c (all_connections net) ->
-    N.le (N.pos (unwrap (get_conn_name c))) (max_conn_id net).
-
 (* A well-formed ModuleNetwork satisfies all conditions. *)
 Definition wf_module_network (net : ModuleNetwork) : Prop :=
-  mod_names_consistent net /\
+  mod_names_unique net /\
+  conn_names_unique net /\
   endpoints_defined net /\
-  conn_names_consistent net /\
-  max_mod_is_max net /\
-  max_conn_is_max net /\
   is_dag net.
 
 (* ------------------------------------------------------------------ *)
@@ -198,31 +167,42 @@ Inductive GeneralCaracaraProgram : Type :=
   | GeneralCaracaraProgramDef :
       list Header ->
       ModuleNetwork ->
+      list Header ->
       GeneralCaracaraProgram.
 
 Definition get_headers_from_general (p : GeneralCaracaraProgram) : list Header :=
-  match p with GeneralCaracaraProgramDef h _ => h end.
+  match p with GeneralCaracaraProgramDef h _ _ => h end.
 
 Definition get_network_from_general (p : GeneralCaracaraProgram) : ModuleNetwork :=
-  match p with GeneralCaracaraProgramDef _ net => net end.
+  match p with GeneralCaracaraProgramDef _ net _ => net end.
 
+Definition get_signature_from_general (p : GeneralCaracaraProgram) : list Header :=
+  match p with GeneralCaracaraProgramDef _ _ sig => sig end.
+
+Definition module_states (m : CrModule) : list State :=
+  match m with
+  | ParserModule _ _ => []
+  | TransformerModule _ s _ _ => s
+  end.
 Definition get_states_from_general (p : GeneralCaracaraProgram) (m : ModuleName) : option (list State) :=
-  let modnet := get_network_from_general p in
-  match (net_modules modnet) ?? (unwrap m) with
-  | Some (TransformerModule _ states _ _) => Some states
+  match lookup_module (get_network_from_general p) m with
+  | Some m' => Some (module_states m')
   | _ => None
   end.
 
+Definition module_ctrls (m : CrModule) : list Ctrl :=
+  match m with
+  | ParserModule _ _ => []
+  | TransformerModule _ _ c _ => c
+  end.
 Definition get_ctrls_from_general (p : GeneralCaracaraProgram) (m : ModuleName) : option (list Ctrl) :=
-  let modnet := get_network_from_general p in
-  match (net_modules modnet) ?? (unwrap m) with
-  | Some (TransformerModule _ _ ctrls _) => Some ctrls
+  match lookup_module (get_network_from_general p) m with
+  | Some m' => Some (module_ctrls m')
   | _ => None
   end.
 
 Definition get_transformer_from_general (p : GeneralCaracaraProgram) (m : ModuleName) : option Transformer :=
-  let modnet := get_network_from_general p in
-  match (net_modules modnet) ?? (unwrap m) with
+  match lookup_module (get_network_from_general p) m with
   | Some (TransformerModule _ _ _ t) => Some t
   | _ => None
   end.
@@ -232,6 +212,10 @@ Definition inject_headers {T : Type} (packet : PMap.t T) (local : ProgramState T
   {| ctrl_map   := ctrl_map local;
      header_map := packet;
      state_map  := state_map local |}.
+
+Definition GeneralProgramState (T : Type) : Type := PMap.t (ProgramState T).
+Definition GeneralConcreteState : Type := GeneralProgramState CrVal.
+Definition GeneralSymbolicState : Type := GeneralProgramState SmtArithExpr.
 
 Definition get_sink_states {T : Type}
   (net : ModuleNetwork)
@@ -246,59 +230,50 @@ Definition get_sink_states {T : Type}
 
 (* ------------------------------------------------------------------ *)
 
+(* Largest module-name uid currently used in the network, or 0 if empty.
+   Used to allocate fresh ids when extending the network. *)
+Definition max_mod_uid (net : ModuleNetwork) : positive :=
+  List.fold_left
+    (fun acc m => Pos.max acc (unwrap (get_mod_name m)))
+    (net_modules net) 1%positive.
+
+Definition max_conn_uid (net : ModuleNetwork) : positive :=
+  List.fold_left
+    (fun acc c => Pos.max acc (unwrap (get_conn_name c)))
+    (net_connections net) 1%positive.
+
 Definition add_program_to_network (net : ModuleNetwork) (p : CaracaraProgram) : ModuleNetwork * ModuleName :=
-  let max_mod_id' := N.succ (max_mod_id net) in
-  let mod_id := Z.to_pos (Z.of_N max_mod_id') in
+  let new_id := Pos.succ (max_mod_uid net) in
   let tm := TransformerModule
-    (wrap mod_id)
+    (wrap new_id)
     (get_states_from_prog p)
     (get_ctrls_from_prog p)
     (get_transformer_from_prog p) in
-  let net_modules' := PMap.set mod_id tm (net_modules net) in
   ({|
-    net_modules := net_modules';
-    max_mod_id := max_mod_id';
-    (* * * * *)
+    net_modules     := net_modules net ++ [tm];
     net_connections := net_connections net;
-    start_module := start_module net;
-    max_conn_id := max_conn_id net;
-  |}, wrap mod_id).
+    start_module    := start_module net;
+  |}, wrap new_id).
 
 Definition add_connection_to_network (net : ModuleNetwork) (from to : ModuleName) : ModuleNetwork :=
-  let max_conn_id' := N.succ (max_conn_id net) in
-  let conn_id := Z.to_pos (Z.of_N max_conn_id') in
-  let c := ConnectionDef from to (wrap conn_id) in
-  let net_connections' := PMap.set conn_id c (net_connections net) in
+  let new_id := Pos.succ (max_conn_uid net) in
+  let c := ConnectionDef from to (wrap new_id) in
   {|
-    net_connections := net_connections';
-    max_conn_id := max_conn_id';
-    (* * * * *)
-    net_modules := net_modules net;
-    start_module := start_module net;
-    max_mod_id := max_mod_id net;
+    net_modules     := net_modules net;
+    net_connections := net_connections net ++ [c];
+    start_module    := start_module net;
   |}.
 
 Definition set_start_module (net : ModuleNetwork) (m : ModuleName) : ModuleNetwork :=
   {|
-    start_module := m;
-    (* * * * *)
-    net_modules := net_modules net;
+    net_modules     := net_modules net;
     net_connections := net_connections net;
-    max_mod_id := max_mod_id net;
-    max_conn_id := max_conn_id net;
+    start_module    := m;
   |}.
 
-Definition init_general_from_net (net : ModuleNetwork) : GeneralCaracaraProgram :=
-  GeneralCaracaraProgramDef [] net.
-
-(* Dummy values used only as PMap defaults; never semantically accessed. *)
-Definition dummy_module : CrModule :=
-  TransformerModule (ModuleNameCtr 1) [] [] [].
-Definition dummy_connection : Connection :=
-  ConnectionDef (ModuleNameCtr 1) (ModuleNameCtr 1) (ConnectionNameCtr 1).
-
 Definition empty_net : ModuleNetwork :=
-  mkModuleNetwork
-    (PMap.init dummy_module)
-    (PMap.init dummy_connection)
-    (ModuleNameCtr 1) 0%N 0%N.
+  {|
+    net_modules     := [];
+    net_connections := [];
+    start_module    := ModuleNameCtr 1;
+  |}.

@@ -13,6 +13,9 @@ From MyProject Require Import PosWrapper.
 
 From Stdlib Require Import ZArith.
 From Stdlib Require Import List.
+From Stdlib Require Import Sorting.Mergesort.
+From Stdlib Require Import Sorting.Permutation.
+From Stdlib Require Import Orders.
 Import ListNotations.
 
 (*
@@ -56,8 +59,28 @@ Definition FlattenFilter (f : PacketFilter) : MatchPattern :=
 Definition filter_ltb (f1 f2 : PacketFilter) :=
   Pos.ltb (priority f1) (priority f2).
 Definition FilterDatabase := list (PacketFilter * Label).
+
+(* Order on (PacketFilter * Label) by ascending [priority] of the filter.
+   Exposed as a [TotalLeBool] so we can plug it into [Sorting.Mergesort],
+   which provides a verified O(n log n) stable sort. *)
+Module FilterPriOrder <: TotalLeBool.
+  Definition t := (PacketFilter * Label)%type.
+  Definition leb (x y : t) : bool :=
+    Pos.leb (priority (fst x)) (priority (fst y)).
+  Theorem leb_total : forall x y, leb x y = true \/ leb y x = true.
+  Proof.
+    intros [f1 l1] [f2 l2]; unfold leb; simpl.
+    destruct (Pos.leb_spec (priority f1) (priority f2)) as [H|H];
+      [ left; reflexivity | right ].
+    apply Pos.leb_le; apply Pos.lt_le_incl; exact H.
+  Qed.
+End FilterPriOrder.
+
+Module FilterSort := Sort FilterPriOrder.
+
+(* Stable mergesort of a FilterDatabase in ascending order of [priority]. *)
 Definition sort_db (db : FilterDatabase) : FilterDatabase :=
-  db. (* TODO *)
+  FilterSort.sort db.
 
 Definition PacketHeader := PMap.t CrVal.
 Definition Classifier :=
@@ -65,31 +88,116 @@ Definition Classifier :=
 
 Definition Interpretation := ConcreteState -> option Label.
 
-Fixpoint lindb_helper (db : FilterDatabase) (p : CaracaraProgram) : CaracaraProgram :=
+(* The output label is written to (HeaderCtr 1).  A StatelessOp targets a
+   Header (StatefulOp targets a State), so each rule uses StatelessOp. *)
+(* ------------------------------------------------------------------ *)
+(*  Collect the input Headers read by a FilterDatabase.  These become   *)
+(*  the input-header list of the resulting GeneralCaracaraProgram --    *)
+(*  i.e. the program's "parameters".                                     *)
+(* ------------------------------------------------------------------ *)
+
+Definition header_eqb (h1 h2 : Header) : bool :=
+  match h1, h2 with HeaderCtr a, HeaderCtr b => Pos.eqb a b end.
+
+(* Headers mentioned in one MatchPattern: every left-hand h, plus the rhs
+   header when the comparand is MatchHeader. *)
+Definition headers_in_mp (mp : MatchPattern) : list Header :=
+  List.flat_map
+    (fun '(h1, _, mv) =>
+      match mv with
+      | MatchHeader h2 => [h1; h2]
+      | MatchConst _   => [h1]
+      end)
+    mp.
+
+Definition headers_in_filter (f : PacketFilter) : list Header :=
+  headers_in_mp (src_ip f) ++
+  headers_in_mp (dst_ip f) ++
+  headers_in_mp (src_port f) ++
+  headers_in_mp (dst_port f) ++
+  headers_in_mp (protocol f).
+
+(* Stable de-duplication: keep the first occurrence of each Header. *)
+Definition dedup_headers (hs : list Header) : list Header :=
+  List.fold_right
+    (fun h acc => if existsb (header_eqb h) acc then acc else h :: acc)
+    [] hs.
+
+(* Every Header read anywhere in the database, in first-appearance order. *)
+Definition headers_in_db (db : FilterDatabase) : list Header :=
+  dedup_headers (List.flat_map (fun '(f, _) => headers_in_filter f) db).
+
+(* ------------------------------------------------------------------ *)
+(*  Compute h_base / h_out dynamically: pick Header uids strictly greater *)
+(*  than every Header uid mentioned in any MatchPattern of [db].  This    *)
+(*  guarantees the (label, priority) header pairs written by              *)
+(*  make_table_transformer (and the linear-program output) never collide  *)
+(*  with the headers tested by the filter match patterns.                  *)
+(* ------------------------------------------------------------------ *)
+
+Definition max_pos (a b : positive) : positive :=
+  if Pos.ltb a b then b else a.
+
+Definition max_header_in_mp (mp : MatchPattern) : positive :=
+  List.fold_left
+    (fun acc '(h1, _, h2) =>
+      let x := match h1 with HeaderCtr p => max_pos acc p end in
+      match h2 with
+      | MatchHeader (HeaderCtr h2') => max_pos x h2'
+      | _ => x
+      end)
+    mp 1%positive.
+
+Definition max_header_in_filter (f : PacketFilter) : positive :=
+  max_pos (max_header_in_mp (src_ip f))
+  (max_pos (max_header_in_mp (dst_ip f))
+  (max_pos (max_header_in_mp (src_port f))
+  (max_pos (max_header_in_mp (dst_port f))
+           (max_header_in_mp (protocol f))))).
+
+Definition max_header_in_db (db : FilterDatabase) : positive :=
+  List.fold_left
+    (fun acc '(f, _) => max_pos acc (max_header_in_filter f))
+    db 1%positive.
+
+(* Output label is written to h_out.  We also reserve (h_out + 1) as the
+   accumulator-priority slot used by the tss_db merger.  Table label/priority
+   pairs then start at h_base = h_out + 2. *)
+Definition compute_h_out (db : FilterDatabase) : Header :=
+  HeaderCtr ((max_header_in_db db) + 1).
+
+Definition compute_h_base (db : FilterDatabase) : Header :=
+  HeaderCtr ((max_header_in_db db) + 3).
+
+(* ------------------------------------------------------------------ *)
+
+Fixpoint lindb_helper (h_out : Header) (db : FilterDatabase) (p : CaracaraProgram) : CaracaraProgram :=
   match db with
   | [] => p
   | (f, lbl) :: rest =>
       let mp := FlattenFilter f in
-      let new_rule := Seq (SeqCtr mp [StatefulOp AddOp (ConstantArg (CrUInt8 lbl)) (ConstantArg (CrUInt8 (repr 0))) (StateCtr 1)]) in
+      let new_rule := Seq (SeqCtr mp [StatelessOp AddOp (ConstantArg (CrUInt8 lbl)) (ConstantArg (CrUInt8 (repr 0))) h_out]) in
       let t := get_transformer_from_prog p in
       let new_transformer := new_rule :: t in
-      let new_prog := CaracaraProgramDef [] [StateCtr 1] [] new_transformer in
-      lindb_helper rest new_prog
+      let new_prog := CaracaraProgramDef [h_out] [] [] new_transformer in
+      lindb_helper h_out rest new_prog
   end.
 Definition linear_db (db : FilterDatabase) : GeneralCaracaraProgram :=
+  let h_out := compute_h_out db in
   let db' := sort_db db in
-  let prog := lindb_helper db' (CaracaraProgramDef [] [] [] []) in
+  let prog := lindb_helper h_out db' (CaracaraProgramDef [] [] [] []) in
   let t := get_transformer_from_prog prog in
   let t' := List.rev t in
-  let p := CaracaraProgramDef [] [] [] t' in
+  let p := CaracaraProgramDef [h_out] [] [] t' in
   let net := empty_net in
   let (net, start_id) := add_program_to_network net p in
   let net := set_start_module net start_id in (* technically unnecessary but here for readability or in case empty_net changes *)
-  init_general_from_net net.
+  GeneralCaracaraProgramDef (headers_in_db db) net [h_out].
 
-(* The program output is state 1. That is, we want equivalence over state 1. *)
+(* The program output is (HeaderCtr 1).  That is, we want equivalence over
+   (HeaderCtr 1). *)
 Definition interp (ps : ConcreteState) : option Label :=
-  match (state_map ps) !! 1 with
+  match (header_map ps) !! 1 with
   | IntVal n => match n with
     | CrUInt8 lbl => Some lbl
     | _ => None
@@ -148,38 +256,9 @@ Definition make_table_transformer (table : FilterDatabase) (h_body : Header): Tr
         (incr h_body)])
   ) sorted.
 
-(* Compute h_base dynamically: pick the smallest Header uid that is strictly
-   greater than every Header uid mentioned in any MatchPattern of [db]. This
-   ensures the (label, priority) header pairs written by make_table_transformer
-   never collide with the headers tested by the filter match patterns. *)
-Definition max_pos (a b : positive) : positive :=
-  if Pos.ltb a b then b else a.
-
-Definition max_header_in_mp (mp : MatchPattern) : positive :=
-  List.fold_left
-    (fun acc '(h1, _, h2) =>
-      let x := match h1 with HeaderCtr p => max_pos acc p end in
-      match h2 with
-      | MatchHeader (HeaderCtr h2') => max_pos x h2'
-      | _ => xH
-      end)
-    mp 1%positive.
-
-Definition max_header_in_filter (f : PacketFilter) : positive :=
-  max_pos (max_header_in_mp (src_ip f))
-  (max_pos (max_header_in_mp (dst_ip f))
-  (max_pos (max_header_in_mp (src_port f))
-  (max_pos (max_header_in_mp (dst_port f))
-           (max_header_in_mp (protocol f))))).
-
-Definition max_header_in_db (db : FilterDatabase) : positive :=
-  List.fold_left
-    (fun acc '(f, _) => max_pos acc (max_header_in_filter f))
-    db 1%positive.
-
-Definition compute_h_base (db : FilterDatabase) : Header :=
-  HeaderCtr ((max_header_in_db db) + 1).
-
+(* One merger rule: if (incr acc_base) < (incr filter_base) (i.e. the current
+   best priority is below this table's priority), overwrite acc_base / (incr
+   acc_base) with that table's (label, priority). *)
 Definition check_match (acc_base : Header) (filter_base : Header) : Transformer :=
   [Seq (SeqCtr
     [((incr acc_base), CmpLt, MatchHeader (incr filter_base))]
@@ -195,7 +274,40 @@ Definition check_match (acc_base : Header) (filter_base : Header) : Transformer 
       (incr acc_base)
     ])].
 
+(* The set of (label, priority) header pairs that each table writes into.
+   Table i (0-indexed) writes its best match at (h_base + 2i, h_base + 2i + 1).
+   table_offsets returns the list of label-slot Headers, one per table, in the
+   same order tss_db chains the tables. *)
+Fixpoint table_offsets (h_base : Header) (n : nat) : list Header :=
+  match n with
+  | O    => []
+  | S n' => h_base :: table_offsets (incr (incr h_base)) n'
+  end.
+
+(* Append one merger transformer per offset to [net], chaining them after
+   [prev_opt].  Returns (net, last_module_opt). *)
+Fixpoint add_mergers
+    (h_out : Header)
+    (net : ModuleNetwork)
+    (prev_opt : option ModuleName)
+    (offsets : list Header)
+    : ModuleNetwork * option ModuleName :=
+  match offsets with
+  | []       => (net, prev_opt)
+  | h_off :: rest =>
+    let t := check_match h_out h_off in
+    let p := CaracaraProgramDef
+               [h_out; incr h_out; h_off; incr h_off] [] [] t in
+    let (net', cur) := add_program_to_network net p in
+    let net'' := match prev_opt with
+      | None      => net'
+      | Some prev => add_connection_to_network net' prev cur
+      end in
+    add_mergers h_out net'' (Some cur) rest
+  end.
+
 Definition tss_db (db : FilterDatabase) : GeneralCaracaraProgram :=
+  let h_out := compute_h_out db in
   let db' : FilterDatabase := List.map (fun '(f, lbl) =>
     (set_filter_key f (tup_to_key (GetTuple f)), lbl)) db in
   let hashtables := List.fold_left
@@ -224,17 +336,37 @@ Definition tss_db (db : FilterDatabase) : GeneralCaracaraProgram :=
       (net'', first', Some cur, (incr (incr header_io))))
     ht_list (empty_net, None, None, h_base) in
   let n := List.length ht_list in
-  
-  (* let merge_t := make_merge_transformer n h_base in
-  let merge_p := CaracaraProgramDef [] [StateCtr 1; StateCtr 2] [] merge_t in
-  let '(net', merge_id) := add_program_to_network net merge_p in
-  let net'' := match prev_opt with
-    | None      => net' (* no tables: merge module stands alone *)
-    | Some prev => add_connection_to_network net' prev merge_id
+  (* n merger modules, one per table to conditionally overwrite the
+     final output (HeaderCtr 1, HeaderCtr 2). *)
+  let offsets := table_offsets h_base n in
+  let '(net, last_opt) := add_mergers h_out net prev_opt offsets in
+  let tss_net :=
+    match first_opt, last_opt with
+    | Some fst, _      => set_start_module net fst
+    | None,     Some f => set_start_module net f
+    | None,     None   => net (* db was empty *)
     end in
-  let tss_net := match first_opt with
-    | Some fst => set_start_module net'' fst
-    | None     => set_start_module net'' merge_id (* no tables: start at merge *)
-    end in
-  GeneralCaracaraProgramDef [] tss_net. *)
-  GeneralCaracaraProgramDef [] net.
+  GeneralCaracaraProgramDef (headers_in_db db) tss_net [h_out].
+
+Definition SimpleDB : FilterDatabase :=
+  [({|
+      src_ip := [(HeaderCtr 1, CmpEq, MatchConst (CrUInt8 (repr 0)))];
+      dst_ip := [(HeaderCtr 5, CmpEq, MatchConst (CrUInt8 (repr 0)))];
+      src_port := [(HeaderCtr 9, CmpEq, MatchConst (CrUInt8 (repr 0)))];
+      dst_port := [(HeaderCtr 11, CmpEq, MatchConst (CrUInt8 (repr 0)))];
+      protocol := [(HeaderCtr 13, CmpEq, MatchConst (CrUInt8 (repr 1)))];
+      key := 1%positive;
+      priority := 1%positive |}, (repr 42));
+    ({|
+      src_ip := [(HeaderCtr 1, CmpEq, MatchConst (CrUInt8 (repr 0)));
+                 (HeaderCtr 2, CmpEq, MatchConst (CrUInt8 (repr 0)))];
+      dst_ip := [(HeaderCtr 5, CmpEq, MatchConst (CrUInt8 (repr 0)))];
+      src_port := [(HeaderCtr 9, CmpEq, MatchConst (CrUInt8 (repr 0)))];
+      dst_port := [(HeaderCtr 11, CmpEq, MatchConst (CrUInt8 (repr 0)))];
+      protocol := [(HeaderCtr 13, CmpEq, MatchConst (CrUInt8 (repr 2)))];
+      key := 2%positive;
+      priority := 2%positive
+    |}, (repr 67))
+  ].
+Definition ex_lin_prog : GeneralCaracaraProgram := linear_db SimpleDB.
+Definition ex_tss_prog : GeneralCaracaraProgram := tss_db SimpleDB.
