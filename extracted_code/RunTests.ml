@@ -9,6 +9,13 @@ let get_program f =
 
 let get_mem_program f = MemSolver.load_program f
 
+let get_general_program f =
+  let x = open_in f in
+  let len = in_channel_length x in
+  let str = really_input_string x len in
+  close_in x;
+  str |> Sexp.of_string |> CrTypeIF.CrModule.coq_GeneralCaracaraProgram_of_sexp
+
 let tests = ref []
 let register test_label test_fn =
   tests := (test_label, test_fn) :: !tests
@@ -175,6 +182,18 @@ let () = register "e2e bpf test" (fun () ->
 
   match MemSolver.mem_solve p1 p2 with
   | Z3Unsat -> 1
+  | _ -> 0)
+
+(* Test 13:
+ * compares a linear scan vs tuple space search
+ * over a simple filter database
+ *)
+let () = register "tss 1" (fun () ->
+  let p1 = get_general_program "./test/lin_pkt.out" in
+  let p2 = get_general_program "./test/tss_pkt.out" in
+  
+  match SmtModuleQuery.modnet_equivalence_checker p1 p2 with
+  | Equivalent -> 1
   | _ -> 0)
 
 let () =

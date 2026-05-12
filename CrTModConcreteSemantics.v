@@ -21,9 +21,9 @@ Fixpoint eval_network_from_concrete
     (net           : ModuleNetwork)
     (start         : ModuleName)
     (packet        : PMap.t CrVal)
-    (module_states : PMap.t ConcreteState)
+    (module_states : GeneralConcreteState)
     (fuel          : nat)
-    : option (PMap.t ConcreteState) :=
+    : option (GeneralConcreteState) :=
   match fuel with
   | O => None
   | S fuel' =>
@@ -57,9 +57,9 @@ Fixpoint eval_network_from_concrete
 
 Definition eval_general_program_concrete'
     (p             : GeneralCaracaraProgram)
-    (module_states : PMap.t ConcreteState)
+    (module_states : GeneralConcreteState)
     (fuel          : nat)
-    : option (PMap.t ConcreteState) :=
+    : option (GeneralConcreteState) :=
   let net   := get_network_from_general p in
   let start := start_module net in
   match module_states ?? (unwrap start) with
@@ -70,15 +70,15 @@ Definition eval_general_program_concrete'
 
 Definition eval_general_program_concrete
   (p : GeneralCaracaraProgram)
-  (module_states : PMap.t ConcreteState)
-  : option (PMap.t ConcreteState) :=
-  let mods := all_modules (get_network_from_general p) in
+  (module_states : GeneralConcreteState)
+  : option (GeneralConcreteState) :=
+  let mods := net_modules (get_network_from_general p) in
   let fuel := List.length mods in
   eval_general_program_concrete' p module_states fuel.
 
 Definition eval_general_program_concrete_sinks
   (p : GeneralCaracaraProgram)
-  (module_states : PMap.t ConcreteState)
+  (module_states : GeneralConcreteState)
   : option (list ConcreteState) :=
   match eval_general_program_concrete p module_states with
   | None        => None

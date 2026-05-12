@@ -25,7 +25,7 @@ Definition modnet_equivalence_checker
   match sym1_opt, sym2_opt with
   | Some [sym1], Some [sym2] => (* assume one sink *)
     let h_map : PMap.t SmtArithExpr := (header_map sym1) in
-    let header_ids : list Header := keys_from_map HeaderCtr h_map in
+    let header_ids : list Header := get_signature_from_general p1 in
     match smt_query (check_headers_and_state_vars sym1 sym2 header_ids []) with
     | SmtUnsat => Equivalent
     | SmtSat f => NotEquivalent f

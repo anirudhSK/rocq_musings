@@ -474,9 +474,9 @@ Definition init_module_symbolic_state
 Definition init_general_symbolic_state
     (prog_prefix : string)
     (p : GeneralCaracaraProgram)
-    : PMap.t SymbolicState :=
+    : GeneralSymbolicState :=
   let net := get_network_from_general p in
-  let mods := all_modules net in
+  let mods := net_modules net in
   let h := get_headers_from_general p in
   List.fold_left
     (fun acc m =>
