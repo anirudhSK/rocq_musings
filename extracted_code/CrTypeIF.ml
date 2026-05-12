@@ -52,11 +52,11 @@ module CrTransformer = struct
   include CrTransformer
   type coq_FunctionArgument = [%import: CrTransformer.coq_FunctionArgument]
   [@@deriving sexp]
+  type coq_CmpOp = [%import: CrTransformer.coq_CmpOp]
+  [@@deriving sexp]
   type coq_BinaryOp = [%import: CrTransformer.coq_BinaryOp]
   [@@deriving sexp]
   type coq_HdrOp = [%import: CrTransformer.coq_HdrOp]
-  [@@deriving sexp]
-  type coq_CmpOp = [%import: CrTransformer.coq_CmpOp]
   [@@deriving sexp]
   type coq_MatchValue = [%import: CrTransformer.coq_MatchValue]
   [@@deriving sexp]
