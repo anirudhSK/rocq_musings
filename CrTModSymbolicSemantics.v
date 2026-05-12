@@ -5,6 +5,7 @@ From MyProject Require Import CrDsl.
 From MyProject Require Import CrModule.
 From MyProject Require Import CrProgramState.
 From MyProject Require Import SmtExpr.
+From MyProject Require Import SmtTypes.
 From MyProject Require Import CrSymbolicSemanticsTransformer.
 From MyProject Require Import Maps.
 From MyProject Require Import PosWrapper.
@@ -85,3 +86,6 @@ Definition eval_general_program_symbolic_sinks
   | Some ledger =>
       Some (get_sink_states (get_network_from_general p) ledger)
   end.
+
+Definition concretize_sym_modnet_state (s: PMap.t SymbolicState) (f : SmtValuation) : PMap.t ConcreteState :=
+  PMap.map (fun sym_st => eval_sym_state sym_st f) s.
