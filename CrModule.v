@@ -97,6 +97,9 @@ Inductive reachable (net : ModuleNetwork) : ModuleName -> ModuleName -> Prop :=
 Definition is_dag (net : ModuleNetwork) : Prop :=
   forall m, ~ reachable net m m.
 
+Definition no_fan_out (net : ModuleNetwork) : Prop :=
+  forall m, List.length (downstream_modules net m) <= 1.
+
 Definition no_fan_in (net : ModuleNetwork) : Prop :=
   forall m, List.length (upstream_modules net m) <= 1.
 
@@ -139,6 +142,9 @@ Definition source_modules (net : ModuleNetwork) : list CrModule :=
 
 Definition sink_modules (net : ModuleNetwork) : list CrModule :=
   filter (is_sink net) (all_modules net).
+
+Definition single_sink (net : ModuleNetwork) : Prop :=
+  List.length (sink_modules net) = 1.
 
 (* ------------------------------------------------------------------ *)
 
@@ -237,11 +243,6 @@ Definition get_sink_states {T : Type}
       | Some ps => ps :: acc
       | None => acc
       end) [] (sink_modules net).
-
-(* Well-formedness of a GeneralCaracaraProgram requires a well-formed network. *)
-Definition wf_general_program (p : GeneralCaracaraProgram) : Prop :=
-  wf_module_network (get_network_from_general p).
-  (* may need more specification *)
 
 (* ------------------------------------------------------------------ *)
 
