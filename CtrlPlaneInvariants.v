@@ -1,9 +1,6 @@
 (* Various helper lemmas showing ctrl plane maps don't change *)
 From MyProject Require Import CrTransformer.
-From MyProject Require Import CrIdentifiers.
 From MyProject Require Import CrConcreteSemanticsTransformer.
-From MyProject Require Import SmtExpr.
-From MyProject Require Import CrSymbolicSemanticsTransformer.
 From MyProject Require Import CrProgramState.
 From MyProject Require Import ListUtils.
 From Stdlib Require Import Lists.List.

@@ -2,11 +2,8 @@
 
 (* Import necessary modules *)
 From Stdlib Require Import List.
-From Stdlib Require Import ZArith.
 Import ListNotations.
-From Stdlib Require Import Strings.String.
 From MyProject Require Import CrIdentifiers.
-From MyProject Require Import MyInts.
 From MyProject Require Import CrVal.
 
 (* A transformer is either a sequential or a parallel transformer *)

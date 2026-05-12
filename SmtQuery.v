@@ -3,23 +3,18 @@ From MyProject Require Import CrDsl.
 From MyProject Require Import CrIdentifiers.
 From MyProject Require Import CrVarLike.
 From MyProject Require Import CrDslProperties.
-From MyProject Require Import InitStatus.
 From MyProject Require Import CrProgramState.
 From MyProject Require Import Maps.
 From MyProject Require Import SmtTypes.
 From MyProject Require Import Integers.
-From MyProject Require Import MyInts.
 From MyProject Require Import PMapHelperLemmas.
 From MyProject Require Import CrVal.
-From Stdlib Require Import Classical.
 From Stdlib Require Import Lists.List.
-From Stdlib Require Import Bool.Bool.
 From Stdlib Require Import ZArith.ZArith.
-From Stdlib Require Import FunctionalExtensionality.
 Import ListNotations.
 
 (* Import or define SeqRule and related types *)
-From MyProject Require Import CrTransformer. (* Or replace with the correct module *)
+From MyProject Require Import CrTransformer.
 From MyProject Require Import CrSymbolicSemanticsTransformer.
 From MyProject Require Import CrConcreteSemanticsTransformer.
 From MyProject Require Import ConcreteToSymbolicLemmas.

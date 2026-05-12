@@ -1,5 +1,4 @@
 From Stdlib Require Import List.
-Import ListNotations.
 
 From MyProject Require Import CrMem.
 From MyProject Require Import MyInts.
