@@ -70,3 +70,20 @@ Proof.
     -- right. apply IHrest.
        assumption.
 Qed.
+
+(* If any entry in the list has a true first component,
+   then find_first_match returns Some. *)
+Lemma find_first_match_exists_true :
+  forall {T : Set} (l : list (bool * T)) r,
+    In (true, r) l ->
+    exists r', find_first_match l = Some r'.
+Proof.
+  intros T l r Hin.
+  induction l as [| [b t] rest IH].
+  - contradiction.
+  - destruct b.
+    + eexists. reflexivity.
+    + simpl in Hin. destruct Hin as [Heq | Hin'].
+      * discriminate Heq.
+      * apply IH. exact Hin'.
+Qed.

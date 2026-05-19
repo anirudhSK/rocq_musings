@@ -140,6 +140,56 @@ Definition eval_cr_program_concrete (p : CaracaraProgram) (ps : ConcreteState) :
   (* TODO: Maybe do something with the various lists of headers, states, and ctrls *)
   end.
 
+(* ------------------------------------------------------------------ *)
+(* Default-rule lemmas                                                 *)
+(* ------------------------------------------------------------------ *)
+
+(* An empty match pattern evaluates to true for every concrete state. *)
+Lemma eval_match_concrete_nil :
+  forall ps, eval_match_concrete [] ps = true.
+Proof. reflexivity. Qed.
+
+(* A helper showing that get_match_results and combine preserve the
+   In-relationship we need. *)
+Lemma get_match_results_combine_in :
+  forall t ps rule,
+    In rule t ->
+    eval_match_concrete (rule_match_pattern rule) ps = true ->
+    In (true, rule) (combine (get_match_results t ps) t).
+Proof.
+  induction t as [| r rest IH]; intros ps rule Hin Hmatch.
+  - contradiction.
+  - simpl in Hin. destruct Hin as [Heq | Hin'].
+    + subst r. simpl. left.
+      destruct rule as [[mp action] | [mp action]]; simpl in *; rewrite Hmatch; reflexivity.
+    + simpl. right.
+      destruct r as [[mp action] | [mp action]]; apply IH; assumption.
+Qed.
+
+(* The key lemma: a transformer with a default (catch-all) rule
+   always matches. That is, find_first_match always returns Some. *)
+Lemma has_default_guarantees_match :
+  forall t ps,
+    has_default t ->
+    exists rule, find_first_match (combine (get_match_results t ps) t) = Some rule.
+Proof.
+  induction t as [| r rest IH]; intros ps Hdef.
+  - (* t = [] : has_default [] is False *)
+    contradiction.
+  - destruct rest as [| r' rest'].
+    + (* t = [r] : r is the default rule *)
+      simpl in Hdef.
+      destruct r as [[mp action] | [mp action]]; simpl in Hdef; subst mp; simpl;
+      eexists; reflexivity.
+    + (* t = r :: r' :: rest' : default is in the tail *)
+      simpl in Hdef. (* has_default (r' :: rest') *)
+      simpl.
+      destruct r as [[mp action] | [mp action]]; simpl;
+      destruct (eval_match_concrete mp ps);
+      try (eexists; reflexivity);
+      apply IH; exact Hdef.
+Qed.
+
 (* Could be useful to have a proof about sequential vs parallel *)
 (* Relax notion of local state *)
 (* filter database = naive program *)

@@ -1,4 +1,5 @@
 From MyProject Require Import CrDsl.
+From MyProject Require Import CrTransformer.
 From MyProject Require Import CrVarLike.
 From MyProject Require Import CrIdentifiers.
 From MyProject Require Import CrModule.
@@ -27,12 +28,13 @@ Definition varlike_lt (v1 v2: A) : Prop :=
   Pos.lt (get_key v1) (get_key v2).
 End VarlikeCmp.
 
-(* No duplicates in Caracara Program *)
+(* No duplicates in Caracara Program and transformer has a default rule *)
 Definition well_formed_program (p : CaracaraProgram) : Prop :=
   match p with
-  | CaracaraProgramDef h s c _ =>
+  | CaracaraProgramDef h s c t =>
       Coqlib.list_norepet h /\ Coqlib.list_norepet s /\ Coqlib.list_norepet c /\
-      Sorted varlike_lt h /\ Sorted varlike_lt s /\ Sorted varlike_lt c
+      Sorted varlike_lt h /\ Sorted varlike_lt s /\ Sorted varlike_lt c /\
+      has_default t
   end.
 
 (* TODO: Write a program to check for the well_formed_program property *)
@@ -44,9 +46,10 @@ Definition well_formed_program (p : CaracaraProgram) : Prop :=
 Definition well_formed_module (m : CrModule) : Prop :=
   match m with
   | ParserModule _ _ => True
-  | TransformerModule _ states ctrls _ =>
+  | TransformerModule _ states ctrls t =>
       Coqlib.list_norepet states /\ Coqlib.list_norepet ctrls /\
-      Sorted varlike_lt states /\ Sorted varlike_lt ctrls
+      Sorted varlike_lt states /\ Sorted varlike_lt ctrls /\
+      has_default t
   end.
 
 Definition all_network_states (net : ModuleNetwork) : list State :=

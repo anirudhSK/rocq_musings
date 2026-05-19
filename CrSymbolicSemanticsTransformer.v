@@ -161,6 +161,11 @@ Definition get_match_results_smt (t : Transformer) (ps : SymbolicState) : list S
     | Par (ParCtr match_pattern _) => eval_match_smt match_pattern ps
     end) t.
 
+(* An empty match pattern evaluates to SmtTrue for every symbolic state. *)
+Lemma eval_match_smt_nil :
+  forall ps, eval_match_smt [] ps = SmtTrue.
+Proof. reflexivity. Qed.
+
 Definition eval_transformer_smt (t : Transformer) (ps : SymbolicState) : SymbolicState :=
   (* get all future program states, one for each rule *)
   let program_states := List.map (fun rule => eval_match_action_rule_smt rule ps) t in

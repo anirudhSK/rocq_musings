@@ -683,3 +683,18 @@ Lemma commute_sym_vs_conc_transfomer_sv:
 Proof.
   prove_commute_sym_vs_conc_transformer commute_sym_vs_conc_transformer_state_var_map.
 Qed.
+
+(* ------------------------------------------------------------------ *)
+(* Corollary: for well-formed transformers (with has_default), the     *)
+(* None branch in eval_transformer_concrete is unreachable.  This      *)
+(* means the concrete evaluator always fires a matching rule.          *)
+(* ------------------------------------------------------------------ *)
+
+Lemma well_formed_transformer_always_matches :
+  forall t ps,
+    has_default t ->
+    exists rule,
+      find_first_match (combine (get_match_results t ps) t) = Some rule.
+Proof.
+  apply has_default_guarantees_match.
+Qed.

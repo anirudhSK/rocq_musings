@@ -47,7 +47,6 @@ Inductive HdrOp :=
 (* Define MatchPattern as a list of header, pattern pairs,
    where patterns are uint8 and headers contain uint8 values,
    hence both can be compared. TODO: Need to handle wildcards. *)
-(* TODO: Explicit notion of default/fallback path *)
 Inductive MatchValue :=
 | MatchConst (k : CrInt_T)
 | MatchHeader (h : Header).
@@ -80,3 +79,49 @@ Inductive MatchActionRule :=
   | Par (p : ParRule).
 
 Definition Transformer : Type := list MatchActionRule.
+
+(* ------------------------------------------------------------------ *)
+(* Default / catch-all rule infrastructure                             *)
+(* ------------------------------------------------------------------ *)
+
+(* Extract the match pattern from a match-action rule. *)
+Definition rule_match_pattern (rule : MatchActionRule) : MatchPattern :=
+  match rule with
+  | Seq (SeqCtr mp _) => mp
+  | Par (ParCtr mp _) => mp
+  end.
+
+(* A rule is a default (catch-all) rule when its match pattern is empty.
+   An empty MatchPattern evaluates to true for every program state
+   (vacuous conjunction), so such a rule always matches. *)
+Definition is_default_rule (rule : MatchActionRule) : bool :=
+  match rule_match_pattern rule with
+  | [] => true
+  | _ :: _ => false
+  end.
+
+(* A convenience constructor for the canonical no-op default rule:
+   empty match pattern, empty action list. *)
+Definition nop_default_rule : MatchActionRule :=
+  Seq (SeqCtr [] []).
+
+(* A well-formed transformer must end with a default (catch-all) rule.
+   This guarantees that at least one rule always matches, making the
+   transformer's behavior fully explicit for every input state.
+
+   The predicate is defined recursively so that induction on the
+   transformer list is straightforward. *)
+Fixpoint has_default (t : Transformer) : Prop :=
+  match t with
+  | [] => False
+  | [rule] => rule_match_pattern rule = []
+  | _ :: rest => has_default rest
+  end.
+
+(* Decidable boolean version of has_default. *)
+Fixpoint has_default_b (t : Transformer) : bool :=
+  match t with
+  | [] => false
+  | [rule] => is_default_rule rule
+  | _ :: rest => has_default_b rest
+  end.

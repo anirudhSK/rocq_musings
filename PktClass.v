@@ -188,7 +188,10 @@ Definition linear_db (db : FilterDatabase) : GeneralCaracaraProgram :=
   let prog := lindb_helper h_out db' (CaracaraProgramDef [] [] [] []) in
   let t := get_transformer_from_prog prog in
   let t' := List.rev t in
-  let p := CaracaraProgramDef [h_out] [] [] t' in
+  (* Append an explicit no-op default rule (empty match, empty action)
+     to ensure the transformer always has a catch-all. *)
+  let t_with_default := t' ++ [nop_default_rule] in
+  let p := CaracaraProgramDef [h_out] [] [] t_with_default in
   let net := empty_net in
   let (net, start_id) := add_program_to_network net p in
   let net := set_start_module net start_id in (* technically unnecessary but here for readability or in case empty_net changes *)
@@ -242,7 +245,7 @@ Definition GetTuple (f : PacketFilter) : net_tuple :=
    any MatchPattern of [table]; tss_db enforces this via [compute_h_base]. *)
 Definition make_table_transformer (table : FilterDatabase) (h_body : Header): Transformer :=
   let sorted := sort_db table in
-  List.map (fun '(f, lbl) =>
+  let rules := List.map (fun '(f, lbl) =>
     Seq (SeqCtr (FlattenFilter f)
       [StatelessOp
         AddOp
@@ -254,7 +257,9 @@ Definition make_table_transformer (table : FilterDatabase) (h_body : Header): Tr
         (ConstantArg (CrUInt8 (repr (Zpos (priority f)))))
         (ConstantArg (CrUInt8 (repr 0)))
         (incr h_body)])
-  ) sorted.
+  ) sorted in
+  (* Append an explicit no-op default rule. *)
+  rules ++ [nop_default_rule].
 
 (* One merger rule: if (incr acc_base) < (incr filter_base) (i.e. the current
    best priority is below this table's priority), overwrite acc_base / (incr
@@ -272,7 +277,9 @@ Definition check_match (acc_base : Header) (filter_base : Header) : Transformer 
       (HeaderArg (incr filter_base))
       (ConstantArg (CrUInt8 (repr 0)))
       (incr acc_base)
-    ])].
+    ]);
+   (* Explicit no-op default rule *)
+   nop_default_rule].
 
 (* The set of (label, priority) header pairs that each table writes into.
    Table i (0-indexed) writes its best match at (h_base + 2i, h_base + 2i + 1).
