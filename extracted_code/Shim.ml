@@ -86,3 +86,39 @@ let rec str_to_coq_str (s : Stdlib.String.t) : string =
     let c = Stdlib.String.get s 0 in
     let rest = Stdlib.String.sub s 1 (Stdlib.String.length s - 1) in
     String.String ((char_to_ascii c), (str_to_coq_str rest))
+
+let uint8_crval (n : int) : CrVal.coq_CrVal =
+  CrVal.IntVal (CrVal.CrUInt8 (int_to_coq_uint8 n))
+
+let crval_to_int (v : CrVal.coq_CrVal) : int =
+  match v with
+  | CrVal.IntVal (CrVal.CrUInt8 x)  -> coq_Z_to_int x
+  | CrVal.IntVal (CrVal.CrUInt16 x) -> coq_Z_to_int x
+  | CrVal.IntVal (CrVal.CrUInt32 x) -> coq_Z_to_int x
+  | CrVal.IntVal (CrVal.CrUInt64 x) -> coq_Z_to_int x
+  | _ -> -1
+
+let get_header (n : int) (s : CrProgramState.coq_ConcreteState) : CrVal.coq_CrVal =
+  CrVarLike.lookup_varlike CrVarLike.coq_CrVarLike_Header s (int_to_pos n)
+
+let set_header (n : int) (v : CrVal.coq_CrVal) (s : CrProgramState.coq_ConcreteState)
+    : CrProgramState.coq_ConcreteState =
+  CrVarLike.update_varlike CrVarLike.coq_CrVarLike_Header s (int_to_pos n) v
+
+let get_state (n : int) (s : CrProgramState.coq_ConcreteState) : CrVal.coq_CrVal =
+  CrVarLike.lookup_varlike CrVarLike.coq_CrVarLike_State s (int_to_pos n)
+
+let set_state (n : int) (v : CrVal.coq_CrVal) (s : CrProgramState.coq_ConcreteState)
+    : CrProgramState.coq_ConcreteState =
+  CrVarLike.update_varlike CrVarLike.coq_CrVarLike_State s (int_to_pos n) v
+
+let get_ctrl (n : int) (s : CrProgramState.coq_ConcreteState) : CrVal.coq_CrVal =
+  CrVarLike.lookup_varlike CrVarLike.coq_CrVarLike_Ctrl s (int_to_pos n)
+
+let set_ctrl (n : int) (v : CrVal.coq_CrVal) (s : CrProgramState.coq_ConcreteState)
+    : CrProgramState.coq_ConcreteState =
+  CrVarLike.update_varlike CrVarLike.coq_CrVarLike_Ctrl s (int_to_pos n) v
+
+let run_program (p : CrDsl.coq_CaracaraProgram) (s : CrProgramState.coq_ConcreteState)
+    : CrProgramState.coq_ConcreteState =
+  CrConcreteSemanticsTransformer.eval_cr_program_concrete p s

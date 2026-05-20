@@ -360,7 +360,7 @@ let rec eval_z3_bool_concrete
   match expr with
   | Z3_T -> true
   | Z3_F -> false
-  | Z3_Neg e -> not (eval_z3_bool_concrete ctx m vars caches e)
+  | Z3_Neg e -> Stdlib.not (eval_z3_bool_concrete ctx m vars caches e)
   | Z3_Conj (e1, e2) ->
       (eval_z3_bool_concrete ctx m vars caches e1) && (eval_z3_bool_concrete ctx m vars caches e2)
   | Z3_Disj (e1, e2) ->

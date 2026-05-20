@@ -19,7 +19,7 @@
 (executable
  (public_name run_tests)
  (name RunTests)
- (modules RunTests)
+ (modules RunTests TestEquality TestSemantics)
  (libraries extracted_code_lib))
 
 (library
@@ -27,9 +27,10 @@
  (wrapped false)
  (modules
   Ascii BinInt BinNums BinPos Coqlib CrDsl CrIdentifiers CrProgramState CrVarLike
-  CrSymbolicSemanticsTransformer CrTransformer CrVal CrMem CrMemEx Datatypes EquivDec
-  Integers CrTypeIF Shim List ListDef Maps MyInts Nat PosDef Rocqlib SmtTypes SmtExpr SmtQuery
-  Specif String Z3Solver MemSolver Zpower)
+  CrConcreteSemanticsTransformer CrSymbolicSemanticsTransformer CrTransformer CrVal
+  CrMem CrMemEx Datatypes EquivDec Integers CrTypeIF Shim List ListDef ListUtils Maps
+  MyInts Nat NatDef PosDef Rocqlib SmtTypes SmtExpr SmtQuery Specif String Z3Solver
+  ZArith_dec MemSolver Zpower)
  (preprocess (staged_pps ppx_import ppx_sexp_conv))
  (libraries z3 sexplib)
  (flags (:standard -w -33)))
