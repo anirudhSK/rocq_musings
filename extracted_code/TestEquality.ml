@@ -169,7 +169,7 @@ let () = register_eq "sat aval" (fun () ->
  * end to end test of -O0 and -O2 compilation
  * of a basic bpf program
  *)
-let () = register "e2e bpf test" (fun () ->
+let () = register_eq "e2e bpf test" (fun () ->
   let p1 = get_mem_program "./test/O0.ir" in
   let p2 = get_mem_program "./test/O2.ir" in
 
