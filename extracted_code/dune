@@ -16,10 +16,12 @@
   (modules DumpMemEx)
   (libraries extracted_code_lib))
 
-(executable
- (public_name run_tests)
- (name RunTests)
- (modules RunTests TestEquality TestSemantics)
+(library
+ (name semantics_tests)
+ (modules TestEquality TestSemantics)
+ (inline_tests
+  (deps (source_tree ../test)))
+ (preprocess (pps ppx_expect))
  (libraries extracted_code_lib))
 
 (library

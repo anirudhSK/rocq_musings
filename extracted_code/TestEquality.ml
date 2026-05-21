@@ -9,170 +9,172 @@ let get_program f =
 
 let get_mem_program f = MemSolver.load_program f
 
-let eq_tests = ref []
-let register_eq test_label test_fn =
-  eq_tests := (test_label, test_fn) :: !eq_tests
+let print_equiv = function
+  | SmtQuery.Equivalent -> print_endline "Equivalent"
+  | SmtQuery.NotEquivalent _ -> print_endline "NotEquivalent"
+  | SmtQuery.NotEquivalentUnknown -> print_endline "NotEquivalentUnknown"
+  | SmtQuery.NotEquivalentVariablesDiffer -> print_endline "NotEquivalentVariablesDiffer"
 
-(* Test 1:
- * A program should be equal to itself
- *)
-let () = register_eq "refl_0" (fun () ->
-  let p = get_program "./test/prog1.out" in
+let print_z3 = function
+  | CrMem.Z3Unsat -> print_endline "Z3Unsat"
+  | CrMem.Z3Unknown -> print_endline "Z3Unknown"
+  | CrMem.Z3Sat (_, _, ValueMismatch) -> print_endline "Z3Sat(ValueMismatch)"
+  | CrMem.Z3Sat (_, _, BoundsMismatch) -> print_endline "Z3Sat(BoundsMismatch)"
+  | CrMem.Z3Sat (_, _, FullMismatch) -> print_endline "Z3Sat(FullMismatch)"
 
-  match SmtQuery.equivalence_checker_cr_dsl p p with
-  | Equivalent -> 1
-  | _ -> 0)
+(* Test 1: A program should be equal to itself. *)
+let%expect_test "refl_0: identical programs are equivalent" =
+  let p = get_program "../test/prog1.out" in
+  print_equiv (SmtQuery.equivalence_checker_cr_dsl p p);
+  [%expect {| Equivalent |}]
 
-(* Test 2:
- * Different values get statically assigned to header variable
- * p1: x=5
- * p2: x=1
- *)
-let () = register_eq "hdr_diff" (fun () ->
-  let p1 = get_program "./test/prog1.out" in
-  let p2 = get_program "./test/prog2.out" in
+(* Test 2: Different constant assignments to header variable.
+ * p1: x=5, p2: x=1 *)
+let%expect_test "hdr_diff: different constants are NotEquivalent" =
+  let p1 = get_program "../test/prog1.out" in
+  let p2 = get_program "../test/prog2.out" in
+  print_equiv (SmtQuery.equivalence_checker_cr_dsl p1 p2);
+  [%expect {|
+    ┌ SAT Valuation
+    | var( [1m1[0m ) := 0
+    └
+    NotEquivalent
+    |}]
 
-  match SmtQuery.equivalence_checker_cr_dsl p1 p2 with
-  | NotEquivalent _ -> 1
-  | _ -> 0)
+(* Test 3: -2 and +254 agree under 8-bit 2s complement.
+ * p1: x-2, p2: x+254 *)
+let%expect_test "sub_1comp: -2 and +254 are equivalent" =
+  let p1 = get_program "../test/subtract1.out" in
+  let p2 = get_program "../test/subtract2.out" in
+  print_equiv (SmtQuery.equivalence_checker_cr_dsl p1 p2);
+  [%expect {| Equivalent |}]
 
-(* Test 3:
- * -2 and +254 should be the same under 8-bit 2s complement
- * p1: x-2
- * p2: x+254
- *)
-let () = register_eq "sub_1comp" (fun () ->
-  let p1 = get_program "./test/subtract1.out" in
-  let p2 = get_program "./test/subtract2.out" in
+(* Test 4: Addition is commutative.
+ * p1: x + 2 - 1, p2: x - 1 + 2 *)
+let%expect_test "complex_add_sub: reordered add/sub are equivalent" =
+  let p1 = get_program "../test/complex1a.out" in
+  let p2 = get_program "../test/complex1b.out" in
+  print_equiv (SmtQuery.equivalence_checker_cr_dsl p1 p2);
+  [%expect {| Equivalent |}]
 
-  match SmtQuery.equivalence_checker_cr_dsl p1 p2 with
-  | Equivalent -> 1
-  | _ -> 0)
+(* Test 5: Trivially non-equivalent.
+ * p1: x - 1 + 2, p2: x - 1 *)
+let%expect_test "complex_add_sub: dropping an op breaks equivalence" =
+  let p1 = get_program "../test/complex1b.out" in
+  let p2 = get_program "../test/subtract1.out" in
+  print_equiv (SmtQuery.equivalence_checker_cr_dsl p1 p2);
+  [%expect {|
+    ┌ SAT Valuation
+    | var( [1m1[0m ) := 0
+    └
+    NotEquivalent
+    |}]
 
-(* Test 4:
- * In essence, we're testing that addition is commutative
- * p1: x + 2 - 1
- * p2: x - 1 + 2
- *)
-let () = register_eq "complex_add/sub equal" (fun () ->
-  let p1 = get_program "./test/complex1a.out" in
-  let p2 = get_program "./test/complex1b.out" in
+(* Test 6: Address offsets should alias.
+ * p1: *(x+4), p2: *(x+2+2) *)
+let%expect_test "basic address alias" =
+  let p1 = get_mem_program "../test/mem1a.out" in
+  let p2 = get_mem_program "../test/mem1b.out" in
+  print_z3 (MemSolver.mem_solve p1 p2);
+  [%expect {|
+    casting query to z3 expression...
+    adding query to solver...
+    running query...
+    Z3Unsat
+    |}]
 
-  match SmtQuery.equivalence_checker_cr_dsl p1 p2 with
-  | Equivalent -> 1
-  | _ -> 0)
+(* Test 7: Writing a variable value vs writing a constant value differ.
+ * p1: *(x+4) = y, p2: *(x+4) = 1 *)
+let%expect_test "basic memory overwrite: value differs" =
+  let p1 = get_mem_program "../test/mem1a.out" in
+  let p2 = get_mem_program "../test/mem1c.out" in
+  print_z3 (MemSolver.mem_solve p1 p2);
+  [%expect {|
+    casting query to z3 expression...
+    adding query to solver...
+    running query...
+    ┌ SAT Valuation
+    | var( [1m1000[0m ) := 254
+    | var( [1m1100[0m ) := 0
+    | arr( [1m1[0m ) := [0] (len=1)
+    | [1mOutputs equal:[0m [31mfalse[0m
+    | [1mBounds equal:[0m [32mtrue[0m
+    └
+    Z3Sat(ValueMismatch)
+    |}]
 
-(* Test 5:
- * Trivially non-equivalent
- * p1: x - 1 + 2
- * p2: x - 1
- *)
-let () = register_eq "complex_add/sub NOT equal" (fun () ->
-  let p1 = get_program "./test/complex1b.out" in
-  let p2 = get_program "./test/subtract1.out" in
+(* Test 8: Programs with different segfault behavior.
+ * p1: ret *(x+0), p2: *(x+1); ret *(x+0) *)
+let%expect_test "divergent load extents: bounds differ" =
+  let p1 = get_mem_program "../test/mem2a.out" in
+  let p2 = get_mem_program "../test/mem2b.out" in
+  print_z3 (MemSolver.mem_solve p1 p2);
+  [%expect {|
+    casting query to z3 expression...
+    adding query to solver...
+    running query...
+    ┌ SAT Valuation
+    | arr( [1m1[0m ) := [0] (len=1)
+    | [1mOutputs equal:[0m [32mtrue[0m
+    | [1mBounds equal:[0m [31mfalse[0m
+    └
+    Z3Sat(BoundsMismatch)
+    |}]
 
-  match SmtQuery.equivalence_checker_cr_dsl p1 p2 with
-  | NotEquivalent _ -> 1
-  | _ -> 0)
+(* Test 9: Access extents and output variables match.
+ * p1: *(x+1); ret *(x+0), p2: *(x+1)=0; ret *(x+0) *)
+let%expect_test "mem nop are equiv" =
+  let p1 = get_mem_program "../test/mem2b.out" in
+  let p2 = get_mem_program "../test/mem2c.out" in
+  print_z3 (MemSolver.mem_solve p1 p2);
+  [%expect {|
+    casting query to z3 expression...
+    adding query to solver...
+    running query...
+    Z3Unsat
+    |}]
 
-(* Test 6:
- * Address offsets should alias
- * p1: *(x+4)
- * p2: *(x+2+2)
- *)
-let () = register_eq "basic address alias" (fun () ->
-  let p1 = get_mem_program "./test/mem1a.out" in
-  let p2 = get_mem_program "./test/mem1b.out" in
+(* Test 10: If statement collapses.
+ * p1: if (0 == 0) then A else B, p2: A *)
+let%expect_test "degenerate branch collapses" =
+  let p1 = get_mem_program "../test/mem3a.out" in
+  let p2 = get_mem_program "../test/mem3b.out" in
+  print_z3 (MemSolver.mem_solve p1 p2);
+  [%expect {|
+    casting query to z3 expression...
+    Met nil expression
+    adding query to solver...
+    running query...
+    Z3Unsat
+    |}]
 
-  match MemSolver.mem_solve p1 p2 with
-  | Z3Unsat -> 1
-  | _ -> 0)
+(* Test 11: Array values may differ.
+ * p1: *(x+1); ret *(x+0), p2: *(x+0); ret *(x+1) *)
+let%expect_test "sat aval: array values differ" =
+  let p1 = get_mem_program "../test/mem4a.out" in
+  let p2 = get_mem_program "../test/mem4b.out" in
+  print_z3 (MemSolver.mem_solve p1 p2);
+  [%expect {|
+    casting query to z3 expression...
+    adding query to solver...
+    running query...
+    ┌ SAT Valuation
+    | arr( [1m1[0m ) := [255, 0] (len=2)
+    | [1mOutputs equal:[0m [31mfalse[0m
+    | [1mBounds equal:[0m [32mtrue[0m
+    └
+    Z3Sat(ValueMismatch)
+    |}]
 
-(* Test 7:
- * writing a variable value will not always be the same as writing a constant value
- * p1: *(x+4) = y
- * p2: *(x+4) = 1
- *)
-let () = register_eq "basic memory overwrite" (fun () ->
-  let p1 = get_mem_program "./test/mem1a.out" in
-  let p2 = get_mem_program "./test/mem1c.out" in
-
-  match MemSolver.mem_solve p1 p2 with
-  | Z3Sat (_, _, f) -> (
-    match f with
-    | ValueMismatch -> 1
-    | _ -> 0
-    )
-  | _ -> 0)
-
-(* Test 8:
- * Programs can have different segfault behavior
- * p1: ret *(x+0)
- * p2: *(x+1); ret *(x+0)
- *)
-let () = register_eq "divergent load extents" (fun () ->
-  let p1 = get_mem_program "./test/mem2a.out" in
-  let p2 = get_mem_program "./test/mem2b.out" in
-
-  match MemSolver.mem_solve p1 p2 with
-  | Z3Sat (_, _, f) -> (
-    match f with
-    | BoundsMismatch -> 1
-    | _ -> 0
-    )
-  | _ -> 0)
-
-(* Test 9:
- * Access extents are the same, and output variables are same
- * p1: *(x+1); ret *(x+0)
- * p2: *(x+1)=0; ret *(x+0)
- *)
-let () = register_eq "mem nop are equiv" (fun () ->
-  let p1 = get_mem_program "./test/mem2b.out" in
-  let p2 = get_mem_program "./test/mem2c.out" in
-
-  match MemSolver.mem_solve p1 p2 with
-  | Z3Unsat -> 1
-  | _ -> 0)
-
-(* Test 10:
- * If statement collapses
- * p1: if (0 == 0) then A else B
- * p2: A
- *)
-let () = register_eq "degenerate branch" (fun () ->
-  let p1 = get_mem_program "./test/mem3a.out" in
-  let p2 = get_mem_program "./test/mem3b.out" in
-
-  match MemSolver.mem_solve p1 p2 with
-  | Z3Unsat -> 1
-  | _ -> 0)
-
-(* Test 11:
- * Array values might be different
- * p1: *(x+1); ret *(x+0)
- * p2: *(x+0); ret *(x+1)
- *)
-let () = register_eq "sat aval" (fun () ->
-  let p1 = get_mem_program "./test/mem4a.out" in
-  let p2 = get_mem_program "./test/mem4b.out" in
-
-  match MemSolver.mem_solve p1 p2 with
-  | Z3Sat (_, _, f) -> (
-    match f with
-    | ValueMismatch -> 1
-    | _ -> 0
-    )
-  | _ -> 0)
-
-(* Test 12:
- * end to end test of -O0 and -O2 compilation
- * of a basic bpf program
- *)
-let () = register_eq "e2e bpf test" (fun () ->
-  let p1 = get_mem_program "./test/O0.ir" in
-  let p2 = get_mem_program "./test/O2.ir" in
-
-  match MemSolver.mem_solve p1 p2 with
-  | Z3Unsat -> 1
-  | _ -> 0)
+(* Test 12: End-to-end -O0 vs -O2 compilation of a basic bpf program. *)
+let%expect_test "e2e bpf test: O0 ≡ O2" =
+  let p1 = get_mem_program "../test/O0.ir" in
+  let p2 = get_mem_program "../test/O2.ir" in
+  print_z3 (MemSolver.mem_solve p1 p2);
+  [%expect {|
+    casting query to z3 expression...
+    Met nil expression
+    adding query to solver...
+    running query...
+    Z3Unsat
+    |}]

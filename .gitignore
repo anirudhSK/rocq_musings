@@ -30,7 +30,6 @@ smt_query
 !/extracted_code/TestEquality.ml
 !/extracted_code/TestSemantics.ml
 !/extracted_code/EqCheck.ml
-!/extracted_code/RunTests.ml
 /.vscode/
 /.idea/
 /.claude/
