@@ -26,7 +26,7 @@ let () = register_semantics "sub5_h1_if_h1eq0: no match, h1=3 unchanged" (fun ()
   let s' = Shim.run_program (get_program pid) s in
   if Shim.crval_to_int (Shim.get_header 1 s') = 3 then 1 else 0)
 
-(* Test 3: sub5_h1_if_h1eq0 — predicate match path (complements Test 2)
+(* Test 3: sub5_h1_if_h1eq0 — predicate match path
  * Rule fires when h1 = 0; (0 - 5) mod 256 = 251. *)
 let () = register_semantics "sub5_h1_if_h1eq0: match fires, h1=0 → h1=251" (fun () ->
   let pid = 1 in
@@ -42,7 +42,7 @@ let () = register_semantics "add3_h1_if_h1eq5: match fires, h1=5 → h1=8" (fun 
   let s' = Shim.run_program (get_program pid) s in
   if Shim.crval_to_int (Shim.get_header 1 s') = 8 then 1 else 0)
 
-(* Test 5: add3_h1_if_h1eq5 — predicate mismatch path (complements Test 3)
+(* Test 5: add3_h1_if_h1eq5 — predicate mismatch path
  * Pattern requires h1 = 5; with h1 = 7 the rule does not fire. *)
 let () = register_semantics "add3_h1_if_h1eq5: no match, h1=7 unchanged" (fun () ->
   let pid = 2 in
@@ -59,7 +59,7 @@ let () = register_semantics "first_match_h1eq5: only rule 1 fires, h1=5 → h1=6
   let s' = Shim.run_program (get_program pid) s in
   if Shim.crval_to_int (Shim.get_header 1 s') = 6 then 1 else 0)
 
-(* Test 7: first_match_h1eq5 — neither rule matches (complements Test 4)
+(* Test 7: first_match_h1eq5 — neither rule matches
  * Both rules require h1 = 5; with h1 = 3 neither fires. *)
 let () = register_semantics "first_match_h1eq5: no rule matches, h1=3 unchanged" (fun () ->
   let pid = 3 in
@@ -179,7 +179,7 @@ let () = register_semantics "multi_rule_second_matches: h1=10 → h1=110" (fun (
   let s' = Shim.run_program (get_program pid) s in
   if Shim.crval_to_int (Shim.get_header 1 s') = 110 then 1 else 0)
 
-(* Test 21: multi_rule_second_matches — first rule fires (complements Test 17)
+(* Test 21: multi_rule_second_matches — first rule fires
  * Rule 1: h1=5 → h1 += 1. With h1 = 5 the first rule fires; h1 = 6. *)
 let () = register_semantics "multi_rule_second_matches: first fires, h1=5 → h1=6" (fun () ->
   let pid = 16 in
@@ -187,7 +187,7 @@ let () = register_semantics "multi_rule_second_matches: first fires, h1=5 → h1
   let s' = Shim.run_program (get_program pid) s in
   if Shim.crval_to_int (Shim.get_header 1 s') = 6 then 1 else 0)
 
-(* Test 22: multi_rule_second_matches — neither rule matches (complements Test 17)
+(* Test 22: multi_rule_second_matches — neither rule matches
  * Patterns require h1 ∈ {5, 10}; with h1 = 3 nothing fires. *)
 let () = register_semantics "multi_rule_second_matches: no rule matches, h1=3 unchanged" (fun () ->
   let pid = 16 in
@@ -206,7 +206,7 @@ let () = register_semantics "cross_header_predicate: h2=7 gates h1+=1" (fun () -
   let h2_ok = Shim.crval_to_int (Shim.get_header 2 s') = 7 in
   if h1_ok && h2_ok then 1 else 0)
 
-(* Test 24: cross_header_predicate — predicate fails (complements Test 18)
+(* Test 24: cross_header_predicate — predicate fails
  * Predicate requires h2 = 7; with h2 = 1, h1 is unchanged. *)
 let () = register_semantics "cross_header_predicate: h2=1 → h1 unchanged" (fun () ->
   let pid = 17 in
