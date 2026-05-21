@@ -86,14 +86,14 @@ let () = register_semantics "add_ctrl1_to_h1: h1=5, ctrl1=3 → h1=8" (fun () ->
   let s' = Shim.run_program (get_program pid) s in
   if Shim.crval_to_int (Shim.get_header 1 s') = 8 then 1 else 0)
 
-(* Test 10: Action list fold_right order — last op in list executes first
- * action = [h1 += 1 ; h1 *= 2]: the multiply (last) runs first.
- * h1 = 10 → 10 * 2 = 20 → 20 + 1 = 21. *)
-let () = register_semantics "fold_right_order: h1=10 → 21 (×2 before +1)" (fun () ->
+(* Test 10: Action list fold_left order — head of list executes first
+ * action = [h1 += 1 ; h1 *= 2]: the add (head) runs first.
+ * h1 = 10 → 10 + 1 = 11 → 11 * 2 = 22. *)
+let () = register_semantics "fold_left_order: h1=10 → 22 (+1 before ×2)" (fun () ->
   let pid = 6 in
   let s  = Shim.set_header 1 (Shim.uint8_crval 10) (init_state pid) in
   let s' = Shim.run_program (get_program pid) s in
-  if Shim.crval_to_int (Shim.get_header 1 s') = 21 then 1 else 0)
+  if Shim.crval_to_int (Shim.get_header 1 s') = 22 then 1 else 0)
 
 (* Test 11: SubOp underflow wraps modulo 2^8
  * h1 := h1 - 5. With h1 = 2: (2 - 5) mod 256 = 253. *)

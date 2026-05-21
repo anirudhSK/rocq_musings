@@ -57,9 +57,9 @@ Definition eval_hdr_op_assign_smt (ho : HdrOp) (ps: SymbolicState) : SymbolicSta
     end.
 
 (* Define evaluation over a list of HdrOp *)
-(* Note we are evaluating the list from right to left (fold_right) because it simplifies proving. *)
+(* The list is evaluated left to right: the head of the list executes first. *)
 Definition eval_hdr_op_list_smt (hol : list HdrOp) (ps : SymbolicState) : SymbolicState :=
-  List.fold_right (fun op acc => eval_hdr_op_assign_smt op acc) ps hol.
+  List.fold_left (fun acc op => eval_hdr_op_assign_smt op acc) hol ps.
 
 Definition eval_match_smt (match_pattern : MatchPattern) (ps : SymbolicState) : SmtBoolExpr :=
   (* For every list element, check if the Header's current value (determined by ps) equals the uint8 *)

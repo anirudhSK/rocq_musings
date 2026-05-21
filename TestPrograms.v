@@ -83,10 +83,10 @@ Definition prog_add_ctrl1_to_h1 : CaracaraProgram :=
     ])
   ].
 
-(* Action list [h1 += 1 ; h1 *= 2] with fold_right evaluation order:
- * the last op in the list (h1 *= 2) executes first, then h1 += 1.
- * Starting from h1 = 10: 10 * 2 = 20, then 20 + 1 = 21. *)
-Definition prog_fold_right_order : CaracaraProgram :=
+(* Action list [h1 += 1 ; h1 *= 2] with fold_left evaluation order:
+ * the head of the list (h1 += 1) executes first, then h1 *= 2.
+ * Starting from h1 = 10: 10 + 1 = 11, then 11 * 2 = 22. *)
+Definition prog_fold_left_order : CaracaraProgram :=
   CaracaraProgramDef [HeaderCtr 1] [] [] [
     Seq (SeqCtr [] [
       StatelessOp AddOp
@@ -246,7 +246,7 @@ Definition test_programs := [
   prog_first_match_h1eq5;
   prog_stateful_sub2_s1_from_h1;
   prog_add_ctrl1_to_h1;
-  prog_fold_right_order;
+  prog_fold_left_order;
   prog_sub_underflow_h1;
   prog_add_overflow_h1;
   prog_and_mask_h1;

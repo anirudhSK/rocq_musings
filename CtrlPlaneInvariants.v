@@ -22,10 +22,10 @@ Lemma ctrl_plane_invariant_hdr_op_list:
   ctrl_map (eval_hdr_op_list_concrete hol c1) =
   ctrl_map c1.
 Proof.
-  intros.
-  induction hol.
+  intros hol c1. revert c1.
+  induction hol; intros c1.
   - reflexivity.
-  - simpl. rewrite <- IHhol.
+  - simpl. rewrite IHhol.
     apply ctrl_plane_invariant_hdr_op.
 Qed.
 

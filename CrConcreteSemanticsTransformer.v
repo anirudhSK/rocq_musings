@@ -47,9 +47,9 @@ Definition eval_match_concrete (match_pattern : MatchPattern) (ps : ConcreteStat
   List.forallb (fun '(h, v) => CrVal.eqb (lookup_varlike ps h) (IntVal v)) match_pattern.
 
 (* Define evaluation over a list of HdrOp *)
-(* Note we are evaluating the list from right to left (fold_right) because it simplifies proving. *)
+(* The list is evaluated left to right: the head of the list executes first. *)
 Definition eval_hdr_op_list_concrete (hol : list HdrOp) (ps : ConcreteState) : ConcreteState :=
-  List.fold_right (fun op acc => eval_hdr_op_assign_concrete op acc) ps hol.
+  List.fold_left (fun acc op => eval_hdr_op_assign_concrete op acc) hol ps.
 
 (* Evalaute a single HdrOp conditionally based on a match_pattern *)
 Definition eval_hdr_op_assign_concrete_conditional
