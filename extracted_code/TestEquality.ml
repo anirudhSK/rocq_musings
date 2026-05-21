@@ -51,8 +51,8 @@ let () = register_eq "sub_1comp" (fun () ->
 
 (* Test 4:
  * In essence, we're testing that addition is commutative
- * p1: x - 1 + 2
- * p2: x + 2 - 1
+ * p1: x + 2 - 1
+ * p2: x - 1 + 2
  *)
 let () = register_eq "complex_add/sub equal" (fun () ->
   let p1 = get_program "./test/complex1a.out" in
@@ -64,7 +64,7 @@ let () = register_eq "complex_add/sub equal" (fun () ->
 
 (* Test 5:
  * Trivially non-equivalent
- * p1: x + 2 - 1
+ * p1: x - 1 + 2
  * p2: x - 1
  *)
 let () = register_eq "complex_add/sub NOT equal" (fun () ->

@@ -30,7 +30,7 @@
   CrConcreteSemanticsTransformer CrSymbolicSemanticsTransformer CrTransformer CrVal
   CrMem CrMemEx Datatypes EquivDec Integers CrTypeIF Shim List ListDef ListUtils Maps
   MyInts Nat NatDef PosDef Rocqlib SmtTypes SmtExpr SmtQuery Specif String Z3Solver
-  ZArith_dec MemSolver Zpower)
+  ZArith_dec MemSolver Zpower TestPrograms)
  (preprocess (staged_pps ppx_import ppx_sexp_conv))
  (libraries z3 sexplib)
  (flags (:standard -w -33)))
