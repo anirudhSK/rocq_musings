@@ -36,7 +36,7 @@ let%expect_test "hdr_diff: different constants are NotEquivalent" =
   print_equiv (SmtQuery.equivalence_checker_cr_dsl p1 p2);
   [%expect {|
     ┌ SAT Valuation
-    | var( [1m1[0m ) := 0
+    | var( 1 ) := 0
     └
     NotEquivalent
     |}]
@@ -65,7 +65,7 @@ let%expect_test "complex_add_sub: dropping an op breaks equivalence" =
   print_equiv (SmtQuery.equivalence_checker_cr_dsl p1 p2);
   [%expect {|
     ┌ SAT Valuation
-    | var( [1m1[0m ) := 0
+    | var( 1 ) := 0
     └
     NotEquivalent
     |}]
@@ -94,11 +94,11 @@ let%expect_test "basic memory overwrite: value differs" =
     adding query to solver...
     running query...
     ┌ SAT Valuation
-    | var( [1m1000[0m ) := 254
-    | var( [1m1100[0m ) := 0
-    | arr( [1m1[0m ) := [0] (len=1)
-    | [1mOutputs equal:[0m [31mfalse[0m
-    | [1mBounds equal:[0m [32mtrue[0m
+    | var( 1000 ) := 254
+    | var( 1100 ) := 0
+    | arr( 1 ) := [0] (len=1)
+    | Outputs equal: false
+    | Bounds equal: true
     └
     Z3Sat(ValueMismatch)
     |}]
@@ -114,9 +114,9 @@ let%expect_test "divergent load extents: bounds differ" =
     adding query to solver...
     running query...
     ┌ SAT Valuation
-    | arr( [1m1[0m ) := [0] (len=1)
-    | [1mOutputs equal:[0m [32mtrue[0m
-    | [1mBounds equal:[0m [31mfalse[0m
+    | arr( 1 ) := [0] (len=1)
+    | Outputs equal: true
+    | Bounds equal: false
     └
     Z3Sat(BoundsMismatch)
     |}]
@@ -159,9 +159,9 @@ let%expect_test "sat aval: array values differ" =
     adding query to solver...
     running query...
     ┌ SAT Valuation
-    | arr( [1m1[0m ) := [255, 0] (len=2)
-    | [1mOutputs equal:[0m [31mfalse[0m
-    | [1mBounds equal:[0m [32mtrue[0m
+    | arr( 1 ) := [255, 0] (len=2)
+    | Outputs equal: false
+    | Bounds equal: true
     └
     Z3Sat(ValueMismatch)
     |}]
