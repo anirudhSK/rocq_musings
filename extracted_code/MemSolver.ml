@@ -223,7 +223,7 @@ let eval_scalar_var (m : Z3.Model.model) (name : string) (z3_var : Z3.Expr.expr)
             else
               name
           in
-          Printf.printf "| var( \027[1m%s\027[0m ) := %d\n" display_name num_val;
+          Printf.printf "| var( %s ) := %d\n" display_name num_val;
           if bv_size = 8 then
             Some (IntVal (CrUInt8 (Shim.int_to_coq_uint8 num_val)))
           else if bv_size = 32 then
@@ -360,7 +360,7 @@ let rec eval_z3_bool_concrete
   match expr with
   | Z3_T -> true
   | Z3_F -> false
-  | Z3_Neg e -> not (eval_z3_bool_concrete ctx m vars caches e)
+  | Z3_Neg e -> Stdlib.not (eval_z3_bool_concrete ctx m vars caches e)
   | Z3_Conj (e1, e2) ->
       (eval_z3_bool_concrete ctx m vars caches e1) && (eval_z3_bool_concrete ctx m vars caches e2)
   | Z3_Disj (e1, e2) ->
@@ -424,10 +424,10 @@ let sat_check
       Stdlib.List.iter (fun (name, arr) ->
         match arr with
         | Unallocated ->
-          Printf.printf "| arr( \027[1m%s\027[0m ) := <unallocated>\n" name
+          Printf.printf "| arr( %s ) := <unallocated>\n" name
         | Allocated { arr_len; arr_bytes } ->
           let len = Shim.coq_Z_to_int arr_len in
-          Printf.printf "| arr( \027[1m%s\027[0m ) := [" name;
+          Printf.printf "| arr( %s ) := [" name;
           for i = 0 to len - 1 do
             let key = Shim.int_to_pos (i + 1) in
             let v = match Maps.PMap.get key arr_bytes with
@@ -454,8 +454,8 @@ let sat_check
       let outputs_holds = eval_z3_bool_concrete ctx m tracked_vars blank_caches outputs_expr in
       let bounds_holds = eval_z3_bool_concrete ctx m tracked_vars blank_caches bounds_expr in
       
-      Printf.printf "| \027[1mOutputs equal:\027[0m %s\n" (if outputs_holds then "\027[32mtrue\027[0m" else "\027[31mfalse\027[0m");
-      Printf.printf "| \027[1mBounds equal:\027[0m %s\n" (if bounds_holds then "\027[32mtrue\027[0m" else "\027[31mfalse\027[0m");
+      Printf.printf "| Outputs equal: %s\n" (if outputs_holds then "true" else "false");
+      Printf.printf "| Bounds equal: %s\n" (if bounds_holds then "true" else "false");
       
       Printf.printf "└\n";
       

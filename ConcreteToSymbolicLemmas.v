@@ -62,15 +62,16 @@ Lemma commute_sym_vs_conc_hdr_op_list :
          (s1 : SymbolicState)
          (c1 : ConcreteState),
     c1 = eval_sym_state s1 f ->
-    eval_hdr_op_list_concrete hol c1 = (* first concretize, and then interpret *) 
+    eval_hdr_op_list_concrete hol c1 = (* first concretize, and then interpret *)
     eval_sym_state (eval_hdr_op_list_smt hol s1) f.    (* first interpret, and then concretize *)
 Proof.
-  intros hol f s1 c1 Hc1.
-  induction hol as [| h rest IHrest].
-  - simpl. assumption.
-  - simpl. rewrite IHrest.
+  intros hol f s1 c1 Hc1. subst c1.
+  revert s1.
+  induction hol as [| h rest IHrest]; intros s1.
+  - reflexivity.
+  - simpl.
     rewrite commute_sym_conc_assign.
-    reflexivity.
+    apply IHrest.
 Qed.
 
 (* For any Header, uint8 pair,

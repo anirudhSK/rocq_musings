@@ -5,6 +5,7 @@ From MyProject Require Import SmtQuery.
 
 From MyProject Require Import CrMem.
 From MyProject Require Import CrMemEx.
+From MyProject Require Import TestPrograms.
 
 (* Tell extraction to use your external OCaml implementation *)
 Extract Constant smt_query => "Z3Solver.solve".
@@ -16,4 +17,8 @@ Set Extraction Output Directory "extracted_code".
 Separate Extraction
   CrMem.query_expression CrMem.Z3Res
   CrMemEx.example_programs
-  CrDsl.CaracaraProgram Integers.repr SmtQuery.equivalence_checker_cr_dsl SmtTypes.SmtResult.
+  CrDsl.CaracaraProgram Integers.repr SmtQuery.equivalence_checker_cr_dsl SmtTypes.SmtResult
+  CrSymbolicSemanticsTransformer.eval_sym_state
+  CrConcreteSemanticsTransformer.eval_cr_program_concrete
+  CrVarLike.program_state_mapper CrVarLike.init_concrete_state
+  test_programs.
