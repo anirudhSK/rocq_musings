@@ -17,9 +17,6 @@ Inductive FunctionArgument :=
   | ConstantArg (n : CrInt_T) (* TODO: Can have constant ptrs as well *)
   | StatefulArg (s : State).
 
-(* A CmpOp is a comparison primitive used in Guards.
-   Only Eq and Lt are exposed; Gt/Le/Ge/Ne are derived by swapping operands
-   (and, when GNot/GOr land later, wrapping). *)
 Inductive CmpOp :=
   | CmpEq
   | CmpGt

@@ -165,9 +165,9 @@ Definition wf_module_network (net : ModuleNetwork) : Prop :=
 
 Inductive GeneralCaracaraProgram : Type :=
   | GeneralCaracaraProgramDef :
-      list Header ->
+      list Header -> (* Input Header Format *)
       ModuleNetwork ->
-      list Header ->
+      list Header -> (* Output Header Format *)
       GeneralCaracaraProgram.
 
 Definition get_headers_from_general (p : GeneralCaracaraProgram) : list Header :=

@@ -7,12 +7,12 @@ let get_program f =
   close_in x;
   str |> Sexp.of_string |> CrTypeIF.coq_CaracaraProgram_of_sexp
 
-let get_general_program f =
+(* let get_general_program f =
   let x = open_in f in
   let len = in_channel_length x in
   let str = really_input_string x len in
   close_in x;
-  str |> Sexp.of_string |> CrTypeIF.CrModule.coq_GeneralCaracaraProgram_of_sexp
+  str |> Sexp.of_string |> CrTypeIF.CrModule.coq_GeneralCaracaraProgram_of_sexp *)
 
 let get_mem_program f = MemSolver.load_program f
 
@@ -188,7 +188,9 @@ let%expect_test "e2e bpf test: O0 ≡ O2" =
 
 (* Test 13: linear scan vs tss for simple filter database *)
 let%expect_test "tss basic" =
-  let p1 = get_general_program "../test/lin_pkt.out" in
-  let p2 = get_general_program "../test/tss_pkt.out" in
+  (* let p1 = get_general_program "../test/lin_pkt.out" in
+  let p2 = get_general_program "../test/tss_pkt.out" in *)
+  let p1 = PktClass.ex_lin_prog in
+  let p2 = PktClass.ex_tss_prog in
   print_equiv (SmtModuleQuery.modnet_equivalence_checker p1 p2);
   [%expect {| Equivalent |}]

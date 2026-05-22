@@ -171,24 +171,16 @@ Definition compute_h_base (db : FilterDatabase) : Header :=
 
 (* ------------------------------------------------------------------ *)
 
-Fixpoint lindb_helper (h_out : Header) (db : FilterDatabase) (p : CaracaraProgram) : CaracaraProgram :=
-  match db with
-  | [] => p
-  | (f, lbl) :: rest =>
-      let mp := FlattenFilter f in
-      let new_rule := Seq (SeqCtr mp [StatelessOp AddOp (ConstantArg (CrUInt8 lbl)) (ConstantArg (CrUInt8 (repr 0))) h_out]) in
-      let t := get_transformer_from_prog p in
-      let new_transformer := new_rule :: t in
-      let new_prog := CaracaraProgramDef [h_out] [] [] new_transformer in
-      lindb_helper h_out rest new_prog
-  end.
 Definition linear_db (db : FilterDatabase) : GeneralCaracaraProgram :=
   let h_out := compute_h_out db in
   let db' := sort_db db in
-  let prog := lindb_helper h_out db' (CaracaraProgramDef [] [] [] []) in
-  let t := get_transformer_from_prog prog in
-  let t' := List.rev t in
-  let p := CaracaraProgramDef [h_out] [] [] t' in
+  let t := List.fold_right
+    (fun '(f, lbl) acc =>
+      let mp := FlattenFilter f in
+      let new_rule := Seq (SeqCtr mp [StatelessOp AddOp (ConstantArg (CrUInt8 lbl)) (ConstantArg (CrUInt8 (repr 0))) h_out]) in
+      new_rule :: acc)
+    [] db' in
+  let p := CaracaraProgramDef [h_out] [] [] t in
   let net := empty_net in
   let (net, start_id) := add_program_to_network net p in
   let net := set_start_module net start_id in (* technically unnecessary but here for readability or in case empty_net changes *)
