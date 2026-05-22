@@ -6,6 +6,7 @@ From MyProject Require Import MyInts.
 From MyProject Require Import CrIdentifiers.
 From MyProject Require Import CrProgramState.
 From MyProject Require Import CrModule.
+From MyProject Require Import CrTransformer.
 From MyProject Require Import SmtExpr.
 From MyProject Require Import CrDsl.
 From MyProject Require Import Maps.
@@ -470,6 +471,18 @@ Definition init_module_symbolic_state
             let var := match x with | StateCtr x_id => x_id end in
             (var, SmtArithVar (m_prefix ++ "state_" ++ pos_to_string var))) s));|}.
 
+Definition collect_write_headers (mods : list CrModule) : list Header :=
+  List.flat_map (fun m =>
+    match m with
+    | ParserModule _ _ => []
+    | TransformerModule _ _ _ t =>
+      List.flat_map (fun rule =>
+        match rule with
+        | Seq (SeqCtr _ ops) => snd (extract_all_targets ops)
+        | Par (ParCtr _ ops) => snd (extract_all_targets (proj1_sig ops))
+        end) t
+    end) mods.
+
 Definition init_general_symbolic_state
     (prog_prefix : string)
     (p : GeneralCaracaraProgram)
@@ -477,12 +490,21 @@ Definition init_general_symbolic_state
   let net := get_network_from_general p in
   let mods := net_modules net in
   let h := get_headers_from_general p in
+  let write_hdrs := collect_write_headers mods in
   List.fold_left
     (fun acc m =>
       match m with
       | ParserModule _ _ => acc
       | TransformerModule m_id s c t =>
-        PMap.set (unwrap m_id) (init_module_symbolic_state prog_prefix m_id h s c) acc
+        let base := init_module_symbolic_state prog_prefix m_id h s c in
+        (* Seed each write-target header explicitly in the PTree so that
+           update_all_varlike will track it after eval_transformer_smt runs.
+           For input headers already present this is a no-op; for output-only
+           headers it installs their PMap default (CrNilInt) as an explicit entry. *)
+        let seeded := List.fold_left
+          (fun st wh => update_varlike st wh (lookup_varlike st wh))
+          write_hdrs base in
+        PMap.set (unwrap m_id) seeded acc
       end)
     mods
     (PMap.init {|
