@@ -28,7 +28,8 @@ smt_query
 !/extracted_code/MemSolver.ml
 !/extracted_code/Z3Solver.ml
 !/extracted_code/TestEquality.ml
-!/extracted_code/TestSemantics.ml
+!/extracted_code/TestModuleSemantics.ml
+!/extracted_code/TestProgramSemantics.ml
 !/extracted_code/EqCheck.ml
 /.vscode/
 /.idea/

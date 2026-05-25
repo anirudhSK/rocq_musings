@@ -513,6 +513,19 @@ Definition init_general_symbolic_state
       state_map := PMap.init (SmtArithConst CrNilInt);
     |}).
 
+Definition init_general_concrete_state (p : GeneralCaracaraProgram)
+    : GeneralConcreteState :=
+  let net := get_network_from_general p in
+  List.fold_left
+    (fun acc m =>
+      match m with
+      | ParserModule _ _ => acc
+      | TransformerModule m_id s c _ =>
+          PMap.set (unwrap m_id) (init_concrete_state (CaracaraProgramDef [] s c [])) acc
+      end)
+    (net_modules net)
+    (PMap.init (init_concrete_state (CaracaraProgramDef [] [] [] []))).
+
 Definition is_init_state {T} (p : CaracaraProgram) (ps : ProgramState T) : Prop :=
   forall h sv c,
     (In h (get_headers_from_prog p) <-> In h (get_all_varlike_from_ps ps)) /\

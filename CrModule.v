@@ -230,12 +230,15 @@ Definition get_sink_states {T : Type}
 
 (* ------------------------------------------------------------------ *)
 
-(* Largest module-name uid currently used in the network, or 0 if empty.
-   Used to allocate fresh ids when extending the network. *)
+(* One past the largest module uid in use — the next fresh id to allocate.
+   Invariant: forall m_id in net, m_id < max_mod_uid net. *)
 Definition max_mod_uid (net : ModuleNetwork) : positive :=
-  List.fold_left
-    (fun acc m => Pos.max acc (unwrap (get_mod_name m)))
-    (net_modules net) 1%positive.
+  match net_modules net with
+  | [] => 1%positive
+  | ms => Pos.succ (List.fold_left
+            (fun acc m => Pos.max acc (unwrap (get_mod_name m)))
+            ms 1%positive)
+  end.
 
 Definition max_conn_uid (net : ModuleNetwork) : positive :=
   List.fold_left
@@ -243,7 +246,7 @@ Definition max_conn_uid (net : ModuleNetwork) : positive :=
     (net_connections net) 1%positive.
 
 Definition add_program_to_network (net : ModuleNetwork) (p : CaracaraProgram) : ModuleNetwork * ModuleName :=
-  let new_id := Pos.succ (max_mod_uid net) in
+  let new_id := max_mod_uid net in
   let tm := TransformerModule
     (wrap new_id)
     (get_states_from_prog p)
