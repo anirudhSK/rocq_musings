@@ -87,7 +87,7 @@ Lemma modnet_equivalence_checker_complete :
   opt_cf_1_l = Some [cf_1] /\
   opt_cf_2_l = Some [cf_2] /\
   (* in which the output headers differ on at least one header *)
-  (exists h, In h (get_headers_from_general p1) /\
+  (exists h, In h (get_signature_from_general p1) /\
     lookup_varlike cf_1 h <> lookup_varlike cf_2 h).
 Proof.
 Admitted.
