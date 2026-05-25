@@ -74,34 +74,49 @@ Proof.
     apply IHrest.
 Qed.
 
+Lemma commute_conc_and_lookup :
+  forall {A} `{CrVarLike A} (s : SymbolicState) (f : SmtValuation) (v : A),
+  eval_smt_arith (lookup_varlike s v) f =
+  lookup_varlike (eval_sym_state s f) v.
+Proof.
+  intros.
+  unfold eval_sym_state. rewrite commute_lookup_varlike. reflexivity.
+Qed.
+
 (* For any Header, uint8 pair,
    concrete and symbolic execution match up. *)
 Transparent lookup_varlike.
 Lemma commute_sym_vs_conc_match_cond :
-  forall (hv_pair: Header * CrInt_T) (f : SmtValuation)
+  forall (hcv_tuple: Header * CmpOp * MatchValue) (f : SmtValuation)
          (s1 : SymbolicState)
          (c1 : ConcreteState),
     c1 = eval_sym_state s1 f ->
-    eval_match_concrete [hv_pair] c1 = (* first concretize, and then interpret *)
-    eval_smt_bool (eval_match_smt [hv_pair] s1) f. (* first interpret, and then concretize *)
+    eval_match_concrete [hcv_tuple] c1 = (* first concretize, and then interpret *)
+    eval_smt_bool (eval_match_smt [hcv_tuple] s1) f. (* first interpret, and then concretize *)
 Proof.
-  intros hv_pair f s1 c1 Hc1.
-  destruct hv_pair as [h v].
-  simpl.
-  rewrite andb_true_r.
-  rewrite Hc1.
-  assert (H : lookup_varlike (eval_sym_state s1 f) h =
-              eval_smt_arith (lookup_varlike s1 h) f).
-  { unfold eval_sym_state.
-    simpl.
+  intros hcv_tuple f s1 c1 Hc1.
+  assert (H : forall (h_ : Header), lookup_varlike (eval_sym_state s1 f) h_ =
+            eval_smt_arith (lookup_varlike s1 h_) f).
+  { intros.
+    unfold eval_sym_state.
     rewrite commute_lookup_varlike.
     reflexivity. }
-  rewrite H.
-  destruct (eval_smt_arith (lookup_varlike s1 h) f).
-  - destruct (CrVal.eqb (IntVal val) (IntVal v)); reflexivity.
-  - destruct (CrVal.eqb (PtrVal val) (IntVal v)); reflexivity.
-  - destruct (CrVal.eqb UninitVal (IntVal v)); reflexivity.
-  - destruct (CrVal.eqb ErrorVal (IntVal v)); reflexivity.
+  destruct hcv_tuple as [[h cmp] v].
+  simpl.
+  repeat rewrite andb_true_r.
+  destruct v.
+  - destruct cmp;
+    unfold eval_cmp_concrete, eval_cmp_smt; simpl;
+    rewrite Hc1;
+    rewrite H;
+    destruct (CrVal.eqb (eval_smt_arith (lookup_varlike s1 h) f) (IntVal k));
+    reflexivity.
+  - destruct cmp;
+    unfold eval_cmp_concrete, eval_cmp_smt; simpl;
+    rewrite Hc1;
+    try rewrite H with (h_ := h); try rewrite H with (h_ := h0);
+    destruct (CrVal.eqb (eval_smt_arith (lookup_varlike s1 h) f) (eval_smt_arith (lookup_varlike s1 h0) f));
+    reflexivity.
 Qed.
 
 (* The same lemma as above, but
@@ -115,23 +130,23 @@ Lemma commute_sym_vs_conc_match_pattern :
     eval_smt_bool (eval_match_smt mp s1) f. (* first interpret , and then concretize *)
 Proof.
   intros mp f s1 c1 Hc1.
-  induction mp as [| hv_pair rest IHrest].
+  induction mp as [| hcv_tuple rest IHrest].
   - simpl. reflexivity.
-  - assert (H1 : eval_match_concrete (hv_pair :: rest) c1 =
-                 eval_match_concrete [hv_pair] c1 && eval_match_concrete rest c1).
+  - assert (H1 : eval_match_concrete (hcv_tuple :: rest) c1 =
+                 eval_match_concrete [hcv_tuple] c1 && eval_match_concrete rest c1).
     { simpl. rewrite andb_true_r. reflexivity. } 
     rewrite H1.
-    assert (H3 : eval_smt_bool (SmtBoolAnd (eval_match_smt [hv_pair] s1) (eval_match_smt rest s1)) f
-                 = eval_smt_bool (eval_match_smt [hv_pair] s1) f &&
+    assert (H3 : eval_smt_bool (SmtBoolAnd (eval_match_smt [hcv_tuple] s1) (eval_match_smt rest s1)) f
+                 = eval_smt_bool (eval_match_smt [hcv_tuple] s1) f &&
                    eval_smt_bool (eval_match_smt rest s1) f).
     { reflexivity. }
-    rewrite (commute_sym_vs_conc_match_cond hv_pair f s1 c1 Hc1).
+    rewrite (commute_sym_vs_conc_match_cond hcv_tuple f s1 c1 Hc1).
     rewrite IHrest.
-    destruct hv_pair as [h v].
+    destruct hcv_tuple as [[h cmp] v].
     simpl.
-    destruct (eval_match_smt rest s1); try reflexivity.
-    simpl.
-    rewrite andb_true_r. reflexivity.
+    destruct (eval_match_smt rest s1);
+    simpl; try rewrite andb_true_r;
+    reflexivity.
 Qed.
 
 Lemma commute_sym_vs_conc_helper_seq_par_rule_hdr :

@@ -3,6 +3,8 @@ From MyProject Require Import SmtExpr.
 From Stdlib Require Import Bool.Bool.
 From Stdlib Require Import Lists.List.
 From Stdlib Require Import ZArith.ZArith.
+From Stdlib Require Import Strings.String.
+From Stdlib Require Import Strings.Ascii.
 
 Lemma not_none_is_some : forall {A : Type} (y : option A),
   y <> None -> exists x, y = Some x.
@@ -102,3 +104,41 @@ Proof.
   - reflexivity.
   - simpl. f_equal. apply IH.
 Qed.
+
+(* ============================================================ *)
+(*  String append helpers                                        *)
+(* ============================================================ *)
+
+Lemma string_length_append :
+  forall s1 s2,
+    String.length (s1 ++ s2)%string = (String.length s1 + String.length s2)%nat.
+Proof.
+  induction s1; intros s2; simpl; auto.
+Qed.
+
+Lemma string_append_inj_r_char :
+  forall s1 s2 c,
+    (s1 ++ String c "")%string = (s2 ++ String c "")%string -> s1 = s2.
+Proof.
+  induction s1 as [| c1 s1' IH]; intros s2 c Heq; destruct s2 as [| c2 s2'].
+  - reflexivity.
+  - simpl in Heq. inversion Heq.
+    destruct s2'; simpl in H1; discriminate.
+  - simpl in Heq. inversion Heq.
+    destruct s1'; simpl in H1; discriminate.
+  - simpl in Heq. inversion Heq.
+    f_equal. eapply IH. eassumption.
+Qed.
+
+Lemma string_append_neq_r_diff_char :
+  forall s1 s2 c1 c2,
+    c1 <> c2 ->
+    (s1 ++ String c1 "")%string <> (s2 ++ String c2 "")%string.
+Proof.
+  induction s1 as [| c s1' IH]; intros s2 c1 c2 Hneq Heq; destruct s2 as [| c' s2']; simpl in *.
+  - inversion Heq. contradiction.
+  - inversion Heq. destruct s2'; simpl in H1; discriminate.
+  - inversion Heq. destruct s1'; simpl in H1; discriminate.
+  - inversion Heq. eapply IH; eauto.
+Qed.
+

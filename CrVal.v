@@ -74,7 +74,7 @@ Definition ivltb (x y : CrInt_T) : bool :=
   | CrUInt8 x', CrUInt8 y'
   | CrUInt16 x', CrUInt16 y'
   | CrUInt32 x', CrUInt32 y'
-  | CrUInt64 x', CrUInt64 y' => Integers.lt x' y'
+  | CrUInt64 x', CrUInt64 y' => Integers.ltu x' y'
   | _, _ => false
   end.
 Transparent ivltb.

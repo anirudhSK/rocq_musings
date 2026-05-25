@@ -1,11 +1,18 @@
 From Stdlib Require Import Strings.String.
+From Stdlib Require Import Strings.Ascii.
+From Stdlib Require Import micromega.Lia.
+From MyProject Require Import Integers.
+From MyProject Require Import MyInts.
 From MyProject Require Import CrIdentifiers.
 From MyProject Require Import CrProgramState.
+From MyProject Require Import CrModule.
+From MyProject Require Import CrTransformer.
 From MyProject Require Import SmtExpr.
 From MyProject Require Import CrDsl.
 From MyProject Require Import Maps.
 From MyProject Require Import UtilLemmas.
 From MyProject Require Import CrVal.
+From MyProject Require Import PosWrapper.
 From Stdlib Require Import ZArith.
 From Stdlib Require Import Bool.
 From Stdlib Require Import List.
@@ -304,6 +311,37 @@ Proof.
   reflexivity.
 Qed.
 
+(* Convert list_norepet of a list of varlikes to list_norepet of their inner ids. *)
+Lemma list_norepet_header_inner :
+  forall l : list Header,
+    Coqlib.list_norepet l ->
+    Coqlib.list_norepet (List.map (fun h : Header => match h with HeaderCtr i => i end) l).
+Proof.
+  intros l Hno.
+  apply Coqlib.list_map_norepet; auto.
+  intros [i] [j] _ _ Hneq Heq. simpl in Heq. subst. apply Hneq. reflexivity.
+Qed.
+
+Lemma list_norepet_state_inner :
+  forall l : list State,
+    Coqlib.list_norepet l ->
+    Coqlib.list_norepet (List.map (fun s : State => match s with StateCtr i => i end) l).
+Proof.
+  intros l Hno.
+  apply Coqlib.list_map_norepet; auto.
+  intros [i] [j] _ _ Hneq Heq. simpl in Heq. subst. apply Hneq. reflexivity.
+Qed.
+
+Lemma list_norepet_ctrl_inner :
+  forall l : list Ctrl,
+    Coqlib.list_norepet l ->
+    Coqlib.list_norepet (List.map (fun c : Ctrl => match c with CtrlCtr i => i end) l).
+Proof.
+  intros l Hno.
+  apply Coqlib.list_map_norepet; auto.
+  intros [i] [j] _ _ Hneq Heq. simpl in Heq. subst. apply Hneq. reflexivity.
+Qed.
+
 Definition get_all_varlike_from_ps {T A : Type} `{CrVarLike A} (s: ProgramState T) : list A :=
   List.map (fun '(key, value) => make_item key)
            (PTree.elements (snd (map_from_ps s))).
@@ -336,9 +374,9 @@ Definition init_concrete_state (p : CaracaraProgram) : ConcreteState :=
   let h := get_headers_from_prog p in
   let s := get_states_from_prog p in
   let c := get_ctrls_from_prog p in
-  {|ctrl_map    :=  PMap.init UninitVal;
-     header_map :=  PMap.init UninitVal;
-     state_map  :=  PMap.init UninitVal;|}.
+  {|ctrl_map    :=  PMap.init (IntVal CrNilInt);
+     header_map :=  PMap.init (IntVal CrNilInt);
+     state_map  :=  PMap.init (IntVal CrNilInt);|}.
 
 (* Convert positive to string *)
 Fixpoint pos_to_string (p : positive) : string :=
@@ -348,19 +386,145 @@ Fixpoint pos_to_string (p : positive) : string :=
   | xI p' => String.append (pos_to_string p') "1"
   end.
 
+(* pos_to_string is injective. *)
+Lemma pos_to_string_length_ge_1 :
+  forall p, (String.length (pos_to_string p) >= 1)%nat.
+Proof.
+  induction p; simpl; try (rewrite string_length_append; simpl; lia); lia.
+Qed.
+
+Local Ltac pos_to_string_inj_same Heq :=
+  f_equal;
+  match goal with
+  | [ IH : forall q : positive, pos_to_string _ = pos_to_string q -> _ = q |- _ ] =>
+    apply IH
+  end;
+  eapply string_append_inj_r_char; exact Heq.
+Local Ltac pos_to_string_inj_diff Heq :=
+  exfalso; revert Heq;
+  apply string_append_neq_r_diff_char;
+  intro Hc; inversion Hc.
+Local Ltac pos_to_string_inj_length :=
+  exfalso;
+  match goal with
+  | [ Heq : (pos_to_string ?p ++ _)%string = _ |- _ ] =>
+    pose proof (pos_to_string_length_ge_1 p);
+    apply (f_equal String.length) in Heq;
+    rewrite string_length_append in Heq;
+    simpl in Heq; lia
+  | [ Heq : _ = (pos_to_string ?p ++ _)%string |- _ ] =>
+    pose proof (pos_to_string_length_ge_1 p);
+    apply (f_equal String.length) in Heq;
+    rewrite string_length_append in Heq;
+    simpl in Heq; lia
+  end.
+Lemma pos_to_string_inj :
+  forall p1 p2, pos_to_string p1 = pos_to_string p2 -> p1 = p2.
+Proof.
+  induction p1; intros p2 Heq; destruct p2; simpl in Heq;
+    first [ reflexivity
+          | pos_to_string_inj_same Heq
+          | pos_to_string_inj_diff Heq
+          | pos_to_string_inj_length ].
+Qed.
+
+Local Open Scope string_scope.
 Definition init_symbolic_state (p: CaracaraProgram) : SymbolicState :=
   let h := get_headers_from_prog p in
   let s := get_states_from_prog p in
   let c := get_ctrls_from_prog p in
-  {|ctrl_map :=  (SmtArithVar "rndstring", (*TODO: Need better default, but think this doesn't matter *)
-                        PTree_Properties.of_list
-                        (List.map (fun x => let var := match x with | CtrlCtr x_id => x_id end in (var,  SmtArithVar (pos_to_string var))) c));
-     header_map     :=  (SmtArithVar "rndstring", (*TODO: Need better default, but think this doesn't matter *)
-                        PTree_Properties.of_list
-                        (List.map (fun x => let var := match x with | HeaderCtr x_id => x_id end in (var, SmtArithVar (pos_to_string var))) h));
-     state_map  :=  (SmtArithVar "rndstring", (*TODO: Need better default, but think this doesn't matter *)
-                        PTree_Properties.of_list
-                        (List.map (fun x => let var := match x with | StateCtr x_id => x_id end in (var, SmtArithVar (pos_to_string var))) s));|}.
+  {| ctrl_map   :=  (SmtArithConst CrNilInt,
+                      PTree_Properties.of_list
+                      (List.map (fun x => let var := match x with | CtrlCtr x_id => x_id end in (var,  SmtArithVar ("ctrl_" ++ pos_to_string var))) c));
+     header_map :=  (SmtArithConst CrNilInt,
+                      PTree_Properties.of_list
+                      (List.map (fun x => let var := match x with | HeaderCtr x_id => x_id end in (var, SmtArithVar ("hdr_" ++ pos_to_string var))) h));
+     state_map  :=  (SmtArithConst CrNilInt,
+                      PTree_Properties.of_list
+                      (List.map (fun x => let var := match x with | StateCtr x_id => x_id end in (var, SmtArithVar ("state_" ++ pos_to_string var))) s));|}.
+
+Definition init_module_symbolic_state
+    (prog_prefix : string)
+    (m_id        : ModuleName)
+    (h           : list Header)
+    (s           : list State)
+    (c           : list Ctrl)
+    : SymbolicState :=
+  (* e.g. p1_m4_ *)
+  let m_prefix := prog_prefix ++ "_m" ++ pos_to_string (unwrap m_id) ++ "_" in
+  {| ctrl_map :=
+       (SmtArithConst CrNilInt,
+        PTree_Properties.of_list
+          (List.map (fun x =>
+            let var := match x with | CtrlCtr x_id => x_id end in
+            (var, SmtArithVar (m_prefix ++ "ctrl_" ++ pos_to_string var))) c));
+     header_map :=
+       (SmtArithConst CrNilInt,
+        PTree_Properties.of_list
+          (List.map (fun x =>
+            let var := match x with | HeaderCtr x_id => x_id end in
+            (var, SmtArithVar ("hdr_" ++ pos_to_string var))) h));
+     state_map :=
+       (SmtArithConst CrNilInt,
+        PTree_Properties.of_list
+          (List.map (fun x =>
+            let var := match x with | StateCtr x_id => x_id end in
+            (var, SmtArithVar (m_prefix ++ "state_" ++ pos_to_string var))) s));|}.
+
+Definition collect_write_headers (mods : list CrModule) : list Header :=
+  List.flat_map (fun m =>
+    match m with
+    | ParserModule _ _ => []
+    | TransformerModule _ _ _ t =>
+      List.flat_map (fun rule =>
+        match rule with
+        | Seq (SeqCtr _ ops) => snd (extract_all_targets ops)
+        | Par (ParCtr _ ops) => snd (extract_all_targets (proj1_sig ops))
+        end) t
+    end) mods.
+
+Definition init_general_symbolic_state
+    (prog_prefix : string)
+    (p : GeneralCaracaraProgram)
+    : GeneralSymbolicState :=
+  let net := get_network_from_general p in
+  let mods := net_modules net in
+  let h := get_headers_from_general p in
+  let write_hdrs := collect_write_headers mods in
+  List.fold_left
+    (fun acc m =>
+      match m with
+      | ParserModule _ _ => acc
+      | TransformerModule m_id s c t =>
+        let base := init_module_symbolic_state prog_prefix m_id h s c in
+        (* Seed each write-target header explicitly in the PTree so that
+           update_all_varlike will track it after eval_transformer_smt runs.
+           For input headers already present this is a no-op; for output-only
+           headers it installs their PMap default (CrNilInt) as an explicit entry. *)
+        let seeded := List.fold_left
+          (fun st wh => update_varlike st wh (lookup_varlike st wh))
+          write_hdrs base in
+        PMap.set (unwrap m_id) seeded acc
+      end)
+    mods
+    (PMap.init {|
+      ctrl_map := PMap.init (SmtArithConst CrNilInt);
+      header_map := PMap.init (SmtArithConst CrNilInt);
+      state_map := PMap.init (SmtArithConst CrNilInt);
+    |}).
+
+Definition init_general_concrete_state (p : GeneralCaracaraProgram)
+    : GeneralConcreteState :=
+  let net := get_network_from_general p in
+  List.fold_left
+    (fun acc m =>
+      match m with
+      | ParserModule _ _ => acc
+      | TransformerModule m_id s c _ =>
+          PMap.set (unwrap m_id) (init_concrete_state (CaracaraProgramDef [] s c [])) acc
+      end)
+    (net_modules net)
+    (PMap.init (init_concrete_state (CaracaraProgramDef [] [] [] []))).
 
 Definition is_init_state {T} (p : CaracaraProgram) (ps : ProgramState T) : Prop :=
   forall h sv c,

@@ -4,6 +4,8 @@ include Integers
 include Datatypes
 include MyInts
 include String
+
+(* Helpers for constructing an SMT valuation *)
 type coq_ValueMap =
 | VMap of string * CrVal.coq_CrVal * coq_ValueMap
 | VMap_DNE
@@ -15,6 +17,8 @@ let rec coq_TraverseMap (vm : coq_ValueMap) (s : string) : CrVal.coq_CrVal =
     else
       coq_TraverseMap nxt_ s
   | VMap_DNE -> UninitVal
+
+(* Helpers for casting between ocaml and rocq types *)
 let coq_Z_to_int (n : BinNums.coq_Z) : int =
   let rec pos_to_int_ (n : BinNums.positive) (i : int) : int =
     match n with
@@ -22,16 +26,10 @@ let coq_Z_to_int (n : BinNums.coq_Z) : int =
     | Coq_xO n_ -> (pos_to_int_ n_ (i+1))
     | Coq_xI n_ -> (1 lsl i) + (pos_to_int_ n_ (i+1)) in
   let pos_to_int (n : BinNums.positive) : int = (pos_to_int_ n 0) in
-  match n with
-  | Z0 -> 0
-  | Zpos n_ -> pos_to_int n_
-  | Zneg n_ -> 0 - (pos_to_int n_)
-let rec pos_to_str (n : BinNums.positive) : Stdlib.String.t =
-  match n with
-  | Coq_xH -> "1"
-  | Coq_xO n_ -> (pos_to_str n_) ^ "0"
-  | Coq_xI n_ -> (pos_to_str n_) ^ "1"
-
+    match n with
+    | Z0 -> 0
+    | Zpos n_ -> pos_to_int n_
+    | Zneg n_ -> 0 - (pos_to_int n_)
 let rec int_to_pos (n : int) : BinNums.positive =
   if (n = 1) then Coq_xH
   else if (n mod 2 = 0) then
@@ -50,6 +48,12 @@ let int_to_coq_uint64 (n : int) : BinNums.coq_Z =
   repr (Coq_xO (Coq_xO (Coq_xO (Coq_xO (Coq_xO (Coq_xO Coq_xH)))))) (
     if (n = 0) then Z0
     else Zpos (int_to_pos n))
+
+let rec pos_to_str (n : BinNums.positive) : Stdlib.String.t =
+  match n with
+  | Coq_xH -> "1"
+  | Coq_xO n_ -> (pos_to_str n_) ^ "0"
+  | Coq_xI n_ -> (pos_to_str n_) ^ "1"
 let rec coq_str_to_str (s : string) : Stdlib.String.t =
   let bool_to_bit (b : Datatypes.bool) (idx : int) : int =
     match b with
@@ -89,7 +93,6 @@ let rec str_to_coq_str (s : Stdlib.String.t) : string =
 
 let uint8_crval (n : int) : CrVal.coq_CrVal =
   CrVal.IntVal (CrVal.CrUInt8 (int_to_coq_uint8 n))
-
 let crval_to_int (v : CrVal.coq_CrVal) : int =
   match v with
   | CrVal.IntVal (CrVal.CrUInt8 x)  -> coq_Z_to_int x
@@ -100,21 +103,16 @@ let crval_to_int (v : CrVal.coq_CrVal) : int =
 
 let get_header (n : int) (s : CrProgramState.coq_ConcreteState) : CrVal.coq_CrVal =
   CrVarLike.lookup_varlike CrVarLike.coq_CrVarLike_Header s (int_to_pos n)
-
 let set_header (n : int) (v : CrVal.coq_CrVal) (s : CrProgramState.coq_ConcreteState)
     : CrProgramState.coq_ConcreteState =
   CrVarLike.update_varlike CrVarLike.coq_CrVarLike_Header s (int_to_pos n) v
-
 let get_state (n : int) (s : CrProgramState.coq_ConcreteState) : CrVal.coq_CrVal =
   CrVarLike.lookup_varlike CrVarLike.coq_CrVarLike_State s (int_to_pos n)
-
 let set_state (n : int) (v : CrVal.coq_CrVal) (s : CrProgramState.coq_ConcreteState)
     : CrProgramState.coq_ConcreteState =
   CrVarLike.update_varlike CrVarLike.coq_CrVarLike_State s (int_to_pos n) v
-
 let get_ctrl (n : int) (s : CrProgramState.coq_ConcreteState) : CrVal.coq_CrVal =
   CrVarLike.lookup_varlike CrVarLike.coq_CrVarLike_Ctrl s (int_to_pos n)
-
 let set_ctrl (n : int) (v : CrVal.coq_CrVal) (s : CrProgramState.coq_ConcreteState)
     : CrProgramState.coq_ConcreteState =
   CrVarLike.update_varlike CrVarLike.coq_CrVarLike_Ctrl s (int_to_pos n) v
@@ -122,3 +120,61 @@ let set_ctrl (n : int) (v : CrVal.coq_CrVal) (s : CrProgramState.coq_ConcreteSta
 let run_program (p : CrDsl.coq_CaracaraProgram) (s : CrProgramState.coq_ConcreteState)
     : CrProgramState.coq_ConcreteState =
   CrConcreteSemanticsTransformer.eval_cr_program_concrete p s
+
+let print_state' indentation separator (ps : CrProgramState.coq_ConcreteState) =
+  let header_map = ps.header_map in let ctrl_map = ps.ctrl_map in let state_map = ps.state_map in
+  let header_tree = Datatypes.snd header_map in let ctrl_tree = Datatypes.snd ctrl_map in let state_tree = Datatypes.snd state_map in
+  let headers = Maps.PTree.elements header_tree in let ctrls = Maps.PTree.elements ctrl_tree in let states = Maps.PTree.elements state_tree in
+  let key p = coq_Z_to_int (BinNums.Zpos p) in
+  let rec to_pairs = function
+    | Datatypes.Coq_nil -> []
+    | Datatypes.Coq_cons (Datatypes.Coq_pair (k, v), rest) ->
+        (key k, crval_to_int v) :: to_pairs rest
+  in
+  let render prefix coq_list =
+    Stdlib.String.concat "" [
+      indentation;
+      (coq_list
+      |> to_pairs
+      |> Stdlib.List.sort (fun (a, _) (b, _) -> Stdlib.compare a b)
+      |> Stdlib.List.map (fun (k, v) -> Printf.sprintf "%s%d=%d" prefix k v)
+      |> Stdlib.String.concat ", ")]
+  in
+  let groups = Stdlib.List.filter (fun s -> s <> "")
+    [render "h" headers; render "c" ctrls; render "s" states]
+  in
+  print_endline (Stdlib.String.concat separator groups)
+
+let print_state = print_state' "" "\n"
+
+let start_mod_id (p : CrModule.coq_GeneralCaracaraProgram) : int =
+  let net = CrModule.get_network_from_general p in
+  coq_Z_to_int (BinNums.Zpos
+    (PosWrapper.coq_PosWrapper_ModuleName.unwrap net.CrModule.start_module))
+
+let get_mod_state (key : int) (gcs : CrProgramState.coq_ConcreteState Maps.PMap.t)
+    : CrProgramState.coq_ConcreteState =
+  Maps.PMap.get (int_to_pos key) gcs
+let set_mod_state (key : int) (ps : CrProgramState.coq_ConcreteState)
+    (gcs : CrProgramState.coq_ConcreteState Maps.PMap.t)
+    : CrProgramState.coq_ConcreteState Maps.PMap.t =
+  Maps.PMap.set (int_to_pos key) ps gcs
+
+let print_general_state (gcs : CrProgramState.coq_ConcreteState Maps.PMap.t) =
+  let rec to_list acc = function
+    | Datatypes.Coq_nil -> acc
+    | Datatypes.Coq_cons (Datatypes.Coq_pair (mod_id, local_state), rest) ->
+        to_list ((coq_Z_to_int (BinNums.Zpos mod_id), local_state) :: acc) rest
+  in
+  let pairs = to_list [] (Maps.PTree.elements (Datatypes.snd gcs)) in
+  let sorted = Stdlib.List.sort (fun (a, _) (b, _) -> Stdlib.compare a b) pairs in
+  Stdlib.List.iter (fun (id, local_state) ->
+    Printf.printf "Module %d:\n" id;
+    print_state' "  " "" local_state) sorted
+
+let listify_coq_list (a_list : 'a Datatypes.list) : 'a Stdlib.List.t =
+  let rec aux acc = function
+  | Datatypes.Coq_nil -> Stdlib.List.rev acc
+  | Datatypes.Coq_cons (h, t) -> aux (h :: acc) t
+  in
+  aux [] a_list

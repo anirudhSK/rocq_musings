@@ -42,9 +42,20 @@ Definition eval_hdr_op_assign_concrete (op : HdrOp) (ps: ConcreteState) : Concre
         let op_output := eval_hdr_op_expr_concrete op ps in update_varlike ps target op_output
   end.
 
+Definition eval_cmp_concrete (op : CmpOp) (v1 v2 : CrVal) : bool :=
+  match op with
+  | CmpEq => CrVal.eqb v1 v2
+  | CmpGt => CrVal.ltb v2 v1
+  | CmpLt => CrVal.ltb v1 v2
+  end.
+
 Definition eval_match_concrete (match_pattern : MatchPattern) (ps : ConcreteState) : bool :=
-  (* For every list element, check if the Header's current value (determined by ps) equals the uint8 *)
-  List.forallb (fun '(h, v) => CrVal.eqb (lookup_varlike ps h) (IntVal v)) match_pattern.
+  List.forallb (fun '(h, c, v) =>
+  let v' := match v with
+  | MatchConst k' => (IntVal k')
+  | MatchHeader h' => (lookup_varlike ps h')
+  end in
+  eval_cmp_concrete c (lookup_varlike ps h) v') match_pattern.
 
 (* Define evaluation over a list of HdrOp *)
 (* The list is evaluated left to right: the head of the list executes first. *)
@@ -99,9 +110,11 @@ Definition eval_match_action_rule_concrete (rule : MatchActionRule) (ps : Concre
 (* lookup header against each of the match-action rules in t to see if there is a match *)
 Definition get_match_results (t : Transformer) (ps : ConcreteState) : list bool :=
   List.map (fun rule =>
-                     match rule with 
-                       | Seq (SeqCtr match_pattern _) => eval_match_concrete match_pattern ps
-                       | Par (ParCtr match_pattern _) => eval_match_concrete match_pattern ps
+                     match rule with
+                       | Seq (SeqCtr match_pattern _) =>
+                           eval_match_concrete match_pattern ps
+                       | Par (ParCtr match_pattern _) =>
+                           eval_match_concrete match_pattern ps
                      end) t.
 
 (* Function to evaluate a transformer, which is a list of match-action rules *)
@@ -120,3 +133,7 @@ Definition eval_cr_program_concrete (p : CaracaraProgram) (ps : ConcreteState) :
   | CaracaraProgramDef _ _ _ t => eval_transformer_concrete t ps
   (* TODO: Maybe do something with the various lists of headers, states, and ctrls *)
   end.
+
+(* Could be useful to have a proof about sequential vs parallel *)
+(* Relax notion of local state *)
+(* filter database = naive program *)

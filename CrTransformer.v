@@ -17,6 +17,11 @@ Inductive FunctionArgument :=
   | ConstantArg (n : CrInt_T) (* TODO: Can have constant ptrs as well *)
   | StatefulArg (s : State).
 
+Inductive CmpOp :=
+  | CmpEq
+  | CmpGt
+  | CmpLt.
+
 (* A BinaryOp takes two uint8 arguments and returns another uint8 *)
 Inductive BinaryOp :=
   | AddOp
@@ -36,7 +41,11 @@ Inductive HdrOp :=
 (* Define MatchPattern as a list of header, pattern pairs,
    where patterns are uint8 and headers contain uint8 values,
    hence both can be compared. TODO: Need to handle wildcards. *)
-Definition MatchPattern := list (Header * CrInt_T). (* TODO: might have to change *)
+(* TODO: Explicit notion of default/fallback path *)
+Inductive MatchValue :=
+| MatchConst (k : CrInt_T)
+| MatchHeader (h : Header).
+Definition MatchPattern := list (Header * CmpOp * MatchValue).
 
 Inductive SeqRule :=
   | SeqCtr (match_pattern : MatchPattern) (action : list HdrOp).

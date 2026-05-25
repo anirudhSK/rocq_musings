@@ -23,7 +23,7 @@ Definition prog_sub2_h1 : CaracaraProgram :=
  * Used to test that a predicate mismatch leaves the state unchanged. *)
 Definition prog_sub5_h1_if_h1eq0 : CaracaraProgram :=
   CaracaraProgramDef [HeaderCtr 1] [] [] [
-    Seq (SeqCtr [(HeaderCtr 1, CrUInt8 (repr 0))] [
+    Seq (SeqCtr [(HeaderCtr 1, CmpEq, MatchConst (CrUInt8 (repr 0)))] [
       StatelessOp SubOp
         (HeaderArg (HeaderCtr 1))
         (ConstantArg (CrUInt8 (repr 5)))
@@ -34,7 +34,7 @@ Definition prog_sub5_h1_if_h1eq0 : CaracaraProgram :=
 (* Adds 3 to h1 when h1 = 5. *)
 Definition prog_add3_h1_if_h1eq5 : CaracaraProgram :=
   CaracaraProgramDef [HeaderCtr 1] [] [] [
-    Seq (SeqCtr [(HeaderCtr 1, CrUInt8 (repr 5))] [
+    Seq (SeqCtr [(HeaderCtr 1, CmpEq, MatchConst (CrUInt8 (repr 5)))] [
       StatelessOp AddOp
         (HeaderArg (HeaderCtr 1))
         (ConstantArg (CrUInt8 (repr 3)))
@@ -47,13 +47,13 @@ Definition prog_add3_h1_if_h1eq5 : CaracaraProgram :=
  * Rule 1: h1 += 1. Rule 2: h1 += 10. *)
 Definition prog_first_match_h1eq5 : CaracaraProgram :=
   CaracaraProgramDef [HeaderCtr 1] [] [] [
-    Seq (SeqCtr [(HeaderCtr 1, CrUInt8 (repr 5))] [
+    Seq (SeqCtr [(HeaderCtr 1, CmpEq, MatchConst (CrUInt8 (repr 5)))] [
       StatelessOp AddOp
         (HeaderArg (HeaderCtr 1))
         (ConstantArg (CrUInt8 (repr 1)))
         (HeaderCtr 1)
     ]);
-    Seq (SeqCtr [(HeaderCtr 1, CrUInt8 (repr 5))] [
+    Seq (SeqCtr [(HeaderCtr 1, CmpEq, MatchConst (CrUInt8 (repr 5)))] [
       StatelessOp AddOp
         (HeaderArg (HeaderCtr 1))
         (ConstantArg (CrUInt8 (repr 10)))
@@ -209,13 +209,13 @@ Definition prog_stateful_arg_input : CaracaraProgram :=
  * With h1 = 10, only rule 2 fires (find_first_match returns rule 2): h1 = 110. *)
 Definition prog_multi_rule_second_matches : CaracaraProgram :=
   CaracaraProgramDef [HeaderCtr 1] [] [] [
-    Seq (SeqCtr [(HeaderCtr 1, CrUInt8 (repr 5))] [
+    Seq (SeqCtr [(HeaderCtr 1, CmpEq, MatchConst (CrUInt8 (repr 5)))] [
       StatelessOp AddOp
         (HeaderArg (HeaderCtr 1))
         (ConstantArg (CrUInt8 (repr 1)))
         (HeaderCtr 1)
     ]);
-    Seq (SeqCtr [(HeaderCtr 1, CrUInt8 (repr 10))] [
+    Seq (SeqCtr [(HeaderCtr 1, CmpEq, MatchConst (CrUInt8 (repr 10)))] [
       StatelessOp AddOp
         (HeaderArg (HeaderCtr 1))
         (ConstantArg (CrUInt8 (repr 100)))
@@ -227,7 +227,7 @@ Definition prog_multi_rule_second_matches : CaracaraProgram :=
  * When h2 = 7, h1 := h1 + 1. With h1 = 5 and h2 = 7: h1 = 6, h2 unchanged. *)
 Definition prog_cross_header_predicate : CaracaraProgram :=
   CaracaraProgramDef [HeaderCtr 1; HeaderCtr 2] [] [] [
-    Seq (SeqCtr [(HeaderCtr 2, CrUInt8 (repr 7))] [
+    Seq (SeqCtr [(HeaderCtr 2, CmpEq, MatchConst (CrUInt8 (repr 7)))] [
       StatelessOp AddOp
         (HeaderArg (HeaderCtr 1))
         (ConstantArg (CrUInt8 (repr 1)))

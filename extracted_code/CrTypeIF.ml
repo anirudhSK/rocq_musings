@@ -41,9 +41,15 @@ type coq_CrVal = [%import: CrVal.coq_CrVal]
 end
 module CrIdentifiers = struct
   include CrIdentifiers
+  type coq_ParserState = [%import: CrIdentifiers.coq_ParserState]
+  [@@deriving sexp]
   type coq_Header = [%import: CrIdentifiers.coq_Header]
   [@@deriving sexp]
   type coq_State = [%import: CrIdentifiers.coq_State]
+  [@@deriving sexp]
+  type coq_ModuleName = [%import: CrIdentifiers.coq_ModuleName]
+  [@@deriving sexp]
+  type coq_ConnectionName = [%import: CrIdentifiers.coq_ConnectionName]
   [@@deriving sexp]
   type coq_Ctrl = [%import: CrIdentifiers.coq_Ctrl]
   [@@deriving sexp]
@@ -52,9 +58,13 @@ module CrTransformer = struct
   include CrTransformer
   type coq_FunctionArgument = [%import: CrTransformer.coq_FunctionArgument]
   [@@deriving sexp]
+  type coq_CmpOp = [%import: CrTransformer.coq_CmpOp]
+  [@@deriving sexp]
   type coq_BinaryOp = [%import: CrTransformer.coq_BinaryOp]
   [@@deriving sexp]
   type coq_HdrOp = [%import: CrTransformer.coq_HdrOp]
+  [@@deriving sexp]
+  type coq_MatchValue = [%import: CrTransformer.coq_MatchValue]
   [@@deriving sexp]
   type coq_MatchPattern = [%import: CrTransformer.coq_MatchPattern]
   [@@deriving sexp]
@@ -67,9 +77,33 @@ module CrTransformer = struct
   type coq_Transformer = [%import: CrTransformer.coq_Transformer]
   [@@deriving sexp]
 end
-include CrDsl
-type coq_CaracaraProgram = [%import: CrDsl.coq_CaracaraProgram]
-[@@deriving sexp]
+module CrParser = struct
+  include CrParser
+  type coq_Parser = [%import: CrParser.coq_Parser]
+  [@@deriving sexp]
+end
+module CrDsl = struct
+  include CrDsl
+  type coq_CaracaraProgram = [%import: CrDsl.coq_CaracaraProgram]
+  [@@deriving sexp]
+  type coq_CrModule = [%import: CrDsl.coq_CrModule]
+  [@@deriving sexp]
+  type coq_Connection = [%import: CrDsl.coq_Connection]
+  [@@deriving sexp]
+end
+(* Re-export at top level for backwards compatibility with the rest of
+   the OCaml shim. *)
+type coq_CaracaraProgram = CrDsl.coq_CaracaraProgram
+let sexp_of_coq_CaracaraProgram = CrDsl.sexp_of_coq_CaracaraProgram
+let coq_CaracaraProgram_of_sexp = CrDsl.coq_CaracaraProgram_of_sexp
+
+module CrModule = struct
+  include CrModule
+  type coq_ModuleNetwork = [%import: CrModule.coq_ModuleNetwork]
+  [@@deriving sexp]
+  type coq_GeneralCaracaraProgram = [%import: CrModule.coq_GeneralCaracaraProgram]
+  [@@deriving sexp]
+end
 
 module CrMem = struct
   type var_id = [%import : CrMem.var_id]

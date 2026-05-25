@@ -27,7 +27,7 @@ opam update
 
 **Install Coq + VSCoq language server**
 ```bash
-opam install -y coq.8.20.1 vscoq-language-server
+opam install -y coq.9.1.0 vsrocq-language-server
 which vscoqtop
 ```
 (Pinning after specifying a version is unnecessary.)
@@ -39,16 +39,21 @@ which vscoqtop
 
 **Build Rocq code**
 ```bash
-coq_makefile -f _CoqProject *.v -o Makefile
+rocq makefile -f _CoqProject *.v -o Makefile
 make -j
 ```
 
 **For OCaml code, to interface with Z3 after extraction**
-* opam install z3 ppx_import sexplib ppx_sexp_conv
+* opam install z3 ppx_import sexplib ppx_sexp_conv ppx_expect
 * ocamlfind ocamlc -thread -package z3 -linkpkg -o smt_query smt_query.ml
 
 **Build extracted code**
 ```bash
+# if there are new files that have been extracted via make
+# then you must update the dune dependencies
+perl sync_dune_modules.pl
+
+# check that code builds
 dune build --profile release
 
 # usage: dune exec eq_check ./path/to/s/exp/1 ./path/to/s/exp/2
@@ -57,8 +62,8 @@ dune exec eq_check extracted_code/ref/crcr1.out extracted_code/ref/crcr1.out
 dune exec eq_check extracted_code/ref/crcr1.out extracted_code/ref/crcr2.out
 # -> Not Equivalent
 
-# Run tests
-dune exec run_tests
+# run tests with
+dune runtest
 ```
 
 **Configure Git Repo**
@@ -73,14 +78,13 @@ To prevent pushing old versions of the P4C compiler due to git not updating it, 
 
 ## Adding Tests
 
-In `./extracted_code/RunTests.ml`, to add a new test, write a new
+You can add new expect tests of form:
 ```
-let () = register "<test_name>" (fun () ->
-  <test_body>)
+let%expect_test "<new test name>" =
+  <code that prints something to terminal>
+  [%expect {| <what you expect to get printed> |}]
 ```
-where test_body should return `1` if it passes and `0` if it fails.
-
-`get_program` and `get_mem_program` are useful helpers for reading in s-expression program representations.
+into `extracted_code/Test{Module/Program}Semantics.ml`. You can also add tests to a new `.ml` file and include it in the `semantics_tests` library in `extracted_code/dune`.
 
 # Memory IR
 
