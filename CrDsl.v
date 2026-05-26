@@ -11,10 +11,8 @@ Inductive CrModule : Type :=
   | ParserModule (m : ModuleName) (p : Parser)
   | TransformerModule (m : ModuleName) (s : list State) (c : list Ctrl) (t : Transformer).
 
-(* A Connection is a pair of module names *)
-(* and a connection name *)
-Inductive Connection : Type := 
-  | ConnectionDef : ModuleName -> ModuleName -> ConnectionName -> Connection.
+(* Connections defines the directed edges that constitute a network graph. *)
+Definition Connections : Type := ModuleName -> ModuleName -> bool.
 
 Inductive CaracaraProgram : Type := 
   | CaracaraProgramDef : 

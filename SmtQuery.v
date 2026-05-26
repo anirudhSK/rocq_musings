@@ -1,7 +1,6 @@
 From MyProject Require Import SmtExpr.
 From MyProject Require Import CrDsl.
 From MyProject Require Import CrIdentifiers.
-From MyProject Require Import PosWrapper.
 From MyProject Require Import CrVarLike.
 From MyProject Require Import CrDslProperties.
 From MyProject Require Import CrProgramState.
@@ -593,7 +592,7 @@ Proof.
     rewrite commute_lookup_eval_varlike.
     rewrite lookup_varlike_header_PMap.
     rewrite lookup_varlike_header_PMap_concrete.
-    destruct (List.in_dec header_eq_dec (HeaderCtr id) hp) as [Hin | Hnin].
+    destruct (List.in_dec posesque_eq_dec (HeaderCtr id) hp) as [Hin | Hnin].
     + (* In p's list: cs is initialized at id, agrees with f *)
       assert (Hneq : PMap.get id (header_map cs) <> IntVal CrNilInt).
       { apply (proj2 (Hh_in (HeaderCtr id))). assumption. }
@@ -627,7 +626,7 @@ Proof.
     rewrite commute_lookup_eval_varlike.
     rewrite lookup_varlike_state_PMap.
     rewrite lookup_varlike_state_PMap_concrete.
-    destruct (List.in_dec state_eq_dec (StateCtr id) sp) as [Hin | Hnin].
+    destruct (List.in_dec posesque_eq_dec (StateCtr id) sp) as [Hin | Hnin].
     + assert (Hneq : PMap.get id (state_map cs) <> IntVal CrNilInt).
       { apply (proj2 (Hs_in (StateCtr id))). assumption. }
       assert (Htree : (snd (state_map cs)) ! id = Some (PMap.get id (state_map cs))).
@@ -661,7 +660,7 @@ Proof.
     rewrite commute_lookup_eval_varlike.
     rewrite lookup_varlike_ctrl_PMap.
     rewrite lookup_varlike_ctrl_PMap_concrete.
-    destruct (List.in_dec ctrl_eq_dec (CtrlCtr id) cp) as [Hin | Hnin].
+    destruct (List.in_dec posesque_eq_dec (CtrlCtr id) cp) as [Hin | Hnin].
     + assert (Hneq : PMap.get id (ctrl_map cs) <> IntVal CrNilInt).
       { apply (proj2 (Hc_in (CtrlCtr id))). assumption. }
       assert (Htree : (snd (ctrl_map cs)) ! id = Some (PMap.get id (ctrl_map cs))).

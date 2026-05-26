@@ -3,6 +3,7 @@ let get_program = Stdlib.List.nth programs
 let init_state n = CrVarLike.init_concrete_state (get_program n)
 let run pid setup =
   let s  = setup (init_state pid) in
+  Shim.print_malformed_prog (get_program pid) pid;
   Shim.run_program (get_program pid) s
 
 (* Test 1: Unconditional subtract

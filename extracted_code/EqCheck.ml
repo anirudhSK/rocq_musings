@@ -5,6 +5,10 @@ let equivalence_check_programs str1 str2 =
   let sexp_2 = Sexp.of_string str2 in
   let prog_1 = CrTypeIF.coq_CaracaraProgram_of_sexp sexp_1 in
   let prog_2 = CrTypeIF.coq_CaracaraProgram_of_sexp sexp_2 in
+
+  Shim.print_malformed_prog prog_1 1;
+  Shim.print_malformed_prog prog_2 2;
+
   let res = SmtQuery.equivalence_checker_cr_dsl prog_1 prog_2 in
   match res with
   | Equivalent -> print_endline "Equivalent"
