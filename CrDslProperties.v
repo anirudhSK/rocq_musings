@@ -3,6 +3,7 @@ From MyProject Require Import CrVarLike.
 From MyProject Require Import CrIdentifiers.
 From MyProject Require Import CrModule.
 From MyProject Require Import ListUtils.
+From MyProject Require Import CrTransformer.
 From Stdlib Require Import PArith.BinPos.
 From Stdlib Require Import List.
 Import ListNotations.
@@ -27,12 +28,27 @@ Definition varlike_lt (v1 v2: A) : Prop :=
   Pos.lt (get_key v1) (get_key v2).
 End VarlikeCmp.
 
+(* require that a transformer ends with a matchall (make no-op or otherwise explicit) *)
+Fixpoint transformer_has_default (t : Transformer) : Prop :=
+  match t with
+  | [] => False
+  | [rule] => match rule with
+    | Seq (SeqCtr mp _)
+    | Par (ParCtr mp _) => match mp with
+        | [] => True
+        | _ => False
+      end
+    end
+  | _ :: rest => transformer_has_default rest
+  end.
+
 (* No duplicates in Caracara Program *)
 Definition well_formed_program (p : CaracaraProgram) : Prop :=
   match p with
-  | CaracaraProgramDef h s c _ =>
+  | CaracaraProgramDef h s c t =>
       Coqlib.list_norepet h /\ Coqlib.list_norepet s /\ Coqlib.list_norepet c /\
-      Sorted varlike_lt h /\ Sorted varlike_lt s /\ Sorted varlike_lt c
+      Sorted varlike_lt h /\ Sorted varlike_lt s /\ Sorted varlike_lt c /\
+      transformer_has_default t
   end.
 
 (* TODO: Write a program to check for the well_formed_program property *)
@@ -44,9 +60,10 @@ Definition well_formed_program (p : CaracaraProgram) : Prop :=
 Definition well_formed_module (m : CrModule) : Prop :=
   match m with
   | ParserModule _ _ => True
-  | TransformerModule _ states ctrls _ =>
+  | TransformerModule _ states ctrls t =>
       Coqlib.list_norepet states /\ Coqlib.list_norepet ctrls /\
-      Sorted varlike_lt states /\ Sorted varlike_lt ctrls
+      Sorted varlike_lt states /\ Sorted varlike_lt ctrls /\
+      transformer_has_default t
   end.
 
 Definition all_network_states (net : ModuleNetwork) : list State :=
