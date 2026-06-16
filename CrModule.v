@@ -278,6 +278,9 @@ Definition add_program_to_network (net : ModuleNetwork) (p : CaracaraProgram) : 
     start_module := start_module net;
   |}, wrap new_id).
 
+(* TODO: Performance. Each call wraps the previous [net_edges] in another
+   closure, so after k connections a single edge query walks a chain of k
+   closures (O(k) per query). *)
 Definition add_connection_to_network (net : ModuleNetwork) (from to : ModuleName) : ModuleNetwork :=
   {|
     net_modules  := net_modules net;
