@@ -27,7 +27,8 @@ Definition reaches (g : graph) (x y : A) : Prop :=
   exists mid : list A,
     is_walk g (x :: mid ++ [y]).
 
-(* TODO: add a visited set for performance *)
+(* [reachableb] is the specification of bounded reachability: a plain
+   fuel-bounded DFS with no pruning. *)
 Fixpoint reachableb (g : graph) (nodes : list A) (fuel : nat)
                      (src dst : A) : bool :=
   match fuel with
@@ -37,11 +38,39 @@ Fixpoint reachableb (g : graph) (nodes : list A) (fuel : nat)
       || existsb (fun w => g src w && reachableb g nodes fuel' w dst) nodes
   end.
 
+(* Boolean membership test in a list of [A]. *)
+Definition in_listb (l : list A) (x : A) : bool :=
+  existsb (fun y => posesque_eqb y x) l.
+
+Lemma in_listb_spec :
+  forall l x, in_listb l x = true <-> In x l.
+Proof.
+  intros l x. unfold in_listb. rewrite existsb_exists. split.
+  - intros [y [Hy Heq]]. apply posesque_eqb_iff in Heq. subst y. exact Hy.
+  - intros Hin. exists x. split; [exact Hin | apply posesque_eqb_refl].
+Qed.
+
+(* [reachableb_v] is the performant implementation: it carries a [visited]
+   set and prunes any neighbour already on the current search path.  This
+   prevents the exponential re-exploration of the unpruned [reachableb].
+   It is proved equivalent (for the [is_dagb] use, two-sided) below. *)
+Fixpoint reachableb_v (g : graph) (nodes : list A) (fuel : nat)
+                      (visited : list A) (src dst : A) : bool :=
+  match fuel with
+  | O => g src dst
+  | S fuel' =>
+      g src dst
+      || existsb (fun w => g src w
+                           && negb (in_listb visited w)
+                           && reachableb_v g nodes fuel' (w :: visited) w dst)
+                 nodes
+  end.
+
 Definition is_dag (g : graph) : Prop :=
   forall x : A, ~ reaches g x x.
 
 Definition is_dagb (g : graph) (nodes : list A) : bool :=
-  forallb (fun x => negb (reachableb g nodes (length nodes) x x)) nodes.
+  forallb (fun x => negb (reachableb_v g nodes (length nodes) [] x x)) nodes.
 
 (* ------------------------------------------------------------------ *)
 (* Relating walks to bounded reachability                             *)
@@ -69,41 +98,89 @@ Proof.
       * exact Hwalk.
 Qed.
 
-Lemma walk_reachableb :
-  forall g nodes mid src dst,
-    (forall w, In w mid -> In w nodes) ->
-    is_walk g (src :: mid ++ [dst]) ->
-    length mid <= length nodes ->
-    reachableb g nodes (length nodes) src dst = true.
+(* ------------------------------------------------------------------ *)
+(* Bridging the pruned implementation [reachableb_v] to the spec       *)
+(* [reachableb].                                                       *)
+(* ------------------------------------------------------------------ *)
+
+(* Soundness: the pruned search only ever takes a subset of the branches
+   of the unpruned search (it adds the [negb (in_listb visited w)]
+   conjunct), so whatever it finds, [reachableb] finds too — for any
+   [visited]. *)
+Lemma reachableb_v_sound_aux :
+  forall g nodes fuel visited src dst,
+    reachableb_v g nodes fuel visited src dst = true ->
+    reachableb g nodes fuel src dst = true.
 Proof.
-  assert (gen :
-    forall g nodes mid src dst fuel,
-      (forall w, In w mid -> In w nodes) ->
-      is_walk g (src :: mid ++ [dst]) ->
-      length mid <= fuel ->
-      reachableb g nodes fuel src dst = true).
-  { intros g nodes mid. induction mid as [|m mid' IH];
-      intros src dst fuel Hin Hwalk Hlen.
-    - (* mid = [] : single edge src -> dst *)
-      simpl in Hwalk. destruct Hwalk as [Hedge _].
-      destruct fuel; simpl.
-      + exact Hedge.
-      + rewrite Hedge. reflexivity.
-    - (* mid = m :: mid' *)
-      simpl in Hwalk. destruct Hwalk as [Hedge Hrest].
-      destruct fuel as [|fuel'].
-      + simpl in Hlen. lia.
-      + simpl. apply orb_true_intro. right.
-        apply existsb_exists. exists m. split.
-        * apply Hin. left. reflexivity.
-        * apply andb_true_intro. split.
-          -- exact Hedge.
-          -- apply IH.
-             ++ intros w Hw. apply Hin. right. exact Hw.
-             ++ exact Hrest.
-             ++ simpl in Hlen. lia. }
-  intros g nodes mid src dst Hin Hwalk Hlen.
-  eapply gen; eauto.
+  intros g nodes fuel.
+  induction fuel as [|fuel' IH]; intros visited src dst H.
+  - simpl in *. exact H.
+  - simpl in H. simpl. apply orb_prop in H. destruct H as [H | H].
+    + rewrite H. reflexivity.
+    + apply orb_true_intro. right.
+      apply existsb_exists in H. destruct H as [w [Hwin Hw]].
+      apply existsb_exists. exists w. split; [exact Hwin |].
+      apply andb_prop in Hw. destruct Hw as [Hw1 Hrec].
+      apply andb_prop in Hw1. destruct Hw1 as [Hedge _Hnv].
+      apply andb_true_intro. split; [exact Hedge |].
+      apply IH in Hrec. exact Hrec.
+Qed.
+
+Lemma reachableb_v_sound :
+  forall g nodes fuel src dst,
+    reachableb_v g nodes fuel [] src dst = true ->
+    reaches g src dst.
+Proof.
+  intros g nodes fuel src dst H.
+  apply reachableb_v_sound_aux in H.
+  apply (reachableb_sound g nodes fuel src dst H).
+Qed.
+
+(* Completeness: a walk whose intermediate vertices avoid [visited] (and
+   that fits in [fuel]) is found by the pruned search.  The disjointness
+   invariant is exactly what justifies skipping the pruned branches: the
+   next vertex on such a walk is never already in [visited]. *)
+Lemma walk_reachableb_v :
+  forall g nodes mid src dst fuel visited,
+    (forall w, In w mid -> In w nodes) ->
+    (forall w, In w mid -> ~ In w visited) ->
+    NoDup mid ->
+    is_walk g (src :: mid ++ [dst]) ->
+    length mid <= fuel ->
+    reachableb_v g nodes fuel visited src dst = true.
+Proof.
+  intros g nodes mid. induction mid as [|m mid' IH];
+    intros src dst fuel visited Hin Hdisj Hnd Hwalk Hlen.
+  - (* mid = [] : single edge src -> dst *)
+    simpl in Hwalk. destruct Hwalk as [Hedge _].
+    destruct fuel; simpl.
+    + exact Hedge.
+    + rewrite Hedge. reflexivity.
+  - (* mid = m :: mid' *)
+    simpl in Hwalk. destruct Hwalk as [Hedge Hrest].
+    destruct fuel as [|fuel'].
+    + simpl in Hlen. lia.
+    + simpl. apply orb_true_intro. right.
+      apply existsb_exists. exists m. split.
+      * apply Hin. left. reflexivity.
+      * apply andb_true_intro. split.
+        -- apply andb_true_intro. split.
+           ++ exact Hedge.
+           ++ (* m is not in visited *)
+              apply negb_true_iff.
+              destruct (in_listb visited m) eqn:Hmv; [| reflexivity].
+              exfalso. apply in_listb_spec in Hmv.
+              apply (Hdisj m (or_introl eq_refl) Hmv).
+        -- (* recurse with m added to visited *)
+           apply IH.
+           ++ intros w Hw. apply Hin. right. exact Hw.
+           ++ (* intermediate vertices avoid (m :: visited) *)
+              intros w Hw Hwin. simpl in Hwin. destruct Hwin as [Heq | Hwin].
+              ** subst w. inversion Hnd; subst. contradiction.
+              ** apply (Hdisj w (or_intror Hw) Hwin).
+           ++ inversion Hnd; subst. assumption.
+           ++ exact Hrest.
+           ++ simpl in Hlen. lia.
 Qed.
 
 (* ------------------------------------------------------------------ *)
@@ -316,10 +393,10 @@ Proof.
     unfold is_dagb. apply forallb_forall.
     intros x Hx.
     apply negb_true_iff.
-    destruct (reachableb g nodes (length nodes) x x) eqn:Hr.
-    + (* contradiction: reachableb finds a self-walk *)
+    destruct (reachableb_v g nodes (length nodes) [] x x) eqn:Hr.
+    + (* contradiction: reachableb_v finds a self-walk *)
       exfalso. apply (Hdag x).
-      apply (reachableb_sound g nodes (length nodes) x x Hr).
+      apply (reachableb_v_sound g nodes (length nodes) x x Hr).
     + reflexivity.
   - (* is_dagb -> is_dag *)
     intros Hdagb x [mid Hwalk].
@@ -329,14 +406,22 @@ Proof.
     (* its intermediate vertices are in nodes *)
     assert (Hin : forall w, In w mid' -> In w nodes).
     { apply (walk_mid_in_nodes g nodes x mid' x Hedges Hwalk'). }
+    (* the shortened walk has no repeated intermediate vertex *)
+    assert (Hnd : NoDup mid').
+    { apply list_norepet_NoDup. apply has_duplicates_false_norepet. exact Hnodup. }
     (* hence its length is <= |nodes| *)
     assert (Hlen : length mid' <= length nodes).
     { apply norepet_incl_length.
       - apply has_duplicates_false_norepet. exact Hnodup.
       - exact Hin. }
-    (* so reachableb finds it *)
-    assert (Hr : reachableb g nodes (length nodes) x x = true).
-    { apply (walk_reachableb g nodes mid' x x Hin Hwalk' Hlen). }
+    (* so the pruned search finds it (visited starts empty) *)
+    assert (Hr : reachableb_v g nodes (length nodes) [] x x = true).
+    { apply (walk_reachableb_v g nodes mid' x x (length nodes) []).
+      - exact Hin.
+      - intros w _ Hwin. exact Hwin.
+      - exact Hnd.
+      - exact Hwalk'.
+      - exact Hlen. }
     (* but is_dagb says it must be false *)
     unfold is_dagb in Hdagb.
     rewrite forallb_forall in Hdagb.
