@@ -12,7 +12,6 @@ From MyProject Require Import CrDsl.
 From MyProject Require Import Maps.
 From MyProject Require Import UtilLemmas.
 From MyProject Require Import CrVal.
-From MyProject Require Import PosWrapper.
 From Stdlib Require Import ZArith.
 From Stdlib Require Import Bool.
 From Stdlib Require Import List.

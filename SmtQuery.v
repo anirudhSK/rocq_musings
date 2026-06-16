@@ -1,7 +1,6 @@
 From MyProject Require Import SmtExpr.
 From MyProject Require Import CrDsl.
 From MyProject Require Import CrIdentifiers.
-From MyProject Require Import PosWrapper.
 From MyProject Require Import CrVarLike.
 From MyProject Require Import CrDslProperties.
 From MyProject Require Import CrProgramState.
@@ -310,6 +309,7 @@ Class CrVarProg A := {
     get_vars_from_prog (CaracaraProgramDef h s c t2);
   equivalence_checker_cr_sound :
     forall p1 p2 f,
+    well_formed_program p1 ->                          (* p1 is well-formed *)
     equivalence_checker_cr_dsl p1 p2 = Equivalent ->
     let c1_i  := eval_sym_state (init_symbolic_state p1) f in (* Get a sym state out of p1 *)
     let c2_i  := eval_sym_state (init_symbolic_state p2) f in (* Do the same for p2 *)
@@ -317,7 +317,6 @@ Class CrVarProg A := {
     let t2 := get_transformer_from_prog p2 in
     let c1 := eval_transformer_concrete t1 c1_i in
     let c2 := eval_transformer_concrete t2 c2_i in
-    well_formed_program p1 ->                          (* p1 is well-formed *)
     forall var, In var (get_vars_from_prog p1) ->      (* then, every var in p1 *)
     (In var (get_vars_from_prog p2)) /\                (* must be in p2 *)
     (lookup_var c1 var) = (lookup_var c2 var);         (* and their final values must be equal *)
@@ -333,12 +332,12 @@ Ltac prove_in_var_list_implies_in_prog_state hypothesis type crvar_type :=
   simpl;
   apply (@ptree_of_list_lemma_generic type crvar_type);
   simpl in hypothesis;
-  destruct hypothesis as [H0 H3];
+  destruct hypothesis as [Hwf H3];
   destruct H3;
   assumption; assumption.
 
 Ltac prove_equivalence_checker_cr_sound :=
-  intros p1 p2 f H;
+  intros p1 p2 f Hwf H;
   destruct p1 as [h1 s1 c1 t1] eqn:desp1,
             p2 as [h2 s2 c2 t2] eqn:desp2; simpl in H;
   destruct
@@ -348,7 +347,7 @@ Ltac prove_equivalence_checker_cr_sound :=
   apply varlike_list_equal_lemma in H_state_eq;
   apply varlike_list_equal_lemma in H_hdr_eq;
   apply varlike_list_equal_lemma in H_ctrl_eq;
-  intros c1_i c2_i t0 t3 c0 c3 H0 var H1;
+  intros c1_i c2_i t0 t3 c0 c3 var H1;
   simpl in H1;
   split;
   try (rewrite H_hdr_eq in H1; assumption); try (rewrite H_state_eq in H1; assumption);
@@ -362,8 +361,8 @@ Ltac prove_equivalence_checker_cr_sound :=
       rewrite <- H_ctrl_eq;
       rewrite init_symbolic_state_nodep_t with (t2 := t2) in H1 at 2;
       assumption);
-  try(prove_in_var_list_implies_in_prog_state H0 Header CrVarLike_Header);
-  try(prove_in_var_list_implies_in_prog_state H0 State CrVarLike_State).
+  try(prove_in_var_list_implies_in_prog_state Hwf Header CrVarLike_Header);
+  try(prove_in_var_list_implies_in_prog_state Hwf State CrVarLike_State).
 
 Transparent get_all_varlike_from_ps.
 Instance CrVarProg_Header : CrVarProg Header.
@@ -394,6 +393,8 @@ Transparent map_from_ps.
 (* Completeness lemma for equivalence_checker_cr_dsl *)
 Lemma equivalence_checker_cr_complete :
   forall p1 p2 f,
+  well_formed_program p1 ->                          (* p1 is well-formed *)
+  well_formed_program p2 ->                          (* p2 is well-formed *)
   equivalence_checker_cr_dsl p1 p2 = NotEquivalent f ->
   let c1_i  := eval_sym_state (init_symbolic_state p1) f in (* Get a sym state out of p1' headers, ctrls, and state *)
   let c2_i  := eval_sym_state (init_symbolic_state p2) f in (* Do the same for p2 *)
@@ -401,8 +402,6 @@ Lemma equivalence_checker_cr_complete :
   let t2 := get_transformer_from_prog p2 in
   let c1 := eval_transformer_concrete t1 c1_i in
   let c2 := eval_transformer_concrete t2 c2_i in
-  well_formed_program p1 ->                          (* p1 is well-formed *)
-  well_formed_program p2 ->                          (* p2 is well-formed *)
   (init_symbolic_state p1 = init_symbolic_state p2) ->  (* both programs have the same initial symbolic state
                                                            , i.e., same headers, ctrls, and states *)
                                                            (* TODO handle case where programs
@@ -412,7 +411,7 @@ Lemma equivalence_checker_cr_complete :
   (exists v, In v (get_states_from_prog p1) /\        (* or there exists a state var in p1 *)
   (lookup_varlike c1 v) <> (lookup_varlike c2 v))).       (* whose final values are not equal *)
 Proof.
-  intros p1 p2 f H.
+  intros p1 p2 f Hwf1 Hwf2 H.
   destruct p1 as [h1 s1 c1 t1] eqn:desp1,
            p2 as [h2 s2 c2 t2] eqn:desp2; simpl in H.
   destruct
@@ -445,7 +444,7 @@ t1)) t1 t2 h1 s1) eqn:H_eq; try (exfalso; congruence).
           simpl.
           rewrite map_pair_split.
           apply (@ptree_of_list_lemma_generic Header CrVarLike_Header).
-          destruct H0 as [H_wf_headers _].
+          destruct Hwf1 as [H_wf_headers _].
           apply H_wf_headers.
           assumption.
        ++ intros.
@@ -455,7 +454,7 @@ t1)) t1 t2 h1 s1) eqn:H_eq; try (exfalso; congruence).
           simpl.
           rewrite map_pair_split.
           apply (@ptree_of_list_lemma_generic State CrVarLike_State).
-          destruct H0 as [H_wf_headers H_wf_states].
+          destruct Hwf1 as [H_wf_headers H_wf_states].
           destruct H_wf_states as [H_wf_states _].
           apply H_wf_states.
           assumption.
@@ -593,7 +592,7 @@ Proof.
     rewrite commute_lookup_eval_varlike.
     rewrite lookup_varlike_header_PMap.
     rewrite lookup_varlike_header_PMap_concrete.
-    destruct (List.in_dec header_eq_dec (HeaderCtr id) hp) as [Hin | Hnin].
+    destruct (List.in_dec posesque_eq_dec (HeaderCtr id) hp) as [Hin | Hnin].
     + (* In p's list: cs is initialized at id, agrees with f *)
       assert (Hneq : PMap.get id (header_map cs) <> IntVal CrNilInt).
       { apply (proj2 (Hh_in (HeaderCtr id))). assumption. }
@@ -627,7 +626,7 @@ Proof.
     rewrite commute_lookup_eval_varlike.
     rewrite lookup_varlike_state_PMap.
     rewrite lookup_varlike_state_PMap_concrete.
-    destruct (List.in_dec state_eq_dec (StateCtr id) sp) as [Hin | Hnin].
+    destruct (List.in_dec posesque_eq_dec (StateCtr id) sp) as [Hin | Hnin].
     + assert (Hneq : PMap.get id (state_map cs) <> IntVal CrNilInt).
       { apply (proj2 (Hs_in (StateCtr id))). assumption. }
       assert (Htree : (snd (state_map cs)) ! id = Some (PMap.get id (state_map cs))).
@@ -661,7 +660,7 @@ Proof.
     rewrite commute_lookup_eval_varlike.
     rewrite lookup_varlike_ctrl_PMap.
     rewrite lookup_varlike_ctrl_PMap_concrete.
-    destruct (List.in_dec ctrl_eq_dec (CtrlCtr id) cp) as [Hin | Hnin].
+    destruct (List.in_dec posesque_eq_dec (CtrlCtr id) cp) as [Hin | Hnin].
     + assert (Hneq : PMap.get id (ctrl_map cs) <> IntVal CrNilInt).
       { apply (proj2 (Hc_in (CtrlCtr id))). assumption. }
       assert (Htree : (snd (ctrl_map cs)) ! id = Some (PMap.get id (ctrl_map cs))).

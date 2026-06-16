@@ -1,5 +1,6 @@
 From Stdlib Require Import List.
 Import ListNotations.
+From MyProject Require Import ListUtils.
 From Stdlib Require Import Bool.Bool.
 From Stdlib Require Import ZArith.
 From Stdlib Require Import Strings.String.
@@ -10,7 +11,7 @@ From MyProject Require Import CrDsl.
 From MyProject Require Import CrVal.
 From MyProject Require Import Maps.
 From MyProject Require Import CrProgramState.
-From MyProject Require Import PosWrapper.
+From MyProject Require Import PosGraphLemmas.
 From MyProject Require Import SmtExpr.
 
 Definition get_mod_name (m : CrModule) : ModuleName :=
@@ -19,67 +20,59 @@ Definition get_mod_name (m : CrModule) : ModuleName :=
   | TransformerModule name _ _ _ => name
   end.
 
-Definition get_conn_src (c : Connection) : ModuleName :=
-  match c with
-    ConnectionDef src _ _ => src
-  end.
-
-Definition get_conn_dst (c : Connection) : ModuleName :=
-  match c with
-    ConnectionDef _ dst _ => dst
-  end.
-
-Definition get_conn_name (c : Connection) : ConnectionName :=
-  match c with
-    ConnectionDef _ _ n => n
-  end.
-
-(* A ModuleNetwork is a directed graph of CrModules connected by typed edges (Connections). *)
+(* A ModuleNetwork is a directed graph of CrModules whose edges are given by
+   the boolean adjacency function [net_edges].  The function is total with a
+   default of [false]; edges from/to module names not in [net_modules] are
+   ignored by [restricted_edges] below, which is the relation actually used
+   for reachability and acyclicity. *)
 Record ModuleNetwork : Type := mkModuleNetwork {
-  net_modules     : list CrModule;
-  net_connections : list Connection;
-  start_module    : ModuleName;
+  net_modules  : list CrModule;
+  net_edges    : Connections;
+  start_module : ModuleName;
 }.
 
 Definition lookup_module (net : ModuleNetwork) (name : ModuleName)
     : option CrModule :=
-  find (fun m => module_name_equal (get_mod_name m) name) (net_modules net).
+  find (fun m => posesque_eqb (get_mod_name m) name) (net_modules net).
 
 (* ------------------------------------------------------------------ *)
-
-Definition outgoing_connections (net : ModuleNetwork) (src : ModuleName)
-    : list Connection :=
-  filter (fun c => module_name_equal (get_conn_src c) src)
-         (net_connections net).
-
-Definition incoming_connections (net : ModuleNetwork) (dst : ModuleName)
-    : list Connection :=
-  filter (fun c => module_name_equal (get_conn_dst c) dst)
-         (net_connections net).
 
 Definition upstream_modules (net : ModuleNetwork) (dst : ModuleName)
     : list ModuleName :=
-  map get_conn_src (incoming_connections net dst).
+  filter (fun src => net_edges net src dst)
+         (map get_mod_name (net_modules net)).
 
 Definition downstream_modules (net : ModuleNetwork) (src : ModuleName)
     : list ModuleName :=
-  map get_conn_dst (outgoing_connections net src).
+  filter (fun dst => net_edges net src dst)
+         (map get_mod_name (net_modules net)).
 
 (* ------------------------------------------------------------------ *)
 
-(* `reachable net src dst` holds when dst is reachable from src by
-   following one or more connections forward through the network. *)
-Inductive reachable (net : ModuleNetwork) : ModuleName -> ModuleName -> Prop :=
-| reachable_step : forall src dst,
-  In dst (downstream_modules net src) ->
-  reachable net src dst
-| reachable_trans : forall src mid dst,
-  reachable net src mid ->
-  reachable net mid dst ->
-  reachable net src dst.
+(* Boolean membership test for module names in the network. *)
+Definition in_names (net : ModuleNetwork) (m : ModuleName) : bool :=
+  existsb (posesque_eqb m) (map get_mod_name (net_modules net)).
 
+(* Edges restricted to pairs of names that both appear in [net_modules].
+   This folds the endpoint-closure invariant directly into the edge
+   relation: edges to or from unknown module names are silently dropped. *)
+Definition restricted_edges (net : ModuleNetwork)
+    (src dst : ModuleName) : bool :=
+  in_names net src && in_names net dst && net_edges net src dst.
+
+(* A direct edge from [src] to [dst] in the network (restricted form). *)
+Definition edge (net : ModuleNetwork) (src dst : ModuleName) : Prop :=
+  restricted_edges net src dst = true.
+
+(* The network is a DAG iff its restricted edge relation contains no
+   cycle.  Defined in terms of the generic [PosGraphLemmas] development. *)
 Definition is_dag (net : ModuleNetwork) : Prop :=
-  forall m, ~ reachable net m m.
+  PosGraphLemmas.is_dag (restricted_edges net).
+
+(* Boolean acyclicity check via bounded DFS over the module names. *)
+Definition is_dagb (net : ModuleNetwork) : bool :=
+  PosGraphLemmas.is_dagb (restricted_edges net)
+                         (map get_mod_name (net_modules net)).
 
 Definition no_fan_out (net : ModuleNetwork) : Prop :=
   forall m, List.length (downstream_modules net m) <= 1.
@@ -110,16 +103,12 @@ Definition transformer_modules (net : ModuleNetwork) : list CrModule :=
 (* ------------------------------------------------------------------ *)
 
 Definition is_source (net : ModuleNetwork) (m : CrModule) : bool :=
-  match incoming_connections net (get_mod_name m) with
-  | [] => true
-  | _  => false
-  end.
+  negb (existsb (fun src => net_edges net src (get_mod_name m))
+                (map get_mod_name (net_modules net))).
 
 Definition is_sink (net : ModuleNetwork) (m : CrModule) : bool :=
-  match outgoing_connections net (get_mod_name m) with
-  | [] => true
-  | _  => false
-  end.
+  negb (existsb (fun dst => net_edges net (get_mod_name m) dst)
+                (map get_mod_name (net_modules net))).
 
 Definition source_modules (net : ModuleNetwork) : list CrModule :=
   filter (is_source net) (net_modules net).
@@ -135,31 +124,67 @@ Definition single_sink (net : ModuleNetwork) : Prop :=
 (* Module names are pairwise distinct in net_modules. *)
 Definition mod_names_unique (net : ModuleNetwork) : Prop :=
   Coqlib.list_norepet (map get_mod_name (net_modules net)).
+Definition mod_names_uniqueb (net : ModuleNetwork) : bool :=
+  negb (has_duplicates posesque_eqb (map get_mod_name (net_modules net))).
 
-(* Connection names are pairwise distinct in net_connections. *)
-Definition conn_names_unique (net : ModuleNetwork) : Prop :=
-  Coqlib.list_norepet (map get_conn_name (net_connections net)).
+(* The designated start module exists in the network.  The edge-closure
+   condition that used to live alongside this is now folded into
+   [restricted_edges]. *)
+Definition start_module_defined (net : ModuleNetwork) : Prop :=
+  match lookup_module net (start_module net) with
+  | Some _ => True
+  | None => False
+  end.
+Definition start_module_definedb (net : ModuleNetwork) : bool :=
+  match lookup_module net (start_module net) with
+  | Some _ => true
+  | None => false
+  end.
+Lemma start_module_defined_prop_bool_lemma :
+  forall n,
+    start_module_defined n <-> start_module_definedb n = true.
+Proof.
+  intros n.
+  unfold start_module_defined, start_module_definedb.
+  destruct (lookup_module n (start_module n));
+    split; intros; (exact I || reflexivity || contradiction || discriminate).
+Qed.
 
-(* Every endpoint of every connection refers to a known module, and the
-   designated start module exists in the network. *)
-Definition endpoints_defined (net : ModuleNetwork) : Prop :=
-  List.Forall (fun c =>
-    match lookup_module net (get_conn_src c),
-          lookup_module net (get_conn_dst c) with
-    | Some _, Some _ => True
-    | _,      _      => False
-    end) (net_connections net) /\
-    match lookup_module net (start_module net) with
-    | Some _ => True
-    | None   => False
-    end.
+Lemma in_names_iff :
+  forall net m,
+    in_names net m = true <-> In m (map get_mod_name (net_modules net)).
+Proof.
+  intros net m. unfold in_names. split.
+  - intros H. apply existsb_exists in H. destruct H as [x [Hin Heq]].
+    apply posesque_eqb_iff in Heq. subst. exact Hin.
+  - intros Hin. apply existsb_exists. exists m. split.
+    + exact Hin.
+    + apply posesque_eqb_iff. reflexivity.
+Qed.
+
+(* Because [restricted_edges] already enforces endpoint closure, the
+   Prop/bool equivalence holds unconditionally. *)
+Lemma is_dag_prop_bool_lemma :
+  forall n, is_dag n <-> is_dagb n = true.
+Proof.
+  intros n. unfold is_dag, is_dagb.
+  apply PosGraphLemmas.is_dag_prop_bool_lemma.
+  intros u v Hg. unfold restricted_edges in Hg.
+  apply andb_true_iff in Hg. destruct Hg as [Hin _].
+  apply andb_true_iff in Hin. destruct Hin as [Hu Hv].
+  split; apply in_names_iff; assumption.
+Qed.
 
 (* A well-formed ModuleNetwork satisfies all conditions. *)
 Definition wf_module_network (net : ModuleNetwork) : Prop :=
   mod_names_unique net /\
-  conn_names_unique net /\
-  endpoints_defined net /\
+  start_module_defined net /\
   is_dag net.
+
+Definition wf_module_networkb (net : ModuleNetwork) : bool :=
+  (mod_names_uniqueb net) &&
+  (start_module_definedb net) &&
+  (is_dagb net).
 
 (* ------------------------------------------------------------------ *)
 
@@ -240,11 +265,6 @@ Definition max_mod_uid (net : ModuleNetwork) : positive :=
             ms 1%positive)
   end.
 
-Definition max_conn_uid (net : ModuleNetwork) : positive :=
-  List.fold_left
-    (fun acc c => Pos.max acc (unwrap (get_conn_name c)))
-    (net_connections net) 1%positive.
-
 Definition add_program_to_network (net : ModuleNetwork) (p : CaracaraProgram) : ModuleNetwork * ModuleName :=
   let new_id := max_mod_uid net in
   let tm := TransformerModule
@@ -253,30 +273,33 @@ Definition add_program_to_network (net : ModuleNetwork) (p : CaracaraProgram) : 
     (get_ctrls_from_prog p)
     (get_transformer_from_prog p) in
   ({|
-    net_modules     := net_modules net ++ [tm];
-    net_connections := net_connections net;
-    start_module    := start_module net;
+    net_modules  := net_modules net ++ [tm];
+    net_edges    := net_edges net;
+    start_module := start_module net;
   |}, wrap new_id).
 
+(* TODO: Performance. Each call wraps the previous [net_edges] in another
+   closure, so after k connections a single edge query walks a chain of k
+   closures (O(k) per query). *)
 Definition add_connection_to_network (net : ModuleNetwork) (from to : ModuleName) : ModuleNetwork :=
-  let new_id := Pos.succ (max_conn_uid net) in
-  let c := ConnectionDef from to (wrap new_id) in
   {|
-    net_modules     := net_modules net;
-    net_connections := net_connections net ++ [c];
-    start_module    := start_module net;
+    net_modules  := net_modules net;
+    net_edges    := fun src dst =>
+      (posesque_eqb src from && posesque_eqb dst to)
+      || net_edges net src dst;
+    start_module := start_module net;
   |}.
 
 Definition set_start_module (net : ModuleNetwork) (m : ModuleName) : ModuleNetwork :=
   {|
-    net_modules     := net_modules net;
-    net_connections := net_connections net;
-    start_module    := m;
+    net_modules  := net_modules net;
+    net_edges    := net_edges net;
+    start_module := m;
   |}.
 
 Definition empty_net : ModuleNetwork :=
   {|
-    net_modules     := [];
-    net_connections := [];
-    start_module    := ModuleNameCtr 1;
+    net_modules  := [];
+    net_edges    := fun _ _ => false;
+    start_module := ModuleNameCtr 1;
   |}.

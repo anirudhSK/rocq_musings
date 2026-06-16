@@ -8,7 +8,6 @@ From MyProject Require Import SmtExpr.
 From MyProject Require Import SmtTypes.
 From MyProject Require Import CrSymbolicSemanticsTransformer.
 From MyProject Require Import Maps.
-From MyProject Require Import PosWrapper.
 From Stdlib Require Import ZArith.
 
 Definition eval_module_symbolic (m : CrModule) (ps : SymbolicState)

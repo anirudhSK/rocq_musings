@@ -150,7 +150,7 @@ let print_state = print_state' "" "\n"
 let start_mod_id (p : CrModule.coq_GeneralCaracaraProgram) : int =
   let net = CrModule.get_network_from_general p in
   coq_Z_to_int (BinNums.Zpos
-    (PosWrapper.coq_PosWrapper_ModuleName.unwrap net.CrModule.start_module))
+    (CrIdentifiers.coq_Posesque_ModuleName.unwrap net.CrModule.start_module))
 
 let get_mod_state (key : int) (gcs : CrProgramState.coq_ConcreteState Maps.PMap.t)
     : CrProgramState.coq_ConcreteState =
@@ -178,3 +178,13 @@ let listify_coq_list (a_list : 'a Datatypes.list) : 'a Stdlib.List.t =
   | Datatypes.Coq_cons (h, t) -> aux (h :: acc) t
   in
   aux [] a_list
+
+let print_malformed_prog p pid =
+  match CrDslProperties.well_formed_programb p with
+  | Datatypes.Coq_false -> Printf.printf "(%d) malformed\n" pid
+  | Datatypes.Coq_true -> ()
+
+let print_malformed_gprog p pid =
+  match CrDslProperties.well_formed_general_programb p with
+  | Datatypes.Coq_false -> Printf.printf "(%d) malformed\n" pid
+  | Datatypes.Coq_true -> ()

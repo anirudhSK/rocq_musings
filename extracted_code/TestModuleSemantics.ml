@@ -2,6 +2,7 @@ let mod_programs = Shim.listify_coq_list TestModulePrograms.mod_test_programs
 let get_mod_program = Stdlib.List.nth mod_programs
 let run pid setup =
   let p  = get_mod_program pid in
+  Shim.print_malformed_gprog p pid;
   let gcs0 = CrVarLike.init_general_concrete_state p in
   let sid = Shim.start_mod_id p in
   let gcs = Shim.set_mod_state sid

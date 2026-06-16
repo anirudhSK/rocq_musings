@@ -7,7 +7,6 @@ From MyProject Require Import CrProgramState.
 From MyProject Require Import CrVal.
 From MyProject Require Import CrConcreteSemanticsTransformer.
 From MyProject Require Import Maps.
-From MyProject Require Import PosWrapper.
 From Stdlib Require Import ZArith.
 
 Definition eval_module_concrete (m : CrModule) (ps : ConcreteState)

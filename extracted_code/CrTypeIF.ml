@@ -49,8 +49,6 @@ module CrIdentifiers = struct
   [@@deriving sexp]
   type coq_ModuleName = [%import: CrIdentifiers.coq_ModuleName]
   [@@deriving sexp]
-  type coq_ConnectionName = [%import: CrIdentifiers.coq_ConnectionName]
-  [@@deriving sexp]
   type coq_Ctrl = [%import: CrIdentifiers.coq_Ctrl]
   [@@deriving sexp]
 end
@@ -88,7 +86,7 @@ module CrDsl = struct
   [@@deriving sexp]
   type coq_CrModule = [%import: CrDsl.coq_CrModule]
   [@@deriving sexp]
-  type coq_Connection = [%import: CrDsl.coq_Connection]
+  type coq_Connections = [%import: CrDsl.coq_Connections]
   [@@deriving sexp]
 end
 (* Re-export at top level for backwards compatibility with the rest of

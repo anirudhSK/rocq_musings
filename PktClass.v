@@ -9,7 +9,6 @@ From MyProject Require Import CrProgramState.
 From MyProject Require Import CrVarLike.
 From MyProject Require Import CrConcreteSemanticsTransformer.
 From MyProject Require Import CrModule.
-From MyProject Require Import PosWrapper.
 
 From Stdlib Require Import ZArith.
 From Stdlib Require Import List.

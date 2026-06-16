@@ -8,7 +8,6 @@ From MyProject Require Import CrIdentifiers.
 From MyProject Require Import CrVal.
 From MyProject Require Import CrModule.
 From MyProject Require Import Integers.
-From MyProject Require Import PosWrapper.
 
 (* Single-module: unconditionally adds 3 to h1.
    h1=5 → h1=8. *)
@@ -63,7 +62,8 @@ Definition mod_prog_conditional_pipeline : GeneralCaracaraProgram :=
         (ConstantArg (CrUInt8 (repr 1)))
         (ConstantArg (CrUInt8 (repr 0)))
         (HeaderCtr 1)
-    ])
+    ]);
+    Seq (SeqCtr [] [])
   ] in
   let p2 := CaracaraProgramDef [HeaderCtr 1] [] [] [
     Seq (SeqCtr [] [
@@ -92,7 +92,8 @@ Definition mod_prog_cmplt_matchheader : GeneralCaracaraProgram :=
         (HeaderArg (HeaderCtr 1))
         (HeaderArg (HeaderCtr 2))
         (HeaderCtr 1)
-    ])
+    ]);
+    Seq (SeqCtr [] [])
   ] in
   let p2 := CaracaraProgramDef [HeaderCtr 1] [] [] [
     Seq (SeqCtr [] [

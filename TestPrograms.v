@@ -28,7 +28,8 @@ Definition prog_sub5_h1_if_h1eq0 : CaracaraProgram :=
         (HeaderArg (HeaderCtr 1))
         (ConstantArg (CrUInt8 (repr 5)))
         (HeaderCtr 1)
-    ])
+    ]);
+    Seq (SeqCtr [] [])
   ].
 
 (* Adds 3 to h1 when h1 = 5. *)
@@ -39,7 +40,8 @@ Definition prog_add3_h1_if_h1eq5 : CaracaraProgram :=
         (HeaderArg (HeaderCtr 1))
         (ConstantArg (CrUInt8 (repr 3)))
         (HeaderCtr 1)
-    ])
+    ]);
+    Seq (SeqCtr [] [])
   ].
 
 (* Two rules, both matching h1 = 5.
@@ -58,7 +60,8 @@ Definition prog_first_match_h1eq5 : CaracaraProgram :=
         (HeaderArg (HeaderCtr 1))
         (ConstantArg (CrUInt8 (repr 10)))
         (HeaderCtr 1)
-    ])
+    ]);
+    Seq (SeqCtr [] [])
   ].
 
 (* StatefulOp: writes h1 - 2 into state variable s1, leaving h1 unchanged. *)
@@ -220,7 +223,8 @@ Definition prog_multi_rule_second_matches : CaracaraProgram :=
         (HeaderArg (HeaderCtr 1))
         (ConstantArg (CrUInt8 (repr 100)))
         (HeaderCtr 1)
-    ])
+    ]);
+    Seq (SeqCtr [] [])
   ].
 
 (* Cross-header predicate: predicate reads h2; action writes h1.
@@ -232,12 +236,13 @@ Definition prog_cross_header_predicate : CaracaraProgram :=
         (HeaderArg (HeaderCtr 1))
         (ConstantArg (CrUInt8 (repr 1)))
         (HeaderCtr 1)
-    ])
+    ]);
+    Seq (SeqCtr [] [])
   ].
 
 (* Empty transformer: no rules. State is left unchanged. *)
 Definition prog_empty_transformer : CaracaraProgram :=
-  CaracaraProgramDef [HeaderCtr 1] [] [] [].
+  CaracaraProgramDef [HeaderCtr 1] [] [] [Seq (SeqCtr [] [])].
 
 Definition test_programs := [
   prog_sub2_h1;
