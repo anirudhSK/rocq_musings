@@ -81,7 +81,7 @@ Instance Posesque_Ctrl : Posesque Ctrl := {
 }.
 
 Section Posesque.
-Context {A : Type} {asdf : Posesque A}.
+Context {A : Type} {PA : Posesque A}.
 Definition posesque_eq (v1 v2: A) : Prop :=
   Pos.eq (unwrap v1) (unwrap v2).
 Definition posesque_eqb (v1 v2: A) : bool :=
@@ -99,6 +99,17 @@ Proof.
   intros. unfold posesque_eqb. split.
   - intros H. apply Pos.eqb_eq in H. apply unwrap_inj. exact H.
   - intros H. inversion H. apply Pos.eqb_refl.
+Qed.
+Lemma posesque_eqb_refl :
+  forall (x : A), posesque_eqb x x = true.
+Proof. intros. apply posesque_eqb_iff. reflexivity. Qed.
+Lemma posesque_eqb_sym :
+  forall (x y : A), posesque_eqb x y = posesque_eqb y x.
+Proof.
+  intros x y. unfold posesque_eqb.
+  destruct (Pos.eqb (unwrap x) (unwrap y)) eqn:E.
+  - symmetry. apply Pos.eqb_eq. apply Pos.eqb_eq in E. auto.
+  - symmetry. apply Pos.eqb_neq. apply Pos.eqb_neq in E. auto.
 Qed.
 Definition posesque_eq_dec (x y : A) : {x = y} + {x <> y}.
 Proof.

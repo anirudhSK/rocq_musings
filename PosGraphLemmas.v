@@ -18,7 +18,7 @@ Definition graph := A -> A -> bool.
 
 Fixpoint is_walk (g : graph) (vs : list A) : Prop :=
   match vs with
-  | [] => False
+  | [] => True
   | [_] => True
   | u :: (v :: _) as rest => g u v = true /\ is_walk g rest
   end.
@@ -27,6 +27,7 @@ Definition reaches (g : graph) (x y : A) : Prop :=
   exists mid : list A,
     is_walk g (x :: mid ++ [y]).
 
+(* TODO: add a visited set for performance *)
 Fixpoint reachableb (g : graph) (nodes : list A) (fuel : nat)
                      (src dst : A) : bool :=
   match fuel with
@@ -41,20 +42,6 @@ Definition is_dag (g : graph) : Prop :=
 
 Definition is_dagb (g : graph) (nodes : list A) : bool :=
   forallb (fun x => negb (reachableb g nodes (length nodes) x x)) nodes.
-
-(* ------------------------------------------------------------------ *)
-(* Helper: edges stay inside [nodes].                                 *)
-(* ------------------------------------------------------------------ *)
-
-Definition Aeqb (x y : A) : bool := posesque_eqb x y.
-
-Lemma Aeqb_true_iff : forall x y, Aeqb x y = true <-> x = y.
-Proof. intros. apply posesque_eqb_iff. Qed.
-
-Lemma Aeqb_refl : forall x, Aeqb x x = true.
-Proof. intros. apply Aeqb_true_iff. reflexivity. Qed.
-
-Definition Aeq_dec (x y : A) : {x = y} + {x <> y} := posesque_eq_dec x y.
 
 (* ------------------------------------------------------------------ *)
 (* Relating walks to bounded reachability                             *)
@@ -170,7 +157,7 @@ Qed.
 Lemma remove_one_repeat :
   forall g x y mid,
     is_walk g (x :: mid ++ [y]) ->
-    has_duplicates Aeqb mid = true ->
+    has_duplicates posesque_eqb mid = true ->
     exists mid',
       is_walk g (x :: mid' ++ [y]) /\ length mid' < length mid.
 Proof.
@@ -182,9 +169,9 @@ Proof.
   { clear Hwalk. induction mid as [|a mid' IH].
     - simpl in Hdup. discriminate.
     - simpl in Hdup.
-      destruct (existsb (fun y0 => Aeqb y0 a) mid') eqn:Hex.
+      destruct (existsb (fun y0 => posesque_eqb y0 a) mid') eqn:Hex.
       + apply existsb_exists in Hex. destruct Hex as [b [Hbin Hbeq]].
-        apply Aeqb_true_iff in Hbeq. subst b.
+        apply posesque_eqb_iff in Hbeq. subst b.
         apply in_split in Hbin. destruct Hbin as [l2 [l3 Hmid']].
         exists [], a, l2, l3. simpl. rewrite Hmid'. reflexivity.
       + apply IH in Hdup. destruct Hdup as [l1 [w [l2 [l3 Heq]]]].
@@ -271,7 +258,7 @@ Lemma shorten_walk_nodup :
     is_walk g (x :: mid ++ [y]) ->
     exists mid',
       is_walk g (x :: mid' ++ [y]) /\
-      has_duplicates Aeqb mid' = false /\
+      has_duplicates posesque_eqb mid' = false /\
       length mid' <= length mid.
 Proof.
   intros g x y mid.
@@ -279,21 +266,13 @@ Proof.
   revert mid Hn.
   induction n as [n IH] using (well_founded_induction lt_wf);
     intros mid Hn Hwalk.
-  destruct (has_duplicates Aeqb mid) eqn:Hdup.
+  destruct (has_duplicates posesque_eqb mid) eqn:Hdup.
   - destruct (remove_one_repeat g x y mid Hwalk Hdup)
       as [mid' [Hwalk' Hlen]].
     destruct (IH (length mid') ltac:(lia) mid' eq_refl Hwalk')
       as [mid'' [Hw'' [Hd'' Hl'']]].
     exists mid''. split; [exact Hw'' | split; [exact Hd'' | lia]].
   - exists mid. split; [exact Hwalk | split; [exact Hdup | lia]].
-Qed.
-
-Lemma Aeqb_sym : forall a b, Aeqb a b = Aeqb b a.
-Proof.
-  intros a b. unfold Aeqb, posesque_eqb.
-  destruct (Pos.eqb (unwrap a) (unwrap b)) eqn:E.
-  - symmetry. apply Pos.eqb_eq. apply Pos.eqb_eq in E. auto.
-  - symmetry. apply Pos.eqb_neq. apply Pos.eqb_neq in E. auto.
 Qed.
 
 Lemma list_norepet_NoDup :
@@ -315,10 +294,10 @@ Proof.
 Qed.
 
 Lemma has_duplicates_false_norepet :
-  forall l, has_duplicates Aeqb l = false -> list_norepet l.
+  forall l, has_duplicates posesque_eqb l = false -> list_norepet l.
 Proof.
   intros l H.
-  apply (has_duplicates_correct A Aeqb Aeqb_refl Aeqb_sym).
+  apply (has_duplicates_correct A posesque_eqb (@posesque_eqb_refl A _) (@posesque_eqb_sym A _)).
   exact H.
 Qed.
 

@@ -26,12 +26,6 @@ Definition varlike_lt (v1 v2: A) : Prop :=
   Pos.lt (get_key v1) (get_key v2).
 Definition varlike_ltb (v1 v2: A) : bool :=
   Pos.ltb (get_key v1) (get_key v2).
-Lemma varlike_lt_ltb_lemma :
-  forall (x y : A),
-    varlike_lt x y <-> varlike_ltb x y = true.
-Proof.
-  intros x y. unfold varlike_lt, varlike_ltb. exact (iff_sym (Pos.ltb_lt _ _)).
-Qed.
 End VarlikeCmp.
 
 (* require that a transformer ends with a matchall (make no-op or otherwise explicit) *)
@@ -318,18 +312,11 @@ Proof.
       apply well_formed_module_prop_bool_lemma; auto. }
 
   (* Reflexivity, symmetry, and injectivity of [posesque_eqb] on
-     [ModuleName].  Used to handle [mod_names_unique{,b}] below. *)
-  assert (Hpr : forall x : ModuleName, posesque_eqb x x = true).
-  { intros [q]. unfold posesque_eqb. simpl. apply Pos.eqb_refl. }
-  assert (Hps : forall x y : ModuleName, posesque_eqb x y = posesque_eqb y x).
-  { intros [q1] [q2]. unfold posesque_eqb. simpl.
-    destruct (Pos.eqb q1 q2) eqn:E12, (Pos.eqb q2 q1) eqn:E21;
-      try reflexivity; exfalso.
-    - apply Pos.eqb_eq in E12. subst. rewrite Pos.eqb_refl in E21. discriminate.
-    - apply Pos.eqb_eq in E21. subst. rewrite Pos.eqb_refl in E12. discriminate. }
-  assert (Hpeq : forall x y : ModuleName, posesque_eqb x y = true -> x = y).
-  { intros [q1] [q2] H. unfold posesque_eqb in H. simpl in H.
-    apply Pos.eqb_eq in H. f_equal; exact H. }
+     [ModuleName], reusing the canonical lemmas from CrIdentifiers.
+     Used to handle [mod_names_unique{,b}] below. *)
+  pose proof (@posesque_eqb_refl ModuleName _) as Hpr.
+  pose proof (@posesque_eqb_sym ModuleName _) as Hps.
+  pose proof (fun x y => proj1 (@posesque_eqb_iff ModuleName _ x y)) as Hpeq.
 
   (* [mod_names_unique <-> mod_names_uniqueb = true]. *)
   assert (MNU : mod_names_unique net <-> mod_names_uniqueb net = true).
