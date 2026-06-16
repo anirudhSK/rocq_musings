@@ -57,9 +57,12 @@ perl sync_dune_modules.pl
 dune build --profile release
 
 # usage: dune exec eq_check ./path/to/s/exp/1 ./path/to/s/exp/2
-dune exec eq_check extracted_code/ref/crcr1.out extracted_code/ref/crcr1.out
+dune exec eq_check test/prog1.out test/prog1.out
 # -> Equivalent
-dune exec eq_check extracted_code/ref/crcr1.out extracted_code/ref/crcr2.out
+dune exec eq_check test/prog1.out test/prog2.out
+# -> ┌ SAT Valuation
+# -> | var( hdr_1 ) := 0
+# -> └
 # -> Not Equivalent
 
 # run tests with
@@ -85,6 +88,8 @@ let%expect_test "<new test name>" =
   [%expect {| <what you expect to get printed> |}]
 ```
 into `extracted_code/Test{Module/Program}Semantics.ml`. You can also add tests to a new `.ml` file and include it in the `semantics_tests` library in `extracted_code/dune`.
+
+If the test program that you add isn't well-formed, the test harness will print `(<pid>) malformed` before the test body, so either a) if the program is intentionally malformed, this must be added to the expected output or b) you should fix your program or c) if you believe the program is well-formed, open an issue. 
 
 # Memory IR
 
