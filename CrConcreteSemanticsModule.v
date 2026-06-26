@@ -35,20 +35,26 @@ Fixpoint eval_network_from_concrete
     (net    : ModuleNetwork)
     (start  : ModuleName)
     (f_hdrs : PMap.t CrVal)
-    (f_bits : PMap.t CrVal)
+    (f_pkt  : list bool)
     (gs     : GeneralConcreteState)
     (fuel   : nat)
     : option (GeneralConcreteState) :=
   match fuel with | O => None | S fuel' =>
   match lookup_module net start, (mod_states gs) ?? (unwrap start) with
   | Some m, Some ls =>
-    let ls' := set_module_header_map ls f_hdrs in
+    (* Feed this module both the upstream header map and the residual packet. *)
+    let ls' := set_module_packet (set_module_header_map ls f_hdrs) f_pkt in
     match eval_module_concrete m ls' with
     | None => None
     | Some ls'' =>
       let gs' := set_gps_mod_states gs (PMap.set (unwrap start) ls'' (mod_states gs)) in
       let f_hdrs' := module_header_map ls'' in
-      let f_bits' := f_bits in
+      (* Residual packet passed downstream: a parser hands on the bits past its
+         cursor; a transformer consumes none, so the packet flows through. *)
+      let f_pkt' := match ls'' with
+                    | ParserMod ps' => List.skipn (p_cursor ps') (p_packet ps')
+                    | TransformerMod _ => f_pkt
+                    end in
       (* Recurse over downstream modules; on [], fold_left returns
           the seed [Some ms'] as is, which is the desired sink behaviour. *)
       List.fold_left
@@ -57,7 +63,7 @@ Fixpoint eval_network_from_concrete
           | None => None
           | Some gs_acc =>
               eval_network_from_concrete
-                net dst f_hdrs' f_bits' gs_acc fuel'
+                net dst f_hdrs' f_pkt' gs_acc fuel'
           end)
         (downstream_modules net start)
         (Some gs')
@@ -77,9 +83,10 @@ Definition eval_general_program_concrete
   | None => None
   | Some start_state =>
     let hdr_i := module_header_map start_state in
-    let bit_i := PMap.init (IntVal CrNilInt) in
+    (* The network's input packet threads in from the shared bit map. *)
+    let pkt_i := sh_bit_map gs in
     eval_network_from_concrete
-      net start hdr_i bit_i gs fuel
+      net start hdr_i pkt_i gs fuel
   end.
 
 Definition eval_general_program_concrete_sinks

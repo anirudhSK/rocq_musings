@@ -237,19 +237,13 @@ let run_parser (p : CrParser.coq_Parser) (bytes : int Stdlib.List.t)
     : CrProgramState.coq_ConcreteParserState option =
   CrConcreteSemanticsParser.eval_parser_concrete p (mk_parser_state (packet_of_bytes bytes))
 
-(* Seed module [key]'s parser packet from a byte list (no-op if it isn't a
-   parser module). *)
-let set_mod_packet (key : int) (bytes : int Stdlib.List.t)
+(* Seed the network's input packet (the shared bit map) from a byte list.  This
+   threads through the modules: the start module parses it, and each module hands
+   the residual (unparsed) bits to its downstream neighbours. *)
+let set_net_packet (bytes : int Stdlib.List.t)
     (gcs : CrGeneralProgramState.coq_GeneralConcreteState)
     : CrGeneralProgramState.coq_GeneralConcreteState =
-  let packet = packet_of_bytes bytes in
-  let ms' =
-    match Maps.PMap.get (int_to_pos key) gcs.CrGeneralProgramState.mod_states with
-    | CrProgramState.ParserMod ps ->
-        CrProgramState.ParserMod { ps with CrProgramState.p_packet = packet }
-    | other -> other in
-  CrGeneralProgramState.set_gps_mod_states gcs
-    (Maps.PMap.set (int_to_pos key) ms' gcs.CrGeneralProgramState.mod_states)
+  { gcs with CrGeneralProgramState.sh_bit_map = packet_of_bytes bytes }
 
 (* Render the parsed headers ("h<k>=<v>", sorted), or "Reject" on parse failure. *)
 let print_parser_result (r : CrProgramState.coq_ConcreteParserState option) =

@@ -132,9 +132,9 @@ let%expect_test "cmplt_matchheader: h1=h2=4 equal, no match → h1=5" =
   |}]
 
 (* e2e: parser module (extract one byte into h1) feeding a transformer module
-   (h1 += 5).  Packet byte 10 -> parser h1=10, transformer h1=15. *)
+   (h1 += 5).  Network packet byte 10 -> parser h1=10, transformer h1=15. *)
 let%expect_test "parser_then_transformer: byte 10 -> h1=15" =
-  let s' = run_net 4 (Shim.set_mod_packet 1 [10]) in
+  let s' = run_net 4 (Shim.set_net_packet [10]) in
   Shim.print_general_state s';
   [%expect {|
     Module 1:
@@ -143,11 +143,11 @@ let%expect_test "parser_then_transformer: byte 10 -> h1=15" =
       h1=15
   |}]
 
-(* e2e: two parser modules, each seeded with its own packet; parser 2 carries
-   parser 1's h1 forward and adds h2 from its own packet. *)
-let%expect_test "two_parsers: packets [7] and [42] -> h1=7, h2=42" =
-  let s' = run_net 5 (fun gcs ->
-    Shim.set_mod_packet 2 [42] (Shim.set_mod_packet 1 [7] gcs)) in
+(* e2e: packet threading through two parser modules.  The single network packet
+   [7;42] flows through: parser 1 consumes byte 7 into h1, hands the residual
+   [42] to parser 2, which consumes 42 into h2 (carrying h1 forward). *)
+let%expect_test "two_parsers: packet [7;42] threads -> h1=7, h2=42" =
+  let s' = run_net 5 (Shim.set_net_packet [7; 42]) in
   Shim.print_general_state s';
   [%expect {|
     Module 1:

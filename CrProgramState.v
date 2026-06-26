@@ -74,3 +74,15 @@ Definition set_module_header_map {Th Tb} (m : ModuleState Th Tb) (packet : PMap.
                                       p_packet     := p_packet ps;
                                       p_cursor     := p_cursor ps |}
   end.
+
+(* Feed an incoming packet into a module (used to thread the residual packet
+   along the network).  A parser starts parsing the new packet from its head;
+   a transformer has no packet, so it is left unchanged. *)
+Definition set_module_packet {Th Tb} (m : ModuleState Th Tb) (pkt : list Tb)
+    : ModuleState Th Tb :=
+  match m with
+  | TransformerMod ts => TransformerMod ts
+  | ParserMod ps      => ParserMod {| p_header_map := p_header_map ps;
+                                      p_packet     := pkt;
+                                      p_cursor     := 0 |}
+  end.

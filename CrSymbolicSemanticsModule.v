@@ -36,20 +36,26 @@ Fixpoint eval_network_from_symbolic
     (net    : ModuleNetwork)
     (start  : ModuleName)
     (f_hdrs : PMap.t SmtArithExpr)
-    (f_bits : PMap.t SmtArithExpr)
+    (f_pkt  : list SmtBoolExpr)
     (gs     : GeneralSymbolicState)
     (fuel   : nat)
     : option (GeneralSymbolicState) :=
   match fuel with | O => None | S fuel' =>
   match lookup_module net start, (mod_states gs) ?? (unwrap start) with
   | Some m, Some ls =>
-    let ls' := set_module_header_map ls f_hdrs in
+    (* Feed this module both the upstream header map and the residual packet. *)
+    let ls' := set_module_packet (set_module_header_map ls f_hdrs) f_pkt in
     match eval_module_symbolic m ls' with
     | None => None
     | Some ls'' =>
       let gs' := set_gps_mod_states gs (PMap.set (unwrap start) ls'' (mod_states gs)) in
       let f_hdrs' := module_header_map ls'' in
-      let f_bits' := f_bits in
+      (* Residual packet passed downstream (mirrors the concrete semantics):
+         a parser hands on the bits past its cursor; a transformer flows it through. *)
+      let f_pkt' := match ls'' with
+                    | ParserMod ps' => List.skipn (p_cursor ps') (p_packet ps')
+                    | TransformerMod _ => f_pkt
+                    end in
       (* Recurse over downstream modules; on [], fold_left returns
           the seed [Some ms'] as is, which is the desired sink behaviour. *)
       List.fold_left
@@ -58,7 +64,7 @@ Fixpoint eval_network_from_symbolic
           | None => None
           | Some gs_acc =>
               eval_network_from_symbolic
-                net dst f_hdrs' f_bits' gs_acc fuel'
+                net dst f_hdrs' f_pkt' gs_acc fuel'
           end)
         (downstream_modules net start)
         (Some gs')
@@ -78,11 +84,10 @@ Definition eval_general_program_symbolic
   | None => None
   | Some start_state =>
     let hdr_i := module_header_map start_state in
-    (* [f_bits] is stubbed for now: seeded with nil and threaded through
-       unchanged, mirroring [eval_general_program_concrete]. *)
-    let bit_i := PMap.init (SmtArithConst CrNilInt) in
+    (* The network's input packet threads in from the shared bit map. *)
+    let pkt_i := sh_bit_map gs in
     eval_network_from_symbolic
-      net start hdr_i bit_i gs fuel
+      net start hdr_i pkt_i gs fuel
   end.
 
 Definition eval_general_program_symbolic_sinks
