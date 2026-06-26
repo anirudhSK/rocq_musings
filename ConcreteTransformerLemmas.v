@@ -83,10 +83,8 @@ Lemma eval_hdr_op_expr_concrete_eq :
   eval_hdr_op_expr_concrete op c1 = eval_hdr_op_expr_concrete op c2.
 Proof.
   intros c1 c2 op Hcs.
-  destruct op; simpl;
-    rewrite (lookup_concrete_eq _ _ arg1 Hcs);
-    rewrite (lookup_concrete_eq _ _ arg2 Hcs);
-    reflexivity.
+  destruct op; cbn [eval_hdr_op_expr_concrete];
+    rewrite !(lookup_concrete_eq _ _ _ Hcs); reflexivity.
 Qed.
 
 Lemma eval_match_concrete_eq :
@@ -110,7 +108,10 @@ Proof.
   intros c1 c2 op Hcs.
   pose proof (eval_hdr_op_expr_concrete_eq c1 c2 op Hcs) as Hexp.
   unfold eval_hdr_op_assign_concrete.
-  destruct op as [f arg1 arg2 target | f arg1 arg2 target]; rewrite Hexp.
+  destruct op as [f ty arg1 arg2 target | f ty arg1 arg2 target
+                 | from to arg target | from to arg target]; rewrite Hexp.
+  - apply cs_lookup_eq_update_state. assumption.
+  - apply cs_lookup_eq_update_header. assumption.
   - apply cs_lookup_eq_update_state. assumption.
   - apply cs_lookup_eq_update_header. assumption.
 Qed.

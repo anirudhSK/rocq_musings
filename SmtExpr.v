@@ -17,6 +17,9 @@ with SmtArithExpr : Type :=
     | SmtArithConst (value : CrInt_T)
     | SmtArithVar (name : string)
     | SmtConditional (cond : SmtBoolExpr) (then_expr else_expr : SmtArithExpr)
+    (* Read a sub-expression at a given int type (truncate / zero-extend). The
+       operation, not the value, carries the width. *)
+    | SmtCoerce (t : CrIntType) (e : SmtArithExpr)
     (* Arithmetic operations *)
     | SmtBitAdd (e1 e2 : SmtArithExpr)
     | SmtBitSub (e1 e2 : SmtArithExpr) (* Note: this is modulo 256 subtraction *)
@@ -57,9 +60,10 @@ with eval_smt_arith (e : SmtArithExpr) (v : SmtValuation) : CrVal :=
       | _ => ErrorVal
       end
     | SmtConditional cond then_expr else_expr =>
-        if eval_smt_bool cond v 
+        if eval_smt_bool cond v
         then (eval_smt_arith then_expr v)
         else (eval_smt_arith else_expr v)
+    | SmtCoerce t e => coerce_to_type t (eval_smt_arith e v)
     | SmtBitAdd e1 e2 => CrVal.add
         (eval_smt_arith e1 v)
         (eval_smt_arith e2 v)

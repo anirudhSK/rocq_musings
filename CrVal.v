@@ -9,11 +9,30 @@ Inductive Check_T (T : Type) :=
 Arguments Legal {T} _.
 Arguments Illegal {T}.
 
+(* The width an operation acts at, analogous to the b/w/l/q suffix on x86
+   mov: the operand storage is uniform, the *operation* picks the width. *)
+Inductive CrWidth : Type :=
+| W8 | W16 | W32 | W64.
+
+(* The integer "type" an operation reads/writes at. Today this is just a width;
+   it is the extension point for signedness (add [it_signed : bool] here and
+   teach [coerce_to_type] to pick sign- vs zero-extension). Carrying a named
+   record rather than a bare [CrWidth] means that future field is a definition
+   change, not a re-threading of every operation. *)
+Record CrIntType : Type := mkCrIntType {
+  it_width : CrWidth;
+}.
+
+Definition u8  : CrIntType := mkCrIntType W8.
+Definition u16 : CrIntType := mkCrIntType W16.
+Definition u32 : CrIntType := mkCrIntType W32.
+Definition u64 : CrIntType := mkCrIntType W64.
+
+(* Integer storage is uniform 64-bit: a value is just bits, and the width an
+   operation reads/writes at lives on the operation ([CrIntType]). Reads
+   normalize through [coerce_to_type]. *)
 Inductive CrInt_T : Type :=
-| CrUInt8 (val : uint8)
-| CrUInt16 (val : uint16)
-| CrUInt32 (val : uint32)
-| CrUInt64 (val : uint64)
+| CrInt (val : uint64)
 | CrNilInt.
 Inductive CrPtr_T : Type :=
 | CrPtr (addr : uintbptr)
@@ -30,7 +49,7 @@ Inductive MemVal (T : Type) :=
 Arguments Init {T} _.
 Arguments Uninit {T}.
 Record MemBlock (T : Type) := {
-  arr_len : uint32;
+  arr_len : uint64;
   arr_bytes : PMap.t (MemVal T);
 }.
 Arguments arr_len {T} _.
@@ -51,10 +70,7 @@ Definition pkey_to_mkey {w} (p : @bit_int w) : positive :=
 
 Definition iveqb (x y : CrInt_T) : bool :=
   match x, y with
-  | CrUInt8 x', CrUInt8 y'
-  | CrUInt16 x', CrUInt16 y'
-  | CrUInt32 x', CrUInt32 y'
-  | CrUInt64 x', CrUInt64 y' => Integers.eq x' y'
+  | CrInt x', CrInt y' => Integers.eq x' y'
   | CrNilInt, CrNilInt => true
   | _, _ => false
   end.
@@ -71,10 +87,7 @@ Definition eqb (x y : CrVal) : bool :=
 
 Definition ivltb (x y : CrInt_T) : bool :=
   match x, y with
-  | CrUInt8 x', CrUInt8 y'
-  | CrUInt16 x', CrUInt16 y'
-  | CrUInt32 x', CrUInt32 y'
-  | CrUInt64 x', CrUInt64 y' => Integers.ltu x' y'
+  | CrInt x', CrInt y' => Integers.ltu x' y'
   | _, _ => false
   end.
 Transparent ivltb.
@@ -87,86 +100,98 @@ Definition ltb (x y : CrVal) : bool :=
   | _, _ => false
   end.
 
+(* The unsigned Z held by an integer value. *)
+Definition iv_unsigned (i : CrInt_T) : Z :=
+  match i with
+  | CrInt v  => unsigned v
+  | CrNilInt => 0%Z
+  end.
+
+Definition width_bits (w : CrWidth) : Z :=
+  match w with W8 => 8 | W16 => 16 | W32 => 32 | W64 => 64 end.
+
+(* Reinterpret a raw integer [z] at width [w]: keep its low [width_bits w] bits
+   in the uniform 64-bit container (truncate / zero-extend). This is what makes
+   an operation's width meaningful — storage is uniform, the op picks the width. *)
+Definition coerce_int_width (w : CrWidth) (z : Z) : CrInt_T :=
+  CrInt (repr (Z.land z (Z.ones (width_bits w)))).
+
+(* Read a value at type [t]. Only integers carry a width; everything else is
+   passed through unchanged (a type mismatch surfaces later in the operation).
+   This is the single chokepoint where signedness will branch (zero- vs
+   sign-extension) once [CrIntType] grows an [it_signed] field. *)
+Definition coerce_to_type (t : CrIntType) (v : CrVal) : CrVal :=
+  match v with
+  | IntVal i => IntVal (coerce_int_width (it_width t) (iv_unsigned i))
+  | _ => v
+  end.
+
 Definition apply_iv_binop
-  (f :forall (w : positive), @bit_int w -> @bit_int w -> @bit_int w)
+  (f : uint64 -> uint64 -> uint64)
   (x y : CrInt_T) : CrVal :=
   match x, y with
-  | CrUInt8 x', CrUInt8 y'
-    => IntVal (CrUInt8 (@f _ x' y'))
-  | CrUInt16 x', CrUInt16 y'
-    => IntVal (CrUInt16 (@f _ x' y'))
-  | CrUInt32 x', CrUInt32 y'
-    => IntVal (CrUInt32 (@f _ x' y'))
-  | CrUInt64 x', CrUInt64 y'
-    => IntVal (CrUInt64 (@f _ x' y'))
+  | CrInt x', CrInt y' => IntVal (CrInt (f x' y'))
   | _, _ => ErrorVal
   end.
 Transparent apply_iv_binop.
 
 Definition add (x y : CrVal) : CrVal :=
   match x, y with
-  | IntVal x', IntVal y' => apply_iv_binop (fun w => @Integers.add w) x' y'
+  | IntVal x', IntVal y' => apply_iv_binop Integers.add x' y'
   | _, _ => ErrorVal
   end.
 
 Definition sub (x y : CrVal) : CrVal :=
   match x, y with
-  | IntVal x', IntVal y' => apply_iv_binop (fun w => @Integers.sub w) x' y'
+  | IntVal x', IntVal y' => apply_iv_binop Integers.sub x' y'
   | _, _ => ErrorVal
   end.
 
 Definition and (x y : CrVal) : CrVal :=
   match x, y with
-  | IntVal x', IntVal y' => apply_iv_binop (fun w => @Integers.and w) x' y'
+  | IntVal x', IntVal y' => apply_iv_binop Integers.and x' y'
   | _, _ => ErrorVal
   end.
 
 Definition or (x y : CrVal) : CrVal :=
   match x, y with
-  | IntVal x', IntVal y' => apply_iv_binop (fun w => @Integers.or w) x' y'
+  | IntVal x', IntVal y' => apply_iv_binop Integers.or x' y'
   | _, _ => ErrorVal
   end.
 
 Definition xor (x y : CrVal) : CrVal :=
   match x, y with
-  | IntVal x', IntVal y' => apply_iv_binop (fun w => @Integers.xor w) x' y'
+  | IntVal x', IntVal y' => apply_iv_binop Integers.xor x' y'
   | _, _ => ErrorVal
   end.
 
 Definition not (x : CrVal) : CrVal :=
   match x with
-  | IntVal (CrUInt8 x')
-    => IntVal (CrUInt8 (Integers.not x'))
-  | IntVal (CrUInt16 x')
-    => IntVal (CrUInt16 (Integers.not x'))
-  | IntVal (CrUInt32 x')
-    => IntVal (CrUInt32 (Integers.not x'))
-  | IntVal (CrUInt64 x')
-    => IntVal (CrUInt64 (Integers.not x'))
+  | IntVal (CrInt x') => IntVal (CrInt (Integers.not x'))
   | _ => ErrorVal
   end.
 
 Definition mul (x y : CrVal) : CrVal :=
   match x, y with
-  | IntVal x', IntVal y' => apply_iv_binop (fun w => @Integers.mul w) x' y'
+  | IntVal x', IntVal y' => apply_iv_binop Integers.mul x' y'
   | _, _ => ErrorVal
   end.
 
 Definition divu (x y : CrVal) : CrVal :=
   match x, y with
-  | IntVal x', IntVal y' => apply_iv_binop (fun w => @Integers.divu w) x' y'
+  | IntVal x', IntVal y' => apply_iv_binop Integers.divu x' y'
   | _, _ => ErrorVal
   end.
 
 Definition modu (x y : CrVal) : CrVal :=
   match x, y with
-  | IntVal x', IntVal y' => apply_iv_binop (fun w => @Integers.modu w) x' y'
+  | IntVal x', IntVal y' => apply_iv_binop Integers.modu x' y'
   | _, _ => ErrorVal
   end.
 
 Definition ld_arr (a : Array) (i : CrVal) : Check_T CrVal :=
   match a, i with
-  | Allocated array, IntVal (CrUInt32 idx) =>
+  | Allocated array, IntVal (CrInt idx) =>
     if (Integers.ltu idx (arr_len array)) then
       match (arr_bytes array) !! (pkey_to_mkey idx) with
       | Init v => Legal v
@@ -190,7 +215,7 @@ Definition ld (m : Memory CrVal) (p : CrVal) (i : CrVal) : Check_T CrVal :=
 
 Definition st_arr (a : Array) (i : CrVal) (v : CrVal) : Check_T Array :=
   match a, i with
-  | Allocated array, IntVal (CrUInt32 idx) =>
+  | Allocated array, IntVal (CrInt idx) =>
     if (Integers.ltu idx (arr_len array)) then
       Legal (Allocated {|
         arr_len := arr_len array;
@@ -223,7 +248,7 @@ Definition alloc {T : Type} (m : Memory T) (arg1 : CrVal) (arg2 : CrVal) : Memor
   match m with
   | Mem m' =>
     match arg1, arg2 with
-    | PtrVal (CrPtr addr), IntVal (CrUInt32 idx) => Mem
+    | PtrVal (CrPtr addr), IntVal (CrInt idx) => Mem
         (PMap.set (pkey_to_mkey addr) (Allocated {|
           arr_len := idx;
           arr_bytes := PMap.init Uninit;

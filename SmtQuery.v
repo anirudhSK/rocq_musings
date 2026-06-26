@@ -468,7 +468,7 @@ Print Assumptions equivalence_checker_cr_complete.
 Definition value_is_valid (v : CrVal) : Prop :=
   match v with
   | IntVal CrNilInt => True
-  | IntVal (CrUInt8 _) => True
+  | IntVal (CrInt _) => True
   | _ => False
   end.
 
@@ -546,7 +546,7 @@ Definition build_valuation_for_cs (cs : ConcreteState) : SmtValuation :=
       | None =>
         match try_match_prefix "ctrl_" (PTree.elements (snd (ctrl_map cs))) name with
         | Some v => v
-        | None => IntVal (CrUInt8 (repr 0))
+        | None => IntVal (CrInt (repr 0))
         end
       end
     end.

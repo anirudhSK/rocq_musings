@@ -16,7 +16,7 @@ let run pid setup =
 (* ------------------------------------------------------------------ *)
 
 let%expect_test "single_add3: h1=5 → h1=8" =
-  let s' = run 0 (Shim.set_header 1 (Shim.uint8_crval 5)) in
+  let s' = run 0 (Shim.set_header_to_int 1 5) in
   Shim.print_general_state s';
   [%expect {|
     Module 1:
@@ -24,7 +24,7 @@ let%expect_test "single_add3: h1=5 → h1=8" =
   |}]
 
 let%expect_test "single_add3: h1=0 → h1=3" =
-  let s' = run 0 (Shim.set_header 1 (Shim.uint8_crval 0)) in
+  let s' = run 0 (Shim.set_header_to_int 1 0) in
   Shim.print_general_state s';
   [%expect {|
     Module 1:
@@ -36,7 +36,7 @@ let%expect_test "single_add3: h1=0 → h1=3" =
 (* ------------------------------------------------------------------ *)
 
 let%expect_test "add1_then_mul2: h1=5 → 12" =
-  let s' = run 1 (Shim.set_header 1 (Shim.uint8_crval 5)) in
+  let s' = run 1 (Shim.set_header_to_int 1 5) in
   Shim.print_general_state s';
   [%expect {|
     Module 1:
@@ -46,7 +46,7 @@ let%expect_test "add1_then_mul2: h1=5 → 12" =
   |}]
 
 let%expect_test "add1_then_mul2: h1=0 → 2 (0+1)*2" =
-  let s' = run 1 (Shim.set_header 1 (Shim.uint8_crval 0)) in
+  let s' = run 1 (Shim.set_header_to_int 1 0) in
   Shim.print_general_state s';
   [%expect {|
     Module 1:
@@ -61,7 +61,7 @@ let%expect_test "add1_then_mul2: h1=0 → 2 (0+1)*2" =
 (* ------------------------------------------------------------------ *)
 
 let%expect_test "conditional_pipeline: h1=7 hits guard → 11" =
-  let s' = run 2 (Shim.set_header 1 (Shim.uint8_crval 7)) in
+  let s' = run 2 (Shim.set_header_to_int 1 7) in
   Shim.print_general_state s';
   [%expect {|
     Module 1:
@@ -71,7 +71,7 @@ let%expect_test "conditional_pipeline: h1=7 hits guard → 11" =
   |}]
 
 let%expect_test "conditional_pipeline: h1=3 misses guard → 13" =
-  let s' = run 2 (Shim.set_header 1 (Shim.uint8_crval 3)) in
+  let s' = run 2 (Shim.set_header_to_int 1 3) in
   Shim.print_general_state s';
   [%expect {|
     Module 1:
@@ -87,8 +87,8 @@ let%expect_test "conditional_pipeline: h1=3 misses guard → 13" =
 
 let%expect_test "cmplt_matchheader: h1=3 h2=5 fires → h1=9" =
   let s' = run 3 (fun s ->
-    Shim.set_header 2 (Shim.uint8_crval 5)
-      (Shim.set_header 1 (Shim.uint8_crval 3) s)) in
+    Shim.set_header_to_int 2 5
+      (Shim.set_header_to_int 1 3 s)) in
   Shim.print_general_state s';
   [%expect {|
     Module 1:
@@ -99,8 +99,8 @@ let%expect_test "cmplt_matchheader: h1=3 h2=5 fires → h1=9" =
 
 let%expect_test "cmplt_matchheader: h1=5 h2=3 no match → h1=6" =
   let s' = run 3 (fun s ->
-    Shim.set_header 2 (Shim.uint8_crval 3)
-      (Shim.set_header 1 (Shim.uint8_crval 5) s)) in
+    Shim.set_header_to_int 2 3
+      (Shim.set_header_to_int 1 5 s)) in
   Shim.print_general_state s';
   [%expect {|
     Module 1:
@@ -111,8 +111,8 @@ let%expect_test "cmplt_matchheader: h1=5 h2=3 no match → h1=6" =
 
 let%expect_test "cmplt_matchheader: h1=h2=4 equal, no match → h1=5" =
   let s' = run 3 (fun s ->
-    Shim.set_header 2 (Shim.uint8_crval 4)
-      (Shim.set_header 1 (Shim.uint8_crval 4) s)) in
+    Shim.set_header_to_int 2 4
+      (Shim.set_header_to_int 1 4 s)) in
   Shim.print_general_state s';
   [%expect {|
     Module 1:

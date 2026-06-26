@@ -21,8 +21,6 @@ module MyInts = struct
   include MyInts
   type uint8 = [%import: MyInts.uint8]
   [@@deriving sexp]
-  type uint16 = [%import: MyInts.uint16]
-  [@@deriving sexp]
   type uint32 = [%import: MyInts.uint32]
   [@@deriving sexp]
   type uint64 = [%import: MyInts.uint64]
@@ -32,6 +30,10 @@ module MyInts = struct
 end
 module CrVal = struct
 include CrVal
+type coq_CrWidth = [%import: CrVal.coq_CrWidth]
+[@@deriving sexp]
+type coq_CrIntType = [%import: CrVal.coq_CrIntType]
+[@@deriving sexp]
 type coq_CrInt_T = [%import: CrVal.coq_CrInt_T]
 [@@deriving sexp]
 type coq_CrPtr_T = [%import: CrVal.coq_CrPtr_T]
@@ -54,7 +56,7 @@ module CrIdentifiers = struct
 end
 module CrTransformer = struct
   include CrTransformer
-  type coq_FunctionArgument = [%import: CrTransformer.coq_FunctionArgument]
+  type coq_Operand = [%import: CrTransformer.coq_Operand]
   [@@deriving sexp]
   type coq_CmpOp = [%import: CrTransformer.coq_CmpOp]
   [@@deriving sexp]

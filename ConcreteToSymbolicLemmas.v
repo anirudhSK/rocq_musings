@@ -17,15 +17,43 @@ From Stdlib Require Import Bool.Bool.
 
 (* Simpler lemma with no state update *)
 Global Opaque lookup_varlike.
+
+(* The symbolic op-builders evaluate to the concrete op-at-width / cast: this is
+   where "operations carry the width" lands, and it holds by construction because
+   [SmtCoerce] evaluates to [coerce_to_type]. *)
+Lemma eval_smt_of_binop :
+  forall (op : BinaryOp) (e1 e2 : SmtArithExpr) (f : SmtValuation),
+    eval_smt_arith (smt_of_binop op e1 e2) f =
+    apply_bin_op op (eval_smt_arith e1 f) (eval_smt_arith e2 f).
+Proof. destruct op; reflexivity. Qed.
+
+Lemma eval_smt_binop_of :
+  forall (op : BinaryOp) (ty : CrIntType) (e1 e2 : SmtArithExpr) (f : SmtValuation),
+    eval_smt_arith (smt_binop_of op ty e1 e2) f =
+    apply_bin_op_of op ty (eval_smt_arith e1 f) (eval_smt_arith e2 f).
+Proof.
+  intros. unfold smt_binop_of, apply_bin_op_of.
+  cbn [eval_smt_arith]. rewrite eval_smt_of_binop. reflexivity.
+Qed.
+
+Lemma eval_smt_cast :
+  forall (from to : CrIntType) (e : SmtArithExpr) (f : SmtValuation),
+    eval_smt_arith (smt_cast from to e) f =
+    apply_cast from to (eval_smt_arith e f).
+Proof. reflexivity. Qed.
+
 Lemma commute_sym_conc_expr:
   forall (ho: HdrOp) (s : SymbolicState) (f : SmtValuation),
     eval_hdr_op_expr_concrete ho (eval_sym_state s f) =
     eval_smt_arith (eval_hdr_op_expr_smt ho s) f.
 Proof.
   intros ho s f.
-  destruct ho, f0, arg1, arg2; simpl;
-  try repeat (rewrite PMapHelperLemmas.commute_lookup_eval_generic);
-  try reflexivity.
+  (* Split on the operation; each operand commutes via [commute_lookup_eval]
+     regardless of width. *)
+  destruct ho; cbn [eval_hdr_op_expr_concrete eval_hdr_op_expr_smt];
+    first [ rewrite eval_smt_binop_of | rewrite eval_smt_cast ];
+    unfold apply_bin_op_of, apply_cast;
+    rewrite ?commute_lookup_eval; reflexivity.
 Qed.
 
 Lemma commute_update_eval_varlike:
@@ -53,7 +81,7 @@ Proof.
   unfold eval_hdr_op_assign_concrete.
   unfold eval_hdr_op_assign_smt.
   rewrite commute_sym_conc_expr.
-  destruct ho, f0, arg1, arg2, s; simpl; 
+  destruct ho; simpl;
   rewrite commute_update_eval_varlike; reflexivity.
 Qed.
 

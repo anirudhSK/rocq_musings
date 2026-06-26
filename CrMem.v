@@ -438,35 +438,31 @@ Definition sym_eval_program (p : IM_Program) : output_valuation Z3Expr :=
 Definition z3_s_val : Type := var_id -> CrVal.
 Definition z3_a_val : Type := var_id -> @Array CrVal.
 
+(* TODO: integer storage is now a uniform 64-bit [CrInt], so the former 8-bit
+   vs 32-bit cases collapse into one and this evaluator runs at 64 bits. CrMem's
+   width used to come from the [Z3_int8]/[Z3_int32] leaves via the value tag;
+   that distinction is gone (shifts in particular now behave at 64 bits). To
+   restore per-width memory-op semantics, carry a [CrIntType] on these ops like
+   the transformer does (see CrTransformer.HdrOp) and mask results accordingly. *)
 Definition eval_z3_arith_binop (op : ArithBinOp) (v1 v2 : CrVal) : CrVal :=
   match v1, v2 with
-  | IntVal (CrUInt8 x1), IntVal (CrUInt8 x2) =>
+  | IntVal (CrInt x1), IntVal (CrInt x2) =>
     match op with
-    | AddOp => IntVal (CrUInt8 (Integers.add x1 x2))
-    | SubOp => IntVal (CrUInt8 (Integers.sub x1 x2))
-    | ASLOp => IntVal (CrUInt8 (Integers.shl x1 x2))
-    | ASROp => IntVal (CrUInt8 (Integers.shr x1 x2))
-    | BitAndOp => IntVal (CrUInt8 (Integers.and x1 x2))
-    | BitOrOp => IntVal (CrUInt8 (Integers.or x1 x2))
-    | BitXorOp => IntVal (CrUInt8 (Integers.xor x1 x2))
-    end
-  | IntVal (CrUInt32 x1), IntVal (CrUInt32 x2) =>
-    match op with
-    | AddOp => IntVal (CrUInt32 (Integers.add x1 x2))
-    | SubOp => IntVal (CrUInt32 (Integers.sub x1 x2))
-    | ASLOp => IntVal (CrUInt32 (Integers.shl x1 x2))
-    | ASROp => IntVal (CrUInt32 (Integers.shr x1 x2))
-    | BitAndOp => IntVal (CrUInt32 (Integers.and x1 x2))
-    | BitOrOp => IntVal (CrUInt32 (Integers.or x1 x2))
-    | BitXorOp => IntVal (CrUInt32 (Integers.xor x1 x2))
+    | AddOp => IntVal (CrInt (Integers.add x1 x2))
+    | SubOp => IntVal (CrInt (Integers.sub x1 x2))
+    | ASLOp => IntVal (CrInt (Integers.shl x1 x2))
+    | ASROp => IntVal (CrInt (Integers.shr x1 x2))
+    | BitAndOp => IntVal (CrInt (Integers.and x1 x2))
+    | BitOrOp => IntVal (CrInt (Integers.or x1 x2))
+    | BitXorOp => IntVal (CrInt (Integers.xor x1 x2))
     end
   | _, _ => ErrorVal
   end.
 
 Fixpoint eval_z3_arith (e : arith_expr) (sval : z3_s_val) (aval : z3_a_val) : CrVal :=
   match e with
-  | Z3_int8 x => IntVal (CrUInt8 x)
-  | Z3_int32 x => IntVal (CrUInt32 x)
+  | Z3_int8 x => IntVal (CrInt (repr (unsigned x)))
+  | Z3_int32 x => IntVal (CrInt (repr (unsigned x)))
   | Z3_int8_var name
   | Z3_int32_var name => sval name
   | Z3_bv_add e1 e2 =>
@@ -500,8 +496,7 @@ Fixpoint eval_z3_arith (e : arith_expr) (sval : z3_s_val) (aval : z3_a_val) : Cr
   | Z3_bv_not e1 =>
     let v := eval_z3_arith e1 sval aval in
     match v with
-    | IntVal (CrUInt8 x) => IntVal (CrUInt8 (Integers.not x))
-    | IntVal (CrUInt32 x) => IntVal (CrUInt32 (Integers.not x))
+    | IntVal (CrInt x) => IntVal (CrInt (Integers.not x))
     | _ => ErrorVal
     end
   | Z3_arr_sel e1 e2 =>
@@ -530,7 +525,7 @@ with eval_z3_array (e : arr_expr) (sval : z3_s_val) (aval : z3_a_val) : Array :=
   match e with
   | Z3_arr_init e1 =>
     match eval_z3_arith e1 sval aval with
-    | IntVal (CrUInt32 len) =>
+    | IntVal (CrInt len) =>
       Allocated {|
         arr_len := len;
         arr_bytes := PMap.init Uninit

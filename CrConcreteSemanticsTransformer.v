@@ -20,25 +20,40 @@ Definition apply_bin_op (f : BinaryOp) (arg1 : CrVal) (arg2 : CrVal) : CrVal :=
   | ModOp => CrVal.modu arg1 arg2
   end.
 
-Definition lookup_concrete (arg : FunctionArgument) (ps : ConcreteState) : CrVal :=
+Definition lookup_concrete (arg : Operand) (ps : ConcreteState) : CrVal :=
   match arg with
-  | CtrlPlaneArg c => lookup_varlike_map (@map_from_ps Ctrl _ _ ps) c
-  | HeaderArg h    => lookup_varlike_map (@map_from_ps Header _ _ ps) h
-  | ConstantArg n  => IntVal n
-  | StatefulArg s  => lookup_varlike_map (@map_from_ps State _ _ ps) s
+  | OpCtrlPlane c => lookup_varlike_map (@map_from_ps Ctrl _ _ ps) c
+  | OpHeader h    => lookup_varlike_map (@map_from_ps Header _ _ ps) h
+  | OpConst n  => IntVal n
+  | OpStateful s  => lookup_varlike_map (@map_from_ps State _ _ ps) s
   end.
+
+(* Apply [f] at int type [ty]: read both operands at [ty] and produce the
+   result at [ty] (mask operands and result to the operation's width). *)
+Definition apply_bin_op_of (f : BinaryOp) (ty : CrIntType) (v1 v2 : CrVal) : CrVal :=
+  coerce_to_type ty (apply_bin_op f (coerce_to_type ty v1) (coerce_to_type ty v2)).
+
+(* Reinterpret [v] from int type [from] to [to] (truncate / zero-extend). *)
+Definition apply_cast (from to : CrIntType) (v : CrVal) : CrVal :=
+  coerce_to_type to (coerce_to_type from v).
 
 Definition eval_hdr_op_expr_concrete (op : HdrOp) (ps : ConcreteState) : CrVal :=
   match op with
-  | StatefulOp f arg1 arg2 _ => apply_bin_op f (lookup_concrete arg1 ps) (lookup_concrete arg2 ps)
-  | StatelessOp f arg1 arg2 _ => apply_bin_op f (lookup_concrete arg1 ps) (lookup_concrete arg2 ps)
+  | StatefulOp f ty arg1 arg2 _ => apply_bin_op_of f ty (lookup_concrete arg1 ps) (lookup_concrete arg2 ps)
+  | StatelessOp f ty arg1 arg2 _ => apply_bin_op_of f ty (lookup_concrete arg1 ps) (lookup_concrete arg2 ps)
+  | CastStateOp from to arg _ => apply_cast from to (lookup_concrete arg ps)
+  | CastHeaderOp from to arg _ => apply_cast from to (lookup_concrete arg ps)
   end.
 
 Definition eval_hdr_op_assign_concrete (op : HdrOp) (ps: ConcreteState) : ConcreteState :=
   match op with
-  | StatefulOp f arg1 arg2 target =>
+  | StatefulOp _ _ _ _ target =>
         let op_output := eval_hdr_op_expr_concrete op ps in update_varlike ps target op_output
-  | StatelessOp f arg1 arg2 target => 
+  | StatelessOp _ _ _ _ target =>
+        let op_output := eval_hdr_op_expr_concrete op ps in update_varlike ps target op_output
+  | CastStateOp _ _ _ target =>
+        let op_output := eval_hdr_op_expr_concrete op ps in update_varlike ps target op_output
+  | CastHeaderOp _ _ _ target =>
         let op_output := eval_hdr_op_expr_concrete op ps in update_varlike ps target op_output
   end.
 

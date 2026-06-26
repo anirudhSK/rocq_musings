@@ -14,9 +14,9 @@ From MyProject Require Import Integers.
 Definition mod_prog_single_add3 : GeneralCaracaraProgram :=
   let p := CaracaraProgramDef [HeaderCtr 1] [] [] [
     Seq (SeqCtr [] [
-      StatelessOp AddOp
-        (HeaderArg (HeaderCtr 1))
-        (ConstantArg (CrUInt8 (repr 3)))
+      StatelessOp AddOp u8
+        (OpHeader (HeaderCtr 1))
+        (OpConst (CrInt (repr 3)))
         (HeaderCtr 1)
     ])
   ] in
@@ -30,17 +30,17 @@ Definition mod_prog_single_add3 : GeneralCaracaraProgram :=
 Definition mod_prog_add1_then_mul2 : GeneralCaracaraProgram :=
   let p1 := CaracaraProgramDef [HeaderCtr 1] [] [] [
     Seq (SeqCtr [] [
-      StatelessOp AddOp
-        (HeaderArg (HeaderCtr 1))
-        (ConstantArg (CrUInt8 (repr 1)))
+      StatelessOp AddOp u8
+        (OpHeader (HeaderCtr 1))
+        (OpConst (CrInt (repr 1)))
         (HeaderCtr 1)
     ])
   ] in
   let p2 := CaracaraProgramDef [HeaderCtr 1] [] [] [
     Seq (SeqCtr [] [
-      StatelessOp MulOp
-        (HeaderArg (HeaderCtr 1))
-        (ConstantArg (CrUInt8 (repr 2)))
+      StatelessOp MulOp u8
+        (OpHeader (HeaderCtr 1))
+        (OpConst (CrInt (repr 2)))
         (HeaderCtr 1)
     ])
   ] in
@@ -57,19 +57,19 @@ Definition mod_prog_add1_then_mul2 : GeneralCaracaraProgram :=
    h1=7 → 1 → 11.  h1=3 → 3 → 13. *)
 Definition mod_prog_conditional_pipeline : GeneralCaracaraProgram :=
   let p1 := CaracaraProgramDef [HeaderCtr 1] [] [] [
-    Seq (SeqCtr [(HeaderCtr 1, CmpEq, MatchConst (CrUInt8 (repr 7)))] [
-      StatelessOp AddOp
-        (ConstantArg (CrUInt8 (repr 1)))
-        (ConstantArg (CrUInt8 (repr 0)))
+    Seq (SeqCtr [(HeaderCtr 1, CmpEq, MatchConst (CrInt (repr 7)))] [
+      StatelessOp AddOp u8
+        (OpConst (CrInt (repr 1)))
+        (OpConst (CrInt (repr 0)))
         (HeaderCtr 1)
     ]);
     Seq (SeqCtr [] [])
   ] in
   let p2 := CaracaraProgramDef [HeaderCtr 1] [] [] [
     Seq (SeqCtr [] [
-      StatelessOp AddOp
-        (HeaderArg (HeaderCtr 1))
-        (ConstantArg (CrUInt8 (repr 10)))
+      StatelessOp AddOp u8
+        (OpHeader (HeaderCtr 1))
+        (OpConst (CrInt (repr 10)))
         (HeaderCtr 1)
     ])
   ] in
@@ -88,18 +88,18 @@ Definition mod_prog_conditional_pipeline : GeneralCaracaraProgram :=
 Definition mod_prog_cmplt_matchheader : GeneralCaracaraProgram :=
   let p1 := CaracaraProgramDef [HeaderCtr 1; HeaderCtr 2] [] [] [
     Seq (SeqCtr [(HeaderCtr 1, CmpLt, MatchHeader (HeaderCtr 2))] [
-      StatelessOp AddOp
-        (HeaderArg (HeaderCtr 1))
-        (HeaderArg (HeaderCtr 2))
+      StatelessOp AddOp u8
+        (OpHeader (HeaderCtr 1))
+        (OpHeader (HeaderCtr 2))
         (HeaderCtr 1)
     ]);
     Seq (SeqCtr [] [])
   ] in
   let p2 := CaracaraProgramDef [HeaderCtr 1] [] [] [
     Seq (SeqCtr [] [
-      StatelessOp AddOp
-        (HeaderArg (HeaderCtr 1))
-        (ConstantArg (CrUInt8 (repr 1)))
+      StatelessOp AddOp u8
+        (OpHeader (HeaderCtr 1))
+        (OpConst (CrInt (repr 1)))
         (HeaderCtr 1)
     ])
   ] in

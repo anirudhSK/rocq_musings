@@ -1,4 +1,5 @@
 From MyProject Require Import CrTransformer.
+From MyProject Require Import CrVal.
 From MyProject Require Import CrIdentifiers.
 From MyProject Require Import CrVarLike.
 From MyProject Require Import CrProgramState.
@@ -7,40 +8,45 @@ From MyProject Require Import SmtTypes.
 From Stdlib Require Import List.
 Import ListNotations.
 
-(* Convert FunctionArgument to SmtArithExpr *)
-Definition lookup_smt (arg : FunctionArgument) (ps : SymbolicState) : SmtArithExpr :=
+(* Convert an operand to its SmtArithExpr *)
+Definition lookup_smt (arg : Operand) (ps : SymbolicState) : SmtArithExpr :=
   match arg with
-  | CtrlPlaneArg c => lookup_varlike_map (@map_from_ps Ctrl _ _ ps) c
-  | HeaderArg h    => lookup_varlike_map (@map_from_ps Header _ _ ps) h
-  | ConstantArg n  => SmtArithConst n
-  | StatefulArg s  => lookup_varlike_map (@map_from_ps State _ _ ps) s
+  | OpCtrlPlane c => lookup_varlike_map (@map_from_ps Ctrl _ _ ps) c
+  | OpHeader h    => lookup_varlike_map (@map_from_ps Header _ _ ps) h
+  | OpConst n  => SmtArithConst n
+  | OpStateful s  => lookup_varlike_map (@map_from_ps State _ _ ps) s
   end.
+
+(* The SmtArithExpr constructor for each BinaryOp. *)
+Definition smt_of_binop (f : BinaryOp) : SmtArithExpr -> SmtArithExpr -> SmtArithExpr :=
+  match f with
+  | AddOp => SmtBitAdd
+  | SubOp => SmtBitSub
+  | AndOp => SmtBitAnd
+  | OrOp  => SmtBitOr
+  | XorOp => SmtBitXor
+  | MulOp => SmtBitMul
+  | DivOp => SmtBitDiv
+  | ModOp => SmtBitMod
+  end.
+
+(* Symbolic mirror of [apply_bin_op_of]: read both operands at [ty], apply the
+   op, and read the result at [ty]. [SmtCoerce] is the symbolic [coerce_to_type],
+   so this commutes with the concrete semantics by construction. *)
+Definition smt_binop_of (f : BinaryOp) (ty : CrIntType) (e1 e2 : SmtArithExpr) : SmtArithExpr :=
+  SmtCoerce ty (smt_of_binop f (SmtCoerce ty e1) (SmtCoerce ty e2)).
+
+(* Symbolic mirror of [apply_cast]. *)
+Definition smt_cast (from to : CrIntType) (e : SmtArithExpr) : SmtArithExpr :=
+  SmtCoerce to (SmtCoerce from e).
 
 (* Define the symbolic interpreter for header operation expressions *)
 Definition eval_hdr_op_expr_smt (h : HdrOp) (ps : SymbolicState) : SmtArithExpr :=
     match h with
-    | StatefulOp f arg1 arg2 _ =>
-       match f with 
-         | AddOp => SmtBitAdd (lookup_smt arg1 ps) (lookup_smt arg2 ps)
-         | SubOp => SmtBitSub (lookup_smt arg1 ps) (lookup_smt arg2 ps)
-         | AndOp => SmtBitAnd (lookup_smt arg1 ps) (lookup_smt arg2 ps)
-         | OrOp => SmtBitOr (lookup_smt arg1 ps) (lookup_smt arg2 ps)
-         | XorOp => SmtBitXor (lookup_smt arg1 ps) (lookup_smt arg2 ps)
-         | MulOp => SmtBitMul (lookup_smt arg1 ps) (lookup_smt arg2 ps)
-         | DivOp => SmtBitDiv (lookup_smt arg1 ps) (lookup_smt arg2 ps)
-         | ModOp => SmtBitMod (lookup_smt arg1 ps) (lookup_smt arg2 ps)
-       end
-    | StatelessOp f arg1 arg2 _ =>
-       match f with
-         | AddOp => SmtBitAdd (lookup_smt arg1 ps) (lookup_smt arg2 ps)
-         | SubOp => SmtBitSub (lookup_smt arg1 ps) (lookup_smt arg2 ps)
-         | AndOp => SmtBitAnd (lookup_smt arg1 ps) (lookup_smt arg2 ps)
-         | OrOp => SmtBitOr (lookup_smt arg1 ps) (lookup_smt arg2 ps)
-         | XorOp => SmtBitXor (lookup_smt arg1 ps) (lookup_smt arg2 ps)
-         | MulOp => SmtBitMul (lookup_smt arg1 ps) (lookup_smt arg2 ps)
-         | DivOp => SmtBitDiv (lookup_smt arg1 ps) (lookup_smt arg2 ps)
-         | ModOp => SmtBitMod (lookup_smt arg1 ps) (lookup_smt arg2 ps)
-       end
+    | StatefulOp f ty arg1 arg2 _ => smt_binop_of f ty (lookup_smt arg1 ps) (lookup_smt arg2 ps)
+    | StatelessOp f ty arg1 arg2 _ => smt_binop_of f ty (lookup_smt arg1 ps) (lookup_smt arg2 ps)
+    | CastStateOp from to arg _ => smt_cast from to (lookup_smt arg ps)
+    | CastHeaderOp from to arg _ => smt_cast from to (lookup_smt arg ps)
     end.
 
 (* Apply SmtValuation f to every entry in the symbolic state across all 3 maps *)
@@ -50,9 +56,13 @@ Definition eval_sym_state (s: SymbolicState) (f : SmtValuation) : ConcreteState 
 
 Definition eval_hdr_op_assign_smt (ho : HdrOp) (ps: SymbolicState) : SymbolicState :=
     match ho with
-    | StatefulOp f arg1 arg2 target =>
+    | StatefulOp _ _ _ _ target =>
         let op_output := eval_hdr_op_expr_smt ho ps in update_varlike ps target op_output
-    | StatelessOp f arg1 arg2 target => 
+    | StatelessOp _ _ _ _ target =>
+        let op_output := eval_hdr_op_expr_smt ho ps in update_varlike ps target op_output
+    | CastStateOp _ _ _ target =>
+        let op_output := eval_hdr_op_expr_smt ho ps in update_varlike ps target op_output
+    | CastHeaderOp _ _ _ target =>
         let op_output := eval_hdr_op_expr_smt ho ps in update_varlike ps target op_output
     end.
 
@@ -85,11 +95,19 @@ Definition eval_hdr_op_assign_smt_conditional
   : SymbolicState :=
   let condition := eval_match_smt match_condition ps in
     match ho with
-    | StatefulOp _ _ _ target =>
+    | StatefulOp _ _ _ _ target =>
         let op_output := SmtConditional condition (eval_hdr_op_expr_smt ho ps)
                         (lookup_varlike ps target) in
                         update_varlike ps target op_output
-    | StatelessOp _ _ _ target =>
+    | StatelessOp _ _ _ _ target =>
+        let op_output := SmtConditional condition (eval_hdr_op_expr_smt ho ps)
+                        (lookup_varlike ps target) in
+                        update_varlike ps target op_output
+    | CastStateOp _ _ _ target =>
+        let op_output := SmtConditional condition (eval_hdr_op_expr_smt ho ps)
+                        (lookup_varlike ps target) in
+                        update_varlike ps target op_output
+    | CastHeaderOp _ _ _ target =>
         let op_output := SmtConditional condition (eval_hdr_op_expr_smt ho ps)
                         (lookup_varlike ps target) in
                         update_varlike ps target op_output
