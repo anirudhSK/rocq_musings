@@ -2,17 +2,75 @@ From MyProject Require Import SmtExpr.
 From MyProject Require Import Maps.
 From MyProject Require Import CrVal.
 
-(* The ProgramState is a record containing three maps:,
+(* The TransformerState is a record containing three maps:,
    one each for mapping headers/statevars/ctrlplaneconfigs to their current values *)
-Record ProgramState (T : Type) := {
-  ctrl_map : PMap.t T;
-  header_map : PMap.t T;
-  state_map : PMap.t T;
+Record TransformerState (T : Type) := {
+  t_ctrl_map : PMap.t T;
+  t_header_map : PMap.t T;
+  t_state_map : PMap.t T;
 }.
 
-Arguments header_map {T} _.
-Arguments state_map {T} _.  
-Arguments ctrl_map {T} _.
+Arguments t_header_map {T} _.
+Arguments t_state_map {T} _.  
+Arguments t_ctrl_map {T} _.
 
-Definition ConcreteState := ProgramState CrVal.
-Definition SymbolicState := ProgramState SmtArithExpr.
+Definition ConcreteTransformerState := TransformerState CrVal.
+Definition SymbolicTransformerState := TransformerState SmtArithExpr.
+
+(* ------------------------------------------------------------------ *)
+(* Parser-specific runtime state.  Carries its own header map (the shared
+   inter-module interface) plus the input packet bit stream it parses
+   from and a read cursor (a bit offset into [p_packet]).  Parameterized
+   by two types: [Th] is the header-value type and [Tb] is the packet-bit
+   type, since a packet bit and a header value differ between the concrete
+   and symbolic engines (concretely [CrVal]/[bool]; symbolically
+   [SmtArithExpr]/[SmtBoolExpr]). *)
+Record ParserState (Th Tb : Type) := {
+  p_header_map : PMap.t Th;
+  p_packet     : list Tb;   (* input bit stream, MSB-first *)
+  p_cursor     : nat;       (* current read offset into [p_packet] *)
+}.
+
+Arguments p_header_map {Th Tb} _.
+Arguments p_packet {Th Tb} _.
+Arguments p_cursor {Th Tb} _.
+
+Definition ConcreteParserState := ParserState CrVal bool.
+Definition SymbolicParserState := ParserState SmtArithExpr SmtBoolExpr.
+
+(* ------------------------------------------------------------------ *)
+(* Inject a fresh header map into a [TransformerState], keeping ctrl/state. *)
+Definition inject_headers {T : Type} (packet : PMap.t T) (local : TransformerState T)
+    : TransformerState T :=
+  {| t_ctrl_map   := t_ctrl_map local;
+     t_header_map := packet;
+     t_state_map  := t_state_map local |}.
+
+(* ------------------------------------------------------------------ *)
+(* Per-module runtime state.  Both kinds carry a single payload record that
+   owns its own header map: transformer modules a full [TransformerState]
+   (ctrl/header/state); parser modules a [ParserState] (header + packet).
+   [Th] is the header-value type, [Tb] the packet-bit type. *)
+Inductive ModuleState (Th Tb : Type) : Type :=
+  | TransformerMod (ts : TransformerState Th)
+  | ParserMod (ps : ParserState Th Tb).
+
+Arguments TransformerMod {Th Tb} _.
+Arguments ParserMod {Th Tb} _.
+
+(* The shared inter-module interface: every module exposes a header map. *)
+Definition module_header_map {Th Tb} (m : ModuleState Th Tb) : PMap.t Th :=
+  match m with
+  | TransformerMod ts => t_header_map ts
+  | ParserMod ps      => p_header_map ps
+  end.
+
+(* Replace a module's header map (used when piping the packet downstream). *)
+Definition set_module_header_map {Th Tb} (m : ModuleState Th Tb) (packet : PMap.t Th)
+    : ModuleState Th Tb :=
+  match m with
+  | TransformerMod ts => TransformerMod (inject_headers packet ts)
+  | ParserMod ps      => ParserMod {| p_header_map := packet;
+                                      p_packet     := p_packet ps;
+                                      p_cursor     := p_cursor ps |}
+  end.

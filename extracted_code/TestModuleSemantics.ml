@@ -7,7 +7,7 @@ let run pid setup =
   let sid = Shim.start_mod_id p in
   let gcs = Shim.set_mod_state sid
     (setup (Shim.get_mod_state sid gcs0)) gcs0 in
-  match CrTModConcreteSemantics.eval_general_program_concrete p gcs with
+  match CrModConcreteSemantics.eval_general_program_concrete p gcs with
   | None -> failwith "eval_general_program_concrete_sinks returned None"
   | Some sinks -> sinks
 

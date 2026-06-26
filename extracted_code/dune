@@ -29,12 +29,13 @@
  (wrapped false)
  (modules
   Ascii BinInt BinNums BinPos Coqlib CrConcreteSemanticsTransformer CrDsl
-  CrDslProperties CrIdentifiers CrMem CrMemEx CrModule CrParser CrProgramState
-  CrSymbolicSemanticsTransformer CrTModConcreteSemantics CrTModSymbolicSemantics
-  CrTransformer CrTypeIF CrVal CrVarLike Datatypes EquivDec Integers List
-  ListDef ListUtils Maps MemSolver Mergesort MyInts Nat NatDef Orders PktClass
-  PosDef PosGraphLemmas Rocqlib Shim SmtExpr SmtModuleQuery SmtQuery SmtTypes
-  Specif String TestModulePrograms TestPrograms Z3Solver ZArith_dec Zpower)
+  CrDslProperties CrGeneralProgramState CrIdentifiers CrMem CrMemEx
+  CrModConcreteSemantics CrModSymbolicSemantics CrModule CrParser CrProgramState
+  CrSymbolicSemanticsTransformer CrTransformer CrTypeIF CrVal CrVarLike
+  Datatypes EquivDec Integers List ListDef ListUtils Maps MemSolver Mergesort
+  MyInts Nat NatDef Orders PeanoNat PktClass PosDef PosGraphLemmas Rocqlib Shim
+  SmtExpr SmtModuleQuery SmtQuery SmtTypes Specif String TestModulePrograms
+  TestPrograms Z3Solver ZArith_dec Zpower)
  (preprocess (staged_pps ppx_import ppx_sexp_conv))
  (libraries z3 sexplib)
  (flags (:standard -w -33)))

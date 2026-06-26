@@ -232,16 +232,6 @@ Definition get_transformer_from_general (p : GeneralCaracaraProgram) (m : Module
   | _ => None
   end.
 
-Definition inject_headers {T : Type} (packet : PMap.t T) (local : ProgramState T)
-    : ProgramState T :=
-  {| ctrl_map   := ctrl_map local;
-     header_map := packet;
-     state_map  := state_map local |}.
-
-Definition GeneralProgramState (T : Type) : Type := PMap.t (ProgramState T).
-Definition GeneralConcreteState : Type := GeneralProgramState CrVal.
-Definition GeneralSymbolicState : Type := GeneralProgramState SmtArithExpr.
-
 Definition get_sink_states {T : Type}
   (net : ModuleNetwork)
   (ledger : PMap.t T)

@@ -11,8 +11,8 @@ From MyProject Require Import CrVarLike.
 From MyProject Require Import CrModule.
 From MyProject Require Import CrProgramState.
 From MyProject Require Import CrDslProperties.
-From MyProject Require Import CrTModSymbolicSemantics.
-From MyProject Require Import CrTModConcreteSemantics.
+From MyProject Require Import CrModSymbolicSemantics.
+From MyProject Require Import CrModConcreteSemantics.
 
 Definition keys_from_map {T A : Type} (fn : positive -> A) (m : PMap.t T) : list A :=
   List.map fn (List.map fst (PTree.elements (snd m))).
@@ -23,8 +23,8 @@ Definition modnet_equivalence_checker
   let sym1_opt := eval_general_program_symbolic_sinks p1 (init_general_symbolic_state "p1" p1) in
   let sym2_opt := eval_general_program_symbolic_sinks p2 (init_general_symbolic_state "p2" p2) in
   match sym1_opt, sym2_opt with
-  | Some [sym1], Some [sym2] => (* assume one sink *)
-    let h_map : PMap.t SmtArithExpr := (header_map sym1) in
+  | Some [TransformerMod sym1], Some [TransformerMod sym2] => (* assume one sink *)
+    let h_map : PMap.t SmtArithExpr := (t_header_map sym1) in
     let header_ids : list Header := get_signature_from_general p1 in
     match smt_query (check_headers_and_state_vars sym1 sym2 header_ids []) with
     | SmtUnsat => Equivalent
@@ -68,7 +68,8 @@ Lemma modnet_equivalence_checker_sound :
   l2 = [c_f2] /\
   (* and the output headers are identical *)
   (forall h, In h (get_headers_from_general p1) ->
-    lookup_varlike c_f1 h = lookup_varlike c_f2 h).
+    lookup_varlike_map (module_header_map c_f1) h
+    = lookup_varlike_map (module_header_map c_f2) h).
 Proof.
 Admitted.
 
@@ -98,7 +99,8 @@ Lemma modnet_equivalence_checker_complete :
   l2 = [cf_2] /\
   (* and the output headers differ on at least one header *)
   (exists h, In h (get_signature_from_general p1) /\
-    lookup_varlike cf_1 h <> lookup_varlike cf_2 h).
+    lookup_varlike_map (module_header_map cf_1) h
+    <> lookup_varlike_map (module_header_map cf_2) h).
 Proof.
 Admitted.
 

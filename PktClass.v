@@ -85,7 +85,7 @@ Definition PacketHeader := PMap.t CrVal.
 Definition Classifier :=
   FilterDatabase -> PacketHeader -> option Label.
 
-Definition Interpretation := ConcreteState -> option Label.
+Definition Interpretation := ConcreteTransformerState -> option Label.
 
 (* The output label is written to (HeaderCtr 1).  A StatelessOp targets a
    Header (StatefulOp targets a State), so each rule uses StatelessOp. *)
@@ -187,8 +187,8 @@ Definition linear_db (db : FilterDatabase) : GeneralCaracaraProgram :=
 
 (* The program output is (HeaderCtr 1).  That is, we want equivalence over
    (HeaderCtr 1). *)
-Definition interp (ps : ConcreteState) : option Label :=
-  match (header_map ps) !! 1 with
+Definition interp (ps : ConcreteTransformerState) : option Label :=
+  match (t_header_map ps) !! 1 with
   | IntVal n => match n with
     | CrInt lbl => Some (repr (unsigned lbl))
     | _ => None

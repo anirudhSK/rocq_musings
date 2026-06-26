@@ -22,7 +22,7 @@ with SmtArithExpr : Type :=
     | SmtCoerce (t : CrIntType) (e : SmtArithExpr)
     (* Arithmetic operations *)
     | SmtBitAdd (e1 e2 : SmtArithExpr)
-    | SmtBitSub (e1 e2 : SmtArithExpr) (* Note: this is modulo 256 subtraction *)
+    | SmtBitSub (e1 e2 : SmtArithExpr) (* modular subtraction at the consuming op's width *)
     (* Bitwise operations *)
     | SmtBitAnd (e1 e2 : SmtArithExpr)
     | SmtBitOr (e1 e2 : SmtArithExpr)

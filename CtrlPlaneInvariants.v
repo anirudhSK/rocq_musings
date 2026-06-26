@@ -9,9 +9,9 @@ From Stdlib Require Import Bool.Bool.
 (* Effectively, ctrl plane doesn't change *)
 Lemma ctrl_plane_invariant_hdr_op:
   forall (ho: HdrOp)
-         (c1: ConcreteState),
-  ctrl_map (eval_hdr_op_assign_concrete ho c1) =
-  ctrl_map c1.
+         (c1: ConcreteTransformerState),
+  t_ctrl_map (eval_hdr_op_assign_concrete ho c1) =
+  t_ctrl_map c1.
 Proof.
   intros ho c1.
   destruct ho; simpl; try reflexivity.
@@ -20,8 +20,8 @@ Qed.
 (* Effectively, ctrl plane doesn't change *)
 Lemma ctrl_plane_invariant_hdr_op_list:
   forall hol c1,
-  ctrl_map (eval_hdr_op_list_concrete hol c1) =
-  ctrl_map c1.
+  t_ctrl_map (eval_hdr_op_list_concrete hol c1) =
+  t_ctrl_map c1.
 Proof.
   intros hol c1. revert c1.
   induction hol; intros c1.
@@ -33,8 +33,8 @@ Qed.
 
 Lemma ctrl_plane_invariant_seq_rule:
   forall s c,
-    ctrl_map (eval_seq_rule_concrete s c) =
-    ctrl_map c.
+    t_ctrl_map (eval_seq_rule_concrete s c) =
+    t_ctrl_map c.
 Proof.
   intros.
   unfold eval_seq_rule_concrete.
@@ -46,8 +46,8 @@ Qed.
 
 Lemma ctrl_plane_invariant_par_rule:
   forall p c,
-    ctrl_map (eval_par_rule_concrete p c) =
-    ctrl_map c.
+    t_ctrl_map (eval_par_rule_concrete p c) =
+    t_ctrl_map c.
 Proof.
   intros.
   unfold eval_par_rule_concrete.
@@ -59,8 +59,8 @@ Qed.
 
 Lemma ctrl_plane_invariant_ma_rule:
   forall m c,
-    ctrl_map (eval_match_action_rule_concrete m c) =
-    ctrl_map c.
+    t_ctrl_map (eval_match_action_rule_concrete m c) =
+    t_ctrl_map c.
 Proof.
   intros.
   unfold eval_match_action_rule_concrete.
@@ -71,8 +71,8 @@ Qed.
 
 Lemma ctrl_plane_invariant_transformer_intermediate:
   forall a t c,
-    ctrl_map (eval_transformer_concrete (a :: t) c) =
-    ctrl_map (eval_transformer_concrete t c).
+    t_ctrl_map (eval_transformer_concrete (a :: t) c) =
+    t_ctrl_map (eval_transformer_concrete t c).
 Proof.
   intros.
   unfold eval_transformer_concrete.
@@ -85,7 +85,7 @@ Qed.
 
 Lemma ctrl_plane_invariant_transformer:
   forall c t,
-    ctrl_map (eval_transformer_concrete t c) = ctrl_map c.
+    t_ctrl_map (eval_transformer_concrete t c) = t_ctrl_map c.
 Proof.
   intros.
   induction t.

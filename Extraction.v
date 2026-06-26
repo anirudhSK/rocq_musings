@@ -9,7 +9,7 @@ From MyProject Require Import CrMemEx.
 From MyProject Require Import TestPrograms.
 From MyProject Require Import TestModulePrograms.
 From MyProject Require Import PktClass.
-From MyProject Require Import CrTModConcreteSemantics.
+From MyProject Require Import CrModConcreteSemantics.
 From MyProject Require Import CrDslProperties.
 
 (* Tell extraction to use your external OCaml implementation *)
@@ -25,9 +25,9 @@ Separate Extraction
   CrDsl.CaracaraProgram Integers.repr SmtQuery.equivalence_checker_cr_dsl SmtTypes.SmtResult
   CrSymbolicSemanticsTransformer.eval_sym_state
   CrConcreteSemanticsTransformer.eval_cr_program_concrete
-  CrVarLike.program_state_mapper CrVarLike.init_concrete_state
+  CrVarLike.program_state_mapper CrVarLike.init_concrete_transformer_state
   test_programs mod_test_programs
   CrVarLike.init_general_concrete_state
-  CrTModConcreteSemantics.eval_general_program_concrete_sinks
+  CrModConcreteSemantics.eval_general_program_concrete_sinks
   PktClass.ex_lin_prog PktClass.ex_tss_prog modnet_equivalence_checker
   well_formed_programb well_formed_general_programb.

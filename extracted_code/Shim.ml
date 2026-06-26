@@ -98,28 +98,28 @@ let crval_to_int (v : CrVal.coq_CrVal) : int =
   | CrVal.IntVal (CrVal.CrInt x) -> coq_Z_to_int x
   | _ -> -1
 
-let get_header (n : int) (s : CrProgramState.coq_ConcreteState) : CrVal.coq_CrVal =
+let get_header (n : int) (s : CrProgramState.coq_ConcreteTransformerState) : CrVal.coq_CrVal =
   CrVarLike.lookup_varlike CrVarLike.coq_CrVarLike_Header s (int_to_pos n)
-let set_header_to_int (n : int) (v : int) (s : CrProgramState.coq_ConcreteState)
-    : CrProgramState.coq_ConcreteState =
+let set_header_to_int (n : int) (v : int) (s : CrProgramState.coq_ConcreteTransformerState)
+    : CrProgramState.coq_ConcreteTransformerState =
   CrVarLike.update_varlike CrVarLike.coq_CrVarLike_Header s (int_to_pos n) (int_to_crval v)
-let get_state (n : int) (s : CrProgramState.coq_ConcreteState) : CrVal.coq_CrVal =
+let get_state (n : int) (s : CrProgramState.coq_ConcreteTransformerState) : CrVal.coq_CrVal =
   CrVarLike.lookup_varlike CrVarLike.coq_CrVarLike_State s (int_to_pos n)
-let set_state_to_int (n : int) (v : int) (s : CrProgramState.coq_ConcreteState)
-    : CrProgramState.coq_ConcreteState =
+let set_state_to_int (n : int) (v : int) (s : CrProgramState.coq_ConcreteTransformerState)
+    : CrProgramState.coq_ConcreteTransformerState =
   CrVarLike.update_varlike CrVarLike.coq_CrVarLike_State s (int_to_pos n) (int_to_crval v)
-let get_ctrl (n : int) (s : CrProgramState.coq_ConcreteState) : CrVal.coq_CrVal =
+let get_ctrl (n : int) (s : CrProgramState.coq_ConcreteTransformerState) : CrVal.coq_CrVal =
   CrVarLike.lookup_varlike CrVarLike.coq_CrVarLike_Ctrl s (int_to_pos n)
-let set_ctrl_to_int (n : int) (v : int) (s : CrProgramState.coq_ConcreteState)
-    : CrProgramState.coq_ConcreteState =
+let set_ctrl_to_int (n : int) (v : int) (s : CrProgramState.coq_ConcreteTransformerState)
+    : CrProgramState.coq_ConcreteTransformerState =
   CrVarLike.update_varlike CrVarLike.coq_CrVarLike_Ctrl s (int_to_pos n) (int_to_crval v)
 
-let run_program (p : CrDsl.coq_CaracaraProgram) (s : CrProgramState.coq_ConcreteState)
-    : CrProgramState.coq_ConcreteState =
+let run_program (p : CrDsl.coq_CaracaraProgram) (s : CrProgramState.coq_ConcreteTransformerState)
+    : CrProgramState.coq_ConcreteTransformerState =
   CrConcreteSemanticsTransformer.eval_cr_program_concrete p s
 
-let print_state' indentation separator (ps : CrProgramState.coq_ConcreteState) =
-  let header_map = ps.header_map in let ctrl_map = ps.ctrl_map in let state_map = ps.state_map in
+let print_state' indentation separator (ps : CrProgramState.coq_ConcreteTransformerState) =
+  let header_map = ps.t_header_map in let ctrl_map = ps.t_ctrl_map in let state_map = ps.t_state_map in
   let header_tree = Datatypes.snd header_map in let ctrl_tree = Datatypes.snd ctrl_map in let state_tree = Datatypes.snd state_map in
   let headers = Maps.PTree.elements header_tree in let ctrls = Maps.PTree.elements ctrl_tree in let states = Maps.PTree.elements state_tree in
   let key p = coq_Z_to_int (BinNums.Zpos p) in
@@ -149,25 +149,35 @@ let start_mod_id (p : CrModule.coq_GeneralCaracaraProgram) : int =
   coq_Z_to_int (BinNums.Zpos
     (CrIdentifiers.coq_Posesque_ModuleName.unwrap net.CrModule.start_module))
 
-let get_mod_state (key : int) (gcs : CrProgramState.coq_ConcreteState Maps.PMap.t)
-    : CrProgramState.coq_ConcreteState =
-  Maps.PMap.get (int_to_pos key) gcs
-let set_mod_state (key : int) (ps : CrProgramState.coq_ConcreteState)
-    (gcs : CrProgramState.coq_ConcreteState Maps.PMap.t)
-    : CrProgramState.coq_ConcreteState Maps.PMap.t =
-  Maps.PMap.set (int_to_pos key) ps gcs
+(* The general concrete state is now a record whose [mod_states] map holds a
+   [ModuleState] (transformer or parser) per module.  The test harness seeds and
+   reads the *transformer* state of the (transformer) start module, so we unwrap
+   [TransformerMod] on the way in and rewrap on the way out. *)
+let get_mod_state (key : int) (gcs : CrGeneralProgramState.coq_GeneralConcreteState)
+    : CrProgramState.coq_ConcreteTransformerState =
+  match Maps.PMap.get (int_to_pos key) gcs.CrGeneralProgramState.mod_states with
+  | CrProgramState.TransformerMod ts -> ts
+  | CrProgramState.ParserMod _ -> failwith "get_mod_state: expected a transformer module"
+let set_mod_state (key : int) (ps : CrProgramState.coq_ConcreteTransformerState)
+    (gcs : CrGeneralProgramState.coq_GeneralConcreteState)
+    : CrGeneralProgramState.coq_GeneralConcreteState =
+  CrGeneralProgramState.set_gps_mod_states gcs
+    (Maps.PMap.set (int_to_pos key) (CrProgramState.TransformerMod ps)
+       gcs.CrGeneralProgramState.mod_states)
 
-let print_general_state (gcs : CrProgramState.coq_ConcreteState Maps.PMap.t) =
+let print_general_state (gcs : CrGeneralProgramState.coq_GeneralConcreteState) =
   let rec to_list acc = function
     | Datatypes.Coq_nil -> acc
-    | Datatypes.Coq_cons (Datatypes.Coq_pair (mod_id, local_state), rest) ->
-        to_list ((coq_Z_to_int (BinNums.Zpos mod_id), local_state) :: acc) rest
+    | Datatypes.Coq_cons (Datatypes.Coq_pair (mod_id, ms), rest) ->
+        to_list ((coq_Z_to_int (BinNums.Zpos mod_id), ms) :: acc) rest
   in
-  let pairs = to_list [] (Maps.PTree.elements (Datatypes.snd gcs)) in
+  let pairs = to_list [] (Maps.PTree.elements (Datatypes.snd gcs.CrGeneralProgramState.mod_states)) in
   let sorted = Stdlib.List.sort (fun (a, _) (b, _) -> Stdlib.compare a b) pairs in
-  Stdlib.List.iter (fun (id, local_state) ->
+  Stdlib.List.iter (fun (id, ms) ->
     Printf.printf "Module %d:\n" id;
-    print_state' "  " "" local_state) sorted
+    match ms with
+    | CrProgramState.TransformerMod ts -> print_state' "  " "" ts
+    | CrProgramState.ParserMod _ -> print_endline "  (parser module)") sorted
 
 let listify_coq_list (a_list : 'a Datatypes.list) : 'a Stdlib.List.t =
   let rec aux acc = function

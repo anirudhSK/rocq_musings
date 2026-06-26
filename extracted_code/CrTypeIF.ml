@@ -7,6 +7,12 @@ module BinNums = struct
 end
 module Datatypes = struct
   include Datatypes
+  type nat = [%import: Datatypes.nat]
+  [@@deriving sexp]
+  type bool = [%import: Datatypes.bool]
+  [@@deriving sexp]
+  type 'a option = [%import: 'a Datatypes.option]
+  [@@deriving sexp]
   type ('a, 'b) prod = [%import: ('a, 'b) Datatypes.prod]
   [@@deriving sexp]
   type 'a list = [%import: 'a Datatypes.list]
@@ -43,7 +49,7 @@ type coq_CrVal = [%import: CrVal.coq_CrVal]
 end
 module CrIdentifiers = struct
   include CrIdentifiers
-  type coq_ParserState = [%import: CrIdentifiers.coq_ParserState]
+  type coq_ParserStateLabel = [%import: CrIdentifiers.coq_ParserStateLabel]
   [@@deriving sexp]
   type coq_Header = [%import: CrIdentifiers.coq_Header]
   [@@deriving sexp]
@@ -79,6 +85,16 @@ module CrTransformer = struct
 end
 module CrParser = struct
   include CrParser
+  type coq_ExtractOp = [%import: CrParser.coq_ExtractOp]
+  [@@deriving sexp]
+  type coq_ParserTarget = [%import: CrParser.coq_ParserTarget]
+  [@@deriving sexp]
+  type coq_SelectCase = [%import: CrParser.coq_SelectCase]
+  [@@deriving sexp]
+  type coq_Transition = [%import: CrParser.coq_Transition]
+  [@@deriving sexp]
+  type coq_ParserStateDef = [%import: CrParser.coq_ParserStateDef]
+  [@@deriving sexp]
   type coq_Parser = [%import: CrParser.coq_Parser]
   [@@deriving sexp]
 end

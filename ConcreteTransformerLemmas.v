@@ -13,7 +13,7 @@ Import ListNotations.
 
 (* The convenient equivalence: c1 and c2 agree on every program-variable
    lookup. *)
-Definition cs_lookup_eq (c1 c2 : ConcreteState) : Prop :=
+Definition cs_lookup_eq (c1 c2 : ConcreteTransformerState) : Prop :=
   (forall h : Header, lookup_varlike c1 h = lookup_varlike c2 h) /\
   (forall s : State,  lookup_varlike c1 s = lookup_varlike c2 s) /\
   (forall c : Ctrl,   lookup_varlike c1 c = lookup_varlike c2 c).

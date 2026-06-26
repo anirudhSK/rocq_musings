@@ -24,7 +24,8 @@ Inductive CmpOp :=
   | CmpGt
   | CmpLt.
 
-(* A BinaryOp takes two uint8 arguments and returns another uint8 *)
+(* A BinaryOp's operands are width-free; the operation's [CrIntType] (carried
+   on the HdrOp) fixes the width it reads and writes at. *)
 Inductive BinaryOp :=
   | AddOp
   | SubOp (* In modulo u8 *)
@@ -53,9 +54,9 @@ Inductive HdrOp :=
   | CastStateOp  (from : CrIntType) (to : CrIntType) (arg : Operand) (target : State)
   | CastHeaderOp (from : CrIntType) (to : CrIntType) (arg : Operand) (target : Header).
 
-(* Define MatchPattern as a list of header, pattern pairs,
-   where patterns are uint8 and headers contain uint8 values,
-   hence both can be compared. TODO: Need to handle wildcards. *)
+(* Define MatchPattern as a list of header, pattern pairs.  Patterns and header
+   values are both 64-bit [CrInt]s, compared full-width (a match carries no
+   width of its own). TODO: Need to handle wildcards. *)
 Inductive MatchValue :=
 | MatchConst (k : CrInt_T)
 | MatchHeader (h : Header).
