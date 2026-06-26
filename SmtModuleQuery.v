@@ -11,8 +11,8 @@ From MyProject Require Import CrVarLike.
 From MyProject Require Import CrModule.
 From MyProject Require Import CrProgramState.
 From MyProject Require Import CrDslProperties.
-From MyProject Require Import CrModSymbolicSemantics.
-From MyProject Require Import CrModConcreteSemantics.
+From MyProject Require Import CrSymbolicSemanticsModule.
+From MyProject Require Import CrConcreteSemanticsModule.
 
 Definition keys_from_map {T A : Type} (fn : positive -> A) (m : PMap.t T) : list A :=
   List.map fn (List.map fst (PTree.elements (snd m))).

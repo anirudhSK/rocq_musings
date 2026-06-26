@@ -244,6 +244,43 @@ Definition prog_cross_header_predicate : CaracaraProgram :=
 Definition prog_empty_transformer : CaracaraProgram :=
   CaracaraProgramDef [HeaderCtr 1] [] [] [Seq (SeqCtr [] [])].
 
+(* Cast narrowing: h1 := (u8) h1.  Reads h1 at u32 then truncates to u8.
+ * With h1 = 300: 300 mod 256 = 44. *)
+Definition prog_cast_truncate_u8 : CaracaraProgram :=
+  CaracaraProgramDef [HeaderCtr 1] [] [] [
+    Seq (SeqCtr [] [
+      CastHeaderOp u32 u8 (OpHeader (HeaderCtr 1)) (HeaderCtr 1)
+    ])
+  ].
+
+(* Cast where the *source* width matters: h2 := (u32)((u8) h1).  Reading h1
+ * "as u8" keeps only its low byte before widening, and h1 itself is left alone.
+ * With h1 = 511 (0x1FF): low byte = 255, widened to 255; h1 stays 511. *)
+Definition prog_cast_from_u8_to_u32 : CaracaraProgram :=
+  CaracaraProgramDef [HeaderCtr 1; HeaderCtr 2] [] [] [
+    Seq (SeqCtr [] [
+      CastHeaderOp u8 u32 (OpHeader (HeaderCtr 1)) (HeaderCtr 2)
+    ])
+  ].
+
+(* Cast widening preserves a value that already fits: h1 := (u32)((u8) h1).
+ * With h1 = 200 (< 256): stays 200. *)
+Definition prog_cast_widen_preserves : CaracaraProgram :=
+  CaracaraProgramDef [HeaderCtr 1] [] [] [
+    Seq (SeqCtr [] [
+      CastHeaderOp u8 u32 (OpHeader (HeaderCtr 1)) (HeaderCtr 1)
+    ])
+  ].
+
+(* Cast into a state variable (CastStateOp): s1 := (u8) h1, h1 unchanged.
+ * With h1 = 258: 258 mod 256 = 2. *)
+Definition prog_cast_to_state : CaracaraProgram :=
+  CaracaraProgramDef [HeaderCtr 1] [StateCtr 1] [] [
+    Seq (SeqCtr [] [
+      CastStateOp u32 u8 (OpHeader (HeaderCtr 1)) (StateCtr 1)
+    ])
+  ].
+
 Definition test_programs := [
   prog_sub2_h1;
   prog_sub5_h1_if_h1eq0;
@@ -263,5 +300,9 @@ Definition test_programs := [
   prog_stateful_arg_input;
   prog_multi_rule_second_matches;
   prog_cross_header_predicate;
-  prog_empty_transformer
+  prog_empty_transformer;
+  prog_cast_truncate_u8;
+  prog_cast_from_u8_to_u32;
+  prog_cast_widen_preserves;
+  prog_cast_to_state
 ].

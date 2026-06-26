@@ -7,9 +7,19 @@ let run pid setup =
   let sid = Shim.start_mod_id p in
   let gcs = Shim.set_mod_state sid
     (setup (Shim.get_mod_state sid gcs0)) gcs0 in
-  match CrModConcreteSemantics.eval_general_program_concrete p gcs with
+  match CrConcreteSemanticsModule.eval_general_program_concrete p gcs with
   | None -> failwith "eval_general_program_concrete_sinks returned None"
   | Some sinks -> sinks
+
+(* Run a network whose start module is a parser: [seed] injects the per-module
+   packets directly into the initial general state. *)
+let run_net pid seed =
+  let p = get_mod_program pid in
+  Shim.print_malformed_gprog p pid;
+  let gcs0 = CrVarLike.init_general_concrete_state p in
+  match CrConcreteSemanticsModule.eval_general_program_concrete p (seed gcs0) with
+  | None -> failwith "eval_general_program_concrete returned None"
+  | Some s -> s
 
 (* ------------------------------------------------------------------ *)
 (* mod_prog_single_add3 (pid 0): one module, h1 := h1 + 3            *)
@@ -119,4 +129,29 @@ let%expect_test "cmplt_matchheader: h1=h2=4 equal, no match → h1=5" =
       h1=4, h2=4
     Module 2:
       h1=5, h2=4
+  |}]
+
+(* e2e: parser module (extract one byte into h1) feeding a transformer module
+   (h1 += 5).  Packet byte 10 -> parser h1=10, transformer h1=15. *)
+let%expect_test "parser_then_transformer: byte 10 -> h1=15" =
+  let s' = run_net 4 (Shim.set_mod_packet 1 [10]) in
+  Shim.print_general_state s';
+  [%expect {|
+    Module 1:
+      h1=10
+    Module 2:
+      h1=15
+  |}]
+
+(* e2e: two parser modules, each seeded with its own packet; parser 2 carries
+   parser 1's h1 forward and adds h2 from its own packet. *)
+let%expect_test "two_parsers: packets [7] and [42] -> h1=7, h2=42" =
+  let s' = run_net 5 (fun gcs ->
+    Shim.set_mod_packet 2 [42] (Shim.set_mod_packet 1 [7] gcs)) in
+  Shim.print_general_state s';
+  [%expect {|
+    Module 1:
+      h1=7
+    Module 2:
+      h1=7, h2=42
   |}]

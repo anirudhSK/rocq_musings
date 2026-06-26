@@ -43,11 +43,8 @@ Inductive BinaryOp :=
    single instruction). Cast ops convert an operand from one int type to
    another ([from] tells the cast which bits are meaningful / how to extend,
    [to] the target); both widths are explicit because the value itself no
-   longer records one.
-
-   TODO: no test program exercises [CastStateOp]/[CastHeaderOp] yet — add one
-   (e.g. read an 8-bit field, cast to 32-bit, then do 32-bit arithmetic) to
-   [TestPrograms.v] for coverage and as a worked example. *)
+   longer records one.  (See the [prog_cast_*] programs in [TestPrograms.v] for
+   worked examples.) *)
 Inductive HdrOp :=
   | StatefulOp   (f : BinaryOp) (ty : CrIntType) (arg1 : Operand) (arg2 : Operand) (target : State)
   | StatelessOp  (f : BinaryOp) (ty : CrIntType) (arg1 : Operand) (arg2 : Operand) (target : Header)

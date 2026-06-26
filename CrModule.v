@@ -268,6 +268,17 @@ Definition add_program_to_network (net : ModuleNetwork) (p : CaracaraProgram) : 
     start_module := start_module net;
   |}, wrap new_id).
 
+(* Parser counterpart of [add_program_to_network]: append a parser module
+   wrapping [p] and return its fresh name. *)
+Definition add_parser_to_network (net : ModuleNetwork) (p : Parser) : ModuleNetwork * ModuleName :=
+  let new_id := max_mod_uid net in
+  let pm := ParserModule (wrap new_id) p in
+  ({|
+    net_modules  := net_modules net ++ [pm];
+    net_edges    := net_edges net;
+    start_module := start_module net;
+  |}, wrap new_id).
+
 (* TODO: Performance. Each call wraps the previous [net_edges] in another
    closure, so after k connections a single edge query walks a chain of k
    closures (O(k) per query). *)

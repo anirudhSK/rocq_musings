@@ -165,6 +165,19 @@ let set_mod_state (key : int) (ps : CrProgramState.coq_ConcreteTransformerState)
     (Maps.PMap.set (int_to_pos key) (CrProgramState.TransformerMod ps)
        gcs.CrGeneralProgramState.mod_states)
 
+(* Render a header map as "h<k>=<v>" entries, sorted by key, comma-separated. *)
+let header_map_to_string hmap =
+  let key p = coq_Z_to_int (BinNums.Zpos p) in
+  let rec to_pairs = function
+    | Datatypes.Coq_nil -> []
+    | Datatypes.Coq_cons (Datatypes.Coq_pair (k, v), rest) ->
+        (key k, crval_to_int v) :: to_pairs rest in
+  let pairs =
+    to_pairs (Maps.PTree.elements (Datatypes.snd hmap))
+    |> Stdlib.List.sort (fun (a, _) (b, _) -> Stdlib.compare a b) in
+  Stdlib.String.concat ", "
+    (Stdlib.List.map (fun (k, v) -> Printf.sprintf "h%d=%d" k v) pairs)
+
 let print_general_state (gcs : CrGeneralProgramState.coq_GeneralConcreteState) =
   let rec to_list acc = function
     | Datatypes.Coq_nil -> acc
@@ -177,7 +190,8 @@ let print_general_state (gcs : CrGeneralProgramState.coq_GeneralConcreteState) =
     Printf.printf "Module %d:\n" id;
     match ms with
     | CrProgramState.TransformerMod ts -> print_state' "  " "" ts
-    | CrProgramState.ParserMod _ -> print_endline "  (parser module)") sorted
+    | CrProgramState.ParserMod ps ->
+        print_endline ("  " ^ header_map_to_string ps.CrProgramState.p_header_map)) sorted
 
 let listify_coq_list (a_list : 'a Datatypes.list) : 'a Stdlib.List.t =
   let rec aux acc = function
@@ -195,3 +209,50 @@ let print_malformed_gprog p pid =
   match CrDslProperties.well_formed_general_programb p with
   | Datatypes.Coq_false -> Printf.printf "(%d) malformed\n" pid
   | Datatypes.Coq_true -> ()
+
+(* ------------------------------------------------------------------ *)
+(* Parser test helpers: build a packet from bytes, run the parser FSM, *)
+(* and render the resulting header map.                                *)
+
+let rec coq_list_of_list = function
+  | [] -> Datatypes.Coq_nil
+  | x :: xs -> Datatypes.Coq_cons (x, coq_list_of_list xs)
+
+(* MSB-first 8 bits of byte [b] as Coq bools (in a native OCaml list). *)
+let byte_bits (b : int) : Datatypes.bool Stdlib.List.t =
+  Stdlib.List.init 8 (fun k ->
+    if (b lsr (7 - k)) land 1 = 1 then Datatypes.Coq_true else Datatypes.Coq_false)
+
+(* The MSB-first bytes concatenated into a Coq [bool list] packet. *)
+let packet_of_bytes (bytes : int Stdlib.List.t) : Datatypes.bool Datatypes.list =
+  coq_list_of_list (Stdlib.List.concat_map byte_bits bytes)
+
+let mk_parser_state (packet : Datatypes.bool Datatypes.list)
+    : CrProgramState.coq_ConcreteParserState =
+  { CrProgramState.p_header_map = Maps.PMap.init (CrVal.IntVal CrVal.CrNilInt);
+    p_packet = packet;
+    p_cursor = Datatypes.O }
+
+let run_parser (p : CrParser.coq_Parser) (bytes : int Stdlib.List.t)
+    : CrProgramState.coq_ConcreteParserState option =
+  CrConcreteSemanticsParser.eval_parser_concrete p (mk_parser_state (packet_of_bytes bytes))
+
+(* Seed module [key]'s parser packet from a byte list (no-op if it isn't a
+   parser module). *)
+let set_mod_packet (key : int) (bytes : int Stdlib.List.t)
+    (gcs : CrGeneralProgramState.coq_GeneralConcreteState)
+    : CrGeneralProgramState.coq_GeneralConcreteState =
+  let packet = packet_of_bytes bytes in
+  let ms' =
+    match Maps.PMap.get (int_to_pos key) gcs.CrGeneralProgramState.mod_states with
+    | CrProgramState.ParserMod ps ->
+        CrProgramState.ParserMod { ps with CrProgramState.p_packet = packet }
+    | other -> other in
+  CrGeneralProgramState.set_gps_mod_states gcs
+    (Maps.PMap.set (int_to_pos key) ms' gcs.CrGeneralProgramState.mod_states)
+
+(* Render the parsed headers ("h<k>=<v>", sorted), or "Reject" on parse failure. *)
+let print_parser_result (r : CrProgramState.coq_ConcreteParserState option) =
+  match r with
+  | None -> print_endline "Reject"
+  | Some ps -> print_endline (header_map_to_string ps.CrProgramState.p_header_map)

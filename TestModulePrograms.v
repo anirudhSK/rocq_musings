@@ -7,6 +7,7 @@ From MyProject Require Import CrTransformer.
 From MyProject Require Import CrIdentifiers.
 From MyProject Require Import CrVal.
 From MyProject Require Import CrModule.
+From MyProject Require Import CrParser.
 From MyProject Require Import Integers.
 
 (* Single-module: unconditionally adds 3 to h1.
@@ -110,9 +111,52 @@ Definition mod_prog_cmplt_matchheader : GeneralCaracaraProgram :=
   let net := set_start_module net m1 in
   GeneralCaracaraProgramDef [HeaderCtr 1; HeaderCtr 2] net [HeaderCtr 1].
 
+(* Parser module feeding a transformer module: the parser extracts one byte
+   into h1; the transformer then adds 5.  With a packet byte 10: h1 = 10 -> 15. *)
+Definition mod_prog_parser_then_transformer : GeneralCaracaraProgram :=
+  let parser := mkParser (ParserStateLabelCtr 1) [
+    mkParserStateDef (ParserStateLabelCtr 1)
+      (Some (ExtractOpConstructor (HeaderCtr 1) 8))
+      (Unconditional Accept)
+  ] in
+  let t := CaracaraProgramDef [HeaderCtr 1] [] [] [
+    Seq (SeqCtr [] [
+      StatelessOp AddOp u8
+        (OpHeader (HeaderCtr 1)) (OpConst (CrInt (repr 5))) (HeaderCtr 1)
+    ])
+  ] in
+  let net := empty_net in
+  let '(net, m1) := add_parser_to_network net parser in
+  let '(net, m2) := add_program_to_network net t in
+  let net := add_connection_to_network net m1 m2 in
+  let net := set_start_module net m1 in
+  GeneralCaracaraProgramDef [] net [HeaderCtr 1].
+
+(* Two parser modules in a pipeline: parser 1 extracts a byte into h1, parser 2
+   extracts a byte (from its own packet) into h2, carrying h1 forward. *)
+Definition mod_prog_two_parsers : GeneralCaracaraProgram :=
+  let parser1 := mkParser (ParserStateLabelCtr 1) [
+    mkParserStateDef (ParserStateLabelCtr 1)
+      (Some (ExtractOpConstructor (HeaderCtr 1) 8))
+      (Unconditional Accept)
+  ] in
+  let parser2 := mkParser (ParserStateLabelCtr 1) [
+    mkParserStateDef (ParserStateLabelCtr 1)
+      (Some (ExtractOpConstructor (HeaderCtr 2) 8))
+      (Unconditional Accept)
+  ] in
+  let net := empty_net in
+  let '(net, m1) := add_parser_to_network net parser1 in
+  let '(net, m2) := add_parser_to_network net parser2 in
+  let net := add_connection_to_network net m1 m2 in
+  let net := set_start_module net m1 in
+  GeneralCaracaraProgramDef [] net [HeaderCtr 1; HeaderCtr 2].
+
 Definition mod_test_programs : list GeneralCaracaraProgram := [
   mod_prog_single_add3;
   mod_prog_add1_then_mul2;
   mod_prog_conditional_pipeline;
-  mod_prog_cmplt_matchheader
+  mod_prog_cmplt_matchheader;
+  mod_prog_parser_then_transformer;
+  mod_prog_two_parsers
 ].

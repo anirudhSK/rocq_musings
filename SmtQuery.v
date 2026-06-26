@@ -22,8 +22,8 @@ Import ListNotations.
 From MyProject Require Import CrTransformer.
 From MyProject Require Import CrSymbolicSemanticsTransformer.
 From MyProject Require Import CrConcreteSemanticsTransformer.
-From MyProject Require Import CrModSymbolicSemantics.
-From MyProject Require Import CrModConcreteSemantics.
+From MyProject Require Import CrSymbolicSemanticsModule.
+From MyProject Require Import CrConcreteSemanticsModule.
 From MyProject Require Import ConcreteToSymbolicLemmas.
 From MyProject Require Import SmtHelperLemmas.
 From MyProject Require Import UtilLemmas.
