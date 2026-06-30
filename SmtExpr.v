@@ -2,6 +2,8 @@
 show that a single hdr_op evaluation can be converted to the appropriate SMT formula in Z3 *)
 From MyProject Require Import SmtTypes.
 From MyProject Require Import CrVal.
+From MyProject Require Import MyInts.
+From MyProject Require Import Integers.
 From Stdlib.Strings Require Import String.
 
 (* TODO: Look through K2 code *)
@@ -14,23 +16,24 @@ Inductive SmtBoolExpr : Type :=
     | SmtBoolEq (e1 e2 : SmtArithExpr)
     | SmtBoolLt (e1 e2 : SmtArithExpr)
 with SmtArithExpr : Type :=
-    | SmtArithConst (value : CrInt_T)
+    | SmtArithConst (val : uint64) (ty : CrIntType)
+    | SmtUninit  (* the uninitialized value; evaluates to UninitVal *)
     | SmtArithVar (name : string)
     | SmtConditional (cond : SmtBoolExpr) (then_expr else_expr : SmtArithExpr)
-    (* Read a sub-expression at a given int type (truncate / zero-extend). The
-       operation, not the value, carries the width. *)
-    | SmtCoerce (t : CrIntType) (e : SmtArithExpr)
-    (* Arithmetic operations *)
-    | SmtBitAdd (e1 e2 : SmtArithExpr)
-    | SmtBitSub (e1 e2 : SmtArithExpr) (* modular subtraction at the consuming op's width *)
-    (* Bitwise operations *)
-    | SmtBitAnd (e1 e2 : SmtArithExpr)
-    | SmtBitOr (e1 e2 : SmtArithExpr)
-    | SmtBitXor (e1 e2 : SmtArithExpr)
+    (* Cast a sub-expression from one int type to another: the operand must
+       already be typed [from], the result is typed [to]. *)
+    | SmtCast (from to : CrIntType) (e : SmtArithExpr)
+    (* Arithmetic / bitwise operations carry the type they act at; both operands
+       must already carry that type, else the result is ErrorVal. *)
+    | SmtBitAdd (ty : CrIntType) (e1 e2 : SmtArithExpr)
+    | SmtBitSub (ty : CrIntType) (e1 e2 : SmtArithExpr)
+    | SmtBitAnd (ty : CrIntType) (e1 e2 : SmtArithExpr)
+    | SmtBitOr  (ty : CrIntType) (e1 e2 : SmtArithExpr)
+    | SmtBitXor (ty : CrIntType) (e1 e2 : SmtArithExpr)
     | SmtBitNot (e : SmtArithExpr)
-    | SmtBitMul (e1 e2 : SmtArithExpr)
-    | SmtBitDiv (e1 e2 : SmtArithExpr)
-    | SmtBitMod (e1 e2 : SmtArithExpr)
+    | SmtBitMul (ty : CrIntType) (e1 e2 : SmtArithExpr)
+    | SmtBitDiv (ty : CrIntType) (e1 e2 : SmtArithExpr)
+    | SmtBitMod (ty : CrIntType) (e1 e2 : SmtArithExpr)
     | SmtArrSel (e1 : SmtArrExpr) (e2 : (*SmtPtrExpr*) SmtArithExpr) (e3 : SmtArithExpr)
 (* with SmtPtrExpr : Type := *)
     | SmtPtrConst (e1 : CrPtr_T) (* e.g. 0x7fffffff0000 *)
@@ -54,41 +57,26 @@ Fixpoint eval_smt_bool (e : SmtBoolExpr) (v : SmtValuation) : bool :=
     end
 with eval_smt_arith (e : SmtArithExpr) (v : SmtValuation) : CrVal :=
     match e with
-    | SmtArithConst value => IntVal value
+    | SmtArithConst val ty => mk_int ty (unsigned val)
+    | SmtUninit => UninitVal
     | SmtArithVar name => match v name with
-      | IntVal v' => IntVal v'
+      | IntVal a t => IntVal a t
       | _ => ErrorVal
       end
     | SmtConditional cond then_expr else_expr =>
         if eval_smt_bool cond v
         then (eval_smt_arith then_expr v)
         else (eval_smt_arith else_expr v)
-    | SmtCoerce t e => coerce_to_type t (eval_smt_arith e v)
-    | SmtBitAdd e1 e2 => CrVal.add
-        (eval_smt_arith e1 v)
-        (eval_smt_arith e2 v)
-    | SmtBitSub e1 e2 => CrVal.sub
-        (eval_smt_arith e1 v)
-        (eval_smt_arith e2 v)
-    | SmtBitAnd e1 e2 => CrVal.and
-        (eval_smt_arith e1 v)
-        (eval_smt_arith e2 v)
-    | SmtBitOr e1 e2 => CrVal.or
-        (eval_smt_arith e1 v)
-        (eval_smt_arith e2 v)
-    | SmtBitXor e1 e2 => CrVal.xor
-        (eval_smt_arith e1 v)
-        (eval_smt_arith e2 v)
+    | SmtCast from to e => cast from to (eval_smt_arith e v)
+    | SmtBitAdd ty e1 e2 => add_at  ty (eval_smt_arith e1 v) (eval_smt_arith e2 v)
+    | SmtBitSub ty e1 e2 => sub_at  ty (eval_smt_arith e1 v) (eval_smt_arith e2 v)
+    | SmtBitAnd ty e1 e2 => and_at  ty (eval_smt_arith e1 v) (eval_smt_arith e2 v)
+    | SmtBitOr  ty e1 e2 => or_at   ty (eval_smt_arith e1 v) (eval_smt_arith e2 v)
+    | SmtBitXor ty e1 e2 => xor_at  ty (eval_smt_arith e1 v) (eval_smt_arith e2 v)
     | SmtBitNot e => CrVal.not (eval_smt_arith e v)
-    | SmtBitMul e1 e2 => CrVal.mul
-        (eval_smt_arith e1 v)
-        (eval_smt_arith e2 v)
-    | SmtBitDiv e1 e2 => CrVal.divu
-        (eval_smt_arith e1 v)
-        (eval_smt_arith e2 v)
-    | SmtBitMod e1 e2 => CrVal.modu
-        (eval_smt_arith e1 v)
-        (eval_smt_arith e2 v)
+    | SmtBitMul ty e1 e2 => mul_at  ty (eval_smt_arith e1 v) (eval_smt_arith e2 v)
+    | SmtBitDiv ty e1 e2 => divu_at ty (eval_smt_arith e1 v) (eval_smt_arith e2 v)
+    | SmtBitMod ty e1 e2 => modu_at ty (eval_smt_arith e1 v) (eval_smt_arith e2 v)
     | SmtArrSel e1 e2 e3 =>
         match CrVal.ld
             (eval_smt_mem e1 v)
@@ -104,15 +92,6 @@ with eval_smt_arith (e : SmtArithExpr) (v : SmtValuation) : CrVal :=
       | _ => ErrorVal
       end
     end
-(* with eval_smt_ptr (e : SmtPtrExpr) (v : SmtValuation) : CrVal :=
-    unwrap_val match e with
-    | SmtPtrConst value => Legal (PtrVal value)
-    | SmtPtrVar name => match v name with
-      | PtrVal v' => Legal (PtrVal v')
-      | _ => Illegal
-      end
-    | SmtPtrAdd e1 e2 => CrVal.add (eval_smt_ptr e1 v) (eval_smt_arith e2 v)
-    end *)
 with eval_smt_mem (e : SmtArrExpr) (v : SmtValuation) : Memory CrVal :=
     match e with
     | SmtArrInit => @CrVal.tabula_rasa CrVal

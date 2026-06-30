@@ -176,7 +176,7 @@ Definition linear_db (db : FilterDatabase) : GeneralCaracaraProgram :=
   let t := List.fold_right
     (fun '(f, lbl) acc =>
       let mp := FlattenFilter f in
-      let new_rule := Seq (SeqCtr mp [StatelessOp AddOp u8 (OpConst (CrInt (repr (unsigned lbl)))) (OpConst (CrInt (repr 0))) h_out]) in
+      let new_rule := Seq (SeqCtr mp [StatelessOp AddOp u8 (OpConst (repr (unsigned lbl))) (OpConst (repr 0)) h_out]) in
       new_rule :: acc)
     [] db' in
   let p := CaracaraProgramDef [h_out] [] [] t in
@@ -189,10 +189,7 @@ Definition linear_db (db : FilterDatabase) : GeneralCaracaraProgram :=
    (HeaderCtr 1). *)
 Definition interp (ps : ConcreteTransformerState) : option Label :=
   match (t_header_map ps) !! 1 with
-  | IntVal n => match n with
-    | CrInt lbl => Some (repr (unsigned lbl))
-    | _ => None
-    end
+  | IntVal lbl _ => Some (repr (unsigned lbl))
   | _ => None
   end.
 
@@ -237,13 +234,13 @@ Definition make_table_transformer (table : FilterDatabase) (h_body : Header): Tr
     Seq (SeqCtr (FlattenFilter f)
       [StatelessOp
         AddOp u8
-        (OpConst (CrInt (repr (unsigned lbl))))
-        (OpConst (CrInt (repr 0)))
+        (OpConst (repr (unsigned lbl)))
+        (OpConst (repr 0))
         (h_body);
       StatelessOp
         AddOp u8
-        (OpConst (CrInt (repr (Zpos (priority f)))))
-        (OpConst (CrInt (repr 0)))
+        (OpConst (repr (Zpos (priority f))))
+        (OpConst (repr 0))
         (incr h_body)])
   ) sorted.
 
@@ -256,12 +253,12 @@ Definition check_match (acc_base : Header) (filter_base : Header) : Transformer 
     [StatelessOp
       AddOp u8
       (OpHeader filter_base)
-      (OpConst (CrInt (repr 0)))
+      (OpConst (repr 0))
       acc_base;
     StatelessOp
       AddOp u8
       (OpHeader (incr filter_base))
-      (OpConst (CrInt (repr 0)))
+      (OpConst (repr 0))
       (incr acc_base)
     ])].
 
@@ -341,20 +338,20 @@ Definition tss_db (db : FilterDatabase) : GeneralCaracaraProgram :=
 
 Definition SimpleDB : FilterDatabase :=
   [({|
-      src_ip := [(HeaderCtr 1, CmpEq, MatchConst (CrInt (repr 0)))];
-      dst_ip := [(HeaderCtr 5, CmpEq, MatchConst (CrInt (repr 0)))];
-      src_port := [(HeaderCtr 9, CmpEq, MatchConst (CrInt (repr 0)))];
-      dst_port := [(HeaderCtr 11, CmpEq, MatchConst (CrInt (repr 0)))];
-      protocol := [(HeaderCtr 13, CmpEq, MatchConst (CrInt (repr 1)))];
+      src_ip := [(HeaderCtr 1, CmpEq, MatchConst (repr 0))];
+      dst_ip := [(HeaderCtr 5, CmpEq, MatchConst (repr 0))];
+      src_port := [(HeaderCtr 9, CmpEq, MatchConst (repr 0))];
+      dst_port := [(HeaderCtr 11, CmpEq, MatchConst (repr 0))];
+      protocol := [(HeaderCtr 13, CmpEq, MatchConst (repr 1))];
       key := 1%positive;
       priority := 1%positive |}, (repr 42));
     ({|
-      src_ip := [(HeaderCtr 1, CmpEq, MatchConst (CrInt (repr 0)));
-                 (HeaderCtr 2, CmpEq, MatchConst (CrInt (repr 0)))];
-      dst_ip := [(HeaderCtr 5, CmpEq, MatchConst (CrInt (repr 0)))];
-      src_port := [(HeaderCtr 9, CmpEq, MatchConst (CrInt (repr 0)))];
-      dst_port := [(HeaderCtr 11, CmpEq, MatchConst (CrInt (repr 0)))];
-      protocol := [(HeaderCtr 13, CmpEq, MatchConst (CrInt (repr 2)))];
+      src_ip := [(HeaderCtr 1, CmpEq, MatchConst (repr 0));
+                 (HeaderCtr 2, CmpEq, MatchConst (repr 0))];
+      dst_ip := [(HeaderCtr 5, CmpEq, MatchConst (repr 0))];
+      src_port := [(HeaderCtr 9, CmpEq, MatchConst (repr 0))];
+      dst_port := [(HeaderCtr 11, CmpEq, MatchConst (repr 0))];
+      protocol := [(HeaderCtr 13, CmpEq, MatchConst (repr 2))];
       key := 2%positive;
       priority := 2%positive
     |}, (repr 67))

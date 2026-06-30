@@ -20,17 +20,20 @@ From Stdlib Require Import ZArith.
 (* match-action rules.                                                  *)
 (* ================================================================== *)
 
-(* Symbolic analogue of [bits_to_Z] / [bits_to_crint]: fold the symbolic packet
-   bits MSB-first as [acc := 2*acc + bit].  Each bit contributes 1 or 0 via
-   [SmtConditional]; every intermediate stays an [IntVal (CrInt _)] under
-   evaluation, so this commutes with [bits_to_crint] on the concretized bits. *)
+(* Symbolic analogue of [bits_to_Z]: fold the symbolic packet bits MSB-first as
+   [acc := 2*acc + bit].  Each bit contributes 1 or 0 via [SmtConditional]; every
+   intermediate stays an [IntVal _ u64] under evaluation, so this commutes with
+   [mk_int u64 (bits_to_Z ...)] (the concrete extraction) on the concretized
+   bits. *)
+(* Parsed fields are typed [u64] (see [apply_extract_concrete]); the assembled
+   symbolic value and every intermediate is therefore [u64]-typed. *)
 Definition assemble_bits_symbolic (bs : list SmtBoolExpr) : SmtArithExpr :=
   List.fold_left
     (fun acc b =>
-       SmtBitAdd (SmtBitAdd acc acc)
-                 (SmtConditional b (SmtArithConst (CrInt (repr 1)))
-                                   (SmtArithConst (CrInt (repr 0)))))
-    bs (SmtArithConst (CrInt (repr 0))).
+       SmtBitAdd u64 (SmtBitAdd u64 acc acc)
+                 (SmtConditional b (SmtArithConst (repr 1) u64)
+                                   (SmtArithConst (repr 0) u64)))
+    bs (SmtArithConst (repr 0) u64).
 
 (* Apply a symbolic extraction at the current cursor.  Fails ([None]) if
    the slice runs past the (statically known) end of the packet.  Mirrors
@@ -53,10 +56,10 @@ Definition apply_extract_symbolic (eo : ExtractOp) (ps : SymbolicParserState)
    [sc_header]'s current value equals the pattern's denoted value. *)
 Definition select_case_cond_symbolic (ps : SymbolicParserState) (c : SelectCase)
     : SmtBoolExpr :=
-  let pat_v := bits_to_crint (sc_pattern c) in
+  let pat_v := mk_int u64 (bits_to_Z (sc_pattern c)) in
   match pat_v with
-  | IntVal k => SmtBoolEq (lookup_varlike_map (p_header_map ps) (sc_header c))
-                          (SmtArithConst k)
+  | IntVal k kty => SmtBoolEq (lookup_varlike_map (p_header_map ps) (sc_header c))
+                              (SmtArithConst k kty)
   | _ => SmtFalse
   end.
 

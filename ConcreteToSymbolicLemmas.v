@@ -18,23 +18,14 @@ From Stdlib Require Import Bool.Bool.
 (* Simpler lemma with no state update *)
 Global Opaque lookup_varlike.
 
-(* The symbolic op-builders evaluate to the concrete op-at-width / cast: this is
-   where "operations carry the width" lands, and it holds by construction because
-   [SmtCoerce] evaluates to [coerce_to_type]. *)
-Lemma eval_smt_of_binop :
-  forall (op : BinaryOp) (e1 e2 : SmtArithExpr) (f : SmtValuation),
-    eval_smt_arith (smt_of_binop op e1 e2) f =
-    apply_bin_op op (eval_smt_arith e1 f) (eval_smt_arith e2 f).
-Proof. destruct op; reflexivity. Qed.
-
+(* The symbolic op-builders evaluate to the concrete typed op / cast: each
+   [smt_binop_of] builds the typed SMT op whose eval is the matching [*_at], and
+   [SmtCast] evaluates to [cast], so they agree branch-for-branch. *)
 Lemma eval_smt_binop_of :
   forall (op : BinaryOp) (ty : CrIntType) (e1 e2 : SmtArithExpr) (f : SmtValuation),
     eval_smt_arith (smt_binop_of op ty e1 e2) f =
     apply_bin_op_of op ty (eval_smt_arith e1 f) (eval_smt_arith e2 f).
-Proof.
-  intros. unfold smt_binop_of, apply_bin_op_of.
-  cbn [eval_smt_arith]. rewrite eval_smt_of_binop. reflexivity.
-Qed.
+Proof. intros. destruct op; reflexivity. Qed.
 
 Lemma eval_smt_cast :
   forall (from to : CrIntType) (e : SmtArithExpr) (f : SmtValuation),
@@ -137,7 +128,7 @@ Proof.
     unfold eval_cmp_concrete, eval_cmp_smt; simpl;
     rewrite Hc1;
     rewrite H;
-    destruct (CrVal.eqb (eval_smt_arith (lookup_varlike s1 h) f) (IntVal k));
+    try (match goal with |- context[CrVal.eqb ?a ?b] => destruct (CrVal.eqb a b) end);
     reflexivity.
   - destruct cmp;
     unfold eval_cmp_concrete, eval_cmp_smt; simpl;

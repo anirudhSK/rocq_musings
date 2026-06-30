@@ -374,15 +374,15 @@ Definition init_concrete_transformer_state (p : CaracaraProgram) : ConcreteTrans
   let h := get_headers_from_prog p in
   let s := get_states_from_prog p in
   let c := get_ctrls_from_prog p in
-  {|t_ctrl_map    :=  PMap.init (IntVal CrNilInt);
-     t_header_map :=  PMap.init (IntVal CrNilInt);
-     t_state_map  :=  PMap.init (IntVal CrNilInt);|}.
+  {|t_ctrl_map    :=  PMap.init (UninitVal);
+     t_header_map :=  PMap.init (UninitVal);
+     t_state_map  :=  PMap.init (UninitVal);|}.
 
 (* Concrete initial state for a parser module: an empty header map and an
    empty input packet (the packet bits are injected at run time).  Mirrors
    [init_concrete_transformer_state]. *)
 Definition init_concrete_parser_state : ModuleState CrVal bool :=
-  ParserMod {| p_header_map := PMap.init (IntVal CrNilInt);
+  ParserMod {| p_header_map := PMap.init (UninitVal);
                p_packet     := @nil bool;
                p_cursor     := 0 |}.
 
@@ -441,20 +441,20 @@ Definition init_symbolic_transformer_state (prefix: string) (p: CaracaraProgram)
   let h := get_headers_from_prog p in
   let s := get_states_from_prog p in
   let c := get_ctrls_from_prog p in
-  {| t_ctrl_map   :=  (SmtArithConst CrNilInt,
+  {| t_ctrl_map   :=  (SmtUninit,
                       PTree_Properties.of_list
                       (List.map (fun x => let x' := unwrap x in (x', SmtArithVar (prefix ++ "ctrl_" ++ pos_to_string x'))) c));
-     t_header_map :=  (SmtArithConst CrNilInt,
+     t_header_map :=  (SmtUninit,
                       PTree_Properties.of_list
                       (List.map (fun x => let x' := unwrap x in (x', SmtArithVar ("hdr_" ++ pos_to_string x'))) h));
-     t_state_map  :=  (SmtArithConst CrNilInt,
+     t_state_map  :=  (SmtUninit,
                       PTree_Properties.of_list
                       (List.map (fun x => let x' := unwrap x in (x', SmtArithVar (prefix ++ "state_" ++ pos_to_string x'))) s));|}.
 Definition init_symbolic_transformer_state' (p : CaracaraProgram) : SymbolicTransformerState :=
   init_symbolic_transformer_state "" p.
 
 Definition init_symbolic_parser_state (prefix : string) (h : list Header) : SymbolicParserState :=
-  {| p_header_map := (SmtArithConst CrNilInt,
+  {| p_header_map := (SmtUninit,
                      PTree_Properties.of_list
                      (List.map (fun x => let x' := unwrap x in (x', SmtArithVar ("hdr_" ++ pos_to_string x'))) h));
      p_packet := @nil SmtBoolExpr;
@@ -510,9 +510,9 @@ Definition init_general_symbolic_state
       end)
     mods
     (PMap.init (TransformerMod {|
-      t_ctrl_map := PMap.init (SmtArithConst CrNilInt);
-      t_header_map := PMap.init (SmtArithConst CrNilInt);
-      t_state_map := PMap.init (SmtArithConst CrNilInt);
+      t_ctrl_map := PMap.init (SmtUninit);
+      t_header_map := PMap.init (SmtUninit);
+      t_state_map := PMap.init (SmtUninit);
     |})) in
   (* Shared global header channel: seed with the un-prefixed input header
      symbolic variables (the shared cross-module/cross-program interface). *)
@@ -535,7 +535,7 @@ Definition init_general_concrete_state (p : GeneralCaracaraProgram)
       end)
     (net_modules net)
     (PMap.init (TransformerMod (init_concrete_transformer_state (CaracaraProgramDef [] [] [] [])))) in
-  {| sh_hdr_map := PMap.init (IntVal CrNilInt);
+  {| sh_hdr_map := PMap.init (UninitVal);
      sh_bit_map := @nil bool;
      mod_states := ms |}.
 

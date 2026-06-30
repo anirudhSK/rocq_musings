@@ -225,7 +225,7 @@ let eval_scalar_var (m : Z3.Model.model) (name : string) (z3_var : Z3.Expr.expr)
           in
           Printf.printf "| var( %s ) := %d\n" display_name num_val;
           if bv_size = 8 || bv_size = 32 then
-            Some (IntVal (CrInt (Shim.int_to_coq_uint64 num_val)))
+            Some (IntVal (Shim.int_to_coq_uint64 num_val, u64))
           else
             None
       | _ -> None)
@@ -329,13 +329,13 @@ let build_aval_map (_ctx : Z3.context) (m : Z3.Model.model) (var_bindings : (str
               let len = max_idx + 1 in
               (* Initialize PMap with the default value if we have one *)
               let init_status = match default_val with
-                | Some v -> Init (IntVal (CrInt (Shim.int_to_coq_uint64 v)))
+                | Some v -> Init (IntVal (Shim.int_to_coq_uint64 v, u64))
                 | None -> Uninit
               in
               let bytes = Stdlib.List.fold_left
                 (fun pmap (i, v) ->
                   let key = Shim.int_to_pos (i + 1) in (* PMap keys are 1-indexed positives *)
-                  let cval = IntVal (CrInt (Shim.int_to_coq_uint64 v)) in
+                  let cval = IntVal (Shim.int_to_coq_uint64 v, u64) in
                   Maps.PMap.set key (Init cval) pmap)
                 (Maps.PMap.init init_status)
                 entries in
@@ -429,7 +429,7 @@ let sat_check
           for i = 0 to len - 1 do
             let key = Shim.int_to_pos (i + 1) in
             let v = match Maps.PMap.get key arr_bytes with
-              | Init (IntVal (CrInt n)) -> Shim.coq_Z_to_int n
+              | Init (IntVal (n, _)) -> Shim.coq_Z_to_int n
               | _ -> 0
             in
             if i > 0 then Printf.printf ", ";

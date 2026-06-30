@@ -17,7 +17,7 @@ Definition mod_prog_single_add3 : GeneralCaracaraProgram :=
     Seq (SeqCtr [] [
       StatelessOp AddOp u8
         (OpHeader (HeaderCtr 1))
-        (OpConst (CrInt (repr 3)))
+        (OpConst (repr 3))
         (HeaderCtr 1)
     ])
   ] in
@@ -33,7 +33,7 @@ Definition mod_prog_add1_then_mul2 : GeneralCaracaraProgram :=
     Seq (SeqCtr [] [
       StatelessOp AddOp u8
         (OpHeader (HeaderCtr 1))
-        (OpConst (CrInt (repr 1)))
+        (OpConst (repr 1))
         (HeaderCtr 1)
     ])
   ] in
@@ -41,7 +41,7 @@ Definition mod_prog_add1_then_mul2 : GeneralCaracaraProgram :=
     Seq (SeqCtr [] [
       StatelessOp MulOp u8
         (OpHeader (HeaderCtr 1))
-        (OpConst (CrInt (repr 2)))
+        (OpConst (repr 2))
         (HeaderCtr 1)
     ])
   ] in
@@ -58,10 +58,10 @@ Definition mod_prog_add1_then_mul2 : GeneralCaracaraProgram :=
    h1=7 → 1 → 11.  h1=3 → 3 → 13. *)
 Definition mod_prog_conditional_pipeline : GeneralCaracaraProgram :=
   let p1 := CaracaraProgramDef [HeaderCtr 1] [] [] [
-    Seq (SeqCtr [(HeaderCtr 1, CmpEq, MatchConst (CrInt (repr 7)))] [
+    Seq (SeqCtr [(HeaderCtr 1, CmpEq, MatchConst (repr 7))] [
       StatelessOp AddOp u8
-        (OpConst (CrInt (repr 1)))
-        (OpConst (CrInt (repr 0)))
+        (OpConst (repr 1))
+        (OpConst (repr 0))
         (HeaderCtr 1)
     ]);
     Seq (SeqCtr [] [])
@@ -70,7 +70,7 @@ Definition mod_prog_conditional_pipeline : GeneralCaracaraProgram :=
     Seq (SeqCtr [] [
       StatelessOp AddOp u8
         (OpHeader (HeaderCtr 1))
-        (OpConst (CrInt (repr 10)))
+        (OpConst (repr 10))
         (HeaderCtr 1)
     ])
   ] in
@@ -100,7 +100,7 @@ Definition mod_prog_cmplt_matchheader : GeneralCaracaraProgram :=
     Seq (SeqCtr [] [
       StatelessOp AddOp u8
         (OpHeader (HeaderCtr 1))
-        (OpConst (CrInt (repr 1)))
+        (OpConst (repr 1))
         (HeaderCtr 1)
     ])
   ] in
@@ -119,10 +119,12 @@ Definition mod_prog_parser_then_transformer : GeneralCaracaraProgram :=
       (Some (ExtractOpConstructor (HeaderCtr 1) 8))
       (Unconditional Accept)
   ] in
+  (* parsed fields are typed u64 (see apply_extract_concrete), so the
+     transformer op reads h1 at u64 too. *)
   let t := CaracaraProgramDef [HeaderCtr 1] [] [] [
     Seq (SeqCtr [] [
-      StatelessOp AddOp u8
-        (OpHeader (HeaderCtr 1)) (OpConst (CrInt (repr 5))) (HeaderCtr 1)
+      StatelessOp AddOp u64
+        (OpHeader (HeaderCtr 1)) (OpConst (repr 5)) (HeaderCtr 1)
     ])
   ] in
   let net := empty_net in

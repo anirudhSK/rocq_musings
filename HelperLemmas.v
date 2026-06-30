@@ -7,6 +7,7 @@ From Stdlib Require Import Lists.List.
 From MyProject Require Import CrSymbolicSemanticsTransformer.
 From MyProject Require Import CrProgramState.
 From MyProject Require Import ListUtils.
+From MyProject Require Import CrVal.
 
 Lemma commute_lookup_eval_varlike:
   forall {A} `{CrVarLike A} (ps : SymbolicTransformerState)
@@ -22,13 +23,12 @@ Qed.
 
 Lemma commute_lookup_eval:
   forall (s : SymbolicTransformerState) (f : SmtValuation)
-        arg,
-    lookup_concrete arg (eval_sym_state s f) =
-    eval_smt_arith (lookup_smt arg s) f.
+        (ty : CrIntType) arg,
+    lookup_concrete ty arg (eval_sym_state s f) =
+    eval_smt_arith (lookup_smt ty arg s) f.
 Proof.
-  intros s f arg.
-  unfold lookup_concrete.
-  destruct arg eqn:Harg; simpl; try reflexivity;
+  intros s f ty arg.
+  destruct arg; simpl; try reflexivity;
   try apply commute_lookup_eval_varlike.
 Qed.
 

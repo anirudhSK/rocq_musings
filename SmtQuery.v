@@ -30,6 +30,7 @@ From MyProject Require Import UtilLemmas.
 From MyProject Require Import HelperLemmas.
 From MyProject Require Import ListUtils.
 From MyProject Require Import ConcreteTransformerLemmas.
+From MyProject Require Import CtrlPlaneInvariants.
 
 (* An SmtQuery takes an SmtBoolExpr and returns:
    None: meaning it is false for all possible valuations (or)
@@ -334,9 +335,10 @@ Ltac prove_in_var_list_implies_in_prog_state hypothesis type crvar_type :=
   simpl;
   apply (@ptree_of_list_lemma_generic type crvar_type);
   simpl in hypothesis;
-  destruct hypothesis as [Hwf H3];
-  destruct H3;
-  assumption; assumption.
+  (* well_formed_program exposes list_norepet for h, s, and c (in that order);
+     destructure all three so [assumption] finds the one this goal needs. *)
+  destruct hypothesis as [Hnr_h [Hnr_s [Hnr_c _]]];
+  assumption.
 
 Ltac prove_equivalence_checker_cr_sound :=
   intros p1 p2 f Hwf H;
@@ -353,6 +355,7 @@ Ltac prove_equivalence_checker_cr_sound :=
   simpl in H1;
   split;
   try (rewrite H_hdr_eq in H1; assumption); try (rewrite H_state_eq in H1; assumption);
+  try (rewrite H_ctrl_eq in H1; assumption);
   destruct (equivalence_checker (init_symbolic_transformer_state' (CaracaraProgramDef h1 s1 c1 t1)) t1 t2 h1 s1) eqn:H_eq; try (exfalso; congruence);
   apply equivalence_checker_sound with (f := f) in H_eq;
   try(apply H_eq in H1;
@@ -364,7 +367,8 @@ Ltac prove_equivalence_checker_cr_sound :=
       rewrite init_symbolic_state_nodep_t with (t2 := t2) in H1 at 2;
       assumption);
   try(prove_in_var_list_implies_in_prog_state Hwf Header CrVarLike_Header);
-  try(prove_in_var_list_implies_in_prog_state Hwf State CrVarLike_State).
+  try(prove_in_var_list_implies_in_prog_state Hwf State CrVarLike_State);
+  try(prove_in_var_list_implies_in_prog_state Hwf Ctrl CrVarLike_Ctrl).
 
 Transparent get_all_varlike_from_ps.
 Instance CrVarProg_Header : CrVarProg Header.
@@ -383,13 +387,34 @@ Proof.
   - prove_equivalence_checker_cr_sound.
 Defined.
 
+(* Ctrl-plane variables are read-only: the transformer never writes them, so a
+   ctrl lookup is unchanged across [eval_transformer_concrete] (its whole ctrl
+   map is invariant, and a ctrl lookup reads only that map). *)
+Lemma lookup_varlike_ctrl_preserved_by_transformer :
+  forall t c (v : Ctrl),
+    lookup_varlike (eval_transformer_concrete t c) v = lookup_varlike c v.
+Proof.
+  intros t c v.
+  apply lookup_varlike_ctrl_t_ctrl_map.
+  apply ctrl_plane_invariant_transformer.
+Qed.
+
 Instance CrVarProg_Ctrl : CrVarProg Ctrl.
 Proof.
   refine {| get_vars_from_prog := get_ctrls_from_prog;
             lookup_var := fun s c => lookup_varlike s c; |}.
   - intros. simpl. reflexivity.
-  - prove_equivalence_checker_cr_sound. admit.
-Admitted.
+  - prove_equivalence_checker_cr_sound.
+    (* The shared tactic closes everything except the ctrl value-equality goal:
+       [equivalence_checker] only ranges over headers and states, so ctrl
+       equality follows from the ctrl plane being invariant under the
+       transformer and the two programs sharing a ctrl list. *)
+    unfold c0, c3, c1_i, c2_i, t0, t3; simpl.
+    rewrite !lookup_varlike_ctrl_preserved_by_transformer.
+    rewrite H_hdr_eq, H_state_eq, H_ctrl_eq.
+    rewrite (init_symbolic_state_nodep_t h2 s2 c2 t1 t2).
+    reflexivity.
+Defined.
 
 Transparent map_from_ps.
 (* Completeness lemma for equivalence_checker_cr_dsl *)
@@ -469,25 +494,25 @@ Print Assumptions equivalence_checker_cr_complete.
 
 Definition value_is_valid (v : CrVal) : Prop :=
   match v with
-  | IntVal CrNilInt => True
-  | IntVal (CrInt _) => True
+  | UninitVal => True
+  | IntVal _ _ => True
   | _ => False
   end.
 
 Definition map_is_valid (m : PMap.t CrVal) : Prop :=
-  (fst m = IntVal CrNilInt) /\ (forall k, value_is_valid (m !! k)).
+  (fst m = UninitVal) /\ (forall k, value_is_valid (m !! k)).
 
 (* A concrete state cs is valid relative to a program p when:
-   - each PMap has (IntVal CrNilInt) as its default,
-   - every value in cs is either (IntVal CrNilInt) or an (IntVal (CrInt _)), and
+   - each PMap has (UninitVal) as its default,
+   - every value in cs is either (UninitVal) or an (IntVal _ _), and
    - the initialized variables in cs are exactly the program variables of p. *)
 Definition concrete_state_is_valid (p : CaracaraProgram) (cs : ConcreteTransformerState) : Prop :=
   map_is_valid (t_header_map cs) /\
   map_is_valid (t_state_map cs) /\
   map_is_valid (t_ctrl_map cs) /\
-  (forall v : Header, lookup_varlike cs v <> (IntVal CrNilInt) <-> In v (get_headers_from_prog p)) /\
-  (forall v : State,  lookup_varlike cs v <> (IntVal CrNilInt) <-> In v (get_states_from_prog p)) /\
-  (forall v : Ctrl,   lookup_varlike cs v <> (IntVal CrNilInt) <-> In v (get_ctrls_from_prog p)).
+  (forall v : Header, lookup_varlike cs v <> (UninitVal) <-> In v (get_headers_from_prog p)) /\
+  (forall v : State,  lookup_varlike cs v <> (UninitVal) <-> In v (get_states_from_prog p)) /\
+  (forall v : Ctrl,   lookup_varlike cs v <> (UninitVal) <-> In v (get_ctrls_from_prog p)).
 
 (* try_match: search for a string match against prefix ++ pos_to_string id in a list. *)
 Definition try_match_prefix
@@ -548,7 +573,7 @@ Definition build_valuation_for_cs (cs : ConcreteTransformerState) : SmtValuation
       | None =>
         match try_match_prefix "ctrl_" (PTree.elements (snd (t_ctrl_map cs))) name with
         | Some v => v
-        | None => IntVal (CrInt (repr 0))
+        | None => UninitVal
         end
       end
     end.
@@ -596,7 +621,7 @@ Proof.
     rewrite lookup_varlike_header_PMap_concrete.
     destruct (List.in_dec posesque_eq_dec (HeaderCtr id) hp) as [Hin | Hnin].
     + (* In p's list: cs is initialized at id, agrees with f *)
-      assert (Hneq : PMap.get id (t_header_map cs) <> IntVal CrNilInt).
+      assert (Hneq : PMap.get id (t_header_map cs) <> UninitVal).
       { apply (proj2 (Hh_in (HeaderCtr id))). assumption. }
       assert (Htree : (snd (t_header_map cs)) ! id = Some (PMap.get id (t_header_map cs))).
       { eapply cs_initialized_in_tree_header; eauto. }
@@ -610,7 +635,7 @@ Proof.
       * int_value_finalize Hh_valid id.
       * apply PTree.elements_keys_norepet.
       * apply PTree.elements_correct. assumption.
-    + (* Not in p's list: both sides equal IntVal CrNilInt *)
+    + (* Not in p's list: both sides equal UninitVal *)
       rewrite (init_sym_header_lookup_default (CaracaraProgramDef hp sp cp []) id).
       2: { simpl. assumption. }
       simpl.
@@ -629,7 +654,7 @@ Proof.
     rewrite lookup_varlike_state_PMap.
     rewrite lookup_varlike_state_PMap_concrete.
     destruct (List.in_dec posesque_eq_dec (StateCtr id) sp) as [Hin | Hnin].
-    + assert (Hneq : PMap.get id (t_state_map cs) <> IntVal CrNilInt).
+    + assert (Hneq : PMap.get id (t_state_map cs) <> UninitVal).
       { apply (proj2 (Hs_in (StateCtr id))). assumption. }
       assert (Htree : (snd (t_state_map cs)) ! id = Some (PMap.get id (t_state_map cs))).
       { eapply cs_initialized_in_tree_state; eauto. }
@@ -663,7 +688,7 @@ Proof.
     rewrite lookup_varlike_ctrl_PMap.
     rewrite lookup_varlike_ctrl_PMap_concrete.
     destruct (List.in_dec posesque_eq_dec (CtrlCtr id) cp) as [Hin | Hnin].
-    + assert (Hneq : PMap.get id (t_ctrl_map cs) <> IntVal CrNilInt).
+    + assert (Hneq : PMap.get id (t_ctrl_map cs) <> UninitVal).
       { apply (proj2 (Hc_in (CtrlCtr id))). assumption. }
       assert (Htree : (snd (t_ctrl_map cs)) ! id = Some (PMap.get id (t_ctrl_map cs))).
       { eapply cs_initialized_in_tree_ctrl; eauto. }

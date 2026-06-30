@@ -22,7 +22,7 @@ Definition apply_extract_concrete (eo : ExtractOp) (ps : ConcreteParserState)
   | ExtractOpConstructor h width =>
       if Nat.leb (p_cursor ps + width) (List.length (p_packet ps)) then
         let slice := bit_slice (p_packet ps) (p_cursor ps) width in
-        let v := bits_to_crint slice in
+        let v := mk_int u64 (bits_to_Z slice) in
         Some {| p_header_map := PMap.set (get_key h) v (p_header_map ps);
                 p_packet     := p_packet ps;
                 p_cursor     := p_cursor ps + width |}
@@ -35,7 +35,7 @@ Definition apply_extract_concrete (eo : ExtractOp) (ps : ConcreteParserState)
 Definition select_case_matches_concrete (ps : ConcreteParserState) (c : SelectCase)
     : bool :=
   let width := sc_end_index c - sc_start_index c in
-  let pat_v := bits_to_crint (sc_pattern c) in
+  let pat_v := mk_int u64 (bits_to_Z (sc_pattern c)) in
   CrVal.eqb (lookup_varlike_map (p_header_map ps) (sc_header c)) pat_v.
 
 Fixpoint resolve_select_concrete (ps : ConcreteParserState)

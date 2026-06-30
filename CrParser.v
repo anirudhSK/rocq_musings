@@ -80,11 +80,3 @@ Definition bits_to_Z (bs : list bool) : Z :=
 (* Take the [n] bits starting at offset [start] (0-indexed). *)
 Definition bit_slice (bs : list bool) (start width : nat) : list bool :=
   List.firstn width (List.skipn start bs).
-
-(* Convert a bit slice into a value.  Integer storage is uniform 64-bit, so the
-   parsed bits become a single [CrInt]; the slice is already exactly the field
-   width, so no masking is needed.  TODO: fields wider than 64 bits truncate via
-   [repr] (the 64-bit value model can't represent them). *)
-Definition bits_to_crint (bs : list bool) : CrVal :=
-  let z := bits_to_Z bs in
-  IntVal (CrInt (repr z)).

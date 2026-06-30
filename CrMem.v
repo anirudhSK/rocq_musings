@@ -446,23 +446,23 @@ Definition z3_a_val : Type := var_id -> @Array CrVal.
    the transformer does (see CrTransformer.HdrOp) and mask results accordingly. *)
 Definition eval_z3_arith_binop (op : ArithBinOp) (v1 v2 : CrVal) : CrVal :=
   match v1, v2 with
-  | IntVal (CrInt x1), IntVal (CrInt x2) =>
+  | IntVal x1 _, IntVal x2 _ =>
     match op with
-    | AddOp => IntVal (CrInt (Integers.add x1 x2))
-    | SubOp => IntVal (CrInt (Integers.sub x1 x2))
-    | ASLOp => IntVal (CrInt (Integers.shl x1 x2))
-    | ASROp => IntVal (CrInt (Integers.shr x1 x2))
-    | BitAndOp => IntVal (CrInt (Integers.and x1 x2))
-    | BitOrOp => IntVal (CrInt (Integers.or x1 x2))
-    | BitXorOp => IntVal (CrInt (Integers.xor x1 x2))
+    | AddOp => IntVal (Integers.add x1 x2) u64
+    | SubOp => IntVal (Integers.sub x1 x2) u64
+    | ASLOp => IntVal (Integers.shl x1 x2) u64
+    | ASROp => IntVal (Integers.shr x1 x2) u64
+    | BitAndOp => IntVal (Integers.and x1 x2) u64
+    | BitOrOp => IntVal (Integers.or x1 x2) u64
+    | BitXorOp => IntVal (Integers.xor x1 x2) u64
     end
   | _, _ => ErrorVal
   end.
 
 Fixpoint eval_z3_arith (e : arith_expr) (sval : z3_s_val) (aval : z3_a_val) : CrVal :=
   match e with
-  | Z3_int8 x => IntVal (CrInt (repr (unsigned x)))
-  | Z3_int32 x => IntVal (CrInt (repr (unsigned x)))
+  | Z3_int8 x => IntVal (repr (unsigned x)) u64
+  | Z3_int32 x => IntVal (repr (unsigned x)) u64
   | Z3_int8_var name
   | Z3_int32_var name => sval name
   | Z3_bv_add e1 e2 =>
@@ -496,7 +496,7 @@ Fixpoint eval_z3_arith (e : arith_expr) (sval : z3_s_val) (aval : z3_a_val) : Cr
   | Z3_bv_not e1 =>
     let v := eval_z3_arith e1 sval aval in
     match v with
-    | IntVal (CrInt x) => IntVal (CrInt (Integers.not x))
+    | IntVal x _ => IntVal (Integers.not x) u64
     | _ => ErrorVal
     end
   | Z3_arr_sel e1 e2 =>
@@ -525,7 +525,7 @@ with eval_z3_array (e : arr_expr) (sval : z3_s_val) (aval : z3_a_val) : Array :=
   match e with
   | Z3_arr_init e1 =>
     match eval_z3_arith e1 sval aval with
-    | IntVal (CrInt len) =>
+    | IntVal len _ =>
       Allocated {|
         arr_len := len;
         arr_bytes := PMap.init Uninit

@@ -43,9 +43,11 @@ let%expect_test "hdr_diff: different constants are NotEquivalent" =
   let p1 = get_program "../test/prog1.out" in
   let p2 = get_program "../test/prog2.out" in
   print_equiv (SmtQuery.equivalence_checker_cr_dsl p1 p2);
+  (* hdr_1 is never read arithmetically here (both programs overwrite it with a
+     constant), so its width is unconstrained by the query and defaults to u64. *)
   [%expect {|
     ┌ SAT Valuation
-    | var( hdr_1 ) := 0
+    | var( hdr_1 ) : u64 := 0
     └
     NotEquivalent
     |}]
@@ -72,9 +74,10 @@ let%expect_test "complex_add_sub: dropping an op breaks equivalence" =
   let p1 = get_program "../test/complex1b.out" in
   let p2 = get_program "../test/subtract1.out" in
   print_equiv (SmtQuery.equivalence_checker_cr_dsl p1 p2);
+  (* hdr_1 is read at u8 (x - 1), so the threaded width is recovered as u8. *)
   [%expect {|
     ┌ SAT Valuation
-    | var( hdr_1 ) := 0
+    | var( hdr_1 ) : u8 := 0
     └
     NotEquivalent
     |}]

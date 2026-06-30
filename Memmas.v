@@ -2,6 +2,7 @@ From Stdlib Require Import List.
 
 From MyProject Require Import CrMem.
 From MyProject Require Import MyInts.
+From MyProject Require Import CrVal.
 
 Axiom z3_sound_some:
   forall e sval aval f,
@@ -42,39 +43,16 @@ Lemma eval_eq_true:
   eval_z3_bool (Z3_Eq e1 e2) sval aval = true ->
   eval_z3_expr e1 sval aval = eval_z3_expr e2 sval aval.
 Proof.
-  intros.
-  simpl in H.
-  destruct (eval_z3_expr e1 sval aval), (eval_z3_expr e2 sval aval);
-  simpl in H;
-  try congruence.
-  - unfold CrVal.iveqb in H.
-    destruct val, val0; try congruence;
-    apply Inteqb_prop in H; rewrite H;
-    reflexivity.
-  - destruct val; congruence.
-  - destruct val, val0; try congruence.
-    apply Inteqb_prop in H; rewrite H;
-    reflexivity.
-  - destruct val; congruence.
-  - destruct val; congruence.
+  intros e1 e2 sval aval H. simpl in H.
+  apply crval_concrete_if_else. rewrite H. reflexivity.
 Qed.
 Lemma eval_eq_false:
   forall e1 e2 sval aval,
   eval_z3_bool (Z3_Eq e1 e2) sval aval = false ->
   eval_z3_expr e1 sval aval <> eval_z3_expr e2 sval aval.
 Proof.
-  intros.
-  simpl in H.
-  destruct (eval_z3_expr e1 sval aval), (eval_z3_expr e2 sval aval);
-  simpl in H;
-  try congruence.
-  - unfold CrVal.iveqb in H.
-    destruct val, val0; try congruence;
-    apply Intneqb_prop in H; injection;
-    intros; congruence.
-  - destruct val, val0; try congruence.
-    apply Intneqb_prop in H. injection.
-    intros. congruence.
+  intros e1 e2 sval aval H. simpl in H.
+  apply crval_concrete_if_else2. rewrite H. reflexivity.
 Qed.
 Lemma eval_conj:
   forall e1 e2 sval aval,

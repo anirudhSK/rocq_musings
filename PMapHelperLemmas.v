@@ -131,16 +131,16 @@ Proof.
 Qed.
 
 (* ============================================================ *)
-(*  When the PMap default is (IntVal CrNilInt), every non-default        *)
+(*  When the PMap default is (UninitVal), every non-default        *)
 (*  lookup result must come from an entry in the underlying      *)
 (*  PTree.                                                        *)
 (* ============================================================ *)
 
 Lemma cs_initialized_in_tree_header :
   forall (cs : ConcreteTransformerState) id w,
-    fst (t_header_map cs) = (IntVal CrNilInt) ->
+    fst (t_header_map cs) = (UninitVal) ->
     PMap.get id (t_header_map cs) = w ->
-    w <> (IntVal CrNilInt) ->
+    w <> (UninitVal) ->
     (snd (t_header_map cs)) ! id = Some w.
 Proof.
   intros cs id w Hdef Heq Hneq.
@@ -152,9 +152,9 @@ Qed.
 
 Lemma cs_initialized_in_tree_state :
   forall (cs : ConcreteTransformerState) id w,
-    fst (t_state_map cs) = (IntVal CrNilInt) ->
+    fst (t_state_map cs) = (UninitVal) ->
     PMap.get id (t_state_map cs) = w ->
-    w <> (IntVal CrNilInt) ->
+    w <> (UninitVal) ->
     (snd (t_state_map cs)) ! id = Some w.
 Proof.
   intros cs id w Hdef Heq Hneq.
@@ -166,9 +166,9 @@ Qed.
 
 Lemma cs_initialized_in_tree_ctrl :
   forall (cs : ConcreteTransformerState) id w,
-    fst (t_ctrl_map cs) = (IntVal CrNilInt) ->
+    fst (t_ctrl_map cs) = (UninitVal) ->
     PMap.get id (t_ctrl_map cs) = w ->
-    w <> (IntVal CrNilInt) ->
+    w <> (UninitVal) ->
     (snd (t_ctrl_map cs)) ! id = Some w.
 Proof.
   intros cs id w Hdef Heq Hneq.
@@ -204,7 +204,7 @@ Proof.
   pose proof (PTree_Properties.of_list_norepet l id _ Hl_nrep Hl_in) as Hget.
   change (match (PTree_Properties.of_list l) ! id with
           | Some x => x
-          | None => SmtArithConst CrNilInt
+          | None => SmtUninit
           end = SmtArithVar ("hdr_" ++ pos_to_string id)%string).
   rewrite Hget. reflexivity.
 Qed.
@@ -231,7 +231,7 @@ Proof.
   pose proof (PTree_Properties.of_list_norepet l id _ Hl_nrep Hl_in) as Hget.
   change (match (PTree_Properties.of_list l) ! id with
           | Some x => x
-          | None => SmtArithConst CrNilInt
+          | None => SmtUninit
           end = SmtArithVar ("state_" ++ pos_to_string id)%string).
   rewrite Hget. reflexivity.
 Qed.
@@ -258,7 +258,7 @@ Proof.
   pose proof (PTree_Properties.of_list_norepet l id _ Hl_nrep Hl_in) as Hget.
   change (match (PTree_Properties.of_list l) ! id with
           | Some x => x
-          | None => SmtArithConst CrNilInt
+          | None => SmtUninit
           end = SmtArithVar ("ctrl_" ++ pos_to_string id)%string).
   rewrite Hget. reflexivity.
 Qed.
@@ -270,7 +270,7 @@ Qed.
 Lemma init_sym_header_lookup_default :
   forall (p : CaracaraProgram) (id : positive),
     ~ In (HeaderCtr id) (get_headers_from_prog p) ->
-    PMap.get id (t_header_map (init_symbolic_transformer_state' p)) = SmtArithConst CrNilInt.
+    PMap.get id (t_header_map (init_symbolic_transformer_state' p)) = SmtUninit.
 Proof.
   intros p id Hnin.
   unfold init_symbolic_transformer_state',
@@ -289,7 +289,7 @@ Qed.
 Lemma init_sym_state_lookup_default :
   forall (p : CaracaraProgram) (id : positive),
     ~ In (StateCtr id) (get_states_from_prog p) ->
-    PMap.get id (t_state_map (init_symbolic_transformer_state' p)) = SmtArithConst CrNilInt.
+    PMap.get id (t_state_map (init_symbolic_transformer_state' p)) = SmtUninit.
 Proof.
   intros p id Hnin.
   unfold init_symbolic_transformer_state',
@@ -308,7 +308,7 @@ Qed.
 Lemma init_sym_ctrl_lookup_default :
   forall (p : CaracaraProgram) (id : positive),
     ~ In (CtrlCtr id) (get_ctrls_from_prog p) ->
-    PMap.get id (t_ctrl_map (init_symbolic_transformer_state' p)) = SmtArithConst CrNilInt.
+    PMap.get id (t_ctrl_map (init_symbolic_transformer_state' p)) = SmtUninit.
 Proof.
   intros p id Hnin.
   unfold init_symbolic_transformer_state',

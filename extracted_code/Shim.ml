@@ -91,28 +91,38 @@ let rec str_to_coq_str (s : Stdlib.String.t) : string =
     let rest = Stdlib.String.sub s 1 (Stdlib.String.length s - 1) in
     String.String ((char_to_ascii c), (str_to_coq_str rest))
 
-let int_to_crval (n : int) : CrVal.coq_CrVal =
-  CrVal.IntVal (CrVal.CrInt (int_to_coq_uint64 n))
+(* Seed values are typed u8 (the transformer test programs operate at u8);
+   [mk_int] masks the value into the u8 width so the stored value is well-typed. *)
+let int_to_crval_u8 (n : int) : CrVal.coq_CrVal =
+  CrVal.mk_int CrVal.u8 (int_to_coq_uint64 n)
+(* Seed a value at an explicit integer width (used by the cast tests, whose
+   source header must carry the cast's [from] type for the cast to type-check). *)
+let typed_int_to_crval (ty : CrVal.coq_CrIntType) (n : int) : CrVal.coq_CrVal =
+  CrVal.mk_int ty (int_to_coq_uint64 n)
 let crval_to_int (v : CrVal.coq_CrVal) : int =
   match v with
-  | CrVal.IntVal (CrVal.CrInt x) -> coq_Z_to_int x
+  | CrVal.IntVal (x, _) -> coq_Z_to_int x
   | _ -> -1
 
 let get_header (n : int) (s : CrProgramState.coq_ConcreteTransformerState) : CrVal.coq_CrVal =
   CrVarLike.lookup_varlike CrVarLike.coq_CrVarLike_Header s (int_to_pos n)
 let set_header_to_int (n : int) (v : int) (s : CrProgramState.coq_ConcreteTransformerState)
     : CrProgramState.coq_ConcreteTransformerState =
-  CrVarLike.update_varlike CrVarLike.coq_CrVarLike_Header s (int_to_pos n) (int_to_crval v)
+  CrVarLike.update_varlike CrVarLike.coq_CrVarLike_Header s (int_to_pos n) (int_to_crval_u8 v)
+let set_header_to_typed_int (n : int) (ty : CrVal.coq_CrIntType) (v : int)
+    (s : CrProgramState.coq_ConcreteTransformerState)
+    : CrProgramState.coq_ConcreteTransformerState =
+  CrVarLike.update_varlike CrVarLike.coq_CrVarLike_Header s (int_to_pos n) (typed_int_to_crval ty v)
 let get_state (n : int) (s : CrProgramState.coq_ConcreteTransformerState) : CrVal.coq_CrVal =
   CrVarLike.lookup_varlike CrVarLike.coq_CrVarLike_State s (int_to_pos n)
 let set_state_to_int (n : int) (v : int) (s : CrProgramState.coq_ConcreteTransformerState)
     : CrProgramState.coq_ConcreteTransformerState =
-  CrVarLike.update_varlike CrVarLike.coq_CrVarLike_State s (int_to_pos n) (int_to_crval v)
+  CrVarLike.update_varlike CrVarLike.coq_CrVarLike_State s (int_to_pos n) (int_to_crval_u8 v)
 let get_ctrl (n : int) (s : CrProgramState.coq_ConcreteTransformerState) : CrVal.coq_CrVal =
   CrVarLike.lookup_varlike CrVarLike.coq_CrVarLike_Ctrl s (int_to_pos n)
 let set_ctrl_to_int (n : int) (v : int) (s : CrProgramState.coq_ConcreteTransformerState)
     : CrProgramState.coq_ConcreteTransformerState =
-  CrVarLike.update_varlike CrVarLike.coq_CrVarLike_Ctrl s (int_to_pos n) (int_to_crval v)
+  CrVarLike.update_varlike CrVarLike.coq_CrVarLike_Ctrl s (int_to_pos n) (int_to_crval_u8 v)
 
 let run_program (p : CrDsl.coq_CaracaraProgram) (s : CrProgramState.coq_ConcreteTransformerState)
     : CrProgramState.coq_ConcreteTransformerState =
@@ -229,7 +239,7 @@ let packet_of_bytes (bytes : int Stdlib.List.t) : Datatypes.bool Datatypes.list 
 
 let mk_parser_state (packet : Datatypes.bool Datatypes.list)
     : CrProgramState.coq_ConcreteParserState =
-  { CrProgramState.p_header_map = Maps.PMap.init (CrVal.IntVal CrVal.CrNilInt);
+  { CrProgramState.p_header_map = Maps.PMap.init (CrVal.UninitVal);
     p_packet = packet;
     p_cursor = Datatypes.O }
 

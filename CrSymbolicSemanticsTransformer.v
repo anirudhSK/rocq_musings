@@ -8,45 +8,41 @@ From MyProject Require Import SmtTypes.
 From Stdlib Require Import List.
 Import ListNotations.
 
-(* Convert an operand to its SmtArithExpr *)
-Definition lookup_smt (arg : Operand) (ps : SymbolicTransformerState) : SmtArithExpr :=
+(* Convert an operand to its SmtArithExpr at the expected type [ty]: a constant
+   adopts [ty]; a variable carries its stored (symbolic) value. *)
+Definition lookup_smt (ty : CrIntType) (arg : Operand) (ps : SymbolicTransformerState) : SmtArithExpr :=
   match arg with
   | OpCtrlPlane c => lookup_varlike_map (@map_from_ps Ctrl _ _ ps) c
   | OpHeader h    => lookup_varlike_map (@map_from_ps Header _ _ ps) h
-  | OpConst n  => SmtArithConst n
+  | OpConst n     => SmtArithConst n ty
   | OpStateful s  => lookup_varlike_map (@map_from_ps State _ _ ps) s
   end.
 
-(* The SmtArithExpr constructor for each BinaryOp. *)
-Definition smt_of_binop (f : BinaryOp) : SmtArithExpr -> SmtArithExpr -> SmtArithExpr :=
-  match f with
-  | AddOp => SmtBitAdd
-  | SubOp => SmtBitSub
-  | AndOp => SmtBitAnd
-  | OrOp  => SmtBitOr
-  | XorOp => SmtBitXor
-  | MulOp => SmtBitMul
-  | DivOp => SmtBitDiv
-  | ModOp => SmtBitMod
-  end.
-
-(* Symbolic mirror of [apply_bin_op_of]: read both operands at [ty], apply the
-   op, and read the result at [ty]. [SmtCoerce] is the symbolic [coerce_to_type],
-   so this commutes with the concrete semantics by construction. *)
+(* Symbolic mirror of [apply_bin_op_of]: the typed SMT op at [ty]; operands are
+   already typed [ty] (looked up at [ty]), so eval type-checks like the concrete. *)
 Definition smt_binop_of (f : BinaryOp) (ty : CrIntType) (e1 e2 : SmtArithExpr) : SmtArithExpr :=
-  SmtCoerce ty (smt_of_binop f (SmtCoerce ty e1) (SmtCoerce ty e2)).
+  match f with
+  | AddOp => SmtBitAdd ty e1 e2
+  | SubOp => SmtBitSub ty e1 e2
+  | AndOp => SmtBitAnd ty e1 e2
+  | OrOp  => SmtBitOr  ty e1 e2
+  | XorOp => SmtBitXor ty e1 e2
+  | MulOp => SmtBitMul ty e1 e2
+  | DivOp => SmtBitDiv ty e1 e2
+  | ModOp => SmtBitMod ty e1 e2
+  end.
 
 (* Symbolic mirror of [apply_cast]. *)
 Definition smt_cast (from to : CrIntType) (e : SmtArithExpr) : SmtArithExpr :=
-  SmtCoerce to (SmtCoerce from e).
+  SmtCast from to e.
 
 (* Define the symbolic interpreter for header operation expressions *)
 Definition eval_hdr_op_expr_smt (h : HdrOp) (ps : SymbolicTransformerState) : SmtArithExpr :=
     match h with
-    | StatefulOp f ty arg1 arg2 _ => smt_binop_of f ty (lookup_smt arg1 ps) (lookup_smt arg2 ps)
-    | StatelessOp f ty arg1 arg2 _ => smt_binop_of f ty (lookup_smt arg1 ps) (lookup_smt arg2 ps)
-    | CastStateOp from to arg _ => smt_cast from to (lookup_smt arg ps)
-    | CastHeaderOp from to arg _ => smt_cast from to (lookup_smt arg ps)
+    | StatefulOp f ty arg1 arg2 _ => smt_binop_of f ty (lookup_smt ty arg1 ps) (lookup_smt ty arg2 ps)
+    | StatelessOp f ty arg1 arg2 _ => smt_binop_of f ty (lookup_smt ty arg1 ps) (lookup_smt ty arg2 ps)
+    | CastStateOp from to arg _ => smt_cast from to (lookup_smt from arg ps)
+    | CastHeaderOp from to arg _ => smt_cast from to (lookup_smt from arg ps)
     end.
 
 (* Apply SmtValuation f to every entry in the symbolic state across all 3 maps *)
@@ -83,7 +79,7 @@ Definition eval_match_smt (match_pattern : MatchPattern) (ps : SymbolicTransform
   (* Note that because SmtBoolAnd is associative and commutative, both fold_left and fold_right give the same answer. *)
   List.fold_right (fun '(h, c, v) acc =>
     let v' := match v with
-    | MatchConst k' => SmtArithConst k'
+    | MatchConst k' => SmtArithConst k' u8  (* TODO: match constants typed u8 *)
     | MatchHeader h' => lookup_varlike ps h'
     end in
     SmtBoolAnd (eval_cmp_smt c (lookup_varlike ps h) v') acc) SmtTrue match_pattern.

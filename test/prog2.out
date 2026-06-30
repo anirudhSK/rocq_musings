@@ -9,8 +9,8 @@
         (Coq_cons
           (StatelessOp
             AddOp W8
-            (OpConst (CrInt (Zpos Coq_xH)))
-            (OpConst (CrInt Z0))
+            (OpConst (Zpos Coq_xH))
+            (OpConst Z0)
             Coq_xH)
           Coq_nil))) 
     Coq_nil))

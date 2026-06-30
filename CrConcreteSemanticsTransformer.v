@@ -6,43 +6,42 @@ From MyProject Require Import CrIdentifiers.
 From MyProject Require Import CrVarLike.
 From MyProject Require Import ListUtils.
 From MyProject Require Import CrVal.
+From MyProject Require Import Integers.
 
-(* Apply binary operation *)
-Definition apply_bin_op (f : BinaryOp) (arg1 : CrVal) (arg2 : CrVal) : CrVal :=
+(* Apply binary operation [f] at type [ty]: both operands must already be typed
+   [ty] (else the underlying [*_at] yields ErrorVal); result is typed [ty]. *)
+Definition apply_bin_op_of (f : BinaryOp) (ty : CrIntType) (v1 v2 : CrVal) : CrVal :=
   match f with
-  | AddOp => CrVal.add arg1 arg2
-  | SubOp => CrVal.sub arg1 arg2
-  | AndOp => CrVal.and arg1 arg2
-  | OrOp =>  CrVal.or arg1 arg2
-  | XorOp => CrVal.xor arg1 arg2
-  | MulOp => CrVal.mul arg1 arg2
-  | DivOp => CrVal.divu arg1 arg2
-  | ModOp => CrVal.modu arg1 arg2
+  | AddOp => add_at  ty v1 v2
+  | SubOp => sub_at  ty v1 v2
+  | AndOp => and_at  ty v1 v2
+  | OrOp  => or_at   ty v1 v2
+  | XorOp => xor_at  ty v1 v2
+  | MulOp => mul_at  ty v1 v2
+  | DivOp => divu_at ty v1 v2
+  | ModOp => modu_at ty v1 v2
   end.
 
-Definition lookup_concrete (arg : Operand) (ps : ConcreteTransformerState) : CrVal :=
+(* Reinterpret [v] from int type [from] to [to] (the operand must be typed
+   [from], else ErrorVal). *)
+Definition apply_cast (from to : CrIntType) (v : CrVal) : CrVal := cast from to v.
+
+(* Evaluate an operand at the expected type [ty]: a constant adopts [ty]; a
+   variable carries whatever type it was stored with (which the op then checks). *)
+Definition lookup_concrete (ty : CrIntType) (arg : Operand) (ps : ConcreteTransformerState) : CrVal :=
   match arg with
   | OpCtrlPlane c => lookup_varlike_map (@map_from_ps Ctrl _ _ ps) c
   | OpHeader h    => lookup_varlike_map (@map_from_ps Header _ _ ps) h
-  | OpConst n  => IntVal n
+  | OpConst n     => mk_int ty (unsigned n)
   | OpStateful s  => lookup_varlike_map (@map_from_ps State _ _ ps) s
   end.
 
-(* Apply [f] at int type [ty]: read both operands at [ty] and produce the
-   result at [ty] (mask operands and result to the operation's width). *)
-Definition apply_bin_op_of (f : BinaryOp) (ty : CrIntType) (v1 v2 : CrVal) : CrVal :=
-  coerce_to_type ty (apply_bin_op f (coerce_to_type ty v1) (coerce_to_type ty v2)).
-
-(* Reinterpret [v] from int type [from] to [to] (truncate / zero-extend). *)
-Definition apply_cast (from to : CrIntType) (v : CrVal) : CrVal :=
-  coerce_to_type to (coerce_to_type from v).
-
 Definition eval_hdr_op_expr_concrete (op : HdrOp) (ps : ConcreteTransformerState) : CrVal :=
   match op with
-  | StatefulOp f ty arg1 arg2 _ => apply_bin_op_of f ty (lookup_concrete arg1 ps) (lookup_concrete arg2 ps)
-  | StatelessOp f ty arg1 arg2 _ => apply_bin_op_of f ty (lookup_concrete arg1 ps) (lookup_concrete arg2 ps)
-  | CastStateOp from to arg _ => apply_cast from to (lookup_concrete arg ps)
-  | CastHeaderOp from to arg _ => apply_cast from to (lookup_concrete arg ps)
+  | StatefulOp f ty arg1 arg2 _ => apply_bin_op_of f ty (lookup_concrete ty arg1 ps) (lookup_concrete ty arg2 ps)
+  | StatelessOp f ty arg1 arg2 _ => apply_bin_op_of f ty (lookup_concrete ty arg1 ps) (lookup_concrete ty arg2 ps)
+  | CastStateOp from to arg _ => apply_cast from to (lookup_concrete from arg ps)
+  | CastHeaderOp from to arg _ => apply_cast from to (lookup_concrete from arg ps)
   end.
 
 Definition eval_hdr_op_assign_concrete (op : HdrOp) (ps: ConcreteTransformerState) : ConcreteTransformerState :=
@@ -66,8 +65,10 @@ Definition eval_cmp_concrete (op : CmpOp) (v1 v2 : CrVal) : bool :=
 
 Definition eval_match_concrete (match_pattern : MatchPattern) (ps : ConcreteTransformerState) : bool :=
   List.forallb (fun '(h, c, v) =>
+  (* TODO: match constants are typed [u8] (all current programs are u8); a
+     per-pattern CrIntType would let them match wider headers. *)
   let v' := match v with
-  | MatchConst k' => (IntVal k')
+  | MatchConst k' => mk_int u8 (unsigned k')
   | MatchHeader h' => (lookup_varlike ps h')
   end in
   eval_cmp_concrete c (lookup_varlike ps h) v') match_pattern.

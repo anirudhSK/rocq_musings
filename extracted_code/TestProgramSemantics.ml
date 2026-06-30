@@ -187,31 +187,25 @@ let%expect_test "empty_transformer: h1=42 unchanged" =
   [%expect {| h1=42 |}]
 
 (* Test 26: Cast narrowing (u32 -> u8) truncates.
- * h1 := (u8) h1. With h1 = 300: 300 mod 256 = 44. *)
+ * h1 := (u8) h1; h1 is seeded at u32 so the cast's [from] type matches.
+ * With h1 = 300: 300 mod 256 = 44. *)
 let%expect_test "cast_truncate_u8: 300 -> 44" =
-  let s' = run 19 (Shim.set_header_to_int 1 300) in
+  let s' = run 19 (Shim.set_header_to_typed_int 1 CrVal.u32 300) in
   Shim.print_state s';
   [%expect {| h1=44 |}]
 
-(* Test 27: Cast source width matters (u8 -> u32 of a wide value).
- * h2 := (u32)((u8) h1) keeps only h1's low byte; h1 is left unchanged.
- * With h1 = 511: low byte 255 widened to 255; h1 stays 511. *)
-let%expect_test "cast_from_u8_to_u32: 511 -> h2=255, h1 unchanged" =
-  let s' = run 20 (Shim.set_header_to_int 1 511) in
-  Shim.print_state s';
-  [%expect {| h1=511, h2=255 |}]
-
-(* Test 28: Cast widening preserves a value that already fits.
+(* Test 27: Cast widening preserves a value that already fits.
  * h1 := (u32)((u8) h1). With h1 = 200: stays 200. *)
 let%expect_test "cast_widen_preserves: 200 -> 200" =
-  let s' = run 21 (Shim.set_header_to_int 1 200) in
+  let s' = run 20 (Shim.set_header_to_int 1 200) in
   Shim.print_state s';
   [%expect {| h1=200 |}]
 
-(* Test 29: Cast into a state variable (CastStateOp).
- * s1 := (u8) h1, h1 unchanged. With h1 = 258: 258 mod 256 = 2. *)
+(* Test 28: Cast into a state variable (CastStateOp).
+ * s1 := (u8) h1, h1 unchanged; h1 is seeded at u32 so the cast's [from] type
+ * matches. With h1 = 258: 258 mod 256 = 2. *)
 let%expect_test "cast_to_state: 258 -> s1=2, h1 unchanged" =
-  let s' = run 22 (Shim.set_header_to_int 1 258) in
+  let s' = run 21 (Shim.set_header_to_typed_int 1 CrVal.u32 258) in
   Shim.print_state s';
   [%expect {|
     h1=258

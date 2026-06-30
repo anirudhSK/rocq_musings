@@ -1,9 +1,9 @@
 (CaracaraProgramDef (Coq_cons Coq_xH Coq_nil)
  Coq_nil 
  Coq_nil
-(Coq_cons (Seq ( SeqCtr Coq_nil (Coq_cons   (StatelessOp AddOp W8 (OpHeader Coq_xH) (OpConst (CrInt (Zpos (Coq_xO Coq_xH))))
+(Coq_cons (Seq ( SeqCtr Coq_nil (Coq_cons   (StatelessOp AddOp W8 (OpHeader Coq_xH) (OpConst (Zpos (Coq_xO Coq_xH)))
  Coq_xH)
- (Coq_cons   (StatelessOp SubOp W8 (OpHeader Coq_xH) (OpConst (CrInt (Zpos Coq_xH)))
+ (Coq_cons   (StatelessOp SubOp W8 (OpHeader Coq_xH) (OpConst (Zpos Coq_xH))
  Coq_xH)
  Coq_nil))))Coq_nil) 
 )

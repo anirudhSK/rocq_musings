@@ -2,6 +2,7 @@ From Stdlib Require Import ZArith.
 From MyProject Require Import MyInts.
 From MyProject Require Import Integers.
 From MyProject Require Import Maps.
+From MyProject Require Import Rocqlib.
 
 Inductive Check_T (T : Type) :=
 | Legal (v : T)
@@ -9,16 +10,13 @@ Inductive Check_T (T : Type) :=
 Arguments Legal {T} _.
 Arguments Illegal {T}.
 
-(* The width an operation acts at, analogous to the b/w/l/q suffix on x86
-   mov: the operand storage is uniform, the *operation* picks the width. *)
+(* The width an operation acts at, analogous to the b/w/l/q suffix on x86 mov. *)
 Inductive CrWidth : Type :=
 | W8 | W16 | W32 | W64.
 
-(* The integer "type" an operation reads/writes at. Today this is just a width;
-   it is the extension point for signedness (add [it_signed : bool] here and
-   teach [coerce_to_type] to pick sign- vs zero-extension). Carrying a named
-   record rather than a bare [CrWidth] means that future field is a definition
-   change, not a re-threading of every operation. *)
+(* The integer "type" carried by a value and required by an operation.  Today
+   this is just a width; it is the extension point for signedness (add
+   [it_signed : bool] here). *)
 Record CrIntType : Type := mkCrIntType {
   it_width : CrWidth;
 }.
@@ -28,17 +26,22 @@ Definition u16 : CrIntType := mkCrIntType W16.
 Definition u32 : CrIntType := mkCrIntType W32.
 Definition u64 : CrIntType := mkCrIntType W64.
 
-(* Integer storage is uniform 64-bit: a value is just bits, and the width an
-   operation reads/writes at lives on the operation ([CrIntType]). Reads
-   normalize through [coerce_to_type]. *)
-Inductive CrInt_T : Type :=
-| CrInt (val : uint64)
-| CrNilInt.
+Definition width_bits (w : CrWidth) : Z :=
+  match w with W8 => 8 | W16 => 16 | W32 => 32 | W64 => 64 end.
+
+Definition crwidth_eqb (a b : CrWidth) : bool :=
+  match a, b with W8,W8 | W16,W16 | W32,W32 | W64,W64 => true | _,_ => false end.
+Definition crinttype_eqb (a b : CrIntType) : bool := crwidth_eqb (it_width a) (it_width b).
+
 Inductive CrPtr_T : Type :=
 | CrPtr (addr : uintbptr)
 | CrNilPtr.
+
+(* A value is uniform 64-bit storage [val] tagged with its integer type [ity].
+   Operations require their operands to already carry the matching type and
+   produce ErrorVal otherwise; the uninitialized / nil integer is [UninitVal]. *)
 Inductive CrVal : Type :=
-| IntVal (val : CrInt_T)
+| IntVal (val : uint64) (ity : CrIntType)
 | PtrVal (val : CrPtr_T)
 | UninitVal
 | ErrorVal.
@@ -68,130 +71,71 @@ Arguments Invalid {T}.
 Definition pkey_to_mkey {w} (p : @bit_int w) : positive :=
   Pos.of_nat (S (Z.to_nat (unsigned p))).
 
-Definition iveqb (x y : CrInt_T) : bool :=
-  match x, y with
-  | CrInt x', CrInt y' => Integers.eq x' y'
-  | CrNilInt, CrNilInt => true
-  | _, _ => false
-  end.
-Transparent iveqb.
+(* Mask a raw integer into the low [width_bits w] bits of the 64-bit container. *)
+Definition mask_width (w : CrWidth) (z : Z) : uint64 :=
+  repr (Z.land z (Z.ones (width_bits w))).
+
+(* Build a typed integer value, masking its bits to the type's width. *)
+Definition mk_int (ty : CrIntType) (z : Z) : CrVal :=
+  IntVal (mask_width (it_width ty) z) ty.
+
+(* Equality and unsigned-less-than require the operands to share a type. *)
 Definition eqb (x y : CrVal) : bool :=
   match x, y with
-  | IntVal x', IntVal y' => iveqb x' y'
-  | PtrVal (CrPtr x'), PtrVal (CrPtr y') => Integers.eq x' y'
-  | PtrVal (CrNilPtr), PtrVal (CrNilPtr) => true
+  | IntVal a ta, IntVal b tb => crinttype_eqb ta tb && Integers.eq a b
+  | PtrVal (CrPtr a), PtrVal (CrPtr b) => Integers.eq a b
+  | PtrVal CrNilPtr, PtrVal CrNilPtr => true
   | UninitVal, UninitVal
   | ErrorVal, ErrorVal => true
   | _, _ => false
   end.
 
-Definition ivltb (x y : CrInt_T) : bool :=
-  match x, y with
-  | CrInt x', CrInt y' => Integers.ltu x' y'
-  | _, _ => false
-  end.
-Transparent ivltb.
 Definition ltb (x y : CrVal) : bool :=
   match x, y with
-  | IntVal x', IntVal y'
-    => ivltb x' y'
-  | PtrVal (CrPtr x'), PtrVal (CrPtr y')
-    => Integers.lt x' y'
+  | IntVal a ta, IntVal b tb => crinttype_eqb ta tb && Integers.ltu a b
+  | PtrVal (CrPtr a), PtrVal (CrPtr b) => Integers.lt a b
   | _, _ => false
   end.
 
-(* The unsigned Z held by an integer value. *)
-Definition iv_unsigned (i : CrInt_T) : Z :=
-  match i with
-  | CrInt v  => unsigned v
-  | CrNilInt => 0%Z
-  end.
-
-Definition width_bits (w : CrWidth) : Z :=
-  match w with W8 => 8 | W16 => 16 | W32 => 32 | W64 => 64 end.
-
-(* Reinterpret a raw integer [z] at width [w]: keep its low [width_bits w] bits
-   in the uniform 64-bit container (truncate / zero-extend). This is what makes
-   an operation's width meaningful — storage is uniform, the op picks the width. *)
-Definition coerce_int_width (w : CrWidth) (z : Z) : CrInt_T :=
-  CrInt (repr (Z.land z (Z.ones (width_bits w)))).
-
-(* Read a value at type [t]. Only integers carry a width; everything else is
-   passed through unchanged (a type mismatch surfaces later in the operation).
-   This is the single chokepoint where signedness will branch (zero- vs
-   sign-extension) once [CrIntType] grows an [it_signed] field. *)
-Definition coerce_to_type (t : CrIntType) (v : CrVal) : CrVal :=
-  match v with
-  | IntVal i => IntVal (coerce_int_width (it_width t) (iv_unsigned i))
-  | _ => v
-  end.
-
-Definition apply_iv_binop
-  (f : uint64 -> uint64 -> uint64)
-  (x y : CrInt_T) : CrVal :=
+(* Apply [f] at type [ty]: both operands must already be typed [ty]; the result
+   is computed at 64 bits, masked into [ty]'s width and typed [ty].  A type
+   mismatch (or a non-integer operand) yields ErrorVal. *)
+Definition iv_binop_at (f : uint64 -> uint64 -> uint64) (ty : CrIntType) (x y : CrVal) : CrVal :=
   match x, y with
-  | CrInt x', CrInt y' => IntVal (CrInt (f x' y'))
-  | _, _ => ErrorVal
-  end.
-Transparent apply_iv_binop.
-
-Definition add (x y : CrVal) : CrVal :=
-  match x, y with
-  | IntVal x', IntVal y' => apply_iv_binop Integers.add x' y'
+  | IntVal a ta, IntVal b tb =>
+      if crinttype_eqb ta ty && crinttype_eqb tb ty
+      then mk_int ty (unsigned (f a b))
+      else ErrorVal
   | _, _ => ErrorVal
   end.
 
-Definition sub (x y : CrVal) : CrVal :=
-  match x, y with
-  | IntVal x', IntVal y' => apply_iv_binop Integers.sub x' y'
-  | _, _ => ErrorVal
-  end.
+Definition add_at  (ty : CrIntType) : CrVal -> CrVal -> CrVal := iv_binop_at Integers.add ty.
+Definition sub_at  (ty : CrIntType) : CrVal -> CrVal -> CrVal := iv_binop_at Integers.sub ty.
+Definition and_at  (ty : CrIntType) : CrVal -> CrVal -> CrVal := iv_binop_at Integers.and ty.
+Definition or_at   (ty : CrIntType) : CrVal -> CrVal -> CrVal := iv_binop_at Integers.or ty.
+Definition xor_at  (ty : CrIntType) : CrVal -> CrVal -> CrVal := iv_binop_at Integers.xor ty.
+Definition mul_at  (ty : CrIntType) : CrVal -> CrVal -> CrVal := iv_binop_at Integers.mul ty.
+Definition divu_at (ty : CrIntType) : CrVal -> CrVal -> CrVal := iv_binop_at Integers.divu ty.
+Definition modu_at (ty : CrIntType) : CrVal -> CrVal -> CrVal := iv_binop_at Integers.modu ty.
 
-Definition and (x y : CrVal) : CrVal :=
-  match x, y with
-  | IntVal x', IntVal y' => apply_iv_binop Integers.and x' y'
-  | _, _ => ErrorVal
-  end.
-
-Definition or (x y : CrVal) : CrVal :=
-  match x, y with
-  | IntVal x', IntVal y' => apply_iv_binop Integers.or x' y'
-  | _, _ => ErrorVal
-  end.
-
-Definition xor (x y : CrVal) : CrVal :=
-  match x, y with
-  | IntVal x', IntVal y' => apply_iv_binop Integers.xor x' y'
-  | _, _ => ErrorVal
-  end.
-
+(* Bitwise complement at the value's own type (no separate op-type to check). *)
 Definition not (x : CrVal) : CrVal :=
   match x with
-  | IntVal (CrInt x') => IntVal (CrInt (Integers.not x'))
+  | IntVal a ta => mk_int ta (unsigned (Integers.not a))
   | _ => ErrorVal
   end.
 
-Definition mul (x y : CrVal) : CrVal :=
-  match x, y with
-  | IntVal x', IntVal y' => apply_iv_binop Integers.mul x' y'
-  | _, _ => ErrorVal
-  end.
-
-Definition divu (x y : CrVal) : CrVal :=
-  match x, y with
-  | IntVal x', IntVal y' => apply_iv_binop Integers.divu x' y'
-  | _, _ => ErrorVal
-  end.
-
-Definition modu (x y : CrVal) : CrVal :=
-  match x, y with
-  | IntVal x', IntVal y' => apply_iv_binop Integers.modu x' y'
-  | _, _ => ErrorVal
+(* Cast: the operand must be typed [from]; the result is its bits masked into
+   [to] and typed [to]. *)
+Definition cast (from to : CrIntType) (x : CrVal) : CrVal :=
+  match x with
+  | IntVal a ta => if crinttype_eqb ta from then mk_int to (unsigned a) else ErrorVal
+  | _ => ErrorVal
   end.
 
 Definition ld_arr (a : Array) (i : CrVal) : Check_T CrVal :=
   match a, i with
-  | Allocated array, IntVal (CrInt idx) =>
+  | Allocated array, IntVal idx _ =>
     if (Integers.ltu idx (arr_len array)) then
       match (arr_bytes array) !! (pkey_to_mkey idx) with
       | Init v => Legal v
@@ -209,13 +153,13 @@ Definition ld (m : Memory CrVal) (p : CrVal) (i : CrVal) : Check_T CrVal :=
     | PtrVal (CrPtr addr) =>
       ld_arr (m' !! (pkey_to_mkey addr)) i
     | _ => Illegal
-    end 
+    end
   | Invalid => Illegal
   end.
 
 Definition st_arr (a : Array) (i : CrVal) (v : CrVal) : Check_T Array :=
   match a, i with
-  | Allocated array, IntVal (CrInt idx) =>
+  | Allocated array, IntVal idx _ =>
     if (Integers.ltu idx (arr_len array)) then
       Legal (Allocated {|
         arr_len := arr_len array;
@@ -248,7 +192,7 @@ Definition alloc {T : Type} (m : Memory T) (arg1 : CrVal) (arg2 : CrVal) : Memor
   match m with
   | Mem m' =>
     match arg1, arg2 with
-    | PtrVal (CrPtr addr), IntVal (CrInt idx) => Mem
+    | PtrVal (CrPtr addr), IntVal idx _ => Mem
         (PMap.set (pkey_to_mkey addr) (Allocated {|
           arr_len := idx;
           arr_bytes := PMap.init Uninit;
@@ -270,19 +214,54 @@ Definition free {T : Type} (m : Memory T) (arg1 : CrVal) : Memory T :=
   | Invalid => Invalid
   end.
 
+Lemma crwidth_eqb_true : forall a b, crwidth_eqb a b = true -> a = b.
+Proof. intros a b H; destruct a, b; simpl in H; try discriminate; reflexivity. Qed.
+
+Lemma crinttype_eqb_true : forall a b, crinttype_eqb a b = true -> a = b.
+Proof.
+  intros [wa] [wb] H. unfold crinttype_eqb in H. simpl in H.
+  apply crwidth_eqb_true in H. subst. reflexivity.
+Qed.
+
+Lemma int_eq_true : forall (a b : uint64), Integers.eq a b = true -> a = b.
+Proof.
+  intros a b H. unfold Integers.eq in H.
+  destruct (zeq (unsigned a) (unsigned b)) as [e|]; [| discriminate].
+  apply uintw_eq_from_unsigned. exact e.
+Qed.
+
+Lemma crwidth_eqb_refl : forall w, crwidth_eqb w w = true.
+Proof. destruct w; reflexivity. Qed.
+
+Lemma crinttype_eqb_refl : forall t, crinttype_eqb t t = true.
+Proof. intros [w]; apply crwidth_eqb_refl. Qed.
+
+Lemma int_eq_refl : forall (a : uint64), Integers.eq a a = true.
+Proof.
+  intros a. unfold Integers.eq.
+  destruct (zeq (unsigned a) (unsigned a)); [reflexivity | congruence].
+Qed.
+
+Lemma eqb_refl : forall v, eqb v v = true.
+Proof.
+  intros v; destruct v as [a ta| p | |]; simpl.
+  - rewrite crinttype_eqb_refl, int_eq_refl. reflexivity.
+  - destruct p; [apply int_eq_refl | reflexivity].
+  - reflexivity.
+  - reflexivity.
+Qed.
+
 Lemma crval_concrete_if_else : forall (v1 v2 : CrVal),
   ((if eqb v1 v2 then true else false) = true)->
   v1 = v2.
 Proof.
   intros v1 v2 H.
-  unfold eqb, eq, Rocqlib.zeq in H.
-  destruct v1, v2; try reflexivity; try discriminate;
-  try (destruct val; exfalso; congruence);
-  destruct val; destruct val0; try discriminate; try reflexivity; simpl in *; unfold eq in *;
-  try destruct (BinInt.Z.eq_dec (unsigned val) (unsigned val0)); try discriminate;
-  try destruct (BinInt.Z.eq_dec (unsigned addr) (unsigned addr0)); try discriminate;
-  try apply uintw_eq_from_unsigned in e; try rewrite e; try reflexivity;
-  destruct (Rocqlib.zeq (unsigned val) (unsigned val0)); try congruence.
+  destruct (eqb v1 v2) eqn:He; [| discriminate]. clear H.
+  destruct v1 as [a ta| [a1|] | |]; destruct v2 as [b tb| [b1|] | |];
+    simpl in He; try discriminate; try reflexivity.
+  - apply Bool.andb_true_iff in He as [Ht Hb].
+    apply crinttype_eqb_true in Ht. apply int_eq_true in Hb. subst. reflexivity.
+  - apply int_eq_true in He. subst. reflexivity.
 Qed.
 
 Lemma crval_concrete_if_else2 : forall (v1 v2 : CrVal),
@@ -290,14 +269,6 @@ Lemma crval_concrete_if_else2 : forall (v1 v2 : CrVal),
   v1 <> v2.
 Proof.
   intros v1 v2 H.
-  destruct v1, v2; try discriminate;
-  unfold eqb in H;
-  unfold iveqb in H;
-  unfold eq in H;
-  unfold Rocqlib.zeq in H;
-  injection;
-  destruct val, val0; try congruence;
-  try destruct (BinInt.Z.eq_dec (unsigned val) (unsigned val0)); try discriminate;
-  try destruct (BinInt.Z.eq_dec (unsigned addr) (unsigned addr0)); try discriminate;
-  apply uintw_neq_from_unsigned in n; congruence.
+  destruct (eqb v1 v2) eqn:He; [discriminate|]. clear H.
+  intro Heq. subst v2. rewrite eqb_refl in He. discriminate.
 Qed.

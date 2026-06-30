@@ -5,6 +5,7 @@ From Stdlib Require Import List.
 Import ListNotations.
 From MyProject Require Import CrIdentifiers.
 From MyProject Require Import CrVal.
+From MyProject Require Import MyInts.
 
 (* A transformer is either a sequential or a parallel transformer *)
 Inductive TransformerType : Type := 
@@ -16,7 +17,7 @@ Inductive TransformerType : Type :=
 Inductive Operand :=
   | OpCtrlPlane (c : Ctrl)
   | OpHeader (h : Header)
-  | OpConst (n : CrInt_T) (* TODO: Can have constant ptrs as well *)
+  | OpConst (n : uint64) (* the constant adopts the consuming operation's type *)
   | OpStateful (s : State).
 
 Inductive CmpOp :=
@@ -55,7 +56,7 @@ Inductive HdrOp :=
    values are both 64-bit [CrInt]s, compared full-width (a match carries no
    width of its own). TODO: Need to handle wildcards. *)
 Inductive MatchValue :=
-| MatchConst (k : CrInt_T)
+| MatchConst (k : uint64)
 | MatchHeader (h : Header).
 Definition MatchPattern := list (Header * CmpOp * MatchValue).
 
