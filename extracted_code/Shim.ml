@@ -49,6 +49,22 @@ let int_to_coq_uint64 (n : int) : BinNums.coq_Z =
     if (n = 0) then Z0
     else Zpos (int_to_pos n))
 
+(* Build a Coq [Z] from an arbitrary-precision integer, with no native-int
+   overflow (a solved 64-bit model value can exceed [max_int]). *)
+let coq_Z_of_zarith (z : Z.t) : BinNums.coq_Z =
+  let rec pos_of (z : Z.t) : BinNums.positive =
+    if Z.equal z Z.one then Coq_xH
+    else if Z.equal (Z.logand z Z.one) Z.zero
+         then Coq_xO (pos_of (Z.shift_right z 1))
+         else Coq_xI (pos_of (Z.shift_right z 1)) in
+  if Z.equal z Z.zero then Z0
+  else if Z.gt z Z.zero then Zpos (pos_of z)
+  else Zneg (pos_of (Z.neg z))
+(* A uint64 Coq value from a decimal numeral string (the form Z3 returns). *)
+let str_to_coq_uint64 (s : Stdlib.String.t) : BinNums.coq_Z =
+  repr (Coq_xO (Coq_xO (Coq_xO (Coq_xO (Coq_xO (Coq_xO Coq_xH))))))
+       (coq_Z_of_zarith (Z.of_string s))
+
 let rec pos_to_str (n : BinNums.positive) : Stdlib.String.t =
   match n with
   | Coq_xH -> "1"
@@ -227,6 +243,13 @@ let print_malformed_gprog p pid =
 let rec coq_list_of_list = function
   | [] -> Datatypes.Coq_nil
   | x :: xs -> Datatypes.Coq_cons (x, coq_list_of_list xs)
+
+let rec int_to_coq_nat (n : int) : Datatypes.nat =
+  if n <= 0 then Datatypes.O else Datatypes.S (int_to_coq_nat (n - 1))
+
+(* A Coq [list Header] from header ids (Header extracts to positive). *)
+let headers_of_ints (ns : int Stdlib.List.t) : CrIdentifiers.coq_Header Datatypes.list =
+  coq_list_of_list (Stdlib.List.map int_to_pos ns)
 
 (* MSB-first 8 bits of byte [b] as Coq bools (in a native OCaml list). *)
 let byte_bits (b : int) : Datatypes.bool Stdlib.List.t =

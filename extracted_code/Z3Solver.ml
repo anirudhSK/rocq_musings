@@ -62,6 +62,8 @@ let collect_var_widths (expr : SmtExpr.coq_SmtBoolExpr) : (string, int) Hashtbl.
     | SmtExpr.SmtBitDiv (ty, e1, e2) | SmtExpr.SmtBitMod (ty, e1, e2) ->
         let w = Some (ty_bits ty) in arith e1 w; arith e2 w
     | SmtExpr.SmtBitNot e1 -> arith e1 expected
+    | SmtExpr.SmtBitsToInt bits ->
+        Stdlib.List.iter boolean (Shim.listify_coq_list bits)
     | SmtExpr.SmtArrSel (m, e1, e2) -> mem m; arith e1 None; arith e2 None
     | SmtExpr.SmtPtrConst _ | SmtExpr.SmtPtrVar _ -> ()
   and boolean (e : SmtExpr.coq_SmtBoolExpr) : unit =
@@ -77,6 +79,7 @@ let collect_var_widths (expr : SmtExpr.coq_SmtBoolExpr) : (string, int) Hashtbl.
           | Some _ as s -> s
           | None -> static_arith_width e2 in
         arith e1 w; arith e2 w
+    | SmtExpr.SmtBoolVar _ -> ()  (* a lone bit; width is irrelevant (defaults u64) *)
   and mem (e : SmtExpr.coq_SmtArrExpr) : unit =
     match e with
     | SmtExpr.SmtArrInit -> ()
@@ -95,6 +98,19 @@ let rec z3_expr_from_coq_smt_bool_expr (expr : SmtExpr.coq_SmtBoolExpr) (ctx : Z
   | SmtExpr.SmtBoolNot e -> Z3.Boolean.mk_not ctx (z3_expr_from_coq_smt_bool_expr e ctx vars)
   | SmtExpr.SmtBoolEq (a1, a2) -> Z3.Boolean.mk_eq ctx (z3_expr_from_coq_smt_arith_expr a1 ctx vars) (z3_expr_from_coq_smt_arith_expr a2 ctx vars)
   | SmtExpr.SmtBoolLt (a1, a2) -> Z3.BitVector.mk_ult ctx (z3_expr_from_coq_smt_arith_expr a1 ctx vars) (z3_expr_from_coq_smt_arith_expr a2 ctx vars)
+  | SmtExpr.SmtBoolVar name -> (
+      (* A free bit (e.g. a symbolic packet bit) is a 1-bit bitvector const;
+         the boolean holds when that bit is set.  It shares [vars] so the model
+         reconstructs it as a 0/1 numeral. *)
+      let name_str = Shim.coq_str_to_str name in
+      let bit =
+        match StringMap.find_opt name_str !vars with
+        | Some z3_var -> z3_var
+        | None ->
+            let z3_var = Z3.BitVector.mk_const ctx (Z3.Symbol.mk_string ctx name_str) 1 in
+            vars := StringMap.add name_str z3_var !vars;
+            z3_var in
+      Z3.Boolean.mk_eq ctx bit (Z3.BitVector.mk_numeral ctx "1" 1))
 and z3_expr_from_coq_smt_arith_expr (expr : SmtExpr.coq_SmtArithExpr) (ctx : Z3.context) (vars : var_tracker)
   : Z3.Expr.expr =
   match expr with
@@ -110,6 +126,23 @@ and z3_expr_from_coq_smt_arith_expr (expr : SmtExpr.coq_SmtArithExpr) (ctx : Z3.
         let z3_var = Z3.BitVector.mk_const ctx (Z3.Symbol.mk_string ctx name_str) 64 in
         vars := StringMap.add name_str z3_var !vars;
         z3_var)
+  | SmtExpr.SmtBitsToInt bits ->
+      (* Concat the bits MSB-first into a width-|bits| bitvector, then zero-extend
+         to 64.  Concat and zero-extend are free in bit-blasting, so this avoids
+         the ripple-carry adders an arithmetic assembly would generate. *)
+      let bit_bv b =
+        Z3.Boolean.mk_ite ctx (z3_expr_from_coq_smt_bool_expr b ctx vars)
+          (Z3.BitVector.mk_numeral ctx "1" 1)
+          (Z3.BitVector.mk_numeral ctx "0" 1) in
+      let rec concat_bits = function
+        | [] -> Z3.BitVector.mk_numeral ctx "0" 64
+        | [b] -> bit_bv b
+        | b :: rest -> Z3.BitVector.mk_concat ctx (bit_bv b) (concat_bits rest) in
+      let ocaml_bits = Shim.listify_coq_list bits in
+      let w = Stdlib.List.length ocaml_bits in
+      if w = 0 then Z3.BitVector.mk_numeral ctx "0" 64
+      else if w >= 64 then concat_bits ocaml_bits
+      else Z3.BitVector.mk_zero_ext ctx (64 - w) (concat_bits ocaml_bits)
   | SmtExpr.SmtConditional (cond, e1, e2) ->
       Z3.Boolean.mk_ite ctx (z3_expr_from_coq_smt_bool_expr cond ctx vars) (z3_expr_from_coq_smt_arith_expr e1 ctx vars) (z3_expr_from_coq_smt_arith_expr e2 ctx vars)
   | SmtExpr.SmtCast (_from, to_, e) ->
@@ -151,14 +184,14 @@ let to_vmap (var_widths : (string, int) Hashtbl.t)
     if Z3.Expr.is_numeral v then
       let bv_size = Z3.BitVector.get_size (Z3.Expr.get_sort v) in
       let var_str = Z3.BitVector.numeral_to_string v in
-      let var_val = int_of_string var_str in
       (* All bitvectors are 64-bit in the encoding; the variable's CrIntType is
          recovered from how it is used in the query (pointer reconstruction lives
-         in the memory solver, not here). *)
+         in the memory solver, not here).  The numeral is reconstructed via
+         arbitrary precision — a full-width value overflows a native int. *)
       ignore bv_size;
       let bits = match Hashtbl.find_opt var_widths name with Some b -> b | None -> 64 in
-      Printf.printf "| var( %s ) : u%d := %d\n" name bits var_val;
-      let cr_val = CrVal.IntVal (Shim.int_to_coq_uint64 var_val, width_to_ty bits) in
+      Printf.printf "| var( %s ) : u%d := %s\n" name bits var_str;
+      let cr_val = CrVal.IntVal (Shim.str_to_coq_uint64 var_str, width_to_ty bits) in
       Shim.VMap (
         Shim.str_to_coq_str name,
         cr_val,

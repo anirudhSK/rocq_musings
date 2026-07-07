@@ -460,6 +460,18 @@ Definition init_symbolic_parser_state (prefix : string) (h : list Header) : Symb
      p_packet := @nil SmtBoolExpr;
      p_cursor := 0 |}.
 
+(* Symbolic parser start state over a packet of exactly [n] unknown bits: each
+   bit is a free [SmtBoolVar "pkt_i"].  Two parsers seeded this way share the
+   same bit variables, so the solver quantifies over one common input packet. *)
+Definition init_symbolic_parser_state_n (h : list Header) (n : nat) : SymbolicParserState :=
+  {| p_header_map := (SmtUninit,
+                     PTree_Properties.of_list
+                     (List.map (fun x => let x' := unwrap x in (x', SmtArithVar ("hdr_" ++ pos_to_string x'))) h));
+     p_packet := List.map
+                   (fun i => SmtBoolVar ("pkt_" ++ pos_to_string (Pos.of_succ_nat i)))
+                   (List.seq 0 n);
+     p_cursor := 0 |}.
+
 Definition init_sym_t_state (prog_prefix : string) (m_id : ModuleName) (p : CaracaraProgram)
   : SymbolicTransformerState :=
   let prefix := prog_prefix ++ "_m" ++ pos_to_string (unwrap m_id) ++ "_" in

@@ -1,4 +1,5 @@
 From Stdlib Require Import ZArith.
+From Stdlib Require Import micromega.Lia.
 From MyProject Require Import MyInts.
 From MyProject Require Import Integers.
 From MyProject Require Import Maps.
@@ -271,4 +272,19 @@ Proof.
   intros v1 v2 H.
   destruct (eqb v1 v2) eqn:He; [discriminate|]. clear H.
   intro Heq. subst v2. rewrite eqb_refl in He. discriminate.
+Qed.
+
+(* Round-tripping a [u64]-masked value through [unsigned] then re-masking is the
+   identity: masking to the full 64-bit width is idempotent. *)
+Lemma mask_width_W64_unsigned_idem : forall z,
+  mask_width W64 (unsigned (mask_width W64 z)) = mask_width W64 z.
+Proof.
+  intro z. unfold mask_width, width_bits.
+  set (a := repr (Z.land z (Z.ones 64))).
+  rewrite Z.land_ones by lia.
+  rewrite Z.mod_small.
+  - apply repr_unsigned.
+  - pose proof (unsigned_range a) as Hr.
+    assert (Hmod : @modulus 64%positive = (2 ^ 64)%Z) by (vm_compute; reflexivity).
+    lia.
 Qed.

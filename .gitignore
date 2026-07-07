@@ -31,6 +31,7 @@ smt_query
 !/extracted_code/TestModuleSemantics.ml
 !/extracted_code/TestProgramSemantics.ml
 !/extracted_code/TestParserSemantics.ml
+!/extracted_code/TestParserEquality.ml
 !/extracted_code/EqCheck.ml
 /.vscode/
 /.idea/

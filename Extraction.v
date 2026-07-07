@@ -3,6 +3,7 @@ Extraction Language OCaml.
 
 From MyProject Require Import SmtQuery.
 From MyProject Require Import SmtModuleQuery.
+From MyProject Require Import SmtParserQuery.
 
 From MyProject Require Import CrMem.
 From MyProject Require Import CrMemEx.
@@ -33,4 +34,5 @@ Separate Extraction
   CrVarLike.init_general_concrete_state
   CrConcreteSemanticsModule.eval_general_program_concrete_sinks
   PktClass.ex_lin_prog PktClass.ex_tss_prog modnet_equivalence_checker
+  SmtParserQuery.parser_equivalence_checker
   well_formed_programb well_formed_general_programb.

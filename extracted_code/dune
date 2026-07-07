@@ -18,7 +18,7 @@
 
 (library
  (name semantics_tests)
- (modules TestEquality TestModuleSemantics TestParserSemantics TestProgramSemantics)
+ (modules TestEquality TestModuleSemantics TestParserEquality TestParserSemantics TestProgramSemantics)
  (inline_tests
   (deps (source_tree ../test)))
  (preprocess (pps ppx_expect))
@@ -35,8 +35,8 @@
   CrSymbolicSemanticsTransformer CrTransformer CrTypeIF CrVal CrVarLike
   Datatypes EquivDec Integers List ListDef ListUtils Maps MemSolver Mergesort
   MyInts Nat NatDef Orders PeanoNat PktClass PosDef PosGraphLemmas Rocqlib Shim
-  SmtExpr SmtModuleQuery SmtQuery SmtTypes Specif String TestModulePrograms
-  TestParserPrograms TestPrograms Z3Solver ZArith_dec Zpower)
+  SmtExpr SmtModuleQuery SmtParserQuery SmtQuery SmtTypes Specif String
+  TestModulePrograms TestParserPrograms TestPrograms Z3Solver ZArith_dec Zpower)
  (preprocess (staged_pps ppx_import ppx_sexp_conv))
- (libraries z3 sexplib)
+ (libraries z3 sexplib zarith)
  (flags (:standard -w -33)))

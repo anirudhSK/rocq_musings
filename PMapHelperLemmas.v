@@ -374,4 +374,14 @@ Qed.
    are definitional, so [reflexivity] / direct application discharges them
    without an intermediate lemma. *)
 
+(* [PMap.map] commutes with [PMap.set]. *)
+Lemma pmap_map_set : forall (A B : Type) (g : A -> B) (k : positive) (v : A) (m : PMap.t A),
+  PMap.map g (PMap.set k v m) = PMap.set k (g v) (PMap.map g m).
+Proof.
+  intros A B g k v m. unfold PMap.map, PMap.set. simpl. f_equal.
+  apply PTree.extensionality. intro i.
+  rewrite PTree.gmap1, !PTree.gsspec, PTree.gmap1.
+  destruct (Coqlib.peq i k); reflexivity.
+Qed.
+
 Global Opaque lookup_varlike_map.

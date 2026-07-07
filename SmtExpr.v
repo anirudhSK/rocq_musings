@@ -5,6 +5,9 @@ From MyProject Require Import CrVal.
 From MyProject Require Import MyInts.
 From MyProject Require Import Integers.
 From Stdlib.Strings Require Import String.
+From Stdlib Require Import ZArith.
+From Stdlib Require Import List.
+Import ListNotations.
 
 (* TODO: Look through K2 code *)
 Inductive SmtBoolExpr : Type :=
@@ -15,10 +18,18 @@ Inductive SmtBoolExpr : Type :=
     | SmtBoolOr (e1 e2 : SmtBoolExpr)
     | SmtBoolEq (e1 e2 : SmtArithExpr)
     | SmtBoolLt (e1 e2 : SmtArithExpr)
+    (* A free boolean variable (e.g. a single symbolic packet bit).  Evaluated
+       via the valuation, interpreting a nonzero stored value as [true]. *)
+    | SmtBoolVar (name : string)
 with SmtArithExpr : Type :=
     | SmtArithConst (val : uint64) (ty : CrIntType)
     | SmtUninit  (* the uninitialized value; evaluates to UninitVal *)
     | SmtArithVar (name : string)
+    (* The [u64] value denoted by a run of bits, MSB first (head = most
+       significant).  A packet field extraction produces one of these; it lowers
+       to a bitvector [concat] in Z3 (free), rather than an arithmetic
+       assembly chain. *)
+    | SmtBitsToInt (bits : list SmtBoolExpr)
     | SmtConditional (cond : SmtBoolExpr) (then_expr else_expr : SmtArithExpr)
     (* Cast a sub-expression from one int type to another: the operand must
        already be typed [from], the result is typed [to]. *)
@@ -54,6 +65,10 @@ Fixpoint eval_smt_bool (e : SmtBoolExpr) (v : SmtValuation) : bool :=
       (eval_smt_arith e1 v) (eval_smt_arith e2 v)) then true else false
     | SmtBoolLt e1 e2 => CrVal.ltb
       (eval_smt_arith e1 v) (eval_smt_arith e2 v)
+    | SmtBoolVar name => match v name with
+      | IntVal a _ => negb (Integers.eq a Integers.zero)
+      | _ => false
+      end
     end
 with eval_smt_arith (e : SmtArithExpr) (v : SmtValuation) : CrVal :=
     match e with
@@ -63,6 +78,17 @@ with eval_smt_arith (e : SmtArithExpr) (v : SmtValuation) : CrVal :=
       | IntVal a t => IntVal a t
       | _ => ErrorVal
       end
+    | SmtBitsToInt bits =>
+        (* Fold the bits MSB first as [acc := 2*acc + bit]; the [u64] result
+           agrees with the old [assemble_bits_symbolic] assembly. *)
+        mk_int u64
+          ((fix go (bs : list SmtBoolExpr) (acc : Z) {struct bs} : Z :=
+              match bs with
+              | nil => acc
+              | b :: rest =>
+                  go rest (Z.add (Z.mul 2 acc)
+                                 (if eval_smt_bool b v then 1%Z else 0%Z))
+              end) bits 0%Z)
     | SmtConditional cond then_expr else_expr =>
         if eval_smt_bool cond v
         then (eval_smt_arith then_expr v)
