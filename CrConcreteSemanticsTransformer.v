@@ -65,10 +65,8 @@ Definition eval_cmp_concrete (op : CmpOp) (v1 v2 : CrVal) : bool :=
 
 Definition eval_match_concrete (match_pattern : MatchPattern) (ps : ConcreteTransformerState) : bool :=
   List.forallb (fun '(h, c, v) =>
-  (* TODO: match constants are typed [u8] (all current programs are u8); a
-     per-pattern CrIntType would let them match wider headers. *)
   let v' := match v with
-  | MatchConst k' => mk_int u8 (unsigned k')
+  | MatchConst k' ty => mk_int ty (unsigned k')
   | MatchHeader h' => (lookup_varlike ps h')
   end in
   eval_cmp_concrete c (lookup_varlike ps h) v') match_pattern.

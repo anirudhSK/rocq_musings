@@ -71,3 +71,10 @@ let%expect_test "h2 differs: p_extract8 vs p_extract_two over h1,h2 (16-bit)" =
     └
     NotEquivalent
     |}]
+
+(* Sub-field select (index 5, p_select_nibble): branches on the high nibble
+   [4,8) of h1.  Checking it against itself drives the new bit-slice lowering
+   (mk_lshr) through Z3 on both sides; a parser is equivalent to itself. *)
+let%expect_test "reflexive: p_select_nibble vs itself over h1,h2" =
+  print_equiv (check [1; 2] 16 5 5);
+  [%expect {| Equivalent |}]

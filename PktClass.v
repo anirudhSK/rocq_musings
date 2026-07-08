@@ -105,7 +105,7 @@ Definition headers_in_mp (mp : MatchPattern) : list Header :=
     (fun '(h1, _, mv) =>
       match mv with
       | MatchHeader h2 => [h1; h2]
-      | MatchConst _   => [h1]
+      | MatchConst _ _ => [h1]
       end)
     mp.
 
@@ -338,20 +338,20 @@ Definition tss_db (db : FilterDatabase) : GeneralCaracaraProgram :=
 
 Definition SimpleDB : FilterDatabase :=
   [({|
-      src_ip := [(HeaderCtr 1, CmpEq, MatchConst (repr 0))];
-      dst_ip := [(HeaderCtr 5, CmpEq, MatchConst (repr 0))];
-      src_port := [(HeaderCtr 9, CmpEq, MatchConst (repr 0))];
-      dst_port := [(HeaderCtr 11, CmpEq, MatchConst (repr 0))];
-      protocol := [(HeaderCtr 13, CmpEq, MatchConst (repr 1))];
+      src_ip := [(HeaderCtr 1, CmpEq, MatchConst (repr 0) u8)];
+      dst_ip := [(HeaderCtr 5, CmpEq, MatchConst (repr 0) u8)];
+      src_port := [(HeaderCtr 9, CmpEq, MatchConst (repr 0) u8)];
+      dst_port := [(HeaderCtr 11, CmpEq, MatchConst (repr 0) u8)];
+      protocol := [(HeaderCtr 13, CmpEq, MatchConst (repr 1) u8)];
       key := 1%positive;
       priority := 1%positive |}, (repr 42));
     ({|
-      src_ip := [(HeaderCtr 1, CmpEq, MatchConst (repr 0));
-                 (HeaderCtr 2, CmpEq, MatchConst (repr 0))];
-      dst_ip := [(HeaderCtr 5, CmpEq, MatchConst (repr 0))];
-      src_port := [(HeaderCtr 9, CmpEq, MatchConst (repr 0))];
-      dst_port := [(HeaderCtr 11, CmpEq, MatchConst (repr 0))];
-      protocol := [(HeaderCtr 13, CmpEq, MatchConst (repr 2))];
+      src_ip := [(HeaderCtr 1, CmpEq, MatchConst (repr 0) u8);
+                 (HeaderCtr 2, CmpEq, MatchConst (repr 0) u8)];
+      dst_ip := [(HeaderCtr 5, CmpEq, MatchConst (repr 0) u8)];
+      src_port := [(HeaderCtr 9, CmpEq, MatchConst (repr 0) u8)];
+      dst_port := [(HeaderCtr 11, CmpEq, MatchConst (repr 0) u8)];
+      protocol := [(HeaderCtr 13, CmpEq, MatchConst (repr 2) u8)];
       key := 2%positive;
       priority := 2%positive
     |}, (repr 67))

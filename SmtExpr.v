@@ -30,6 +30,9 @@ with SmtArithExpr : Type :=
        to a bitvector [concat] in Z3 (free), rather than an arithmetic
        assembly chain. *)
     | SmtBitsToInt (bits : list SmtBoolExpr)
+    (* Extract bits [lo, hi) of a sub-expression (LSB-indexed) into a [u64];
+       mirrors [CrVal.slice_val].  Used for parser [select] sub-field matches. *)
+    | SmtBitSlice (lo hi : nat) (e : SmtArithExpr)
     | SmtConditional (cond : SmtBoolExpr) (then_expr else_expr : SmtArithExpr)
     (* Cast a sub-expression from one int type to another: the operand must
        already be typed [from], the result is typed [to]. *)
@@ -89,6 +92,7 @@ with eval_smt_arith (e : SmtArithExpr) (v : SmtValuation) : CrVal :=
                   go rest (Z.add (Z.mul 2 acc)
                                  (if eval_smt_bool b v then 1%Z else 0%Z))
               end) bits 0%Z)
+    | SmtBitSlice lo hi e => slice_val lo hi (eval_smt_arith e v)
     | SmtConditional cond then_expr else_expr =>
         if eval_smt_bool cond v
         then (eval_smt_arith then_expr v)

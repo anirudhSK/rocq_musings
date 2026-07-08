@@ -79,7 +79,7 @@ Definition eval_match_smt (match_pattern : MatchPattern) (ps : SymbolicTransform
   (* Note that because SmtBoolAnd is associative and commutative, both fold_left and fold_right give the same answer. *)
   List.fold_right (fun '(h, c, v) acc =>
     let v' := match v with
-    | MatchConst k' => SmtArithConst k' u8  (* TODO: match constants typed u8 *)
+    | MatchConst k' ty => SmtArithConst k' ty
     | MatchHeader h' => lookup_varlike ps h'
     end in
     SmtBoolAnd (eval_cmp_smt c (lookup_varlike ps h) v') acc) SmtTrue match_pattern.

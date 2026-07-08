@@ -58,7 +58,7 @@ Definition mod_prog_add1_then_mul2 : GeneralCaracaraProgram :=
    h1=7 → 1 → 11.  h1=3 → 3 → 13. *)
 Definition mod_prog_conditional_pipeline : GeneralCaracaraProgram :=
   let p1 := CaracaraProgramDef [HeaderCtr 1] [] [] [
-    Seq (SeqCtr [(HeaderCtr 1, CmpEq, MatchConst (repr 7))] [
+    Seq (SeqCtr [(HeaderCtr 1, CmpEq, MatchConst (repr 7) u8)] [
       StatelessOp AddOp u8
         (OpConst (repr 1))
         (OpConst (repr 0))

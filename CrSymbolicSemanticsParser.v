@@ -43,13 +43,15 @@ Definition apply_extract_symbolic (eo : ExtractOp) (ps : SymbolicParserState)
       else None
   end.
 
-(* The symbolic condition under which a [select] case fires: header
-   [sc_header]'s current value equals the pattern's denoted value. *)
+(* The symbolic condition under which a [select] case fires: bits
+   [sc_start_index, sc_end_index) of header [sc_header]'s current value equal
+   the pattern's denoted value.  Mirrors [select_case_matches_concrete]. *)
 Definition select_case_cond_symbolic (ps : SymbolicParserState) (c : SelectCase)
     : SmtBoolExpr :=
   let pat_v := mk_int u64 (bits_to_Z (sc_pattern c)) in
   match pat_v with
-  | IntVal k kty => SmtBoolEq (lookup_varlike_map (p_header_map ps) (sc_header c))
+  | IntVal k kty => SmtBoolEq (SmtBitSlice (sc_start_index c) (sc_end_index c)
+                                (lookup_varlike_map (p_header_map ps) (sc_header c)))
                               (SmtArithConst k kty)
   | _ => SmtFalse
   end.

@@ -247,6 +247,9 @@ let rec coq_list_of_list = function
 let rec int_to_coq_nat (n : int) : Datatypes.nat =
   if n <= 0 then Datatypes.O else Datatypes.S (int_to_coq_nat (n - 1))
 
+let rec coq_nat_to_int (n : Datatypes.nat) : int =
+  match n with Datatypes.O -> 0 | Datatypes.S m -> 1 + coq_nat_to_int m
+
 (* A Coq [list Header] from header ids (Header extracts to positive). *)
 let headers_of_ints (ns : int Stdlib.List.t) : CrIdentifiers.coq_Header Datatypes.list =
   coq_list_of_list (Stdlib.List.map int_to_pos ns)

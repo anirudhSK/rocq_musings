@@ -62,6 +62,8 @@ let collect_var_widths (expr : SmtExpr.coq_SmtBoolExpr) : (string, int) Hashtbl.
     | SmtExpr.SmtBitDiv (ty, e1, e2) | SmtExpr.SmtBitMod (ty, e1, e2) ->
         let w = Some (ty_bits ty) in arith e1 w; arith e2 w
     | SmtExpr.SmtBitNot e1 -> arith e1 expected
+    (* A slice's operand carries its own width, not the slice's; don't force it. *)
+    | SmtExpr.SmtBitSlice (_, _, e1) -> arith e1 None
     | SmtExpr.SmtBitsToInt bits ->
         Stdlib.List.iter boolean (Shim.listify_coq_list bits)
     | SmtExpr.SmtArrSel (m, e1, e2) -> mem m; arith e1 None; arith e2 None
@@ -143,6 +145,18 @@ and z3_expr_from_coq_smt_arith_expr (expr : SmtExpr.coq_SmtArithExpr) (ctx : Z3.
       if w = 0 then Z3.BitVector.mk_numeral ctx "0" 64
       else if w >= 64 then concat_bits ocaml_bits
       else Z3.BitVector.mk_zero_ext ctx (64 - w) (concat_bits ocaml_bits)
+  | SmtExpr.SmtBitSlice (lo, hi, e) ->
+      (* Bits [lo, hi) LSB-indexed, right-aligned: mirrors [CrVal.slice_val]
+         ([(e >> lo) & ones(hi-lo)] in a 64-bit container). *)
+      let ze = z3_expr_from_coq_smt_arith_expr e ctx vars in
+      let lo_i = Shim.coq_nat_to_int lo in
+      let hi_i = Shim.coq_nat_to_int hi in
+      let w = hi_i - lo_i in
+      if w <= 0 then Z3.BitVector.mk_numeral ctx "0" 64
+      else
+        mask_to ctx w
+          (Z3.BitVector.mk_lshr ctx ze
+             (Z3.BitVector.mk_numeral ctx (string_of_int lo_i) 64))
   | SmtExpr.SmtConditional (cond, e1, e2) ->
       Z3.Boolean.mk_ite ctx (z3_expr_from_coq_smt_bool_expr cond ctx vars) (z3_expr_from_coq_smt_arith_expr e1 ctx vars) (z3_expr_from_coq_smt_arith_expr e2 ctx vars)
   | SmtExpr.SmtCast (_from, to_, e) ->
@@ -157,7 +171,10 @@ and z3_expr_from_coq_smt_arith_expr (expr : SmtExpr.coq_SmtArithExpr) (ctx : Z3.
   | SmtExpr.SmtBitNot e            -> Z3.BitVector.mk_not ctx (z3_expr_from_coq_smt_arith_expr e ctx vars)
   | SmtExpr.SmtBitMul (ty, e1, e2) -> mask_to ctx (ty_bits ty) (Z3.BitVector.mk_mul ctx (z3_expr_from_coq_smt_arith_expr e1 ctx vars) (z3_expr_from_coq_smt_arith_expr e2 ctx vars))
   | SmtExpr.SmtBitDiv (ty, e1, e2) -> mask_to ctx (ty_bits ty) (Z3.BitVector.mk_udiv ctx (z3_expr_from_coq_smt_arith_expr e1 ctx vars) (z3_expr_from_coq_smt_arith_expr e2 ctx vars))
-  | SmtExpr.SmtBitMod (ty, e1, e2) -> mask_to ctx (ty_bits ty) (Z3.BitVector.mk_smod ctx (z3_expr_from_coq_smt_arith_expr e1 ctx vars) (z3_expr_from_coq_smt_arith_expr e2 ctx vars))
+  (* Unsigned remainder ([mk_urem]) to match the concrete [ModOp], which is
+     [Integers.modu] (unsigned); [mk_smod]/[mk_srem] would disagree on operands
+     with the high bit set and make the equivalence check unsound. *)
+  | SmtExpr.SmtBitMod (ty, e1, e2) -> mask_to ctx (ty_bits ty) (Z3.BitVector.mk_urem ctx (z3_expr_from_coq_smt_arith_expr e1 ctx vars) (z3_expr_from_coq_smt_arith_expr e2 ctx vars))
   | SmtExpr.SmtArrSel (_, _, _) ->
       (* TODO: Implement pointer load from memory *)
       Z3.BitVector.mk_numeral ctx "0" 64

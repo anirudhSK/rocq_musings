@@ -29,14 +29,15 @@ Definition apply_extract_concrete (eo : ExtractOp) (ps : ConcreteParserState)
       else None
   end.
 
-(* Resolve a [select] case against the current header values: the case
-   fires when header [sc_header]'s current value equals the value the
-   pattern bits denote (matched over the [start,end) slice width). *)
+(* Resolve a [select] case against the current header values: the case fires
+   when bits [sc_start_index, sc_end_index) of header [sc_header]'s current
+   value (LSB-indexed, right-aligned by [slice_val]) equal the value the pattern
+   bits denote. *)
 Definition select_case_matches_concrete (ps : ConcreteParserState) (c : SelectCase)
     : bool :=
-  let width := sc_end_index c - sc_start_index c in
   let pat_v := mk_int u64 (bits_to_Z (sc_pattern c)) in
-  CrVal.eqb (lookup_varlike_map (p_header_map ps) (sc_header c)) pat_v.
+  CrVal.eqb (slice_val (sc_start_index c) (sc_end_index c)
+              (lookup_varlike_map (p_header_map ps) (sc_header c))) pat_v.
 
 Fixpoint resolve_select_concrete (ps : ConcreteParserState)
     (cases : list SelectCase) (default : ParserTarget) : ParserTarget :=

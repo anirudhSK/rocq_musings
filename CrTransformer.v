@@ -52,11 +52,13 @@ Inductive HdrOp :=
   | CastStateOp  (from : CrIntType) (to : CrIntType) (arg : Operand) (target : State)
   | CastHeaderOp (from : CrIntType) (to : CrIntType) (arg : Operand) (target : Header).
 
-(* Define MatchPattern as a list of header, pattern pairs.  Patterns and header
-   values are both 64-bit [CrInt]s, compared full-width (a match carries no
-   width of its own). TODO: Need to handle wildcards. *)
+(* Define MatchPattern as a list of header, pattern pairs.  A [MatchConst]
+   carries its own [CrIntType]: the constant is read at [ty] and compared
+   against the header value, which (like every [CrVal] comparison) requires the
+   two operands to share a type.  A [MatchHeader] compares two header values
+   directly.  TODO: Need to handle wildcards. *)
 Inductive MatchValue :=
-| MatchConst (k : uint64)
+| MatchConst (k : uint64) (ty : CrIntType)
 | MatchHeader (h : Header).
 Definition MatchPattern := list (Header * CmpOp * MatchValue).
 

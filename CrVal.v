@@ -80,6 +80,17 @@ Definition mask_width (w : CrWidth) (z : Z) : uint64 :=
 Definition mk_int (ty : CrIntType) (z : Z) : CrVal :=
   IntVal (mask_width (it_width ty) z) ty.
 
+(* Extract bits [lo, hi) of [v]'s value, LSB-indexed (bit 0 is least
+   significant, so this is P4's [field[hi-1 : lo]]), returned right-aligned in a
+   fresh [u64].  A non-integer operand yields ErrorVal. *)
+Definition slice_val (lo hi : nat) (v : CrVal) : CrVal :=
+  match v with
+  | IntVal a _ =>
+      mk_int u64 (Z.land (Z.shiftr (unsigned a) (Z.of_nat lo))
+                         (Z.ones (Z.of_nat (hi - lo))))
+  | _ => ErrorVal
+  end.
+
 (* Equality and unsigned-less-than require the operands to share a type. *)
 Definition eqb (x y : CrVal) : bool :=
   match x, y with

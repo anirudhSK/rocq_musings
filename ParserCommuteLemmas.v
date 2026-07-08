@@ -73,6 +73,13 @@ Proof.
   rewrite PMap.gmap. reflexivity.
 Qed.
 
+(* --- [SmtBitSlice] evaluates to [slice_val] of its operand's value (holds
+   definitionally; used to peel the slice without over-reducing the sibling
+   constant). --- *)
+Lemma eval_smt_slice : forall lo hi e f,
+  eval_smt_arith (SmtBitSlice lo hi e) f = slice_val lo hi (eval_smt_arith e f).
+Proof. intros; reflexivity. Qed.
+
 (* --- A [select] case's symbolic firing condition, evaluated at [f], is the
    concrete match test on the concretized state. --- *)
 Lemma select_case_cond_commute : forall s f c,
@@ -82,11 +89,13 @@ Proof.
   intros s f c. unfold select_case_cond_symbolic, select_case_matches_concrete.
   cbv zeta.
   unfold mk_int at 1. cbn [eval_smt_bool].
+  rewrite eval_smt_slice.
   change (it_width u64) with W64.
   rewrite <- (eval_sym_lookup_header s f (sc_header c)).
   rewrite eval_const_mask_u64.
   destruct (CrVal.eqb
-              (lookup_varlike_map (p_header_map (eval_sym_parser_state s f)) (sc_header c))
+              (slice_val (sc_start_index c) (sc_end_index c)
+                (lookup_varlike_map (p_header_map (eval_sym_parser_state s f)) (sc_header c)))
               (mk_int u64 (bits_to_Z (sc_pattern c)))); reflexivity.
 Qed.
 
