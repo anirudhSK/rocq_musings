@@ -6,6 +6,7 @@ From Stdlib Require Import ZArith.
 From Stdlib Require Import Strings.String.
 From MyProject Require Import CrIdentifiers.
 From MyProject Require Import CrParser.
+From MyProject Require Import CrDeparser.
 From MyProject Require Import CrTransformer.
 From MyProject Require Import CrDsl.
 From MyProject Require Import CrVal.
@@ -17,6 +18,7 @@ From MyProject Require Import SmtExpr.
 Definition get_mod_name (m : CrModule) : ModuleName :=
   match m with
   | ParserModule name _ => name
+  | DeparserModule name _ => name
   | TransformerModule name _ _ _ => name
   end.
 
@@ -85,12 +87,21 @@ Definition no_fan_in (net : ModuleNetwork) : Prop :=
 Definition is_parser_module (m : CrModule) : bool :=
   match m with
   | ParserModule _ _ => true
+  | DeparserModule _ _ => false
+  | TransformerModule _ _ _ _ => false
+  end.
+
+Definition is_deparser_module (m : CrModule) : bool :=
+  match m with
+  | DeparserModule _ _ => true
+  | ParserModule _ _ => false
   | TransformerModule _ _ _ _ => false
   end.
 
 Definition is_transformer_module (m : CrModule) : bool :=
   match m with
   | ParserModule _ _ => false
+  | DeparserModule _ _ => false
   | TransformerModule _ _ _ _ => true
   end.
 
@@ -207,6 +218,7 @@ Definition get_signature_from_general (p : GeneralCaracaraProgram) : list Header
 Definition module_states (m : CrModule) : list State :=
   match m with
   | ParserModule _ _ => []
+  | DeparserModule _ _ => []
   | TransformerModule _ s _ _ => s
   end.
 Definition get_states_from_general (p : GeneralCaracaraProgram) (m : ModuleName) : option (list State) :=
@@ -218,6 +230,7 @@ Definition get_states_from_general (p : GeneralCaracaraProgram) (m : ModuleName)
 Definition module_ctrls (m : CrModule) : list Ctrl :=
   match m with
   | ParserModule _ _ => []
+  | DeparserModule _ _ => []
   | TransformerModule _ _ c _ => c
   end.
 Definition get_ctrls_from_general (p : GeneralCaracaraProgram) (m : ModuleName) : option (list Ctrl) :=
@@ -275,6 +288,17 @@ Definition add_parser_to_network (net : ModuleNetwork) (p : Parser) : ModuleNetw
   let pm := ParserModule (wrap new_id) p in
   ({|
     net_modules  := net_modules net ++ [pm];
+    net_edges    := net_edges net;
+    start_module := start_module net;
+  |}, wrap new_id).
+
+(* Deparser counterpart of [add_parser_to_network]: append a deparser module
+   wrapping [d] and return its fresh name. *)
+Definition add_deparser_to_network (net : ModuleNetwork) (d : Deparser) : ModuleNetwork * ModuleName :=
+  let new_id := max_mod_uid net in
+  let dm := DeparserModule (wrap new_id) d in
+  ({|
+    net_modules  := net_modules net ++ [dm];
     net_edges    := net_edges net;
     start_module := start_module net;
   |}, wrap new_id).

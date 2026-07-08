@@ -4,11 +4,13 @@
 (* Import necessary modules *)
 From MyProject Require Import CrIdentifiers.
 From MyProject Require Import CrParser.
+From MyProject Require Import CrDeparser.
 From MyProject Require Import CrTransformer.
 
-(* A Module has a module name and either a parser or transformer definition *)
-Inductive CrModule : Type := 
+(* A Module has a module name and a parser, deparser, or transformer definition *)
+Inductive CrModule : Type :=
   | ParserModule (m : ModuleName) (p : Parser)
+  | DeparserModule (m : ModuleName) (d : Deparser)
   | TransformerModule (m : ModuleName) (s : list State) (c : list Ctrl) (t : Transformer).
 
 (* Connections defines the directed edges that constitute a network graph. *)

@@ -386,6 +386,13 @@ Definition init_concrete_parser_state : ModuleState CrVal bool :=
                p_packet     := @nil bool;
                p_cursor     := 0 |}.
 
+(* Concrete initial state for a deparser module: an empty header map (filled by
+   the upstream module) and an empty output packet. *)
+Definition init_concrete_deparser_state : ModuleState CrVal bool :=
+  DeparserMod {| p_header_map := PMap.init (UninitVal);
+                 p_packet     := @nil bool;
+                 p_cursor     := 0 |}.
+
 (* Convert positive to string *)
 Fixpoint pos_to_string (p : positive) : string :=
   match p with
@@ -486,6 +493,7 @@ Definition collect_write_headers (mods : list CrModule) : list Header :=
   List.flat_map (fun m =>
     match m with
     | ParserModule _ _ => []
+    | DeparserModule _ _ => []
     | TransformerModule _ _ _ t =>
       List.flat_map (fun rule =>
         match rule with
@@ -508,6 +516,11 @@ Definition init_general_symbolic_state
       | ParserModule m_id _ =>
         let base := init_sym_p_state prog_prefix m_id h in
         PMap.set (unwrap m_id) (ParserMod base) acc
+      | DeparserModule m_id _ =>
+        (* A deparser reads the same header interface as a parser; seed its
+           header map with the shared symbolic header variables. *)
+        let base := init_sym_p_state prog_prefix m_id h in
+        PMap.set (unwrap m_id) (DeparserMod base) acc
       | TransformerModule m_id s c t =>
         let local_program := CaracaraProgramDef h s c [] in
         let base := init_sym_t_state prog_prefix m_id local_program in
@@ -533,6 +546,25 @@ Definition init_general_symbolic_state
      sh_bit_map := @nil SmtBoolExpr;
      mod_states := ms |}.
 
+(* The [n]-bit shared symbolic input packet [pkt_1 .. pkt_n]: the free bit
+   variables that both programs range over.  Un-prefixed (like the shared
+   header channel), so seeding two programs with these makes the solver
+   quantify over one common input bitstream.  Mirrors the packet seeding in
+   [init_symbolic_parser_state_n]. *)
+Definition symbolic_input_bits (n : nat) : list SmtBoolExpr :=
+  List.map (fun i => SmtBoolVar ("pkt_" ++ pos_to_string (Pos.of_succ_nat i)))
+           (List.seq 0 n).
+
+(* [init_general_symbolic_state] with the shared bit channel seeded by an
+   [n]-bit symbolic input packet.  Used for bitstream-input / bitstream-output
+   equivalence: the network's source consumes these bits and its sink emits an
+   output bitstream over them. *)
+Definition init_general_symbolic_state_n
+    (prog_prefix : string) (p : GeneralCaracaraProgram) (n : nat)
+    : GeneralSymbolicState :=
+  set_gps_shared_bits (init_general_symbolic_state prog_prefix p)
+                      (symbolic_input_bits n).
+
 Definition init_general_concrete_state (p : GeneralCaracaraProgram)
     : GeneralConcreteState :=
   let net := get_network_from_general p in
@@ -541,6 +573,8 @@ Definition init_general_concrete_state (p : GeneralCaracaraProgram)
       match m with
       | ParserModule m_id _ =>
           PMap.set (unwrap m_id) init_concrete_parser_state acc
+      | DeparserModule m_id _ =>
+          PMap.set (unwrap m_id) init_concrete_deparser_state acc
       | TransformerModule m_id s c _ =>
           PMap.set (unwrap m_id)
             (TransformerMod (init_concrete_transformer_state (CaracaraProgramDef [] s c []))) acc

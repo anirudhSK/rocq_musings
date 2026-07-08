@@ -8,6 +8,7 @@ From MyProject Require Import CrGeneralProgramState.
 From MyProject Require Import CrVal.
 From MyProject Require Import CrConcreteSemanticsTransformer.
 From MyProject Require Import CrConcreteSemanticsParser.
+From MyProject Require Import CrConcreteSemanticsDeparser.
 From MyProject Require Import CrVarLike.
 From MyProject Require Import Maps.
 From Stdlib Require Import ZArith.
@@ -28,6 +29,8 @@ Definition eval_module_concrete (m : CrModule) (st : ModuleState CrVal bool)
       | None => None
       | Some ps' => Some (ParserMod ps')
       end
+  | DeparserModule _ d, DeparserMod ps =>
+      Some (DeparserMod (eval_deparser_concrete d ps))
   | _, _ => None  (* module-kind / state-kind mismatch *)
   end.
 
@@ -53,6 +56,8 @@ Fixpoint eval_network_from_concrete
          cursor; a transformer consumes none, so the packet flows through. *)
       let f_pkt' := match ls'' with
                     | ParserMod ps' => List.skipn (p_cursor ps') (p_packet ps')
+                    (* A deparser emits a fresh packet (cursor 0); pass all of it on. *)
+                    | DeparserMod ps' => List.skipn (p_cursor ps') (p_packet ps')
                     | TransformerMod _ => f_pkt
                     end in
       (* Recurse over downstream modules; on [], fold_left returns

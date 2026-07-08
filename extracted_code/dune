@@ -28,10 +28,13 @@
  (name extracted_code_lib)
  (wrapped false)
  (modules
-  Ascii BinInt BinNums BinPos Coqlib CrConcreteSemanticsModule
-  CrConcreteSemanticsParser CrConcreteSemanticsTransformer CrDsl CrDslProperties
+  Ascii BinInt BinNums BinPos Coqlib CrConcreteSemanticsDeparser
+  CrConcreteSemanticsModule
+  CrConcreteSemanticsParser CrConcreteSemanticsTransformer CrDeparser CrDsl
+  CrDslProperties
   CrGeneralProgramState CrIdentifiers CrMem CrMemEx CrModule CrParser
-  CrProgramState CrSymbolicSemanticsModule CrSymbolicSemanticsParser
+  CrProgramState CrSymbolicSemanticsDeparser CrSymbolicSemanticsModule
+  CrSymbolicSemanticsParser
   CrSymbolicSemanticsTransformer CrTransformer CrTypeIF CrVal CrVarLike
   Datatypes EquivDec Integers List ListDef ListUtils Maps MemSolver Mergesort
   MyInts Nat NatDef Orders PeanoNat PktClass PosDef PosGraphLemmas Rocqlib Shim

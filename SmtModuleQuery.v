@@ -17,7 +17,12 @@ From MyProject Require Import CrConcreteSemanticsModule.
 Definition keys_from_map {T A : Type} (fn : positive -> A) (m : PMap.t T) : list A :=
   List.map fn (List.map fst (PTree.elements (snd m))).
 
-Definition modnet_equivalence_checker
+(* ------------------------------------------------------------------ *)
+(* Header-map equivalence (the original network check): two transformer  *)
+(* networks are equivalent when their single (transformer) sinks agree on *)
+(* every signature header.  Retained for header-observable pipelines; the *)
+(* bitstream-I/O check below is the default [modnet_equivalence_checker]. *)
+Definition modnet_header_equivalence_checker
   (p1 : GeneralCaracaraProgram) (p2 : GeneralCaracaraProgram)
   : EquivalenceResult :=
   let sym1_opt := eval_general_program_symbolic_sinks p1 (init_general_symbolic_state "p1" p1) in
@@ -34,6 +39,47 @@ Definition modnet_equivalence_checker
   | _, _ => NotEquivalentVariablesDiffer
   end.
 
+(* ------------------------------------------------------------------ *)
+(* Bitstream-I/O equivalence.                                          *)
+(*                                                                     *)
+(* The network's real interface is (input packet bits -> output packet  *)
+(* bits): a source parser consumes the incoming bitstream, and a sink    *)
+(* deparser emits the outgoing bitstream.  Two programs are equivalent   *)
+(* when, for every [n]-bit input packet, their sinks emit the same        *)
+(* output packet. *)
+
+(* Two symbolic bits differ (XOR). *)
+Definition smt_bit_neq (b1 b2 : SmtBoolExpr) : SmtBoolExpr :=
+  SmtBoolOr (SmtBoolAnd b1 (SmtBoolNot b2)) (SmtBoolAnd (SmtBoolNot b1) b2).
+
+(* The two output bitstreams differ: some aligned bit differs, or their
+   (statically-determined) lengths differ.  A SAT model of this query is an
+   input packet on which the two programs emit different output packets. *)
+Fixpoint bitstreams_differ (out1 out2 : list SmtBoolExpr) : SmtBoolExpr :=
+  match out1, out2 with
+  | nil, nil => SmtFalse
+  | b1 :: r1, b2 :: r2 => SmtBoolOr (smt_bit_neq b1 b2) (bitstreams_differ r1 r2)
+  | _, _ => SmtTrue   (* different output lengths: they always differ *)
+  end.
+
+(* Both programs are run symbolically from a shared [input_len]-bit input
+   packet, so they range over one common input bitstream.  Their single sinks
+   must be deparsers; equivalence is UNSAT of "the output packets differ". *)
+Definition modnet_equivalence_checker
+  (p1 : GeneralCaracaraProgram) (p2 : GeneralCaracaraProgram) (input_len : nat)
+  : EquivalenceResult :=
+  let sym1_opt := eval_general_program_symbolic_sinks p1 (init_general_symbolic_state_n "p1" p1 input_len) in
+  let sym2_opt := eval_general_program_symbolic_sinks p2 (init_general_symbolic_state_n "p2" p2 input_len) in
+  match sym1_opt, sym2_opt with
+  | Some [DeparserMod sym1], Some [DeparserMod sym2] => (* assume one (deparser) sink *)
+    match smt_query (bitstreams_differ (p_packet sym1) (p_packet sym2)) with
+    | SmtUnsat => Equivalent
+    | SmtSat f => NotEquivalent f
+    | SmtUnknown => NotEquivalentUnknown
+    end
+  | _, _ => NotEquivalentVariablesDiffer
+  end.
+
 Definition is_linear_chain (p : GeneralCaracaraProgram) : Prop :=
   let net := get_network_from_general p in
   is_dag net /\
@@ -42,7 +88,7 @@ Definition is_linear_chain (p : GeneralCaracaraProgram) : Prop :=
   no_fan_in net.
 
 (* NOTE/TODO: Open question about state equivalence and what it means for states to be equivalent for different network topologies *)
-Lemma modnet_equivalence_checker_sound :
+Lemma modnet_header_equivalence_checker_sound :
   forall p1 p2,
   (* if two well-formed programs *)
   well_formed_general_program p1 ->
@@ -51,7 +97,7 @@ Lemma modnet_equivalence_checker_sound :
   is_linear_chain p1 ->
   is_linear_chain p2 ->
   (* and they're considered equivalent *)
-  modnet_equivalence_checker p1 p2 = Equivalent ->
+  modnet_header_equivalence_checker p1 p2 = Equivalent ->
   (* then when starting from their initial concrete states *)
   forall s_i1 s_i2 c_i1 c_i2 f,
   s_i1 = init_general_symbolic_state "p1" p1 ->
@@ -73,7 +119,7 @@ Lemma modnet_equivalence_checker_sound :
 Proof.
 Admitted.
 
-Lemma modnet_equivalence_checker_complete :
+Lemma modnet_header_equivalence_checker_complete :
   forall p1 p2 f,
   (* if two programs *)
   well_formed_general_program p1 ->
@@ -82,7 +128,7 @@ Lemma modnet_equivalence_checker_complete :
   is_linear_chain p1 ->
   is_linear_chain p2 ->
   (* if they're not considered equivalent *)
-  modnet_equivalence_checker p1 p2 = NotEquivalent f ->
+  modnet_header_equivalence_checker p1 p2 = NotEquivalent f ->
   (* then when starting from their initial concrete states *)
   forall s_i1 s_i2 c_i1 c_i2,
   s_i1 = init_general_symbolic_state "p1" p1 ->
@@ -101,6 +147,63 @@ Lemma modnet_equivalence_checker_complete :
   (exists h, In h (get_signature_from_general p1) /\
     lookup_varlike_map (module_header_map cf_1) h
     <> lookup_varlike_map (module_header_map cf_2) h).
+Proof.
+Admitted.
+
+Print Assumptions modnet_header_equivalence_checker_sound.
+Print Assumptions modnet_header_equivalence_checker_complete.
+
+(* ------------------------------------------------------------------ *)
+(* Bitstream-I/O soundness / completeness.  Same shape as the header-map  *)
+(* lemmas, but the observable is the sink deparser's output packet         *)
+(* ([p_packet]) rather than a header map: for the same concrete input      *)
+(* packet (the [f]-concretization of the shared symbolic bits), the two    *)
+(* programs' output packets agree (soundness) or differ (completeness). *)
+Lemma modnet_equivalence_checker_sound :
+  forall p1 p2 n,
+  well_formed_general_program p1 ->
+  well_formed_general_program p2 ->
+  is_linear_chain p1 ->
+  is_linear_chain p2 ->
+  modnet_equivalence_checker p1 p2 n = Equivalent ->
+  forall s_i1 s_i2 c_i1 c_i2 f,
+  s_i1 = init_general_symbolic_state_n "p1" p1 n ->
+  s_i2 = init_general_symbolic_state_n "p2" p2 n ->
+  c_i1 = concretize_sym_modnet_state s_i1 f ->
+  c_i2 = concretize_sym_modnet_state s_i2 f ->
+  forall l1 l2,
+  eval_general_program_concrete_sinks p1 c_i1 = Some l1 ->
+  eval_general_program_concrete_sinks p2 c_i2 = Some l2 ->
+  (* each program's single sink is a deparser, and the emitted output
+     bitstreams are identical *)
+  exists ds1 ds2,
+  l1 = [DeparserMod ds1] /\
+  l2 = [DeparserMod ds2] /\
+  p_packet ds1 = p_packet ds2.
+Proof.
+Admitted.
+
+Lemma modnet_equivalence_checker_complete :
+  forall p1 p2 n f,
+  well_formed_general_program p1 ->
+  well_formed_general_program p2 ->
+  is_linear_chain p1 ->
+  is_linear_chain p2 ->
+  modnet_equivalence_checker p1 p2 n = NotEquivalent f ->
+  forall s_i1 s_i2 c_i1 c_i2,
+  s_i1 = init_general_symbolic_state_n "p1" p1 n ->
+  s_i2 = init_general_symbolic_state_n "p2" p2 n ->
+  c_i1 = concretize_sym_modnet_state s_i1 f ->
+  c_i2 = concretize_sym_modnet_state s_i2 f ->
+  forall l1 l2,
+  eval_general_program_concrete_sinks p1 c_i1 = Some l1 ->
+  eval_general_program_concrete_sinks p2 c_i2 = Some l2 ->
+  (* each program's single sink is a deparser, and the emitted output
+     bitstreams differ (on the input packet witnessed by [f]) *)
+  exists ds1 ds2,
+  l1 = [DeparserMod ds1] /\
+  l2 = [DeparserMod ds2] /\
+  p_packet ds1 <> p_packet ds2.
 Proof.
 Admitted.
 

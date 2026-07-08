@@ -33,6 +33,9 @@ Separate Extraction
   CrConcreteSemanticsParser.eval_parser_concrete
   CrVarLike.init_general_concrete_state
   CrConcreteSemanticsModule.eval_general_program_concrete_sinks
-  PktClass.ex_lin_prog PktClass.ex_tss_prog modnet_equivalence_checker
+  PktClass.ex_lin_prog PktClass.ex_tss_prog
+  modnet_equivalence_checker modnet_header_equivalence_checker
+  TestModulePrograms.mod_prog_parse_deparse
+  TestModulePrograms.mod_prog_parse_deparse_swapped
   SmtParserQuery.parser_equivalence_checker
   well_formed_programb well_formed_general_programb.

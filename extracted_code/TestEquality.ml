@@ -191,11 +191,51 @@ let%expect_test "e2e bpf test: O0 ≡ O2" =
     Z3Unsat
     |}]
 
-(* Test 13: linear scan vs tss for simple filter database *)
+(* Test 13: linear scan vs tss for simple filter database.  These are
+   transformer-only networks whose observable is a header map, so they use the
+   header-map checker. *)
 let%expect_test "tss basic" =
   (* let p1 = get_general_program "../test/lin_pkt.out" in
   let p2 = get_general_program "../test/tss_pkt.out" in *)
   let p1 = PktClass.ex_lin_prog in
   let p2 = PktClass.ex_tss_prog in
-  print_equiv (SmtModuleQuery.modnet_equivalence_checker p1 p2);
+  print_equiv (SmtModuleQuery.modnet_header_equivalence_checker p1 p2);
   [%expect {| Equivalent |}]
+
+(* Test 14: bitstream-I/O equivalence.  A parse->deparse pipeline is equivalent
+   to itself over any 16-bit input packet: the deparser re-emits exactly the
+   bits the parser consumed.  Exercises the new bitstream [modnet_equivalence_checker]
+   (shared symbolic input packet -> compare deparser output packets). *)
+let%expect_test "bitstream self-equivalence: parse->deparse" =
+  let p = TestModulePrograms.mod_prog_parse_deparse in
+  print_equiv (SmtModuleQuery.modnet_equivalence_checker p p (Shim.int_to_coq_nat 16));
+  [%expect {| Equivalent |}]
+
+(* Test 15: bitstream NON-equivalence.  The same parser feeding a deparser that
+   emits the two bytes in swapped order produces a different output packet
+   whenever the bytes differ, so the checker must report NotEquivalent. *)
+let%expect_test "bitstream non-equivalence: emit order swapped" =
+  let p1 = TestModulePrograms.mod_prog_parse_deparse in
+  let p2 = TestModulePrograms.mod_prog_parse_deparse_swapped in
+  print_equiv (SmtModuleQuery.modnet_equivalence_checker p1 p2 (Shim.int_to_coq_nat 16));
+  [%expect {|
+    ┌ SAT Valuation
+    | var( pkt_1 ) : u64 := 0
+    | var( pkt_10 ) : u64 := 1
+    | var( pkt_100 ) : u64 := 0
+    | var( pkt_1000 ) : u64 := 1
+    | var( pkt_10000 ) : u64 := 0
+    | var( pkt_1001 ) : u64 := 1
+    | var( pkt_101 ) : u64 := 0
+    | var( pkt_1010 ) : u64 := 0
+    | var( pkt_1011 ) : u64 := 0
+    | var( pkt_11 ) : u64 := 0
+    | var( pkt_110 ) : u64 := 1
+    | var( pkt_1100 ) : u64 := 1
+    | var( pkt_1101 ) : u64 := 0
+    | var( pkt_111 ) : u64 := 1
+    | var( pkt_1110 ) : u64 := 0
+    | var( pkt_1111 ) : u64 := 0
+    └
+    NotEquivalent
+    |}]

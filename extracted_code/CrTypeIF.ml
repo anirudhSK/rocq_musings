@@ -81,6 +81,13 @@ module CrTransformer = struct
   type coq_Transformer = [%import: CrTransformer.coq_Transformer]
   [@@deriving sexp]
 end
+module CrDeparser = struct
+  include CrDeparser
+  type coq_EmitOp = [%import: CrDeparser.coq_EmitOp]
+  [@@deriving sexp]
+  type coq_Deparser = [%import: CrDeparser.coq_Deparser]
+  [@@deriving sexp]
+end
 module CrParser = struct
   include CrParser
   type coq_ExtractOp = [%import: CrParser.coq_ExtractOp]

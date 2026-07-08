@@ -8,6 +8,7 @@ From MyProject Require Import CrIdentifiers.
 From MyProject Require Import CrVal.
 From MyProject Require Import CrModule.
 From MyProject Require Import CrParser.
+From MyProject Require Import CrDeparser.
 From MyProject Require Import Integers.
 
 (* Single-module: unconditionally adds 3 to h1.
@@ -154,11 +155,57 @@ Definition mod_prog_two_parsers : GeneralCaracaraProgram :=
   let net := set_start_module net m1 in
   GeneralCaracaraProgramDef [] net [HeaderCtr 1; HeaderCtr 2].
 
+(* Bitstream I/O pipeline: a parser extracts two bytes into h1, h2; a deparser
+   re-emits h1, h2 (prepending them to any residual payload).  This is the
+   inverse-pair pipeline used to exercise the bitstream [modnet_equivalence_checker]:
+   parse-then-deparse reproduces the input packet, so the pipeline is
+   equivalent to itself over any input bitstream. *)
+Definition mod_prog_parse_deparse : GeneralCaracaraProgram :=
+  let parser := mkParser (ParserStateLabelCtr 1) [
+    mkParserStateDef (ParserStateLabelCtr 1)
+      (Some (ExtractOpConstructor (HeaderCtr 1) 8))
+      (Unconditional (TargetState (ParserStateLabelCtr 2)));
+    mkParserStateDef (ParserStateLabelCtr 2)
+      (Some (ExtractOpConstructor (HeaderCtr 2) 8))
+      (Unconditional Accept)
+  ] in
+  let deparser := mkDeparser [ EmitOpConstructor (HeaderCtr 1) 8;
+                               EmitOpConstructor (HeaderCtr 2) 8 ] in
+  let net := empty_net in
+  let '(net, m1) := add_parser_to_network net parser in
+  let '(net, m2) := add_deparser_to_network net deparser in
+  let net := add_connection_to_network net m1 m2 in
+  let net := set_start_module net m1 in
+  GeneralCaracaraProgramDef [] net [HeaderCtr 1; HeaderCtr 2].
+
+(* Same parser, but the deparser emits the two headers in swapped order.  This
+   pipeline is NOT equivalent to [mod_prog_parse_deparse]: on any input whose two
+   bytes differ, the emitted output packets differ. *)
+Definition mod_prog_parse_deparse_swapped : GeneralCaracaraProgram :=
+  let parser := mkParser (ParserStateLabelCtr 1) [
+    mkParserStateDef (ParserStateLabelCtr 1)
+      (Some (ExtractOpConstructor (HeaderCtr 1) 8))
+      (Unconditional (TargetState (ParserStateLabelCtr 2)));
+    mkParserStateDef (ParserStateLabelCtr 2)
+      (Some (ExtractOpConstructor (HeaderCtr 2) 8))
+      (Unconditional Accept)
+  ] in
+  let deparser := mkDeparser [ EmitOpConstructor (HeaderCtr 2) 8;
+                               EmitOpConstructor (HeaderCtr 1) 8 ] in
+  let net := empty_net in
+  let '(net, m1) := add_parser_to_network net parser in
+  let '(net, m2) := add_deparser_to_network net deparser in
+  let net := add_connection_to_network net m1 m2 in
+  let net := set_start_module net m1 in
+  GeneralCaracaraProgramDef [] net [HeaderCtr 1; HeaderCtr 2].
+
 Definition mod_test_programs : list GeneralCaracaraProgram := [
   mod_prog_single_add3;
   mod_prog_add1_then_mul2;
   mod_prog_conditional_pipeline;
   mod_prog_cmplt_matchheader;
   mod_prog_parser_then_transformer;
-  mod_prog_two_parsers
+  mod_prog_two_parsers;
+  mod_prog_parse_deparse;
+  mod_prog_parse_deparse_swapped
 ].

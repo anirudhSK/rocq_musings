@@ -53,16 +53,21 @@ Definition inject_headers {T : Type} (packet : PMap.t T) (local : TransformerSta
    [Th] is the header-value type, [Tb] the packet-bit type. *)
 Inductive ModuleState (Th Tb : Type) : Type :=
   | TransformerMod (ts : TransformerState Th)
-  | ParserMod (ps : ParserState Th Tb).
+  | ParserMod (ps : ParserState Th Tb)
+  (* A deparser reuses the [ParserState] layout: it reads [p_header_map] and
+     writes its emitted bits into [p_packet] (the packet is now an output). *)
+  | DeparserMod (ps : ParserState Th Tb).
 
 Arguments TransformerMod {Th Tb} _.
 Arguments ParserMod {Th Tb} _.
+Arguments DeparserMod {Th Tb} _.
 
 (* The shared inter-module interface: every module exposes a header map. *)
 Definition module_header_map {Th Tb} (m : ModuleState Th Tb) : PMap.t Th :=
   match m with
   | TransformerMod ts => t_header_map ts
   | ParserMod ps      => p_header_map ps
+  | DeparserMod ps    => p_header_map ps
   end.
 
 (* Replace a module's header map (used when piping the packet downstream). *)
@@ -73,11 +78,15 @@ Definition set_module_header_map {Th Tb} (m : ModuleState Th Tb) (packet : PMap.
   | ParserMod ps      => ParserMod {| p_header_map := packet;
                                       p_packet     := p_packet ps;
                                       p_cursor     := p_cursor ps |}
+  | DeparserMod ps    => DeparserMod {| p_header_map := packet;
+                                        p_packet     := p_packet ps;
+                                        p_cursor     := p_cursor ps |}
   end.
 
 (* Feed an incoming packet into a module (used to thread the residual packet
    along the network).  A parser starts parsing the new packet from its head;
-   a transformer has no packet, so it is left unchanged. *)
+   a deparser will prepend its emitted bits to this incoming payload; a
+   transformer has no packet, so it is left unchanged. *)
 Definition set_module_packet {Th Tb} (m : ModuleState Th Tb) (pkt : list Tb)
     : ModuleState Th Tb :=
   match m with
@@ -85,4 +94,7 @@ Definition set_module_packet {Th Tb} (m : ModuleState Th Tb) (pkt : list Tb)
   | ParserMod ps      => ParserMod {| p_header_map := p_header_map ps;
                                       p_packet     := pkt;
                                       p_cursor     := 0 |}
+  | DeparserMod ps    => DeparserMod {| p_header_map := p_header_map ps;
+                                        p_packet     := pkt;
+                                        p_cursor     := 0 |}
   end.

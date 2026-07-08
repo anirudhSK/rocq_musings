@@ -9,6 +9,7 @@ From MyProject Require Import SmtExpr.
 From MyProject Require Import SmtTypes.
 From MyProject Require Import CrSymbolicSemanticsTransformer.
 From MyProject Require Import CrSymbolicSemanticsParser.
+From MyProject Require Import CrSymbolicSemanticsDeparser.
 From MyProject Require Import CrVarLike.
 From MyProject Require Import CrVal.
 From MyProject Require Import Maps.
@@ -29,6 +30,8 @@ Definition eval_module_symbolic (m : CrModule) (st : ModuleState SmtArithExpr Sm
       | None => None
       | Some ps' => Some (ParserMod ps')
       end
+  | DeparserModule _ d, DeparserMod ps =>
+      Some (DeparserMod (eval_deparser_symbolic d ps))
   | _, _ => None  (* module-kind / state-kind mismatch *)
   end.
 
@@ -54,6 +57,7 @@ Fixpoint eval_network_from_symbolic
          a parser hands on the bits past its cursor; a transformer flows it through. *)
       let f_pkt' := match ls'' with
                     | ParserMod ps' => List.skipn (p_cursor ps') (p_packet ps')
+                    | DeparserMod ps' => List.skipn (p_cursor ps') (p_packet ps')
                     | TransformerMod _ => f_pkt
                     end in
       (* Recurse over downstream modules; on [], fold_left returns
@@ -111,6 +115,12 @@ Definition concretize_sym_module_state (m : ModuleState SmtArithExpr SmtBoolExpr
                      PMap.map (fun e => eval_smt_arith e f) (p_header_map ps);
                    p_packet := List.map (fun b => eval_smt_bool b f) (p_packet ps);
                    p_cursor := p_cursor ps |}
+  | DeparserMod ps =>
+      (* Same concretization as a parser state (a deparser reuses the layout). *)
+      DeparserMod {| p_header_map :=
+                       PMap.map (fun e => eval_smt_arith e f) (p_header_map ps);
+                     p_packet := List.map (fun b => eval_smt_bool b f) (p_packet ps);
+                     p_cursor := p_cursor ps |}
   end.
 
 Definition concretize_sym_modnet_state (s: GeneralSymbolicState) (f : SmtValuation) : GeneralConcreteState :=

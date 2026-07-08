@@ -184,6 +184,7 @@ let get_mod_state (key : int) (gcs : CrGeneralProgramState.coq_GeneralConcreteSt
   match Maps.PMap.get (int_to_pos key) gcs.CrGeneralProgramState.mod_states with
   | CrProgramState.TransformerMod ts -> ts
   | CrProgramState.ParserMod _ -> failwith "get_mod_state: expected a transformer module"
+  | CrProgramState.DeparserMod _ -> failwith "get_mod_state: expected a transformer module"
 let set_mod_state (key : int) (ps : CrProgramState.coq_ConcreteTransformerState)
     (gcs : CrGeneralProgramState.coq_GeneralConcreteState)
     : CrGeneralProgramState.coq_GeneralConcreteState =
@@ -217,6 +218,8 @@ let print_general_state (gcs : CrGeneralProgramState.coq_GeneralConcreteState) =
     match ms with
     | CrProgramState.TransformerMod ts -> print_state' "  " "" ts
     | CrProgramState.ParserMod ps ->
+        print_endline ("  " ^ header_map_to_string ps.CrProgramState.p_header_map)
+    | CrProgramState.DeparserMod ps ->
         print_endline ("  " ^ header_map_to_string ps.CrProgramState.p_header_map)) sorted
 
 let listify_coq_list (a_list : 'a Datatypes.list) : 'a Stdlib.List.t =

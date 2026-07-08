@@ -60,6 +60,7 @@ Definition well_formed_program (p : CaracaraProgram) : Prop :=
 Definition well_formed_module (m : CrModule) : Prop :=
   match m with
   | ParserModule _ _ => True
+  | DeparserModule _ _ => True
   | TransformerModule _ states ctrls t =>
       Coqlib.list_norepet states /\ Coqlib.list_norepet ctrls /\
       Sorted varlike_lt states /\ Sorted varlike_lt ctrls /\
@@ -238,6 +239,7 @@ Qed.
 Definition well_formed_moduleb (m : CrModule) : bool :=
   match m with
   | ParserModule _ _ => true
+  | DeparserModule _ _ => true
   | TransformerModule _ states ctrls t =>
       negb (has_duplicates varlike_equal states) &&
       negb (has_duplicates varlike_equal ctrls) &&
