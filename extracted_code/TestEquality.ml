@@ -106,8 +106,8 @@ let%expect_test "basic memory overwrite: value differs" =
     adding query to solver...
     running query...
     ┌ SAT Valuation
-    | var( 1000 ) := 254
-    | var( 1100 ) := 0
+    | var( 10 ) : u8 := 254
+    | var( 11 ) : u8 := 0
     | arr( 1 ) := [0] (len=1)
     | Outputs equal: false
     | Bounds equal: true
