@@ -2,6 +2,7 @@ From Stdlib Require Import List.
 Import ListNotations.
 From MyProject Require Import CrIdentifiers.
 From MyProject Require Import CrDsl.
+From MyProject Require Import CrDeparser.
 From MyProject Require Import CrModule.
 From MyProject Require Import CrProgramState.
 From MyProject Require Import CrGeneralProgramState.
@@ -32,37 +33,6 @@ Definition eval_module_symbolic (m : CrModule) (st : ModuleState SmtArithExpr Sm
       end
   | DeparserModule _ d, DeparserMod ps =>
       Some (DeparserMod (eval_deparser_symbolic d ps))
-  | _, _ => None  (* module-kind / state-kind mismatch *)
-  end.
-
-(* ================================================================== *)
-(* Accept-aware module / network semantics.                            *)
-(*                                                                     *)
-(* Symbolic execution is path-merged (one formula, no branching), so a  *)
-(* parser [Reject] is not a control-flow abort — it is a symbolic        *)
-(* predicate over the input bits.  This variant threads that predicate:  *)
-(* each module yields its state plus an [SmtBoolExpr] accept condition,   *)
-(* and the network folds their conjunction.  A parser contributes its     *)
-(* [spr_accept] (via the total [eval_parser_symbolic_acc]); a transformer *)
-(* and a deparser never reject, so they contribute [SmtTrue].             *)
-(* ================================================================== *)
-
-Definition eval_module_symbolic_acc (m : CrModule) (st : ModuleState SmtArithExpr SmtBoolExpr)
-    : option (ModuleState SmtArithExpr SmtBoolExpr * SmtBoolExpr) :=
-  match m, st with
-  | TransformerModule _ _ _ t, TransformerMod ts =>
-      Some (TransformerMod (eval_transformer_smt t ts), SmtTrue)
-  | ParserModule _ p, ParserMod ps =>
-      let r := eval_parser_symbolic_acc p ps in
-      (* Reuse the input packet/cursor (as [eval_parser_symbolic] does): under
-         path merging the consumed length is data-dependent, so only the merged
-         header map and the accept condition are meaningful here. *)
-      Some (ParserMod {| p_header_map := spr_headers r;
-                         p_packet     := p_packet ps;
-                         p_cursor     := p_cursor ps |},
-            spr_accept r)
-  | DeparserModule _ d, DeparserMod ps =>
-      Some (DeparserMod (eval_deparser_symbolic d ps), SmtTrue)
   | _, _ => None  (* module-kind / state-kind mismatch *)
   end.
 
@@ -135,52 +105,101 @@ Definition eval_general_program_symbolic_sinks
       Some (get_sink_states (get_network_from_general p) (mod_states ledger))
   end.
 
-(* Accept-aware analogue of [eval_network_from_symbolic]: identical header /
-   packet threading, but also carries [acc], the conjunction of every module's
-   accept condition along the path so far. *)
-Fixpoint eval_network_from_symbolic_acc
+(* ================================================================== *)
+(* Accept-aware, bitstream-carrying network semantics.                 *)
+(*                                                                     *)
+(* Symbolic execution is path-merged (one formula, no branching), so a  *)
+(* parser [Reject] is a symbolic predicate over the input bits, not a    *)
+(* control-flow abort; and the number of bits a parser consumes is data- *)
+(* dependent, so the residual it leaves has a data-dependent length.     *)
+(* This path threads both: each module yields (updated headers, an        *)
+(* accept condition, an outgoing residual bitstream [SymBitstream]).  The  *)
+(* network conjoins the accept conditions and carries the residual to the  *)
+(* sink, whose deparser prepends its emitted bits.  Reject is modelled as  *)
+(* [spr_accept = SmtFalse]; the residual's [valid] channel carries the      *)
+(* data-dependent length.                                                  *)
+(* ================================================================== *)
+
+(* A deparser's output bitstream: its emitted bits (all valid — they are
+   freshly written) followed by the incoming residual. *)
+Definition deparser_output_bitstream
+    (d : Deparser) (hm : PMap.t SmtArithExpr) (residual : SymBitstream)
+    : SymBitstream :=
+  List.map (fun b => (b, SmtTrue))
+           (List.flat_map (emit_bits_symbolic hm) (deparser_emits d))
+  ++ residual.
+
+(* One module, accept/bitstream-aware: returns its updated state, its accept
+   condition, and its outgoing residual bitstream.  A parser reads the incoming
+   residual's bits (dropping their validity — exact for an all-valid source
+   packet; see the caveat at [modnet_equivalence_checker]) and emits the merged
+   tail; a transformer flows the residual through; a deparser writes ahead of it. *)
+Definition eval_module_bitstream_acc
+    (m : CrModule) (ls : ModuleState SmtArithExpr SmtBoolExpr)
+    (f_hdrs : PMap.t SmtArithExpr) (f_bits : SymBitstream)
+    : option (ModuleState SmtArithExpr SmtBoolExpr * SmtBoolExpr * SymBitstream) :=
+  let ls' := set_module_packet (set_module_header_map ls f_hdrs)
+                               (List.map fst f_bits) in
+  match m, ls' with
+  | TransformerModule _ _ _ t, TransformerMod ts =>
+      Some (TransformerMod (eval_transformer_smt t ts), SmtTrue, f_bits)
+  | ParserModule _ p, ParserMod ps =>
+      let r := eval_parser_symbolic_acc p ps in
+      Some (ParserMod {| p_header_map := spr_headers r;
+                         p_packet     := p_packet ps;
+                         p_cursor     := p_cursor ps |},
+            spr_accept r,
+            eval_parser_residual p ps)
+  | DeparserModule _ d, DeparserMod ps =>
+      Some (DeparserMod (eval_deparser_symbolic d ps), SmtTrue,
+            deparser_output_bitstream d (p_header_map ps) f_bits)
+  | _, _ => None  (* module-kind / state-kind mismatch *)
+  end.
+
+(* Thread headers, the conjoined accept condition [acc], and the residual
+   bitstream [f_bits] along the network; return the accumulated ledger, the
+   network accept condition, and the bitstream leaving the sink module. *)
+Fixpoint eval_network_bitstream_acc
     (net    : ModuleNetwork)
     (start  : ModuleName)
     (f_hdrs : PMap.t SmtArithExpr)
-    (f_pkt  : list SmtBoolExpr)
+    (f_bits : SymBitstream)
     (gs     : GeneralSymbolicState)
     (acc    : SmtBoolExpr)
     (fuel   : nat)
-    : option (GeneralSymbolicState * SmtBoolExpr) :=
+    : option (GeneralSymbolicState * SmtBoolExpr * SymBitstream) :=
   match fuel with | O => None | S fuel' =>
   match lookup_module net start, (mod_states gs) ?? (unwrap start) with
   | Some m, Some ls =>
-    let ls' := set_module_packet (set_module_header_map ls f_hdrs) f_pkt in
-    match eval_module_symbolic_acc m ls' with
+    match eval_module_bitstream_acc m ls f_hdrs f_bits with
     | None => None
-    | Some (ls'', a) =>
-      (* Conjoin this module's accept condition into the running accumulator. *)
+    | Some (ls'', a, out_bits) =>
       let acc' := SmtBoolAnd acc a in
       let gs' := set_gps_mod_states gs (PMap.set (unwrap start) ls'' (mod_states gs)) in
       let f_hdrs' := module_header_map ls'' in
-      let f_pkt' := match ls'' with
-                    | ParserMod ps' => List.skipn (p_cursor ps') (p_packet ps')
-                    | DeparserMod ps' => List.skipn (p_cursor ps') (p_packet ps')
-                    | TransformerMod _ => f_pkt
-                    end in
-      List.fold_left
-        (fun acc_opt dst =>
-          match acc_opt with
-          | None => None
-          | Some (gs_acc, acc_cond) =>
-              eval_network_from_symbolic_acc
-                net dst f_hdrs' f_pkt' gs_acc acc_cond fuel'
-          end)
-        (downstream_modules net start)
-        (Some (gs', acc'))
+      match downstream_modules net start with
+      (* Sink: its outgoing bitstream is the network's observable output. *)
+      | [] => Some (gs', acc', out_bits)
+      | dsts =>
+          List.fold_left
+            (fun acc_opt dst =>
+              match acc_opt with
+              | None => None
+              | Some (gs_acc, acc_cond, _) =>
+                  eval_network_bitstream_acc
+                    net dst f_hdrs' out_bits gs_acc acc_cond fuel'
+              end)
+            dsts
+            (Some (gs', acc', out_bits))
+      end
     end
   | _, _ => None
   end end.
 
-Definition eval_general_program_symbolic_acc
+Definition eval_general_program_bitstream_acc
   (p  : GeneralCaracaraProgram)
   (gs : GeneralSymbolicState)
-  : option (GeneralSymbolicState * SmtBoolExpr) :=
+  : option (list (ModuleState SmtArithExpr SmtBoolExpr) * SmtBoolExpr * SymBitstream) :=
   let net := get_network_from_general p in
   let fuel := List.length (net_modules net) in
   let start := start_module net in
@@ -188,19 +207,13 @@ Definition eval_general_program_symbolic_acc
   | None => None
   | Some start_state =>
     let hdr_i := module_header_map start_state in
-    let pkt_i := sh_bit_map gs in
-    (* Seed the accept accumulator with [SmtTrue] (an empty network accepts). *)
-    eval_network_from_symbolic_acc net start hdr_i pkt_i gs SmtTrue fuel
-  end.
-
-Definition eval_general_program_symbolic_sinks_acc
-  (p : GeneralCaracaraProgram)
-  (module_states: GeneralSymbolicState)
-  : option (list (ModuleState SmtArithExpr SmtBoolExpr) * SmtBoolExpr) :=
-  match eval_general_program_symbolic_acc p module_states with
-  | None => None
-  | Some (ledger, acc) =>
-      Some (get_sink_states (get_network_from_general p) (mod_states ledger), acc)
+    (* The input packet threads in from the shared bit map, all bits valid. *)
+    let bits_i := List.map (fun b => (b, SmtTrue)) (sh_bit_map gs) in
+    match eval_network_bitstream_acc net start hdr_i bits_i gs SmtTrue fuel with
+    | None => None
+    | Some (ledger, acc, out_bits) =>
+        Some (get_sink_states net (mod_states ledger), acc, out_bits)
+    end
   end.
 
 Definition concretize_sym_module_state (m : ModuleState SmtArithExpr SmtBoolExpr) (f : SmtValuation)

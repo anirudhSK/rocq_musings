@@ -237,6 +237,69 @@ Definition mod_prog_parse_accept_deparse : GeneralCaracaraProgram :=
   let net := set_start_module net m1 in
   GeneralCaracaraProgramDef [] net [HeaderCtr 1].
 
+(* Residual-packet pipelines.  These consume a nonzero number of bits and emit
+   fewer than they consume, so the deparser output = emitted ++ (unconsumed tail).
+   They exercise the cursor/residual: the old "reset the cursor to 0, hand the
+   whole packet downstream" symbolic semantics would give the wrong output. *)
+
+(* Consume one byte into h1, emit h1: output = byte0 ++ (input past byte 0). *)
+Definition mod_prog_consume1_emit1 : GeneralCaracaraProgram :=
+  let parser := mkParser (ParserStateLabelCtr 1) [
+    mkParserStateDef (ParserStateLabelCtr 1)
+      (Some (ExtractOpConstructor (HeaderCtr 1) 8))
+      (Unconditional Accept)
+  ] in
+  let deparser := mkDeparser [ EmitOpConstructor (HeaderCtr 1) 8 ] in
+  let net := empty_net in
+  let '(net, m1) := add_parser_to_network net parser in
+  let '(net, m2) := add_deparser_to_network net deparser in
+  let net := add_connection_to_network net m1 m2 in
+  let net := set_start_module net m1 in
+  GeneralCaracaraProgramDef [] net [HeaderCtr 1].
+
+(* Consume TWO bytes (h1, h2) but emit only h1: output = byte0 ++ (input past
+   byte 1) — it drops byte 1.  Not equivalent to [mod_prog_consume1_emit1], which
+   keeps byte 1; the old whole-packet residual wrongly called them equivalent. *)
+Definition mod_prog_consume2_emit1 : GeneralCaracaraProgram :=
+  let parser := mkParser (ParserStateLabelCtr 1) [
+    mkParserStateDef (ParserStateLabelCtr 1)
+      (Some (ExtractOpConstructor (HeaderCtr 1) 8))
+      (Unconditional (TargetState (ParserStateLabelCtr 2)));
+    mkParserStateDef (ParserStateLabelCtr 2)
+      (Some (ExtractOpConstructor (HeaderCtr 2) 8))
+      (Unconditional Accept)
+  ] in
+  let deparser := mkDeparser [ EmitOpConstructor (HeaderCtr 1) 8 ] in
+  let net := empty_net in
+  let '(net, m1) := add_parser_to_network net parser in
+  let '(net, m2) := add_deparser_to_network net deparser in
+  let net := add_connection_to_network net m1 m2 in
+  let net := set_start_module net m1 in
+  GeneralCaracaraProgramDef [] net [HeaderCtr 1].
+
+(* DATA-DEPENDENT consumption: extract h1, then if h1 = 0 accept (consumed one
+   byte), else extract h2 and accept (consumed two bytes).  Emit h1.  The
+   unconsumed-tail length depends on the input, so its residual is a genuinely
+   variable-length bitstream (exercises [merge_bitstream]). *)
+Definition mod_prog_varlen_emit1 : GeneralCaracaraProgram :=
+  let parser := mkParser (ParserStateLabelCtr 1) [
+    mkParserStateDef (ParserStateLabelCtr 1)
+      (Some (ExtractOpConstructor (HeaderCtr 1) 8))
+      (Select [mkSelectCase (HeaderCtr 1) 0 8
+                 [false;false;false;false;false;false;false;false] Accept]
+              (TargetState (ParserStateLabelCtr 2)));
+    mkParserStateDef (ParserStateLabelCtr 2)
+      (Some (ExtractOpConstructor (HeaderCtr 2) 8))
+      (Unconditional Accept)
+  ] in
+  let deparser := mkDeparser [ EmitOpConstructor (HeaderCtr 1) 8 ] in
+  let net := empty_net in
+  let '(net, m1) := add_parser_to_network net parser in
+  let '(net, m2) := add_deparser_to_network net deparser in
+  let net := add_connection_to_network net m1 m2 in
+  let net := set_start_module net m1 in
+  GeneralCaracaraProgramDef [] net [HeaderCtr 1].
+
 Definition mod_test_programs : list GeneralCaracaraProgram := [
   mod_prog_single_add3;
   mod_prog_add1_then_mul2;

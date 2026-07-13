@@ -39,5 +39,8 @@ Separate Extraction
   TestModulePrograms.mod_prog_parse_deparse_swapped
   TestModulePrograms.mod_prog_parse_reject_deparse
   TestModulePrograms.mod_prog_parse_accept_deparse
+  TestModulePrograms.mod_prog_consume1_emit1
+  TestModulePrograms.mod_prog_consume2_emit1
+  TestModulePrograms.mod_prog_varlen_emit1
   SmtParserQuery.parser_equivalence_checker
   well_formed_programb well_formed_general_programb.

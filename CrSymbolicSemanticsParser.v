@@ -230,6 +230,99 @@ Definition eval_parser_symbolic_acc (p : Parser) (ps : SymbolicParserState)
   run_parser_symbolic_acc p (parser_start p) ps
     (List.length (parser_states p) * S (List.length (p_packet ps))).
 
+(* ================================================================== *)
+(* Residual bitstream (the bits a parser leaves unconsumed).           *)
+(*                                                                     *)
+(* Under path merging the number of bits a parser consumes is data-    *)
+(* dependent, so the unconsumed tail has a data-dependent length.  We   *)
+(* represent it as a validity-annotated bitstream: a fixed-length list  *)
+(* of [(bit, valid)] pairs, where [valid] is the symbolic condition     *)
+(* under which that position carries a real bit.  A [select] merges two  *)
+(* residuals position-by-position under its firing condition, padding    *)
+(* the shorter with invalid entries.  This lets a downstream deparser's  *)
+(* output length vary with the input while staying a fixed-length term.  *)
+(* ================================================================== *)
+
+Definition SymBit : Type := (SmtBoolExpr * SmtBoolExpr)%type. (* (bit, valid) *)
+Definition SymBitstream : Type := list SymBit.
+
+(* Merge two residuals under [cond]: keep [l1] where [cond] holds, else [l2];
+   pad the shorter side with invalid ([SmtFalse] validity).  Structurally
+   recursive on [l1] (the [[]] case maps the remainder of [l2]). *)
+Fixpoint merge_bitstream (cond : SmtBoolExpr) (l1 l2 : SymBitstream) : SymBitstream :=
+  match l1 with
+  | [] =>
+      List.map (fun '(b2, v2) =>
+                  (smt_bool_ite cond SmtFalse b2, smt_bool_ite cond SmtFalse v2)) l2
+  | (b1, v1) :: r1 =>
+      match l2 with
+      | [] =>
+          (smt_bool_ite cond b1 SmtFalse, smt_bool_ite cond v1 SmtFalse)
+            :: merge_bitstream cond r1 []
+      | (b2, v2) :: r2 =>
+          (smt_bool_ite cond b1 b2, smt_bool_ite cond v1 v2)
+            :: merge_bitstream cond r1 r2
+      end
+  end.
+
+(* Accept-path residual merge, analogous to [resolve_select_symbolic_acc]. *)
+Fixpoint resolve_select_residual
+    (run_tgt : ParserTarget -> SymBitstream)
+    (ps : SymbolicParserState)
+    (cases : list SelectCase) (default : ParserTarget)
+    : SymBitstream :=
+  match cases with
+  | [] => run_tgt default
+  | c :: rest =>
+      let cond := select_case_cond_symbolic ps c in
+      merge_bitstream cond (run_tgt (sc_target c))
+                      (resolve_select_residual run_tgt ps rest default)
+  end.
+
+(* The merged residual bitstream from running [p] at [lbl].  Mirrors the
+   traversal of [run_parser_symbolic_acc] and shares its [select] conditions, so
+   the residual muxes line up with the accept condition.  On [Accept] the tail
+   [skipn cursor packet] is emitted (all valid — those are real input bits); a
+   dead-end ([Reject], missing state, failed extraction, fuel out) yields the
+   empty residual, which [merge_bitstream] pads as invalid. *)
+Fixpoint run_parser_residual (p : Parser) (lbl : ParserStateLabel)
+    (ps : SymbolicParserState) (fuel : nat) : SymBitstream :=
+  match fuel with
+  | O => []
+  | S fuel' =>
+      match lookup_state p lbl with
+      | None => []
+      | Some d =>
+          let ps_extracted :=
+            match psd_extract d with
+            | None => Some ps
+            | Some eo => apply_extract_symbolic eo ps
+            end in
+          match ps_extracted with
+          | None => []
+          | Some ps' =>
+              let run_tgt := fun (tgt : ParserTarget) =>
+                match tgt with
+                | Accept =>
+                    List.map (fun b => (b, SmtTrue))
+                             (List.skipn (p_cursor ps') (p_packet ps'))
+                | Reject => []
+                | TargetState next => run_parser_residual p next ps' fuel'
+                end in
+              match psd_trans d with
+              | Unconditional tgt => run_tgt tgt
+              | Select cases default =>
+                  resolve_select_residual run_tgt ps' cases default
+              end
+          end
+      end
+  end.
+
+Definition eval_parser_residual (p : Parser) (ps : SymbolicParserState)
+    : SymBitstream :=
+  run_parser_residual p (parser_start p) ps
+    (List.length (parser_states p) * S (List.length (p_packet ps))).
+
 (* Concretize a symbolic parser state under a valuation [f]: the parser analogue
    of [eval_sym_state] for transformers.  Every symbolic header value runs
    through [eval_smt_arith f] and every symbolic packet bit through

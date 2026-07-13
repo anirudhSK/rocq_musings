@@ -221,21 +221,21 @@ let%expect_test "bitstream non-equivalence: emit order swapped" =
   [%expect {|
     ┌ SAT Valuation
     | var( pkt_1 ) : u64 := 0
-    | var( pkt_10 ) : u64 := 1
+    | var( pkt_10 ) : u64 := 0
     | var( pkt_100 ) : u64 := 0
     | var( pkt_1000 ) : u64 := 1
     | var( pkt_10000 ) : u64 := 0
     | var( pkt_1001 ) : u64 := 1
-    | var( pkt_101 ) : u64 := 0
-    | var( pkt_1010 ) : u64 := 0
-    | var( pkt_1011 ) : u64 := 0
+    | var( pkt_101 ) : u64 := 1
+    | var( pkt_1010 ) : u64 := 1
+    | var( pkt_1011 ) : u64 := 1
     | var( pkt_11 ) : u64 := 0
     | var( pkt_110 ) : u64 := 1
-    | var( pkt_1100 ) : u64 := 1
+    | var( pkt_1100 ) : u64 := 0
     | var( pkt_1101 ) : u64 := 0
-    | var( pkt_111 ) : u64 := 1
+    | var( pkt_111 ) : u64 := 0
     | var( pkt_1110 ) : u64 := 0
-    | var( pkt_1111 ) : u64 := 0
+    | var( pkt_1111 ) : u64 := 1
     └
     NotEquivalent
     |}]
@@ -268,4 +268,35 @@ let%expect_test "bitstream accept differs: reject-on-0xFF vs always-accept" =
 let%expect_test "bitstream self-equivalence: reject-on-0xFF" =
   let p = TestModulePrograms.mod_prog_parse_reject_deparse in
   print_equiv (SmtModuleQuery.modnet_equivalence_checker p p (Shim.int_to_coq_nat 8));
+  [%expect {| Equivalent |}]
+
+(* Test 18: residual/cursor.  Both pipelines emit byte 0, but one consumes one
+   byte and the other two, so their unconsumed tails (and hence output packets)
+   differ.  The old cursor-reset semantics handed the whole packet downstream in
+   both, wrongly calling them equivalent; with the residual now tracked they are
+   NotEquivalent. *)
+let%expect_test "bitstream residual: consume1 vs consume2 (emit h1)" =
+  let p1 = TestModulePrograms.mod_prog_consume1_emit1 in
+  let p2 = TestModulePrograms.mod_prog_consume2_emit1 in
+  print_equiv (SmtModuleQuery.modnet_equivalence_checker p1 p2 (Shim.int_to_coq_nat 16));
+  [%expect {|
+    ┌ SAT Valuation
+    | var( pkt_1 ) : u64 := 0
+    | var( pkt_10 ) : u64 := 0
+    | var( pkt_100 ) : u64 := 0
+    | var( pkt_1000 ) : u64 := 0
+    | var( pkt_101 ) : u64 := 0
+    | var( pkt_11 ) : u64 := 0
+    | var( pkt_110 ) : u64 := 0
+    | var( pkt_111 ) : u64 := 0
+    └
+    NotEquivalent
+    |}]
+
+(* Test 19: data-dependent consumption (consume one or two bytes depending on
+   whether byte 0 is zero) is equivalent to itself — the variable-length residual
+   merges consistently across the two branches. *)
+let%expect_test "bitstream self-equivalence: data-dependent consumption" =
+  let p = TestModulePrograms.mod_prog_varlen_emit1 in
+  print_equiv (SmtModuleQuery.modnet_equivalence_checker p p (Shim.int_to_coq_nat 16));
   [%expect {| Equivalent |}]
