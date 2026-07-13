@@ -117,8 +117,10 @@ and z3_expr_from_coq_smt_arith_expr (expr : SmtExpr.coq_SmtArithExpr) (ctx : Z3.
   : Z3.Expr.expr =
   match expr with
   | SmtExpr.SmtArithConst (v, ty) ->
+      (* Encode via an arbitrary-precision decimal string: a u64 constant can
+         exceed OCaml's [max_int], so [coq_Z_to_int] would overflow. *)
       mask_to ctx (ty_bits ty)
-        (Z3.BitVector.mk_numeral ctx (string_of_int (Shim.coq_Z_to_int v)) 64)
+        (Z3.BitVector.mk_numeral ctx (Shim.coq_Z_to_str v) 64)
   | SmtExpr.SmtUninit -> Z3.BitVector.mk_numeral ctx "0" 64
   | SmtExpr.SmtArithVar name -> (
     let name_str = Shim.coq_str_to_str name in
@@ -170,7 +172,18 @@ and z3_expr_from_coq_smt_arith_expr (expr : SmtExpr.coq_SmtArithExpr) (ctx : Z3.
   | SmtExpr.SmtBitXor (ty, e1, e2) -> mask_to ctx (ty_bits ty) (Z3.BitVector.mk_xor ctx (z3_expr_from_coq_smt_arith_expr e1 ctx vars) (z3_expr_from_coq_smt_arith_expr e2 ctx vars))
   | SmtExpr.SmtBitNot e            -> Z3.BitVector.mk_not ctx (z3_expr_from_coq_smt_arith_expr e ctx vars)
   | SmtExpr.SmtBitMul (ty, e1, e2) -> mask_to ctx (ty_bits ty) (Z3.BitVector.mk_mul ctx (z3_expr_from_coq_smt_arith_expr e1 ctx vars) (z3_expr_from_coq_smt_arith_expr e2 ctx vars))
-  | SmtExpr.SmtBitDiv (ty, e1, e2) -> mask_to ctx (ty_bits ty) (Z3.BitVector.mk_udiv ctx (z3_expr_from_coq_smt_arith_expr e1 ctx vars) (z3_expr_from_coq_smt_arith_expr e2 ctx vars))
+  | SmtExpr.SmtBitDiv (ty, e1, e2) ->
+      (* Concrete [divu] yields 0 on a zero divisor ([Z.div _ 0 = 0]), whereas
+         Z3's [bvudiv] by zero is all-ones; guard so the two agree, else the
+         equivalence check is unsound at a zero divisor.  ([urem]/[modu] already
+         agree — both return the dividend on a zero divisor — so [SmtBitMod]
+         needs no such guard.) *)
+      let z1 = z3_expr_from_coq_smt_arith_expr e1 ctx vars in
+      let z2 = z3_expr_from_coq_smt_arith_expr e2 ctx vars in
+      let zero = Z3.BitVector.mk_numeral ctx "0" 64 in
+      mask_to ctx (ty_bits ty)
+        (Z3.Boolean.mk_ite ctx (Z3.Boolean.mk_eq ctx z2 zero)
+           zero (Z3.BitVector.mk_udiv ctx z1 z2))
   (* Unsigned remainder ([mk_urem]) to match the concrete [ModOp], which is
      [Integers.modu] (unsigned); [mk_smod]/[mk_srem] would disagree on operands
      with the high bit set and make the equivalence check unsound. *)
@@ -180,7 +193,7 @@ and z3_expr_from_coq_smt_arith_expr (expr : SmtExpr.coq_SmtArithExpr) (ctx : Z3.
       Z3.BitVector.mk_numeral ctx "0" 64
   | SmtExpr.SmtPtrConst ptr -> (
       match ptr with
-      | CrVal.CrPtr addr -> Z3.BitVector.mk_numeral ctx (string_of_int (Shim.coq_Z_to_int addr)) 64
+      | CrVal.CrPtr addr -> Z3.BitVector.mk_numeral ctx (Shim.coq_Z_to_str addr) 64
       | CrVal.CrNilPtr -> Z3.BitVector.mk_numeral ctx "0" 64)
   | SmtExpr.SmtPtrVar name -> (
       let name_str = Shim.coq_str_to_str name in
@@ -204,7 +217,19 @@ let to_vmap (var_widths : (string, int) Hashtbl.t)
       (* All bitvectors are 64-bit in the encoding; the variable's CrIntType is
          recovered from how it is used in the query (pointer reconstruction lives
          in the memory solver, not here).  The numeral is reconstructed via
-         arbitrary precision — a full-width value overflows a native int. *)
+         arbitrary precision — a full-width value overflows a native int.
+
+         NB: the value is stored UNMASKED (its full 64-bit model value), tagged
+         with the recovered width.  It must NOT be masked to [bits]: the returned
+         valuation is the SAT witness, and both [eval_smt_arith] and the encoding
+         above operate on full 64-bit operands (masking only ever happens on op
+         *results* via [mk_int]); comparisons ([SmtBoolEq]/[SmtBoolLt]) likewise
+         test full values.  Masking here could flip a match condition and stop
+         the valuation from being a genuine witness.  The residual wart — a value
+         may exceed its nominal width because variables are not constrained to
+         their width in the query — is best fixed query-side (assert each
+         variable < 2^width) rather than by masking the model, and is left as-is
+         to avoid over-constraining on an inferred width. *)
       ignore bv_size;
       let bits = match Hashtbl.find_opt var_widths name with Some b -> b | None -> 64 in
       Printf.printf "| var( %s ) : u%d := %s\n" name bits var_str;

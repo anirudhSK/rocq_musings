@@ -239,3 +239,33 @@ let%expect_test "bitstream non-equivalence: emit order swapped" =
     └
     NotEquivalent
     |}]
+
+(* Test 16: bitstream accept/reject.  Two one-byte parse->deparse pipelines whose
+   parsers agree on every packet except 0xFF, where one Rejects and the other
+   Accepts.  With reject threaded as a symbolic accept predicate, the checker must
+   report NotEquivalent, witnessed by the 0xFF packet (every pkt bit = 1).  Under
+   the old swallow-the-reject semantics this was wrongly Equivalent. *)
+let%expect_test "bitstream accept differs: reject-on-0xFF vs always-accept" =
+  let p1 = TestModulePrograms.mod_prog_parse_reject_deparse in
+  let p2 = TestModulePrograms.mod_prog_parse_accept_deparse in
+  print_equiv (SmtModuleQuery.modnet_equivalence_checker p1 p2 (Shim.int_to_coq_nat 8));
+  [%expect {|
+    ┌ SAT Valuation
+    | var( pkt_1 ) : u64 := 1
+    | var( pkt_10 ) : u64 := 1
+    | var( pkt_100 ) : u64 := 1
+    | var( pkt_1000 ) : u64 := 1
+    | var( pkt_101 ) : u64 := 1
+    | var( pkt_11 ) : u64 := 1
+    | var( pkt_110 ) : u64 := 1
+    | var( pkt_111 ) : u64 := 1
+    └
+    NotEquivalent
+    |}]
+
+(* Test 17: the rejecting pipeline is equivalent to itself — the accept
+   conditions coincide, so no packet distinguishes it from itself. *)
+let%expect_test "bitstream self-equivalence: reject-on-0xFF" =
+  let p = TestModulePrograms.mod_prog_parse_reject_deparse in
+  print_equiv (SmtModuleQuery.modnet_equivalence_checker p p (Shim.int_to_coq_nat 8));
+  [%expect {| Equivalent |}]

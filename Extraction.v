@@ -37,5 +37,7 @@ Separate Extraction
   modnet_equivalence_checker modnet_header_equivalence_checker
   TestModulePrograms.mod_prog_parse_deparse
   TestModulePrograms.mod_prog_parse_deparse_swapped
+  TestModulePrograms.mod_prog_parse_reject_deparse
+  TestModulePrograms.mod_prog_parse_accept_deparse
   SmtParserQuery.parser_equivalence_checker
   well_formed_programb well_formed_general_programb.

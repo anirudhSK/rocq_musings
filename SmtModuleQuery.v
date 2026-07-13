@@ -62,17 +62,43 @@ Fixpoint bitstreams_differ (out1 out2 : list SmtBoolExpr) : SmtBoolExpr :=
   | _, _ => SmtTrue   (* different output lengths: they always differ *)
   end.
 
+(* The two programs observably differ when they either accept different packets,
+   or both accept but emit different output bitstreams.  Mirrors the single-parser
+   [parser_neq_query]: [smt_bit_neq a1 a2] is the accept-XOR, and the output
+   comparison is only demanded when both accept.  A SAT model is an input packet
+   witnessing the difference. *)
+Definition modnet_neq_query
+  (a1 a2 : SmtBoolExpr) (out1 out2 : list SmtBoolExpr) : SmtBoolExpr :=
+  SmtBoolOr (smt_bit_neq a1 a2)
+            (SmtBoolAnd (SmtBoolAnd a1 a2) (bitstreams_differ out1 out2)).
+
 (* Both programs are run symbolically from a shared [input_len]-bit input
    packet, so they range over one common input bitstream.  Their single sinks
-   must be deparsers; equivalence is UNSAT of "the output packets differ". *)
+   must be deparsers; equivalence is UNSAT of the [modnet_neq_query].
+
+   Reject handling: the network is run through the accept-aware semantics
+   ([eval_general_program_symbolic_sinks_acc] -> [eval_parser_symbolic_acc]),
+   which threads each parser's [spr_accept] as a symbolic predicate and hands the
+   conjunction ([a1] / [a2]) to the query above.  So a data-dependent [Reject]
+   (which concretely makes [eval_parser_concrete] return [None] and aborts the
+   network) is faithfully modelled as "accept condition is false" rather than
+   being silently swallowed.
+
+   REMAINING CAVEAT (residual packet): under path merging the number of bits a
+   parser consumes is data-dependent, and [eval_parser_symbolic] / the accept
+   evaluator do not advance the cursor (see [CrSymbolicSemanticsParser]), so the
+   downstream residual packet is approximate.  For a parser -> deparser pipeline
+   this means the symbolic sink packet need not equal the concrete one bit-for-
+   bit; the [Admitted] lemmas below do not close that gap.  It is a separate,
+   deeper design issue (a symbolic / accept-conditioned consumed length). *)
 Definition modnet_equivalence_checker
   (p1 : GeneralCaracaraProgram) (p2 : GeneralCaracaraProgram) (input_len : nat)
   : EquivalenceResult :=
-  let sym1_opt := eval_general_program_symbolic_sinks p1 (init_general_symbolic_state_n "p1" p1 input_len) in
-  let sym2_opt := eval_general_program_symbolic_sinks p2 (init_general_symbolic_state_n "p2" p2 input_len) in
+  let sym1_opt := eval_general_program_symbolic_sinks_acc p1 (init_general_symbolic_state_n "p1" p1 input_len) in
+  let sym2_opt := eval_general_program_symbolic_sinks_acc p2 (init_general_symbolic_state_n "p2" p2 input_len) in
   match sym1_opt, sym2_opt with
-  | Some [DeparserMod sym1], Some [DeparserMod sym2] => (* assume one (deparser) sink *)
-    match smt_query (bitstreams_differ (p_packet sym1) (p_packet sym2)) with
+  | Some ([DeparserMod sym1], a1), Some ([DeparserMod sym2], a2) => (* assume one (deparser) sink *)
+    match smt_query (modnet_neq_query a1 a2 (p_packet sym1) (p_packet sym2)) with
     | SmtUnsat => Equivalent
     | SmtSat f => NotEquivalent f
     | SmtUnknown => NotEquivalentUnknown

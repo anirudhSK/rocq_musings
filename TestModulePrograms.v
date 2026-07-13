@@ -199,6 +199,44 @@ Definition mod_prog_parse_deparse_swapped : GeneralCaracaraProgram :=
   let net := set_start_module net m1 in
   GeneralCaracaraProgramDef [] net [HeaderCtr 1; HeaderCtr 2].
 
+(* Bitstream pipeline whose parser REJECTS the one-byte packet 0xFF (via a
+   [select] case) and otherwise accepts, extracting the byte into h1; a deparser
+   re-emits h1.  Paired with [mod_prog_parse_accept_deparse] below (identical but
+   always-accepting) to exercise accept/reject handling in the bitstream
+   [modnet_equivalence_checker]: the two agree on every packet except 0xFF, where
+   one rejects and the other accepts.  The old swallow-the-reject symbolic
+   semantics wrongly called them equivalent. *)
+Definition mod_prog_parse_reject_deparse : GeneralCaracaraProgram :=
+  let parser := mkParser (ParserStateLabelCtr 1) [
+    mkParserStateDef (ParserStateLabelCtr 1)
+      (Some (ExtractOpConstructor (HeaderCtr 1) 8))
+      (Select [mkSelectCase (HeaderCtr 1) 0 8
+                 [true;true;true;true;true;true;true;true] Reject]
+              Accept)
+  ] in
+  let deparser := mkDeparser [ EmitOpConstructor (HeaderCtr 1) 8 ] in
+  let net := empty_net in
+  let '(net, m1) := add_parser_to_network net parser in
+  let '(net, m2) := add_deparser_to_network net deparser in
+  let net := add_connection_to_network net m1 m2 in
+  let net := set_start_module net m1 in
+  GeneralCaracaraProgramDef [] net [HeaderCtr 1].
+
+(* Always-accepting counterpart of [mod_prog_parse_reject_deparse]. *)
+Definition mod_prog_parse_accept_deparse : GeneralCaracaraProgram :=
+  let parser := mkParser (ParserStateLabelCtr 1) [
+    mkParserStateDef (ParserStateLabelCtr 1)
+      (Some (ExtractOpConstructor (HeaderCtr 1) 8))
+      (Unconditional Accept)
+  ] in
+  let deparser := mkDeparser [ EmitOpConstructor (HeaderCtr 1) 8 ] in
+  let net := empty_net in
+  let '(net, m1) := add_parser_to_network net parser in
+  let '(net, m2) := add_deparser_to_network net deparser in
+  let net := add_connection_to_network net m1 m2 in
+  let net := set_start_module net m1 in
+  GeneralCaracaraProgramDef [] net [HeaderCtr 1].
+
 Definition mod_test_programs : list GeneralCaracaraProgram := [
   mod_prog_single_add3;
   mod_prog_add1_then_mul2;

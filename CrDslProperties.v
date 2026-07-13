@@ -59,6 +59,9 @@ Definition well_formed_program (p : CaracaraProgram) : Prop :=
 (* TODO: Needs extension once parser semantics are fleshed out *)
 Definition well_formed_module (m : CrModule) : Prop :=
   match m with
+  (* TODO: parser/deparser modules are currently unconstrained.  A deparser
+     should at least require its emit widths to be well-formed (and, once
+     header types carry widths, that each emit width match its header). *)
   | ParserModule _ _ => True
   | DeparserModule _ _ => True
   | TransformerModule _ states ctrls t =>

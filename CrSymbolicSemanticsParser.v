@@ -53,6 +53,8 @@ Definition select_case_cond_symbolic (ps : SymbolicParserState) (c : SelectCase)
   | IntVal k kty => SmtBoolEq (SmtBitSlice (sc_start_index c) (sc_end_index c)
                                 (lookup_varlike_map (p_header_map ps) (sc_header c)))
                               (SmtArithConst k kty)
+  (* Unreachable: [mk_int] always yields [IntVal]; the branch only satisfies the
+     exhaustiveness checker. *)
   | _ => SmtFalse
   end.
 
