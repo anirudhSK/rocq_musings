@@ -14,6 +14,8 @@ From MyProject Require Import CrDslProperties.
 From MyProject Require Import CrSymbolicSemanticsParser.
 From MyProject Require Import CrSymbolicSemanticsModule.
 From MyProject Require Import CrConcreteSemanticsModule.
+From MyProject Require Import ModnetHeaderLemmas.
+From MyProject Require Import SmtHelperLemmas.
 
 Definition keys_from_map {T A : Type} (fn : positive -> A) (m : PMap.t T) : list A :=
   List.map fn (List.map fst (PTree.elements (snd m))).
@@ -138,6 +140,10 @@ Lemma modnet_header_equivalence_checker_sound :
   (* have a single source and sink *)
   is_linear_chain p1 ->
   is_linear_chain p2 ->
+  (* and are transformer-only (see [transformer_ok]: every module a transformer,
+     with write-targets present in the seeded initial symbolic state) *)
+  transformer_ok "p1" p1 ->
+  transformer_ok "p2" p2 ->
   (* and they're considered equivalent *)
   modnet_header_equivalence_checker p1 p2 = Equivalent ->
   (* then when starting from their initial concrete states *)
@@ -154,12 +160,36 @@ Lemma modnet_header_equivalence_checker_sound :
   exists c_f1 c_f2,
   l1 = [c_f1] /\
   l2 = [c_f2] /\
-  (* and the output headers are identical *)
-  (forall h, In h (get_headers_from_general p1) ->
+  (* and the output headers are identical.  NOTE: over [get_signature_from_general]
+     (the OUTPUT signature the checker's [smt_query] actually ranges over), not
+     [get_headers_from_general] (the input header format).  The query says nothing
+     about input-only headers, so the original [get_headers_from_general] made this
+     unprovable; this matches the [_complete] lemma below. *)
+  (forall h, In h (get_signature_from_general p1) ->
     lookup_varlike_map (module_header_map c_f1) h
     = lookup_varlike_map (module_header_map c_f2) h).
 Proof.
-Admitted.
+  intros p1 p2 Hwf1 Hwf2 Hlc1 Hlc2 Hok1 Hok2 Hcheck
+         s_i1 s_i2 c_i1 c_i2 f Hs1 Hs2 Hc1 Hc2 l1 l2 Hl1 Hl2.
+  subst s_i1 s_i2 c_i1 c_i2.
+  unfold modnet_header_equivalence_checker in Hcheck.
+  destruct (eval_general_program_symbolic_sinks p1 (init_general_symbolic_state "p1" p1))
+    as [[| [sym1 | ps1 | ps1] [| x1 xs1] ] |] eqn:Esym1; try discriminate Hcheck.
+  destruct (eval_general_program_symbolic_sinks p2 (init_general_symbolic_state "p2" p2))
+    as [[| [sym2 | ps2 | ps2] [| x2 xs2] ] |] eqn:Esym2; try discriminate Hcheck.
+  destruct (smt_query (check_headers_and_state_vars sym1 sym2 (get_signature_from_general p1) []))
+    eqn:Hq; try discriminate Hcheck.
+  destruct (header_sink_agree "p1" p1 f sym1 Hok1 Esym1 l1 Hl1) as [cs1 [Hl1eq Hts1]].
+  destruct (header_sink_agree "p2" p2 f sym2 Hok2 Esym2 l2 Hl2) as [cs2 [Hl2eq Hts2]].
+  exists (TransformerMod cs1), (TransformerMod cs2).
+  split; [exact Hl1eq | split; [exact Hl2eq |]].
+  intros h Hh. cbn [module_header_map].
+  pose proof (smt_query_sound_none _ Hq f) as Hqf.
+  apply check_headers_and_state_vars_false in Hqf. destruct Hqf as [Hhdr _].
+  specialize (Hhdr h Hh). apply smt_bool_eq_true in Hhdr.
+  rewrite (ts_agree_hm cs1 sym1 f Hts1 h), (ts_agree_hm cs2 sym2 f Hts2 h).
+  exact Hhdr.
+Qed.
 
 Lemma modnet_header_equivalence_checker_complete :
   forall p1 p2 f,
@@ -169,6 +199,9 @@ Lemma modnet_header_equivalence_checker_complete :
   (* have a single source and sink *)
   is_linear_chain p1 ->
   is_linear_chain p2 ->
+  (* and are transformer-only *)
+  transformer_ok "p1" p1 ->
+  transformer_ok "p2" p2 ->
   (* if they're not considered equivalent *)
   modnet_header_equivalence_checker p1 p2 = NotEquivalent f ->
   (* then when starting from their initial concrete states *)
@@ -190,7 +223,30 @@ Lemma modnet_header_equivalence_checker_complete :
     lookup_varlike_map (module_header_map cf_1) h
     <> lookup_varlike_map (module_header_map cf_2) h).
 Proof.
-Admitted.
+  intros p1 p2 f Hwf1 Hwf2 Hlc1 Hlc2 Hok1 Hok2 Hcheck
+         s_i1 s_i2 c_i1 c_i2 Hs1 Hs2 Hc1 Hc2 l1 l2 Hl1 Hl2.
+  subst s_i1 s_i2 c_i1 c_i2.
+  unfold modnet_header_equivalence_checker in Hcheck.
+  destruct (eval_general_program_symbolic_sinks p1 (init_general_symbolic_state "p1" p1))
+    as [[| [sym1 | ps1 | ps1] [| x1 xs1] ] |] eqn:Esym1; try discriminate Hcheck.
+  destruct (eval_general_program_symbolic_sinks p2 (init_general_symbolic_state "p2" p2))
+    as [[| [sym2 | ps2 | ps2] [| x2 xs2] ] |] eqn:Esym2; try discriminate Hcheck.
+  destruct (smt_query (check_headers_and_state_vars sym1 sym2 (get_signature_from_general p1) []))
+    as [f0| |] eqn:Hq; try discriminate Hcheck.
+  injection Hcheck as Hcheck'. subst f0.
+  destruct (header_sink_agree "p1" p1 f sym1 Hok1 Esym1 l1 Hl1) as [cs1 [Hl1eq Hts1]].
+  destruct (header_sink_agree "p2" p2 f sym2 Hok2 Esym2 l2 Hl2) as [cs2 [Hl2eq Hts2]].
+  exists (TransformerMod cs1), (TransformerMod cs2).
+  split; [exact Hl1eq | split; [exact Hl2eq |]].
+  pose proof (smt_query_sound_some _ _ Hq) as Hqf.
+  apply check_headers_and_state_vars_true in Hqf.
+  destruct Hqf as [[h [Hh Hneq]] | [sv [Hsv _]]].
+  - exists h. split; [exact Hh|]. cbn [module_header_map].
+    apply smt_bool_eq_false in Hneq.
+    rewrite (ts_agree_hm cs1 sym1 f Hts1 h), (ts_agree_hm cs2 sym2 f Hts2 h).
+    exact Hneq.
+  - simpl in Hsv. contradiction.
+Qed.
 
 Print Assumptions modnet_header_equivalence_checker_sound.
 Print Assumptions modnet_header_equivalence_checker_complete.
