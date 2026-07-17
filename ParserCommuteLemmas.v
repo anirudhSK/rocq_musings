@@ -154,7 +154,7 @@ Qed.
 Lemma resolve_dom : forall cases default run_tgt ps' k,
   (forall tgt, in_dom (p_header_map ps') k -> in_dom (spr_headers (run_tgt tgt)) k) ->
   in_dom (p_header_map ps') k ->
-  in_dom (spr_headers (resolve_select_symbolic_acc run_tgt ps' cases default)) k.
+  in_dom (spr_headers (resolve_select_symbolic run_tgt ps' cases default)) k.
 Proof.
   destruct cases as [| c rest]; intros default run_tgt ps' k Htgt Hin; simpl.
   - apply Htgt, Hin.
@@ -164,7 +164,7 @@ Qed.
 (* The parser run only grows the header-map domain. *)
 Lemma run_dom_mono : forall fuel p lbl s k,
   in_dom (p_header_map s) k ->
-  in_dom (spr_headers (run_parser_symbolic_acc p lbl s fuel)) k.
+  in_dom (spr_headers (run_parser_symbolic p lbl s fuel)) k.
 Proof.
   induction fuel as [| fuel' IH]; intros p lbl s k Hk.
   - simpl. cbn [spr_headers]. exact Hk.
@@ -274,11 +274,11 @@ Lemma transition_commute :
        (forall h, In h headers -> in_dom (p_header_map s) (get_key h)) ->
        match run_parser_concrete p lbl (eval_sym_parser_state s f) fuel' with
        | Some cps =>
-           eval_smt_bool (spr_accept (run_parser_symbolic_acc p lbl s fuel')) f = true /\
+           eval_smt_bool (spr_accept (run_parser_symbolic p lbl s fuel')) f = true /\
            (forall h, In h headers ->
               lookup_varlike_map (p_header_map cps) h =
-              eval_smt_arith (lookup_varlike_map (spr_headers (run_parser_symbolic_acc p lbl s fuel')) h) f)
-       | None => eval_smt_bool (spr_accept (run_parser_symbolic_acc p lbl s fuel')) f = false
+              eval_smt_arith (lookup_varlike_map (spr_headers (run_parser_symbolic p lbl s fuel')) h) f)
+       | None => eval_smt_bool (spr_accept (run_parser_symbolic p lbl s fuel')) f = false
        end) ->
     (forall h, In h headers -> in_dom (p_header_map ps') (get_key h)) ->
     match match eval_transition_concrete (eval_sym_parser_state ps' f) tr with
@@ -291,14 +291,14 @@ Lemma transition_commute :
           match tr with
           | Unconditional tgt =>
               match tgt with
-              | TargetState next => run_parser_symbolic_acc p next ps' fuel'
+              | TargetState next => run_parser_symbolic p next ps' fuel'
               | Accept => mkSymParserResult SmtTrue (p_header_map ps')
               | Reject => mkSymParserResult SmtFalse (p_header_map ps')
               end
           | Select cases default =>
-              resolve_select_symbolic_acc
+              resolve_select_symbolic
                 (fun t => match t with
-                  | TargetState next => run_parser_symbolic_acc p next ps' fuel'
+                  | TargetState next => run_parser_symbolic p next ps' fuel'
                   | Accept => mkSymParserResult SmtTrue (p_header_map ps')
                   | Reject => mkSymParserResult SmtFalse (p_header_map ps')
                   end) ps' cases default
@@ -309,14 +309,14 @@ Lemma transition_commute :
              match tr with
              | Unconditional tgt =>
                  match tgt with
-                 | TargetState next => run_parser_symbolic_acc p next ps' fuel'
+                 | TargetState next => run_parser_symbolic p next ps' fuel'
                  | Accept => mkSymParserResult SmtTrue (p_header_map ps')
                  | Reject => mkSymParserResult SmtFalse (p_header_map ps')
                  end
              | Select cases default =>
-                 resolve_select_symbolic_acc
+                 resolve_select_symbolic
                    (fun t => match t with
-                     | TargetState next => run_parser_symbolic_acc p next ps' fuel'
+                     | TargetState next => run_parser_symbolic p next ps' fuel'
                      | Accept => mkSymParserResult SmtTrue (p_header_map ps')
                      | Reject => mkSymParserResult SmtFalse (p_header_map ps')
                      end) ps' cases default
@@ -326,14 +326,14 @@ Lemma transition_commute :
           match tr with
           | Unconditional tgt =>
               match tgt with
-              | TargetState next => run_parser_symbolic_acc p next ps' fuel'
+              | TargetState next => run_parser_symbolic p next ps' fuel'
               | Accept => mkSymParserResult SmtTrue (p_header_map ps')
               | Reject => mkSymParserResult SmtFalse (p_header_map ps')
               end
           | Select cases default =>
-              resolve_select_symbolic_acc
+              resolve_select_symbolic
                 (fun t => match t with
-                  | TargetState next => run_parser_symbolic_acc p next ps' fuel'
+                  | TargetState next => run_parser_symbolic p next ps' fuel'
                   | Accept => mkSymParserResult SmtTrue (p_header_map ps')
                   | Reject => mkSymParserResult SmtFalse (p_header_map ps')
                   end) ps' cases default
@@ -350,7 +350,7 @@ Proof.
     | Some cps =>
         eval_smt_bool (spr_accept
           match tgt with
-          | TargetState next => run_parser_symbolic_acc p next ps' fuel'
+          | TargetState next => run_parser_symbolic p next ps' fuel'
           | Accept => mkSymParserResult SmtTrue (p_header_map ps')
           | Reject => mkSymParserResult SmtFalse (p_header_map ps')
           end) f = true /\
@@ -358,14 +358,14 @@ Proof.
            lookup_varlike_map (p_header_map cps) h =
            eval_smt_arith (lookup_varlike_map (spr_headers
              match tgt with
-             | TargetState next => run_parser_symbolic_acc p next ps' fuel'
+             | TargetState next => run_parser_symbolic p next ps' fuel'
              | Accept => mkSymParserResult SmtTrue (p_header_map ps')
              | Reject => mkSymParserResult SmtFalse (p_header_map ps')
              end) h) f)
     | None =>
         eval_smt_bool (spr_accept
           match tgt with
-          | TargetState next => run_parser_symbolic_acc p next ps' fuel'
+          | TargetState next => run_parser_symbolic p next ps' fuel'
           | Accept => mkSymParserResult SmtTrue (p_header_map ps')
           | Reject => mkSymParserResult SmtFalse (p_header_map ps')
           end) f = false
@@ -378,7 +378,7 @@ Proof.
   assert (Hmt : forall tgt h, In h headers ->
     in_dom (spr_headers
       match tgt with
-      | TargetState next => run_parser_symbolic_acc p next ps' fuel'
+      | TargetState next => run_parser_symbolic p next ps' fuel'
       | Accept => mkSymParserResult SmtTrue (p_header_map ps')
       | Reject => mkSymParserResult SmtFalse (p_header_map ps')
       end) (get_key h)).
@@ -389,8 +389,8 @@ Proof.
   destruct tr as [tgt | cases default].
   - cbn [eval_transition_concrete]. exact (Ptgt tgt).
   - cbn [eval_transition_concrete]. induction cases as [| c rest IHcases].
-    + cbn [resolve_select_symbolic_acc resolve_select_concrete]. exact (Ptgt default).
-    + cbn [resolve_select_symbolic_acc resolve_select_concrete].
+    + cbn [resolve_select_symbolic resolve_select_concrete]. exact (Ptgt default).
+    + cbn [resolve_select_symbolic resolve_select_concrete].
       unfold merge_results. cbn [spr_accept spr_headers].
       rewrite eval_smt_bool_ite.
       pose proof (select_case_cond_commute ps' f c) as Hcond.
@@ -427,12 +427,12 @@ Lemma run_parser_commute : forall f (headers : list Header) fuel p lbl s,
   (forall h, In h headers -> in_dom (p_header_map s) (get_key h)) ->
   match run_parser_concrete p lbl (eval_sym_parser_state s f) fuel with
   | Some cps =>
-      eval_smt_bool (spr_accept (run_parser_symbolic_acc p lbl s fuel)) f = true /\
+      eval_smt_bool (spr_accept (run_parser_symbolic p lbl s fuel)) f = true /\
       (forall h, In h headers ->
          lookup_varlike_map (p_header_map cps) h =
-         eval_smt_arith (lookup_varlike_map (spr_headers (run_parser_symbolic_acc p lbl s fuel)) h) f)
+         eval_smt_arith (lookup_varlike_map (spr_headers (run_parser_symbolic p lbl s fuel)) h) f)
   | None =>
-      eval_smt_bool (spr_accept (run_parser_symbolic_acc p lbl s fuel)) f = false
+      eval_smt_bool (spr_accept (run_parser_symbolic p lbl s fuel)) f = false
   end.
 Proof.
   intros f headers. induction fuel as [| fuel' IH]; intros p lbl s Hdom.
@@ -458,22 +458,22 @@ Lemma eval_parser_commute :
             (eval_sym_parser_state (init_symbolic_parser_state_n headers packet_len) f) with
     | Some cps =>
         eval_smt_bool
-          (spr_accept (eval_parser_symbolic_acc p
+          (spr_accept (eval_parser_symbolic p
                          (init_symbolic_parser_state_n headers packet_len))) f = true /\
         (forall h, In h headers ->
            lookup_varlike_map (p_header_map cps) h =
            eval_smt_arith
              (lookup_varlike_map
-                (spr_headers (eval_parser_symbolic_acc p
+                (spr_headers (eval_parser_symbolic p
                                 (init_symbolic_parser_state_n headers packet_len))) h) f)
     | None =>
         eval_smt_bool
-          (spr_accept (eval_parser_symbolic_acc p
+          (spr_accept (eval_parser_symbolic p
                          (init_symbolic_parser_state_n headers packet_len))) f = false
     end.
 Proof.
   intros headers packet_len p f.
-  unfold eval_parser_concrete, eval_parser_symbolic_acc.
+  unfold eval_parser_concrete, eval_parser_symbolic.
   replace (length (p_packet (eval_sym_parser_state (init_symbolic_parser_state_n headers packet_len) f)))
     with (length (p_packet (init_symbolic_parser_state_n headers packet_len)))
     by (unfold eval_sym_parser_state; cbn [p_packet]; rewrite length_map; reflexivity).

@@ -980,47 +980,51 @@ Proof.
   - exact IH.
 Qed.
 
-(* Transformer-only well-formedness bundle for the initial symbolic state:
-   every module is a transformer, every initial slot is a transformer slot,
-   the start header map contains all write headers, and every slot's state map
-   contains that module's write-target state variables.  (well_formed_module
+(* Transformer-only well-formedness bundle, parametric in the initial symbolic
+   state [gs]: every module is a transformer, every initial slot is a transformer
+   slot, the start header map contains all write headers, and every slot's state
+   map contains that module's write-target state variables.  (well_formed_module
    does NOT constrain write targets, so the last two are stated explicitly;
    header writes are in fact covered by [init_general_symbolic_state]'s
-   [collect_write_headers] seeding.) *)
-Definition transformer_ok (pre : String.string) (p : GeneralCaracaraProgram) : Prop :=
-  let net := get_network_from_general p in
-  let gs := init_general_symbolic_state pre p in
+   [collect_write_headers] seeding.)  Every conjunct depends on [gs] only through
+   [mod_states gs], so it is invariant under [set_gps_shared_bits] (the input
+   packet threaded in for a source parser). *)
+Definition transformer_ok_gs (net : ModuleNetwork) (gs : GeneralSymbolicState) : Prop :=
   all_transformers net /\
   (forall n ms, (mod_states gs) ?? n = Some ms -> exists ts, ms = TransformerMod ts) /\
   (forall ss, (mod_states gs) ?? (unwrap (start_module net)) = Some ss ->
       hdr_writes_present net (module_header_map ss)) /\
   state_writes_present net gs.
 
-(* The single-sink header agreement used by the checker soundness/completeness:
-   if the symbolic run's sinks are a single transformer [sym], the concrete run
-   from the concretized initial ledger yields a single transformer sink [cs]
-   whose state agrees with [sym] under [f]. *)
-Lemma header_sink_agree :
-  forall pre p f sym,
-    transformer_ok pre p ->
-    eval_general_program_symbolic_sinks p (init_general_symbolic_state pre p)
+Definition transformer_ok (pre : String.string) (p : GeneralCaracaraProgram) : Prop :=
+  transformer_ok_gs (get_network_from_general p) (init_general_symbolic_state pre p).
+
+(* The single-sink header agreement used by the checker soundness/completeness,
+   parametric in the initial symbolic state [gs]: if the symbolic run's sinks are
+   a single transformer [sym], the concrete run from the concretized initial
+   ledger yields a single transformer sink [cs] whose state agrees with [sym]
+   under [f]. *)
+Lemma header_sink_agree_gs :
+  forall p gs f sym,
+    transformer_ok_gs (get_network_from_general p) gs ->
+    eval_general_program_symbolic_sinks p gs
       = Some [TransformerMod sym] ->
     forall l,
     eval_general_program_concrete_sinks p
-      (concretize_sym_modnet_state (init_general_symbolic_state pre p) f) = Some l ->
+      (concretize_sym_modnet_state gs f) = Some l ->
     exists cs, l = [TransformerMod cs] /\ ts_agree cs sym f.
 Proof.
-  intros pre p f sym Hok Hsym l Hconc.
+  intros p gs f sym Hok Hsym l Hconc.
   destruct Hok as [Hall [Hslots [Hdom Hsw]]].
   unfold eval_general_program_symbolic_sinks in Hsym.
   unfold eval_general_program_concrete_sinks in Hconc.
-  destruct (eval_general_program_symbolic p (init_general_symbolic_state pre p))
+  destruct (eval_general_program_symbolic p gs)
     as [ls|] eqn:Es; [| discriminate].
   destruct (eval_general_program_concrete p
-              (concretize_sym_modnet_state (init_general_symbolic_state pre p) f))
+              (concretize_sym_modnet_state gs f))
     as [lc|] eqn:Ec; [| discriminate].
   (* lockstep: ledger_agree lc ls *)
-  pose proof (eval_general_program_lockstep p (init_general_symbolic_state pre p) f
+  pose proof (eval_general_program_lockstep p gs f
                 Hall Hdom Hsw
                 (ledger_agree_concretize _ f Hslots)) as Hstep.
   rewrite Ec, Es in Hstep. destruct Hstep as [Hled _].
@@ -1033,4 +1037,27 @@ Proof.
   unfold slot_agree in Hslot.
   destruct mc as [cs| |]; try contradiction.
   exists cs. split; [reflexivity | exact Hslot].
+Qed.
+
+Corollary header_sink_agree :
+  forall pre p f sym,
+    transformer_ok pre p ->
+    eval_general_program_symbolic_sinks p (init_general_symbolic_state pre p)
+      = Some [TransformerMod sym] ->
+    forall l,
+    eval_general_program_concrete_sinks p
+      (concretize_sym_modnet_state (init_general_symbolic_state pre p) f) = Some l ->
+    exists cs, l = [TransformerMod cs] /\ ts_agree cs sym f.
+Proof. intros pre p. apply header_sink_agree_gs. Qed.
+
+(* [set_gps_shared_bits] (hence [init_general_symbolic_state_n]) leaves the module
+   ledger untouched, so the transformer-only bundle transfers to the packet-seeded
+   initial state used by the header checker with a genuine input packet. *)
+Lemma transformer_ok_n :
+  forall pre p n,
+    transformer_ok pre p ->
+    transformer_ok_gs (get_network_from_general p) (init_general_symbolic_state_n pre p n).
+Proof.
+  intros pre p n Hok. unfold init_general_symbolic_state_n, set_gps_shared_bits.
+  exact Hok.
 Qed.

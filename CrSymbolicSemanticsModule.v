@@ -27,9 +27,21 @@ Definition eval_module_symbolic (m : CrModule) (st : ModuleState SmtArithExpr Sm
   | TransformerModule _ _ _ t, TransformerMod ts =>
       Some (TransformerMod (eval_transformer_smt t ts))
   | ParserModule _ p, ParserMod ps =>
-      match eval_parser_symbolic p ps with
-      | None => None
-      | Some ps' => Some (ParserMod ps')
+      (* Accept-aware parser step.  [eval_parser_symbolic] is total; we
+         fail-close ([None], aborting the network exactly as the concrete
+         [eval_parser_concrete] reject does) only on a statically-certain
+         reject — [spr_accept] literally [SmtFalse], i.e. every path is an
+         unconditional [Reject] / dead-end.  Otherwise the merged header map
+         ([spr_headers]) flows on; a *data-dependent* reject is retained as
+         the [spr_accept] predicate (used by the bitstream checker, dropped
+         by the header-observable path). *)
+      let r := eval_parser_symbolic p ps in
+      match spr_accept r with
+      | SmtFalse => None
+      | _ =>
+          Some (ParserMod {| p_header_map := spr_headers r;
+                             p_packet     := p_packet ps;
+                             p_cursor     := p_cursor ps |})
       end
   | DeparserModule _ d, DeparserMod ps =>
       Some (DeparserMod (eval_deparser_symbolic d ps))
@@ -144,7 +156,7 @@ Definition eval_module_bitstream_acc
   | TransformerModule _ _ _ t, TransformerMod ts =>
       Some (TransformerMod (eval_transformer_smt t ts), SmtTrue, f_bits)
   | ParserModule _ p, ParserMod ps =>
-      let r := eval_parser_symbolic_acc p ps in
+      let r := eval_parser_symbolic p ps in
       Some (ParserMod {| p_header_map := spr_headers r;
                          p_packet     := p_packet ps;
                          p_cursor     := p_cursor ps |},

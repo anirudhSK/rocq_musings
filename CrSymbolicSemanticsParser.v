@@ -69,94 +69,20 @@ Definition merge_header_maps (cond : SmtBoolExpr)
                 SmtConditional cond v_then v_else)
              (snd m_then)).
 
-(* Merge all [select] cases into one symbolic header map, given a
-   continuation [run_tgt] that resolves a single target at the current fuel
-   level.  Each case's resulting map is merged under its firing condition;
-   a branch that fails ([None]) falls back to [ps]'s current headers.
-   Structurally recursive on [cases]. *)
-Fixpoint resolve_select_symbolic
-    (run_tgt : ParserTarget -> option (PMap.t SmtArithExpr))
-    (ps : SymbolicParserState)
-    (cases : list SelectCase) (default : ParserTarget)
-    : PMap.t SmtArithExpr :=
-  match cases with
-  | [] =>
-      match run_tgt default with
-      | Some m => m
-      | None => p_header_map ps
-      end
-  | c :: rest =>
-      let cond := select_case_cond_symbolic ps c in
-      let then_map :=
-        match run_tgt (sc_target c) with
-        | Some m => m
-        | None => p_header_map ps
-        end in
-      let else_map := resolve_select_symbolic run_tgt ps rest default in
-      merge_header_maps cond then_map else_map
-  end.
-
-(* Run the parser FSM symbolically from [lbl], returning the merged
-   symbolic header map for the subtree.  [fuel] bounds state visits.
-   On [Reject], a missing state, failed extraction, or fuel exhaustion the
-   branch yields [None]; a [None] branch within a [select] contributes the
-   pre-branch header values. *)
-Fixpoint run_parser_symbolic (p : Parser) (lbl : ParserStateLabel)
-    (ps : SymbolicParserState) (fuel : nat)
-    : option (PMap.t SmtArithExpr) :=
-  match fuel with
-  | O => None
-  | S fuel' =>
-      match lookup_state p lbl with
-      | None => None
-      | Some d =>
-          let ps_extracted :=
-            match psd_extract d with
-            | None => Some ps
-            | Some eo => apply_extract_symbolic eo ps
-            end in
-          match ps_extracted with
-          | None => None
-          | Some ps' =>
-              let run_tgt := fun (tgt : ParserTarget) =>
-                match tgt with
-                | Accept => Some (p_header_map ps')
-                | Reject => None
-                | TargetState next => run_parser_symbolic p next ps' fuel'
-                end in
-              match psd_trans d with
-              | Unconditional tgt => run_tgt tgt
-              | Select cases default =>
-                  Some (resolve_select_symbolic run_tgt ps' cases default)
-              end
-          end
-      end
-  end.
-
-(* Same fuel as [eval_parser_concrete] — |states| * (|packet| + 1) — which must
-   match for concrete/symbolic commutation ([concretize] preserves packet
-   length).  Admits P4-style parser loops while guaranteeing termination. *)
-Definition eval_parser_symbolic (p : Parser) (ps : SymbolicParserState)
-    : option SymbolicParserState :=
-  match run_parser_symbolic p (parser_start p) ps
-          (List.length (parser_states p) * S (List.length (p_packet ps))) with
-  | None => None
-  | Some hm => Some {| p_header_map := hm;
-                       p_packet     := p_packet ps;
-                       p_cursor     := p_cursor ps |}
-  end.
-
 (* ================================================================== *)
 (* Accept-aware symbolic parser semantics.                             *)
 (*                                                                     *)
-(* The [run_parser_symbolic] above merges a [Reject] branch as leaving  *)
-(* the headers unchanged, which loses the accept/reject outcome — fine  *)
-(* for feeding a downstream module, but useless for equivalence, where  *)
-(* two parsers may differ precisely in when they reject.  This variant  *)
-(* threads an [spr_accept] condition (a [SmtBoolExpr] over the packet    *)
-(* bits) alongside the merged header map, so a caller can ask both       *)
-(* whether the parsers accept the same packets and, when both accept,    *)
-(* whether the headers agree.                                           *)
+(* Symbolic execution is path-merged: data-dependent [select] control    *)
+(* flow is merged into a single symbolic header map, and a [Reject] is a  *)
+(* symbolic predicate over the packet bits rather than a control-flow      *)
+(* abort.  This evaluator threads an [spr_accept] condition (a             *)
+(* [SmtBoolExpr] over the packet bits) alongside the merged header map,    *)
+(* so a caller can ask both whether two parsers accept the same packets    *)
+(* and, when both accept, whether the headers agree.  (A header-only merge *)
+(* that dropped the accept/reject outcome would be useless for             *)
+(* equivalence, where two parsers may differ precisely in when they        *)
+(* reject; hence every consumer — the network semantics and both checkers  *)
+(* — uses this accept-aware form.)                                         *)
 (* ================================================================== *)
 
 Record SymParserResult : Type := mkSymParserResult {
@@ -175,9 +101,10 @@ Definition merge_results (cond : SmtBoolExpr) (r_then r_else : SymParserResult)
   {| spr_accept  := smt_bool_ite cond (spr_accept r_then) (spr_accept r_else);
      spr_headers := merge_header_maps cond (spr_headers r_then) (spr_headers r_else) |}.
 
-(* Accept-aware analogue of [resolve_select_symbolic]; [run_tgt] is now total
-   (a target always yields a result — [Reject] just carries [SmtFalse]). *)
-Fixpoint resolve_select_symbolic_acc
+(* Merge all [select] cases into one accept-aware result, given a total
+   continuation [run_tgt] (a target always yields a result — [Reject] just
+   carries [SmtFalse]).  Structurally recursive on [cases]. *)
+Fixpoint resolve_select_symbolic
     (run_tgt : ParserTarget -> SymParserResult)
     (ps : SymbolicParserState)
     (cases : list SelectCase) (default : ParserTarget)
@@ -187,13 +114,14 @@ Fixpoint resolve_select_symbolic_acc
   | c :: rest =>
       let cond := select_case_cond_symbolic ps c in
       merge_results cond (run_tgt (sc_target c))
-                    (resolve_select_symbolic_acc run_tgt ps rest default)
+                    (resolve_select_symbolic run_tgt ps rest default)
   end.
 
-(* Accept-aware analogue of [run_parser_symbolic].  Total (never [None]): a
-   dead-end (missing state, failed extraction, fuel exhaustion, [Reject]) yields
-   [spr_accept := SmtFalse] with the headers reached so far. *)
-Fixpoint run_parser_symbolic_acc (p : Parser) (lbl : ParserStateLabel)
+(* Run the parser FSM symbolically from [lbl], threading an accept condition
+   alongside the merged header map.  [fuel] bounds state visits.  Total (never
+   [None]): a dead-end (missing state, failed extraction, fuel exhaustion,
+   [Reject]) yields [spr_accept := SmtFalse] with the headers reached so far. *)
+Fixpoint run_parser_symbolic (p : Parser) (lbl : ParserStateLabel)
     (ps : SymbolicParserState) (fuel : nat) : SymParserResult :=
   let reject := mkSymParserResult SmtFalse (p_header_map ps) in
   match fuel with
@@ -214,20 +142,20 @@ Fixpoint run_parser_symbolic_acc (p : Parser) (lbl : ParserStateLabel)
                 match tgt with
                 | Accept => mkSymParserResult SmtTrue  (p_header_map ps')
                 | Reject => mkSymParserResult SmtFalse (p_header_map ps')
-                | TargetState next => run_parser_symbolic_acc p next ps' fuel'
+                | TargetState next => run_parser_symbolic p next ps' fuel'
                 end in
               match psd_trans d with
               | Unconditional tgt => run_tgt tgt
               | Select cases default =>
-                  resolve_select_symbolic_acc run_tgt ps' cases default
+                  resolve_select_symbolic run_tgt ps' cases default
               end
           end
       end
   end.
 
-Definition eval_parser_symbolic_acc (p : Parser) (ps : SymbolicParserState)
+Definition eval_parser_symbolic (p : Parser) (ps : SymbolicParserState)
     : SymParserResult :=
-  run_parser_symbolic_acc p (parser_start p) ps
+  run_parser_symbolic p (parser_start p) ps
     (List.length (parser_states p) * S (List.length (p_packet ps))).
 
 (* ================================================================== *)
@@ -265,7 +193,7 @@ Fixpoint merge_bitstream (cond : SmtBoolExpr) (l1 l2 : SymBitstream) : SymBitstr
       end
   end.
 
-(* Accept-path residual merge, analogous to [resolve_select_symbolic_acc]. *)
+(* Accept-path residual merge, analogous to [resolve_select_symbolic]. *)
 Fixpoint resolve_select_residual
     (run_tgt : ParserTarget -> SymBitstream)
     (ps : SymbolicParserState)
@@ -280,7 +208,7 @@ Fixpoint resolve_select_residual
   end.
 
 (* The merged residual bitstream from running [p] at [lbl].  Mirrors the
-   traversal of [run_parser_symbolic_acc] and shares its [select] conditions, so
+   traversal of [run_parser_symbolic] and shares its [select] conditions, so
    the residual muxes line up with the accept condition.  On [Accept] the tail
    [skipn cursor packet] is emitted (all valid — those are real input bits); a
    dead-end ([Reject], missing state, failed extraction, fuel out) yields the
