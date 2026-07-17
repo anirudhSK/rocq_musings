@@ -52,8 +52,8 @@ Definition parser_equivalence_checker
     (headers : list Header) (packet_len : nat) (p1 p2 : Parser)
     : EquivalenceResult :=
   let ps := init_symbolic_parser_state_n headers packet_len in
-  let r1 := eval_parser_symbolic_acc p1 ps in
-  let r2 := eval_parser_symbolic_acc p2 ps in
+  let r1 := eval_parser_symbolic p1 ps in
+  let r2 := eval_parser_symbolic p2 ps in
   match smt_query (parser_neq_query r1 r2 headers) with
   | SmtUnsat  => Equivalent
   | SmtSat f  => NotEquivalent f
@@ -139,8 +139,8 @@ Proof.
   intros headers packet_len p1 p2 f Hchk. cbv zeta.
   unfold parser_equivalence_checker in Hchk.
   destruct (smt_query (parser_neq_query
-              (eval_parser_symbolic_acc p1 (init_symbolic_parser_state_n headers packet_len))
-              (eval_parser_symbolic_acc p2 (init_symbolic_parser_state_n headers packet_len))
+              (eval_parser_symbolic p1 (init_symbolic_parser_state_n headers packet_len))
+              (eval_parser_symbolic p2 (init_symbolic_parser_state_n headers packet_len))
               headers)) eqn:Hq; try discriminate.
   pose proof (smt_query_sound_none _ Hq f) as Hfalse.
   rewrite eval_parser_neq_query in Hfalse.
@@ -186,8 +186,8 @@ Proof.
   intros headers packet_len p1 p2 f Hchk. cbv zeta.
   unfold parser_equivalence_checker in Hchk.
   destruct (smt_query (parser_neq_query
-              (eval_parser_symbolic_acc p1 (init_symbolic_parser_state_n headers packet_len))
-              (eval_parser_symbolic_acc p2 (init_symbolic_parser_state_n headers packet_len))
+              (eval_parser_symbolic p1 (init_symbolic_parser_state_n headers packet_len))
+              (eval_parser_symbolic p2 (init_symbolic_parser_state_n headers packet_len))
               headers)) eqn:Hq; try discriminate.
   injection Hchk as Hf. subst f0.
   pose proof (smt_query_sound_some _ _ Hq) as Htrue.

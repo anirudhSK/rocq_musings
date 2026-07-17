@@ -199,7 +199,7 @@ let%expect_test "tss basic" =
   let p2 = get_general_program "../test/tss_pkt.out" in *)
   let p1 = PktClass.ex_lin_prog in
   let p2 = PktClass.ex_tss_prog in
-  print_equiv (SmtModuleQuery.modnet_header_equivalence_checker p1 p2);
+  print_equiv (SmtModuleQuery.modnet_header_equivalence_checker p1 p2 (Shim.int_to_coq_nat 0));
   [%expect {| Equivalent |}]
 
 (* Test 14: bitstream-I/O equivalence.  A parse->deparse pipeline is equivalent
