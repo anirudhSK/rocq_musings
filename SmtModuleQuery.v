@@ -8,14 +8,19 @@ From MyProject Require Import SmtExpr.
 From MyProject Require Import SmtQuery.
 From MyProject Require Import CrIdentifiers.
 From MyProject Require Import CrVarLike.
+From MyProject Require Import CrDsl.
 From MyProject Require Import CrModule.
 From MyProject Require Import CrProgramState.
+From MyProject Require Import CrGeneralProgramState.
+From MyProject Require Import CrVal.
 From MyProject Require Import CrDslProperties.
 From MyProject Require Import CrSymbolicSemanticsParser.
 From MyProject Require Import CrSymbolicSemanticsModule.
 From MyProject Require Import CrConcreteSemanticsModule.
 From MyProject Require Import ModnetHeaderLemmas.
 From MyProject Require Import ModnetParserSourceLemmas.
+From MyProject Require Import BitstreamResidualLemmas.
+From MyProject Require Import BitstreamNetworkLemmas.
 From MyProject Require Import SmtHelperLemmas.
 
 Definition keys_from_map {T A : Type} (fn : positive -> A) (m : PMap.t T) : list A :=
@@ -99,17 +104,23 @@ Definition modnet_neq_query
 
    Residual handling: the sink output ([out1] / [out2]) is a validity-annotated
    bitstream ([SymBitstream]).  A parser's unconsumed tail is emitted with a
-   [valid] channel and merged across [select] branches ([eval_parser_residual]),
+   [valid] channel and merged across [select] branches ([eval_parser_residual_v]),
    so the data-dependent consumed length is represented exactly rather than by a
    single cursor — the deparser then prepends its emitted bits ahead of it.
 
-   REMAINING CAVEATS: (1) a parser that reads a *data-dependent* residual
-   produced by an upstream parser is approximate — [eval_module_bitstream_acc]
-   drops the incoming validity ([List.map fst]) when feeding a parser, which is
-   exact only for an all-valid source packet (single source parser feeding
-   transformers/deparsers).  (2) On a fan-out DAG the sink's bitstream is taken
-   from the last path explored; the intended topology is a linear chain
-   ([is_linear_chain]).  The [Admitted] lemmas below do not close these. *)
+   Chained parsers: a parser reading a *data-dependent* residual from an upstream
+   parser is modelled EXACTLY — [eval_module_bitstream_acc] feeds the downstream
+   parser the incoming validity channel, and [eval_parser_symbolic_v] requires
+   every extracted position to be valid (else that parse cannot accept), while
+   [eval_parser_residual_v] carries the incoming validity forward into the tail.
+   With an all-valid source packet the validity guard is vacuous, matching the
+   single-source-parser behaviour.
+
+   REMAINING CAVEAT: on a fan-out DAG the sink's bitstream is taken from the last
+   path explored; the intended topology is a linear chain ([is_linear_chain]).
+   The [Admitted] lemmas below do not close this (nor do they yet verify the
+   chained-parser model above — that is a semantic-exactness fix, still awaiting
+   the Gap B bitstream commutation proof). *)
 Definition modnet_equivalence_checker
   (p1 : GeneralCaracaraProgram) (p2 : GeneralCaracaraProgram) (input_len : nat)
   : EquivalenceResult :=
@@ -315,17 +326,94 @@ Qed.
 Print Assumptions modnet_header_equivalence_checker_sound_parser_source.
 
 (* ------------------------------------------------------------------ *)
-(* Bitstream-I/O soundness / completeness.  Same shape as the header-map  *)
-(* lemmas, but the observable is the sink deparser's output packet         *)
-(* ([p_packet]) rather than a header map: for the same concrete input      *)
-(* packet (the [f]-concretization of the shared symbolic bits), the two    *)
-(* programs' output packets agree (soundness) or differ (completeness). *)
+(* SMT bridge: decode the [modnet_neq_query] against [sb_concrete].      *)
+
+Lemma smt_bit_neq_eval : forall a b f,
+  eval_smt_bool (smt_bit_neq a b) f = xorb (eval_smt_bool a f) (eval_smt_bool b f).
+Proof.
+  intros a b f. cbn [smt_bit_neq eval_smt_bool].
+  destruct (eval_smt_bool a f), (eval_smt_bool b f); reflexivity.
+Qed.
+
+(* Two output bitstreams have equal concretizations exactly when the query's
+   [bitstreams_differ_v] is false at [f]. *)
+Lemma bitstreams_differ_v_false : forall f out1 out2,
+  eval_smt_bool (bitstreams_differ_v out1 out2) f = false ->
+  sb_concrete out1 f = sb_concrete out2 f.
+Proof.
+  intros f out1. induction out1 as [|[b1 v1] r1 IH]; intros [|[b2 v2] r2] H;
+    try reflexivity;
+    try (cbn [bitstreams_differ_v] in H; cbn [eval_smt_bool] in H; discriminate H).
+  cbn [bitstreams_differ_v] in H. cbn [eval_smt_bool] in H.
+  apply Bool.orb_false_iff in H. destruct H as [Hhead Htail].
+  cbn [sym_bit_differ] in Hhead. cbn [eval_smt_bool] in Hhead.
+  apply Bool.orb_false_iff in Hhead. destruct Hhead as [Hv Hb].
+  change (sb_concrete ((b1, v1) :: r1) f)
+    with ((if eval_smt_bool v1 f then [eval_smt_bool b1 f] else []) ++ sb_concrete r1 f).
+  change (sb_concrete ((b2, v2) :: r2) f)
+    with ((if eval_smt_bool v2 f then [eval_smt_bool b2 f] else []) ++ sb_concrete r2 f).
+  rewrite (IH r2 Htail).
+  f_equal.
+  (* head positions contribute equally: validities agree (Hv), and when both
+     valid the bits agree (Hb). *)
+  assert (Hveq : eval_smt_bool v1 f = eval_smt_bool v2 f).
+  { change (SmtBoolOr (SmtBoolAnd v1 (SmtBoolNot v2)) (SmtBoolAnd (SmtBoolNot v1) v2))
+      with (smt_bit_neq v1 v2) in Hv.
+    rewrite smt_bit_neq_eval in Hv. apply Bool.xorb_eq in Hv. exact Hv. }
+  rewrite <- Hveq. destruct (eval_smt_bool v1 f) eqn:Ev1; [| reflexivity].
+  assert (Ev2 : eval_smt_bool v2 f = true) by congruence.
+  change (SmtBoolOr (SmtBoolAnd b1 (SmtBoolNot b2)) (SmtBoolAnd (SmtBoolNot b1) b2))
+    with (smt_bit_neq b1 b2) in Hb.
+  rewrite smt_bit_neq_eval, Ev2 in Hb. cbn [andb] in Hb.
+  apply Bool.xorb_eq in Hb. rewrite Hb. reflexivity.
+Qed.
+
+(* NOTE: the converse ([bitstreams_differ_v out1 out2] true -> concretizations
+   differ) does NOT hold: when [out1]/[out2] have different STATIC lengths,
+   [bitstreams_differ_v] returns [SmtTrue] ("always differ"), yet [sb_concrete]
+   drops invalid padding, so e.g. [sb_concrete [(SmtTrue,SmtFalse)] f = [] =
+   sb_concrete [] f] while [bitstreams_differ_v [(SmtTrue,SmtFalse)] [] = SmtTrue].
+   Hence the completeness lemma below is UNPROVABLE as stated: the query over-
+   approximates output-length differences, so a SAT model can be spurious.  This
+   is a precision bug in [modnet_neq_query], not a missing proof — closing it
+   requires making [bitstreams_differ_v] length-exact w.r.t. the [valid] channel. *)
+(* Well-formedness bundle for the bitstream checker, analogous to
+   [parser_source_ok] for the header checker: a [source parser -> transformer*
+   -> deparser] linear chain, plus the (topology) condition that a successful
+   concrete run's sinks are a single deparser.  Everything is what
+   [refine_toplevel] (half 2) and [bitstream_lockstep_toplevel] (half 1) need. *)
+Definition bitstream_ok (pre : String.string) (p : GeneralCaracaraProgram) (n : nat) : Prop :=
+  let net := get_network_from_general p in
+  let psrc := start_module net in
+  let S := init_general_symbolic_state_n pre p n in
+  no_fan_out net /\
+  single_sink net /\
+  (forall name m, lookup_module net name = Some m -> name <> psrc ->
+     (exists nm2 s c t, m = TransformerModule nm2 s c t) \/
+     (exists nm2 d, m = DeparserModule nm2 d)) /\
+  (forall x, ~ In psrc (downstream_modules net x)) /\
+  (exists nm pp, lookup_module net psrc = Some (ParserModule nm pp) /\
+     (forall ss, (mod_states S) ?? (unwrap psrc) = Some ss ->
+        exists ps, ss = ParserMod ps /\
+                   extract_targets_in_dom pp (module_header_map ss) /\
+                   hdr_writes_present net (module_header_map ss))) /\
+  state_writes_present net S /\
+  (forall f l, eval_general_program_concrete_sinks p (concretize_sym_modnet_state S f) = Some l ->
+     exists ds, l = [DeparserMod ds]).
+
+(* Bitstream-I/O soundness: for the same concrete input packet (the
+   [f]-concretization of the shared symbolic bits), the two programs' output
+   packets are identical.  Same shape as the header-map lemma, but the observable
+   is the sink deparser's output packet ([p_packet]).  Adds a [bitstream_ok]
+   bundle (mirroring the Gap A closure's [parser_source_ok]). *)
 Lemma modnet_equivalence_checker_sound :
   forall p1 p2 n,
   well_formed_general_program p1 ->
   well_formed_general_program p2 ->
   is_linear_chain p1 ->
   is_linear_chain p2 ->
+  bitstream_ok "p1" p1 n ->
+  bitstream_ok "p2" p2 n ->
   modnet_equivalence_checker p1 p2 n = Equivalent ->
   forall s_i1 s_i2 c_i1 c_i2 f,
   s_i1 = init_general_symbolic_state_n "p1" p1 n ->
@@ -335,38 +423,91 @@ Lemma modnet_equivalence_checker_sound :
   forall l1 l2,
   eval_general_program_concrete_sinks p1 c_i1 = Some l1 ->
   eval_general_program_concrete_sinks p2 c_i2 = Some l2 ->
-  (* each program's single sink is a deparser, and the emitted output
-     bitstreams are identical *)
   exists ds1 ds2,
   l1 = [DeparserMod ds1] /\
   l2 = [DeparserMod ds2] /\
   p_packet ds1 = p_packet ds2.
 Proof.
-Admitted.
+  intros p1 p2 n Hwf1 Hwf2 Hlc1 Hlc2 Hok1 Hok2 Hcheck
+         s_i1 s_i2 c_i1 c_i2 f Hs1 Hs2 Hc1 Hc2 l1 l2 Hl1 Hl2.
+  subst s_i1 s_i2 c_i1 c_i2.
+  destruct Hok1 as [Hnf1 [Hss1 [Htd1 [Hnd1 [[nm1 [pp1 [Hlk1 Hps1]]] [Hsw1 Hdep1]]]]]].
+  destruct Hok2 as [Hnf2 [Hss2 [Htd2 [Hnd2 [[nm2 [pp2 [Hlk2 Hps2]]] [Hsw2 Hdep2]]]]]].
+  (* the concrete sinks are single deparsers *)
+  destruct (Hdep1 f l1 Hl1) as [ds1 ->]. destruct (Hdep2 f l2 Hl2) as [ds2 ->].
+  exists ds1, ds2. split; [reflexivity | split; [reflexivity |]].
+  (* half 2: the concrete bitstream network output = p_packet ds_i *)
+  pose proof (refine_toplevel p1 (concretize_sym_modnet_state (init_general_symbolic_state_n "p1" p1 n) f)
+                ds1 Hnf1 Hss1 Hl1) as Hrt1.
+  pose proof (refine_toplevel p2 (concretize_sym_modnet_state (init_general_symbolic_state_n "p2" p2 n) f)
+                ds2 Hnf2 Hss2 Hl2) as Hrt2.
+  (* half 1: the symbolic accept is true and the concrete output = sb_concrete os *)
+  pose proof (bitstream_lockstep_toplevel p1 (init_general_symbolic_state_n "p1" p1 n) f
+                nm1 pp1 [DeparserMod ds1] (p_packet ds1)
+                Hnf1 Htd1 Hnd1 Hlk1 Hps1 Hsw1 Hrt1) as Hls1.
+  pose proof (bitstream_lockstep_toplevel p2 (init_general_symbolic_state_n "p2" p2 n) f
+                nm2 pp2 [DeparserMod ds2] (p_packet ds2)
+                Hnf2 Htd2 Hnd2 Hlk2 Hps2 Hsw2 Hrt2) as Hls2.
+  (* unfold the checker to expose the symbolic runs and the UNSAT query *)
+  unfold modnet_equivalence_checker in Hcheck.
+  destruct (eval_general_program_bitstream_acc p1 (init_general_symbolic_state_n "p1" p1 n))
+    as [[[sinks1 a1] out1]|] eqn:Esym1; [| contradiction Hls1].
+  destruct (eval_general_program_bitstream_acc p2 (init_general_symbolic_state_n "p2" p2 n))
+    as [[[sinks2 a2] out2]|] eqn:Esym2; [| contradiction Hls2].
+  destruct Hls1 as [Ha1 Ho1]. destruct Hls2 as [Ha2 Ho2].
+  (* the checker matched single-deparser sinks *)
+  destruct sinks1 as [| [t1|q1|d1] [|y1 ys1]]; try discriminate Hcheck.
+  destruct sinks2 as [| [t2|q2|d2] [|y2 ys2]]; try discriminate Hcheck.
+  destruct (smt_query (modnet_neq_query a1 a2 out1 out2)) eqn:Hq; try discriminate Hcheck.
+  (* soundness of the solver: the query is false at f *)
+  pose proof (smt_query_sound_none _ Hq f) as Hqf.
+  cbn [modnet_neq_query eval_smt_bool] in Hqf.
+  apply Bool.orb_false_iff in Hqf. destruct Hqf as [_ Hand].
+  (* both accept, so the bitstream-difference disjunct forces agreement *)
+  rewrite Ha1, Ha2 in Hand. cbn [andb] in Hand.
+  pose proof (bitstreams_differ_v_false f out1 out2 Hand) as Hbeq.
+  (* p_packet ds1 = sb_concrete out1 = sb_concrete out2 = p_packet ds2 *)
+  rewrite Ho1, Ho2. exact Hbeq.
+Qed.
 
-Lemma modnet_equivalence_checker_complete :
-  forall p1 p2 n f,
-  well_formed_general_program p1 ->
-  well_formed_general_program p2 ->
-  is_linear_chain p1 ->
-  is_linear_chain p2 ->
-  modnet_equivalence_checker p1 p2 n = NotEquivalent f ->
-  forall s_i1 s_i2 c_i1 c_i2,
-  s_i1 = init_general_symbolic_state_n "p1" p1 n ->
-  s_i2 = init_general_symbolic_state_n "p2" p2 n ->
-  c_i1 = concretize_sym_modnet_state s_i1 f ->
-  c_i2 = concretize_sym_modnet_state s_i2 f ->
-  forall l1 l2,
-  eval_general_program_concrete_sinks p1 c_i1 = Some l1 ->
-  eval_general_program_concrete_sinks p2 c_i2 = Some l2 ->
-  (* each program's single sink is a deparser, and the emitted output
-     bitstreams differ (on the input packet witnessed by [f]) *)
-  exists ds1 ds2,
-  l1 = [DeparserMod ds1] /\
-  l2 = [DeparserMod ds2] /\
-  p_packet ds1 <> p_packet ds2.
+(* COMPLETENESS DOES NOT HOLD, and it is not merely unproven — it is FALSE as
+   stated, because [modnet_neq_query] / [bitstreams_differ_v] OVER-APPROXIMATE
+   the real (sb_concrete) output difference.  We record this formally instead of
+   leaving a false [Admitted] (which would be an inconsistency landmine):
+
+   (1) Length over-approximation: a bitstream with a trailing INVALID position
+       has the same [sb_concrete] as the shorter one, yet [bitstreams_differ_v]
+       returns [SmtTrue] for the length mismatch. *)
+Lemma modnet_neq_query_overapprox_length :
+  exists (f : SmtValuation) out1 out2,
+    eval_smt_bool (bitstreams_differ_v out1 out2) f = true /\
+    sb_concrete out1 f = sb_concrete out2 f.
 Proof.
-Admitted.
+  exists (fun _ => UninitVal), [(SmtTrue, SmtFalse)], (@nil SymBit).
+  split; reflexivity.
+Qed.
+
+(* (2) Per-position over-approximation (even at EQUAL length): two positions
+       with swapped validity but equal underlying bits give equal [sb_concrete]
+       while [bitstreams_differ_v] fires on the validity mismatch. *)
+Lemma modnet_neq_query_overapprox_validity :
+  exists (f : SmtValuation) out1 out2,
+    length out1 = length out2 /\
+    eval_smt_bool (bitstreams_differ_v out1 out2) f = true /\
+    sb_concrete out1 f = sb_concrete out2 f.
+Proof.
+  exists (fun _ => UninitVal),
+         [(SmtTrue, SmtTrue); (SmtTrue, SmtFalse)],
+         [(SmtTrue, SmtFalse); (SmtTrue, SmtTrue)].
+  split; [reflexivity | split; reflexivity].
+Qed.
+
+(* Consequently a SAT model returned by [modnet_equivalence_checker] can be
+   SPURIOUS: the checker may report [NotEquivalent] on programs whose concrete
+   outputs actually coincide.  So the checker is SOUND (see above) but NOT
+   COMPLETE.  Closing completeness requires making [bitstreams_differ_v]
+   length- and validity-exact w.r.t. [sb_concrete] (a semantics change to the
+   query), not just a proof — this is tracked as a precision gap in
+   SOUNDNESS.md, related to Gap C. *)
 
 Print Assumptions modnet_equivalence_checker_sound.
-Print Assumptions modnet_equivalence_checker_complete.

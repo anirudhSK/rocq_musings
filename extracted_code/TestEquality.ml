@@ -223,19 +223,19 @@ let%expect_test "bitstream non-equivalence: emit order swapped" =
     | var( pkt_1 ) : u64 := 0
     | var( pkt_10 ) : u64 := 0
     | var( pkt_100 ) : u64 := 0
-    | var( pkt_1000 ) : u64 := 1
-    | var( pkt_10000 ) : u64 := 0
+    | var( pkt_1000 ) : u64 := 0
+    | var( pkt_10000 ) : u64 := 1
     | var( pkt_1001 ) : u64 := 1
     | var( pkt_101 ) : u64 := 1
     | var( pkt_1010 ) : u64 := 1
-    | var( pkt_1011 ) : u64 := 1
+    | var( pkt_1011 ) : u64 := 0
     | var( pkt_11 ) : u64 := 0
     | var( pkt_110 ) : u64 := 1
     | var( pkt_1100 ) : u64 := 0
     | var( pkt_1101 ) : u64 := 0
-    | var( pkt_111 ) : u64 := 0
+    | var( pkt_111 ) : u64 := 1
     | var( pkt_1110 ) : u64 := 0
-    | var( pkt_1111 ) : u64 := 1
+    | var( pkt_1111 ) : u64 := 0
     └
     NotEquivalent
     |}]

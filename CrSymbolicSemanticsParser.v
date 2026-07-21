@@ -159,6 +159,68 @@ Definition eval_parser_symbolic (p : Parser) (ps : SymbolicParserState)
     (List.length (parser_states p) * S (List.length (p_packet ps))).
 
 (* ================================================================== *)
+(* Validity-aware parser run (for CHAINED parsers in the bitstream path). *)
+(*                                                                       *)
+(* [run_parser_symbolic] above treats the whole [p_packet] as real bits.  *)
+(* When a parser reads a residual produced by an UPSTREAM parser, some     *)
+(* trailing positions are padding (their [valid] flag is false), and       *)
+(* extracting from them is meaningless — that parse must NOT accept.  This  *)
+(* variant threads the incoming per-position [validity] and conjoins, into  *)
+(* the accept condition, the requirement that every extracted position is   *)
+(* valid.  With an all-valid source packet (a single source parser) the      *)
+(* guard is vacuously true, so this agrees with [run_parser_symbolic].       *)
+(* ================================================================== *)
+
+(* Conjunction of the input-packet validity over positions [cursor, cursor+width). *)
+Definition slice_valid (validity : list SmtBoolExpr) (cursor width : nat) : SmtBoolExpr :=
+  List.fold_right SmtBoolAnd SmtTrue (List.firstn width (List.skipn cursor validity)).
+
+Fixpoint run_parser_symbolic_v (p : Parser) (lbl : ParserStateLabel)
+    (ps : SymbolicParserState) (validity : list SmtBoolExpr) (guard : SmtBoolExpr)
+    (fuel : nat) : SymParserResult :=
+  let reject := mkSymParserResult SmtFalse (p_header_map ps) in
+  match fuel with
+  | O => reject
+  | S fuel' =>
+      match lookup_state p lbl with
+      | None => reject
+      | Some d =>
+          (* Advance the cursor on extraction, and require the extracted range
+             be valid by conjoining it into the running [guard]. *)
+          let ext :=
+            match psd_extract d with
+            | None => Some (ps, guard)
+            | Some (ExtractOpConstructor h w) =>
+                match apply_extract_symbolic (ExtractOpConstructor h w) ps with
+                | None => None
+                | Some ps' =>
+                    Some (ps', SmtBoolAnd guard (slice_valid validity (p_cursor ps) w))
+                end
+            end in
+          match ext with
+          | None => reject
+          | Some (ps', guard') =>
+              let run_tgt := fun (tgt : ParserTarget) =>
+                match tgt with
+                | Accept => mkSymParserResult guard' (p_header_map ps')
+                | Reject => mkSymParserResult SmtFalse (p_header_map ps')
+                | TargetState next => run_parser_symbolic_v p next ps' validity guard' fuel'
+                end in
+              match psd_trans d with
+              | Unconditional tgt => run_tgt tgt
+              | Select cases default =>
+                  resolve_select_symbolic run_tgt ps' cases default
+              end
+          end
+      end
+  end.
+
+Definition eval_parser_symbolic_v (p : Parser) (ps : SymbolicParserState)
+    (validity : list SmtBoolExpr) : SymParserResult :=
+  run_parser_symbolic_v p (parser_start p) ps validity SmtTrue
+    (List.length (parser_states p) * S (List.length (p_packet ps))).
+
+(* ================================================================== *)
 (* Residual bitstream (the bits a parser leaves unconsumed).           *)
 (*                                                                     *)
 (* Under path merging the number of bits a parser consumes is data-    *)
@@ -249,6 +311,49 @@ Fixpoint run_parser_residual (p : Parser) (lbl : ParserStateLabel)
 Definition eval_parser_residual (p : Parser) (ps : SymbolicParserState)
     : SymBitstream :=
   run_parser_residual p (parser_start p) ps
+    (List.length (parser_states p) * S (List.length (p_packet ps))).
+
+(* Validity-aware residual (for CHAINED parsers): the unconsumed tail carries the
+   INCOMING [validity] of its positions, not a blanket [SmtTrue].  So if an
+   upstream parser left padding, that padding stays invalid as it flows on, and a
+   downstream parser will not treat it as real bits.  With an all-valid source
+   packet this coincides with [run_parser_residual] (every tail position valid). *)
+Fixpoint run_parser_residual_v (p : Parser) (lbl : ParserStateLabel)
+    (ps : SymbolicParserState) (validity : list SmtBoolExpr) (fuel : nat) : SymBitstream :=
+  match fuel with
+  | O => []
+  | S fuel' =>
+      match lookup_state p lbl with
+      | None => []
+      | Some d =>
+          let ps_extracted :=
+            match psd_extract d with
+            | None => Some ps
+            | Some eo => apply_extract_symbolic eo ps
+            end in
+          match ps_extracted with
+          | None => []
+          | Some ps' =>
+              let run_tgt := fun (tgt : ParserTarget) =>
+                match tgt with
+                | Accept =>
+                    List.combine (List.skipn (p_cursor ps') (p_packet ps'))
+                                 (List.skipn (p_cursor ps') validity)
+                | Reject => []
+                | TargetState next => run_parser_residual_v p next ps' validity fuel'
+                end in
+              match psd_trans d with
+              | Unconditional tgt => run_tgt tgt
+              | Select cases default =>
+                  resolve_select_residual run_tgt ps' cases default
+              end
+          end
+      end
+  end.
+
+Definition eval_parser_residual_v (p : Parser) (ps : SymbolicParserState)
+    (validity : list SmtBoolExpr) : SymBitstream :=
+  run_parser_residual_v p (parser_start p) ps validity
     (List.length (parser_states p) * S (List.length (p_packet ps))).
 
 (* Concretize a symbolic parser state under a valuation [f]: the parser analogue

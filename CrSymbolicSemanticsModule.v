@@ -143,9 +143,14 @@ Definition deparser_output_bitstream
 
 (* One module, accept/bitstream-aware: returns its updated state, its accept
    condition, and its outgoing residual bitstream.  A parser reads the incoming
-   residual's bits (dropping their validity — exact for an all-valid source
-   packet; see the caveat at [modnet_equivalence_checker]) and emits the merged
-   tail; a transformer flows the residual through; a deparser writes ahead of it. *)
+   residual as a validity-annotated bitstream: it extracts the bits but its
+   accept condition also requires every extracted position to be VALID (via
+   [eval_parser_symbolic_v]), and the residual it emits carries the incoming
+   validity forward ([eval_parser_residual_v]).  This models CHAINED parsers
+   exactly — a parser reading an upstream parser's data-dependent residual will
+   not treat padding as real bits.  With an all-valid source packet the validity
+   guard is vacuous, so this matches the single-source-parser behaviour.  A
+   transformer flows the residual through; a deparser writes ahead of it. *)
 Definition eval_module_bitstream_acc
     (m : CrModule) (ls : ModuleState SmtArithExpr SmtBoolExpr)
     (f_hdrs : PMap.t SmtArithExpr) (f_bits : SymBitstream)
@@ -156,12 +161,13 @@ Definition eval_module_bitstream_acc
   | TransformerModule _ _ _ t, TransformerMod ts =>
       Some (TransformerMod (eval_transformer_smt t ts), SmtTrue, f_bits)
   | ParserModule _ p, ParserMod ps =>
-      let r := eval_parser_symbolic p ps in
+      let validity := List.map snd f_bits in
+      let r := eval_parser_symbolic_v p ps validity in
       Some (ParserMod {| p_header_map := spr_headers r;
                          p_packet     := p_packet ps;
                          p_cursor     := p_cursor ps |},
             spr_accept r,
-            eval_parser_residual p ps)
+            eval_parser_residual_v p ps validity)
   | DeparserModule _ d, DeparserMod ps =>
       Some (DeparserMod (eval_deparser_symbolic d ps), SmtTrue,
             deparser_output_bitstream d (p_header_map ps) f_bits)
