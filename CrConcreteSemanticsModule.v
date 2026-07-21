@@ -6,6 +6,7 @@ From MyProject Require Import CrModule.
 From MyProject Require Import CrProgramState.
 From MyProject Require Import CrGeneralProgramState.
 From MyProject Require Import CrVal.
+From MyProject Require Import CrDeparser.
 From MyProject Require Import CrConcreteSemanticsTransformer.
 From MyProject Require Import CrConcreteSemanticsParser.
 From MyProject Require Import CrConcreteSemanticsDeparser.
@@ -102,4 +103,92 @@ Definition eval_general_program_concrete_sinks
   | None        => None
   | Some ledger =>
       Some (get_sink_states (get_network_from_general p) (mod_states ledger))
+  end.
+
+(* ================================================================== *)
+(* Concrete twin of the accept/bitstream-aware network semantics        *)
+(* (CrSymbolicSemanticsModule.eval_*_bitstream_acc).  Same shape — each   *)
+(* module yields (updated state, a concrete [bool] accept flag, and an     *)
+(* outgoing [list bool] residual) — so the symbolic bitstream network       *)
+(* locksteps with this one.  A separate refinement lemma then relates this   *)
+(* concrete bitstream network to the plain cursor-based [eval_network_from_  *)
+(* concrete] output.  A parser reject sets the accept flag [false] (the      *)
+(* module still returns [Some], mirroring the symbolic side); a transformer  *)
+(* flows the bitstream through; a deparser prepends its emitted bits.        *)
+(* ================================================================== *)
+
+Definition eval_module_bitstream_concrete
+    (m : CrModule) (ls : ModuleState CrVal bool)
+    (f_hdrs : PMap.t CrVal) (f_bits : list bool)
+    : option (ModuleState CrVal bool * bool * list bool) :=
+  let ls' := set_module_packet (set_module_header_map ls f_hdrs) f_bits in
+  match m, ls' with
+  | TransformerModule _ _ _ t, TransformerMod ts =>
+      Some (TransformerMod (eval_transformer_concrete t ts), true, f_bits)
+  | ParserModule _ p, ParserMod ps =>
+      match eval_parser_concrete p ps with
+      | Some cps => Some (ParserMod cps, true,
+                          List.skipn (p_cursor cps) (p_packet cps))
+      | None => Some (ParserMod ps, false, [])
+      end
+  | DeparserModule _ d, DeparserMod ps =>
+      Some (DeparserMod (eval_deparser_concrete d ps), true,
+            List.flat_map (emit_bits_concrete (p_header_map ps)) (deparser_emits d)
+              ++ f_bits)
+  | _, _ => None
+  end.
+
+Fixpoint eval_network_bitstream_concrete
+    (net    : ModuleNetwork)
+    (start  : ModuleName)
+    (f_hdrs : PMap.t CrVal)
+    (f_bits : list bool)
+    (gs     : GeneralConcreteState)
+    (acc    : bool)
+    (fuel   : nat)
+    : option (GeneralConcreteState * bool * list bool) :=
+  match fuel with | O => None | S fuel' =>
+  match lookup_module net start, (mod_states gs) ?? (unwrap start) with
+  | Some m, Some ls =>
+    match eval_module_bitstream_concrete m ls f_hdrs f_bits with
+    | None => None
+    | Some (ls'', a, out_bits) =>
+      let acc' := andb acc a in
+      let gs' := set_gps_mod_states gs (PMap.set (unwrap start) ls'' (mod_states gs)) in
+      let f_hdrs' := module_header_map ls'' in
+      match downstream_modules net start with
+      | [] => Some (gs', acc', out_bits)
+      | dsts =>
+          List.fold_left
+            (fun acc_opt dst =>
+              match acc_opt with
+              | None => None
+              | Some (gs_acc, acc_cond, _) =>
+                  eval_network_bitstream_concrete
+                    net dst f_hdrs' out_bits gs_acc acc_cond fuel'
+              end)
+            dsts
+            (Some (gs', acc', out_bits))
+      end
+    end
+  | _, _ => None
+  end end.
+
+Definition eval_general_program_bitstream_concrete
+  (p  : GeneralCaracaraProgram)
+  (gs : GeneralConcreteState)
+  : option (list (ModuleState CrVal bool) * bool * list bool) :=
+  let net := get_network_from_general p in
+  let fuel := List.length (net_modules net) in
+  let start := start_module net in
+  match (mod_states gs) ?? (unwrap start) with
+  | None => None
+  | Some start_state =>
+    let hdr_i := module_header_map start_state in
+    let bits_i := sh_bit_map gs in
+    match eval_network_bitstream_concrete net start hdr_i bits_i gs true fuel with
+    | None => None
+    | Some (ledger, acc, out_bits) =>
+        Some (get_sink_states net (mod_states ledger), acc, out_bits)
+    end
   end.
