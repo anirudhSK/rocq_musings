@@ -90,7 +90,7 @@ module CrDeparser = struct
 end
 module CrParser = struct
   include CrParser
-  type coq_ExtractOp = [%import: CrParser.coq_ExtractOp]
+  type coq_ParserOp = [%import: CrParser.coq_ParserOp]
   [@@deriving sexp]
   type coq_ParserTarget = [%import: CrParser.coq_ParserTarget]
   [@@deriving sexp]

@@ -36,7 +36,7 @@ Arguments p_packet {Th Tb} _.
 Arguments p_cursor {Th Tb} _.
 
 Definition ConcreteParserState := ParserState CrVal bool.
-Definition SymbolicParserState := ParserState SmtArithExpr SmtBoolExpr.
+Definition SymbolicParserState := ParserState SmtArithExpr (ConditionalVal SmtBoolExpr).
 
 (* ------------------------------------------------------------------ *)
 (* Inject a fresh header map into a [TransformerState], keeping ctrl/state. *)
@@ -98,3 +98,6 @@ Definition set_module_packet {Th Tb} (m : ModuleState Th Tb) (pkt : list Tb)
                                         p_packet     := pkt;
                                         p_cursor     := 0 |}
   end.
+
+Definition ConcreteModuleState := ModuleState CrVal bool.
+Definition SymbolicModuleState := ModuleState SmtArithExpr (ConditionalVal SmtBoolExpr).

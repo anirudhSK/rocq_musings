@@ -3,7 +3,6 @@ Extraction Language OCaml.
 
 From MyProject Require Import SmtQuery.
 From MyProject Require Import SmtModuleQuery.
-From MyProject Require Import SmtParserQuery.
 
 From MyProject Require Import CrMem.
 From MyProject Require Import CrMemEx.
@@ -29,18 +28,14 @@ Separate Extraction
   CrSymbolicSemanticsTransformer.eval_sym_state
   CrConcreteSemanticsTransformer.eval_cr_program_concrete
   CrVarLike.program_state_mapper CrVarLike.init_concrete_transformer_state
-  test_programs mod_test_programs parser_test_programs
+  test_programs parser_test_programs
+  TestModulePrograms.lookup_mod_test_program
+  TestModulePrograms.mod_test_program_names
   CrConcreteSemanticsParser.eval_parser_concrete
   CrVarLike.init_general_concrete_state
-  CrConcreteSemanticsModule.eval_general_program_concrete_sinks
+  CrConcreteSemanticsModule.eval_general_program_concrete
   PktClass.ex_lin_prog PktClass.ex_tss_prog
-  modnet_equivalence_checker modnet_header_equivalence_checker
-  TestModulePrograms.mod_prog_parse_deparse
-  TestModulePrograms.mod_prog_parse_deparse_swapped
-  TestModulePrograms.mod_prog_parse_reject_deparse
-  TestModulePrograms.mod_prog_parse_accept_deparse
-  TestModulePrograms.mod_prog_consume1_emit1
-  TestModulePrograms.mod_prog_consume2_emit1
-  TestModulePrograms.mod_prog_varlen_emit1
-  SmtParserQuery.parser_equivalence_checker
+  PktClass.ex_lin_overlap PktClass.ex_tss_overlap
+  PktClass.ex_lin_distinct PktClass.ex_tss_distinct
+  modnet_equivalence_checker
   well_formed_programb well_formed_general_programb.

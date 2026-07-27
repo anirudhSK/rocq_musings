@@ -17,7 +17,7 @@ Definition pat_255 : list bool := [true;true;true;true;true;true;true;true].
 Definition p_extract8 : Parser :=
   mkParser (ParserStateLabelCtr 1) [
     mkParserStateDef (ParserStateLabelCtr 1)
-      (Some (ExtractOpConstructor (HeaderCtr 1) 8))
+      (Some (ExtractOpConstructor (HeaderCtr 1) 8 u64))
       (Unconditional Accept)
   ].
 
@@ -25,10 +25,10 @@ Definition p_extract8 : Parser :=
 Definition p_extract_two : Parser :=
   mkParser (ParserStateLabelCtr 1) [
     mkParserStateDef (ParserStateLabelCtr 1)
-      (Some (ExtractOpConstructor (HeaderCtr 1) 8))
+      (Some (ExtractOpConstructor (HeaderCtr 1) 8 u64))
       (Unconditional (TargetState (ParserStateLabelCtr 2)));
     mkParserStateDef (ParserStateLabelCtr 2)
-      (Some (ExtractOpConstructor (HeaderCtr 2) 8))
+      (Some (ExtractOpConstructor (HeaderCtr 2) 8 u64))
       (Unconditional Accept)
   ].
 
@@ -37,11 +37,11 @@ Definition p_extract_two : Parser :=
 Definition p_select_extract : Parser :=
   mkParser (ParserStateLabelCtr 1) [
     mkParserStateDef (ParserStateLabelCtr 1)
-      (Some (ExtractOpConstructor (HeaderCtr 1) 8))
+      (Some (ExtractOpConstructor (HeaderCtr 1) 8 u64))
       (Select [mkSelectCase (HeaderCtr 1) 0 8 pat_1 (TargetState (ParserStateLabelCtr 2))]
               Accept);
     mkParserStateDef (ParserStateLabelCtr 2)
-      (Some (ExtractOpConstructor (HeaderCtr 2) 8))
+      (Some (ExtractOpConstructor (HeaderCtr 2) 8 u64))
       (Unconditional Accept)
   ].
 
@@ -51,11 +51,11 @@ Definition p_select_extract : Parser :=
 Definition p_loop : Parser :=
   mkParser (ParserStateLabelCtr 1) [
     mkParserStateDef (ParserStateLabelCtr 1)
-      (Some (ExtractOpConstructor (HeaderCtr 1) 8))
+      (Some (ExtractOpConstructor (HeaderCtr 1) 8 u64))
       (Select [mkSelectCase (HeaderCtr 1) 0 8 pat_0 (TargetState (ParserStateLabelCtr 2))]
               (TargetState (ParserStateLabelCtr 1)));
     mkParserStateDef (ParserStateLabelCtr 2)
-      (Some (ExtractOpConstructor (HeaderCtr 2) 8))
+      (Some (ExtractOpConstructor (HeaderCtr 2) 8 u64))
       (Unconditional Accept)
   ].
 
@@ -64,7 +64,7 @@ Definition p_loop : Parser :=
 Definition p_reject : Parser :=
   mkParser (ParserStateLabelCtr 1) [
     mkParserStateDef (ParserStateLabelCtr 1)
-      (Some (ExtractOpConstructor (HeaderCtr 1) 8))
+      (Some (ExtractOpConstructor (HeaderCtr 1) 8 u64))
       (Select [mkSelectCase (HeaderCtr 1) 0 8 pat_255 Reject]
               Accept)
   ].
@@ -78,11 +78,11 @@ Definition pat_nib3 : list bool := [false; false; true; true].  (* denotes 3 *)
 Definition p_select_nibble : Parser :=
   mkParser (ParserStateLabelCtr 1) [
     mkParserStateDef (ParserStateLabelCtr 1)
-      (Some (ExtractOpConstructor (HeaderCtr 1) 8))
+      (Some (ExtractOpConstructor (HeaderCtr 1) 8 u64))
       (Select [mkSelectCase (HeaderCtr 1) 4 8 pat_nib3 (TargetState (ParserStateLabelCtr 2))]
               Accept);
     mkParserStateDef (ParserStateLabelCtr 2)
-      (Some (ExtractOpConstructor (HeaderCtr 2) 8))
+      (Some (ExtractOpConstructor (HeaderCtr 2) 8 u64))
       (Unconditional Accept)
   ].
 

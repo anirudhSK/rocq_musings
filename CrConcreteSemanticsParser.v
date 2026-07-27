@@ -16,13 +16,20 @@ From Stdlib Require Import ZArith.
    current cursor (the packet is a [list bool], MSB-first), store the
    assembled value into header [h], and advance the cursor.  If the slice
    runs past the end of the packet the parse fails ([None]). *)
-Definition apply_extract_concrete (eo : ExtractOp) (ps : ConcreteParserState)
+Definition apply_extract_concrete (po : ParserOp) (ps : ConcreteParserState)
     : option ConcreteParserState :=
-  match eo with
-  | ExtractOpConstructor h width =>
+  match po with
+  | SeekForward width =>
+      if Nat.leb (p_cursor ps + width) (List.length (p_packet ps)) then
+        Some {| p_header_map := (p_header_map ps);
+                p_packet := p_packet ps;
+                p_cursor := p_cursor ps + width |}
+      else None
+  | ExtractOpConstructor h width of =>
       if Nat.leb (p_cursor ps + width) (List.length (p_packet ps)) then
         let slice := bit_slice (p_packet ps) (p_cursor ps) width in
-        let v := mk_int u64 (bits_to_Z slice) in
+        (* Assemble the [width] bits (MSB-first) and coerce into type [of]. *)
+        let v := mk_int of (bits_to_Z slice) in
         Some {| p_header_map := PMap.set (get_key h) v (p_header_map ps);
                 p_packet     := p_packet ps;
                 p_cursor     := p_cursor ps + width |}
@@ -36,8 +43,10 @@ Definition apply_extract_concrete (eo : ExtractOp) (ps : ConcreteParserState)
 Definition select_case_matches_concrete (ps : ConcreteParserState) (c : SelectCase)
     : bool :=
   let pat_v := mk_int u64 (bits_to_Z (sc_pattern c)) in
-  CrVal.eqb (slice_val (sc_start_index c) (sc_end_index c)
-              (lookup_varlike_map (p_header_map ps) (sc_header c))) pat_v.
+  CrVal.eqb
+    (slice_val (sc_start_index c) (sc_end_index c)
+      (lookup_varlike_map (p_header_map ps) (sc_header c)))
+    pat_v.
 
 Fixpoint resolve_select_concrete (ps : ConcreteParserState)
     (cases : list SelectCase) (default : ParserTarget) : ParserTarget :=
@@ -64,18 +73,19 @@ Fixpoint run_parser_concrete (p : Parser) (lbl : ParserStateLabel)
   match fuel with
   | O => None
   | S fuel' =>
-      match lookup_state p lbl with
+      match lookup_def p lbl with
       | None => None
-      | Some d =>
-          let ps_extracted :=
-            match psd_extract d with
+      | Some def =>
+          (* apply action *)
+          let ps_post :=
+            match psd_action def with
             | None => Some ps
-            | Some eo => apply_extract_concrete eo ps
+            | Some po => apply_extract_concrete po ps
             end in
-          match ps_extracted with
+          match ps_post with
           | None => None
           | Some ps' =>
-              match eval_transition_concrete ps' (psd_trans d) with
+              match eval_transition_concrete ps' (psd_trans def) with
               | Accept => Some ps'
               | Reject => None
               | TargetState next => run_parser_concrete p next ps' fuel'

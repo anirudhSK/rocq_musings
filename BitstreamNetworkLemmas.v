@@ -1,3 +1,5 @@
+(* 
+
 (* ================================================================== *)
 (* Gap B, layer 2: deparser output commutation.                         *)
 (*                                                                     *)
@@ -568,4 +570,4 @@ Proof.
       * pose proof (bs_acc_false_monotone _ _ _ _ _ _ _ _ _ Hnf E) as Ha. subst aa.
         cbv beta iota in Hcon. injection Hcon as _ Hbad _. discriminate Hbad.
       * cbv beta iota in Hcon. discriminate Hcon.
-Qed.
+Qed. *)

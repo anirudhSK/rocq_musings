@@ -114,8 +114,13 @@ let char_to_ascii (c : char) : Ascii.ascii =
     | 1 -> Coq_true
     | _ -> raise (Failure "&0x1 should only result in 0 or 1.") in
   let code : int = Char.code c in
-  Ascii (get_bit code 7, get_bit code 6, get_bit code 5, get_bit code 4,
-         get_bit code 3, get_bit code 2, get_bit code 1, get_bit code 0)
+  (* Coq's [Ascii b0 .. b7] takes b0 as the LEAST significant bit -- the order
+     [coq_str_to_str] above decodes with.  Passing the bits the other way round
+     builds a bit-reversed character, so a Coq-built string and an OCaml-built
+     one for the same text would not be equal: [coq_TraverseMap] would miss
+     every variable, and a name used as a map key would never be found. *)
+  Ascii (get_bit code 0, get_bit code 1, get_bit code 2, get_bit code 3,
+         get_bit code 4, get_bit code 5, get_bit code 6, get_bit code 7)
 let rec str_to_coq_str (s : Stdlib.String.t) : string =
   match s with
   | "" -> EmptyString
@@ -251,9 +256,9 @@ let print_malformed_prog p pid =
   | Datatypes.Coq_false -> Printf.printf "(%d) malformed\n" pid
   | Datatypes.Coq_true -> ()
 
-let print_malformed_gprog p pid =
+let print_malformed_gprog p name =
   match CrDslProperties.well_formed_general_programb p with
-  | Datatypes.Coq_false -> Printf.printf "(%d) malformed\n" pid
+  | Datatypes.Coq_false -> Printf.printf "(%s) malformed\n" name
   | Datatypes.Coq_true -> ()
 
 (* ------------------------------------------------------------------ *)
@@ -299,10 +304,38 @@ let run_parser (p : CrParser.coq_Parser) (bytes : int Stdlib.List.t)
 let set_net_packet (bytes : int Stdlib.List.t)
     (gcs : CrGeneralProgramState.coq_GeneralConcreteState)
     : CrGeneralProgramState.coq_GeneralConcreteState =
-  { gcs with CrGeneralProgramState.sh_bit_map = packet_of_bytes bytes }
+  { gcs with CrGeneralProgramState.sh_read_tape = packet_of_bytes bytes }
+
+(* Render the network's output packet -- the write tape the sink deparser left
+   behind -- as MSB-first bytes.  A trailing partial byte is rendered from the
+   bits that are there. *)
+let print_net_output (gcs : CrGeneralProgramState.coq_GeneralConcreteState) =
+  let bit_val = function Datatypes.Coq_true -> 1 | Datatypes.Coq_false -> 0 in
+  let rec pack acc cur n = function
+    | [] -> Stdlib.List.rev (if n = 0 then acc else cur :: acc)
+    | b :: rest ->
+      let cur = (cur lsl 1) lor bit_val b in
+      if n + 1 = 8 then pack (cur :: acc) 0 0 rest else pack acc cur (n + 1) rest in
+  let bytes = pack [] 0 0
+    (listify_coq_list gcs.CrGeneralProgramState.sh_write_tape) in
+  print_endline
+    (Stdlib.String.concat ", " (Stdlib.List.map string_of_int bytes))
+
+(* How many bits of the input packet the network consumed, summed over its
+   parsers. *)
+let net_bits_read (gcs : CrGeneralProgramState.coq_GeneralConcreteState) : int =
+  crval_to_int gcs.CrGeneralProgramState.sh_bits_read
+
+let print_net_bits_read (gcs : CrGeneralProgramState.coq_GeneralConcreteState) =
+  Printf.printf "bits_read=%d\n" (net_bits_read gcs)
 
 (* Render the parsed headers ("h<k>=<v>", sorted), or "Reject" on parse failure. *)
 let print_parser_result (r : CrProgramState.coq_ConcreteParserState option) =
   match r with
   | None -> print_endline "Reject"
   | Some ps -> print_endline (header_map_to_string ps.CrProgramState.p_header_map)
+
+let find_modprog (name : Stdlib.String.t) =
+  match TestModulePrograms.lookup_mod_test_program (str_to_coq_str name) with
+  | Some p -> p
+  | None -> failwith ("find_modprog: no module test program named " ^ name)

@@ -370,12 +370,19 @@ Proof.
   - intros w Hw. apply Hincl. exact Hw.
 Qed.
 
-Lemma has_duplicates_false_norepet :
-  forall l, has_duplicates posesque_eqb l = false -> list_norepet l.
+Lemma has_duplicates_false_iff_norepet :
+  forall l, has_duplicates posesque_eqb l = false <-> list_norepet l.
 Proof.
-  intros l H.
-  apply (has_duplicates_correct A posesque_eqb (@posesque_eqb_refl A _) (@posesque_eqb_sym A _)).
-  exact H.
+  intros l.
+  split.
+  - apply (has_duplicates_correct A posesque_eqb (@posesque_eqb_refl A _) (@posesque_eqb_sym A _)).
+  - intros Hnr. induction Hnr.
+    + reflexivity.
+    + simpl.
+      assert (Hex : existsb (fun y => posesque_eqb y hd) tl = false).
+      { destruct (existsb (fun y => posesque_eqb y hd) tl) eqn:E; [ | reflexivity ].
+        exfalso. apply H. apply (in_listb_spec tl hd). unfold in_listb. exact E. }
+      rewrite Hex. apply IHHnr.
 Qed.
 
 (* ------------------------------------------------------------------ *)
@@ -408,11 +415,11 @@ Proof.
     { apply (walk_mid_in_nodes g nodes x mid' x Hedges Hwalk'). }
     (* the shortened walk has no repeated intermediate vertex *)
     assert (Hnd : NoDup mid').
-    { apply list_norepet_NoDup. apply has_duplicates_false_norepet. exact Hnodup. }
+    { apply list_norepet_NoDup. apply has_duplicates_false_iff_norepet. exact Hnodup. }
     (* hence its length is <= |nodes| *)
     assert (Hlen : length mid' <= length nodes).
     { apply norepet_incl_length.
-      - apply has_duplicates_false_norepet. exact Hnodup.
+      - apply has_duplicates_false_iff_norepet. exact Hnodup.
       - exact Hin. }
     (* so the pruned search finds it (visited starts empty) *)
     assert (Hr : reachableb_v g nodes (length nodes) [] x x = true).

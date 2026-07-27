@@ -191,15 +191,22 @@ let%expect_test "e2e bpf test: O0 ≡ O2" =
     Z3Unsat
     |}]
 
-(* Test 13: linear scan vs tss for simple filter database.  These are
-   transformer-only networks whose observable is a header map, so they use the
-   header-map checker. *)
+(* Test 13: linear scan vs tss for simple filter database.  Both are full
+   parser -> table chain -> deparser networks over a 192-bit input packet (what
+   field_extractor consumes), so they go through the bitstream checker: the
+   observable is the label byte the deparser emits.
+
+   NOTE: this test is weaker than it looks -- it reported Equivalent even while
+   tss_db concretely produced nothing and linear_db emitted a label.  Agreeing
+   on output packets does not pin down which label a classifier assigns.  The
+   concrete labels are checked in TestModuleSemantics ("pktclass..."); keep
+   both tests. *)
 let%expect_test "tss basic" =
   (* let p1 = get_general_program "../test/lin_pkt.out" in
   let p2 = get_general_program "../test/tss_pkt.out" in *)
   let p1 = PktClass.ex_lin_prog in
   let p2 = PktClass.ex_tss_prog in
-  print_equiv (SmtModuleQuery.modnet_header_equivalence_checker p1 p2 (Shim.int_to_coq_nat 0));
+  print_equiv (SmtModuleQuery.modnet_equivalence_checker p1 p2);
   [%expect {| Equivalent |}]
 
 (* Test 14: bitstream-I/O equivalence.  A parse->deparse pipeline is equivalent
@@ -207,34 +214,34 @@ let%expect_test "tss basic" =
    bits the parser consumed.  Exercises the new bitstream [modnet_equivalence_checker]
    (shared symbolic input packet -> compare deparser output packets). *)
 let%expect_test "bitstream self-equivalence: parse->deparse" =
-  let p = TestModulePrograms.mod_prog_parse_deparse in
-  print_equiv (SmtModuleQuery.modnet_equivalence_checker p p (Shim.int_to_coq_nat 16));
+  let p = Shim.find_modprog "parse_deparse" in
+  print_equiv (SmtModuleQuery.modnet_equivalence_checker p p);
   [%expect {| Equivalent |}]
 
 (* Test 15: bitstream NON-equivalence.  The same parser feeding a deparser that
    emits the two bytes in swapped order produces a different output packet
    whenever the bytes differ, so the checker must report NotEquivalent. *)
 let%expect_test "bitstream non-equivalence: emit order swapped" =
-  let p1 = TestModulePrograms.mod_prog_parse_deparse in
-  let p2 = TestModulePrograms.mod_prog_parse_deparse_swapped in
-  print_equiv (SmtModuleQuery.modnet_equivalence_checker p1 p2 (Shim.int_to_coq_nat 16));
+  let p1 = Shim.find_modprog "parse_deparse" in
+  let p2 = Shim.find_modprog "parse_deparse_swapped" in
+  print_equiv (SmtModuleQuery.modnet_equivalence_checker p1 p2);
   [%expect {|
     ┌ SAT Valuation
     | var( pkt_1 ) : u64 := 0
-    | var( pkt_10 ) : u64 := 0
-    | var( pkt_100 ) : u64 := 0
+    | var( pkt_10 ) : u64 := 1
+    | var( pkt_100 ) : u64 := 1
     | var( pkt_1000 ) : u64 := 0
-    | var( pkt_10000 ) : u64 := 1
-    | var( pkt_1001 ) : u64 := 1
+    | var( pkt_10000 ) : u64 := 0
+    | var( pkt_1001 ) : u64 := 0
     | var( pkt_101 ) : u64 := 1
     | var( pkt_1010 ) : u64 := 1
     | var( pkt_1011 ) : u64 := 0
     | var( pkt_11 ) : u64 := 0
     | var( pkt_110 ) : u64 := 1
-    | var( pkt_1100 ) : u64 := 0
+    | var( pkt_1100 ) : u64 := 1
     | var( pkt_1101 ) : u64 := 0
-    | var( pkt_111 ) : u64 := 1
-    | var( pkt_1110 ) : u64 := 0
+    | var( pkt_111 ) : u64 := 0
+    | var( pkt_1110 ) : u64 := 1
     | var( pkt_1111 ) : u64 := 0
     └
     NotEquivalent
@@ -246,9 +253,9 @@ let%expect_test "bitstream non-equivalence: emit order swapped" =
    report NotEquivalent, witnessed by the 0xFF packet (every pkt bit = 1).  Under
    the old swallow-the-reject semantics this was wrongly Equivalent. *)
 let%expect_test "bitstream accept differs: reject-on-0xFF vs always-accept" =
-  let p1 = TestModulePrograms.mod_prog_parse_reject_deparse in
-  let p2 = TestModulePrograms.mod_prog_parse_accept_deparse in
-  print_equiv (SmtModuleQuery.modnet_equivalence_checker p1 p2 (Shim.int_to_coq_nat 8));
+  let p1 = Shim.find_modprog "parse_reject_deparse" in
+  let p2 = Shim.find_modprog "parse_accept_deparse" in
+  print_equiv (SmtModuleQuery.modnet_equivalence_checker p1 p2);
   [%expect {|
     ┌ SAT Valuation
     | var( pkt_1 ) : u64 := 1
@@ -266,19 +273,22 @@ let%expect_test "bitstream accept differs: reject-on-0xFF vs always-accept" =
 (* Test 17: the rejecting pipeline is equivalent to itself — the accept
    conditions coincide, so no packet distinguishes it from itself. *)
 let%expect_test "bitstream self-equivalence: reject-on-0xFF" =
-  let p = TestModulePrograms.mod_prog_parse_reject_deparse in
-  print_equiv (SmtModuleQuery.modnet_equivalence_checker p p (Shim.int_to_coq_nat 8));
+  let p = Shim.find_modprog "parse_reject_deparse" in
+  print_equiv (SmtModuleQuery.modnet_equivalence_checker p p);
   [%expect {| Equivalent |}]
 
-(* Test 18: residual/cursor.  Both pipelines emit byte 0, but one consumes one
-   byte and the other two, so their unconsumed tails (and hence output packets)
-   differ.  The old cursor-reset semantics handed the whole packet downstream in
-   both, wrongly calling them equivalent; with the residual now tracked they are
-   NotEquivalent. *)
+(* Test 18: read extent.  Both pipelines emit exactly h1 = byte 0, so their
+   output packets are identical and the write-tape check alone cannot tell them
+   apart (a deparser emits only its emitted bits — the unconsumed tail is not
+   appended).  They differ in how much input they consume: 8 bits vs 16.  The
+   [check_sym_bits_read] conjunct is what makes this NotEquivalent — a network
+   that reads further into its input is not interchangeable with one that does
+   not, the bitstream analogue of the memory IR's access-extent equivalence.
+   Every packet is a witness, hence the all-zero valuation. *)
 let%expect_test "bitstream residual: consume1 vs consume2 (emit h1)" =
-  let p1 = TestModulePrograms.mod_prog_consume1_emit1 in
-  let p2 = TestModulePrograms.mod_prog_consume2_emit1 in
-  print_equiv (SmtModuleQuery.modnet_equivalence_checker p1 p2 (Shim.int_to_coq_nat 16));
+  let p1 = Shim.find_modprog "consume1_emit1" in
+  let p2 = Shim.find_modprog "consume2_emit1" in
+  print_equiv (SmtModuleQuery.modnet_equivalence_checker p1 p2);
   [%expect {|
     ┌ SAT Valuation
     | var( pkt_1 ) : u64 := 0
@@ -297,6 +307,20 @@ let%expect_test "bitstream residual: consume1 vs consume2 (emit h1)" =
    whether byte 0 is zero) is equivalent to itself — the variable-length residual
    merges consistently across the two branches. *)
 let%expect_test "bitstream self-equivalence: data-dependent consumption" =
-  let p = TestModulePrograms.mod_prog_varlen_emit1 in
-  print_equiv (SmtModuleQuery.modnet_equivalence_checker p p (Shim.int_to_coq_nat 16));
+  let p = Shim.find_modprog "varlen_emit1" in
+  print_equiv (SmtModuleQuery.modnet_equivalence_checker p p);
+  [%expect {| Equivalent |}]
+
+(* Test 20: write-tape append, symbolically.  mod_prog_parse_deparse emits h1
+   and h2 from ONE deparser; mod_prog_two_deparsers emits h1 from one deparser
+   and h2 from a second chained after it.  Both consume the same 16-bit packet
+   and, because each deparser appends to the shared write tape rather than
+   replacing it, both produce the same 16-bit output.  Under the old replacing
+   semantics the two-deparser pipeline would emit only h2 -- 8 bits -- and this
+   would be NotEquivalent.  This is the symbolic counterpart to the concrete
+   "two_deparsers" test in TestModuleSemantics. *)
+let%expect_test "bitstream: one deparser emitting h1,h2 = two deparsers chained" =
+  let p1 = Shim.find_modprog "parse_deparse" in
+  let p2 = Shim.find_modprog "two_deparsers" in
+  print_equiv (SmtModuleQuery.modnet_equivalence_checker p1 p2);
   [%expect {| Equivalent |}]

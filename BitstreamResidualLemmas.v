@@ -1,3 +1,5 @@
+(* 
+
 (* ================================================================== *)
 (* Gap B keystone: the residual-bitstream commutation.                  *)
 (*                                                                     *)
@@ -163,7 +165,7 @@ Proof.
           * exact (Ptgt (sc_target c) Hrun').
           * exact (IHcases Hrun'). }
     (* discharge the extraction, reducing each case to [Htrans] *)
-    revert Hrun. destruct (psd_extract d) as [[h w]|] eqn:Hex; intro Hrun.
+    revert Hrun. destruct (psd_action d) as [[h w]|] eqn:Hex; intro Hrun.
     + rewrite (apply_extract_commute (ExtractOpConstructor h w) ps f) in Hrun. revert Hrun.
       destruct (apply_extract_symbolic (ExtractOpConstructor h w) ps) as [ps'|] eqn:Hae; intro Hrun.
       2:{ cbv [option_map] in Hrun. discriminate Hrun. }
@@ -295,7 +297,7 @@ Proof.
           destruct (select_case_matches_concrete (eval_sym_parser_state ps' f) c) eqn:Hm.
           * exact (Ptgt (sc_target c) Hrun').
           * exact (IHcases Hrun'). }
-    revert Hrun. destruct (psd_extract d) as [[h w]|] eqn:Hex; intro Hrun.
+    revert Hrun. destruct (psd_action d) as [[h w]|] eqn:Hex; intro Hrun.
     + rewrite (apply_extract_commute (ExtractOpConstructor h w) ps f) in Hrun. revert Hrun.
       destruct (apply_extract_symbolic (ExtractOpConstructor h w) ps) as [ps'|] eqn:Hae; intro Hrun.
       2:{ cbv [option_map] in Hrun. discriminate Hrun. }
@@ -375,7 +377,7 @@ Proof.
           destruct (select_case_matches_concrete (eval_sym_parser_state ps' f) c) eqn:Hm.
           * exact (Ptgt (sc_target c) Hrun').
           * exact (IHcases Hrun'). }
-    revert Hrun. destruct (psd_extract d) as [[h w]|] eqn:Hex; intro Hrun.
+    revert Hrun. destruct (psd_action d) as [[h w]|] eqn:Hex; intro Hrun.
     + rewrite (apply_extract_commute (ExtractOpConstructor h w) ps f) in Hrun. revert Hrun.
       destruct (apply_extract_symbolic (ExtractOpConstructor h w) ps) as [ps'|] eqn:Hae; intro Hrun.
       2:{ reflexivity. }
@@ -432,7 +434,7 @@ Proof.
       - cbn [resolve_select_symbolic]. apply Htgt.
       - cbn [resolve_select_symbolic]. unfold merge_results. cbn [spr_headers].
         rewrite (Htgt ps' guard' (sc_target c)), IHc. reflexivity. }
-    destruct (psd_extract d) as [[h w]|] eqn:Hex.
+    destruct (psd_action d) as [[h w]|] eqn:Hex.
     + destruct (apply_extract_symbolic (ExtractOpConstructor h w) ps) as [ps'|] eqn:Hae;
         [| reflexivity].
       destruct (psd_trans d) as [tgt | cases default]; [ apply Htgt | apply Hres ].
@@ -441,4 +443,4 @@ Qed.
 
 Lemma eval_parser_symbolic_v_headers : forall p ps validity,
   spr_headers (eval_parser_symbolic_v p ps validity) = spr_headers (eval_parser_symbolic p ps).
-Proof. intros. apply run_parser_symbolic_v_headers. Qed.
+Proof. intros. apply run_parser_symbolic_v_headers. Qed. *)

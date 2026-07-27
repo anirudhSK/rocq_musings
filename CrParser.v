@@ -18,9 +18,11 @@ From MyProject Require Import CrVal.
 (* ------------------------------------------------------------------ *)
 (* Extraction: read [width] bits from the packet's current cursor and  *)
 (* store them into header [eo_header].  The [width] is given as a bit  *)
-(* count (the number of bits consumed from the stream).                *)
-Inductive ExtractOp : Type :=
-  | ExtractOpConstructor (eo_header : Header) (width : nat).
+(* count (the number of bits consumed from the stream); the assembled  *)
+(* value is then coerced into the integer type [of] (e.g. [u8], [u16]).*)
+Inductive ParserOp : Type :=
+  | SeekForward (width: nat)
+  | ExtractOpConstructor (eo_header : Header) (width : nat) (of : CrIntType).
 
 (* ------------------------------------------------------------------ *)
 (* A target of a transition is either another parser state, or one of  *)
@@ -52,9 +54,9 @@ Inductive Transition : Type :=
 (* A parser state definition: its label, the (optional) extraction it   *)
 (* performs, and its outgoing transition.                               *)
 Record ParserStateDef : Type := mkParserStateDef {
-  psd_label   : ParserStateLabel;
-  psd_extract : option ExtractOp;
-  psd_trans   : Transition;
+  psd_label  : ParserStateLabel;
+  psd_action : option ParserOp;
+  psd_trans  : Transition;
 }.
 
 (* A parser is a start state plus the list of its state definitions.    *)
@@ -65,9 +67,26 @@ Record Parser : Type := mkParser {
 
 (* ------------------------------------------------------------------ *)
 (* Look up the definition of a parser state by its label.              *)
-Definition lookup_state (p : Parser) (lbl : ParserStateLabel)
+Definition lookup_def (p : Parser) (lbl : ParserStateLabel)
     : option ParserStateDef :=
   find (fun d => posesque_eqb (psd_label d) lbl) (parser_states p).
+
+(* list of all parser i/o headers *)
+Definition parser_headers (p : Parser) : list Header :=
+  List.fold_left (fun acc d =>
+    (* get write headers *)
+    let acc' := match psd_action d with
+    | Some (ExtractOpConstructor h _ _) => h :: acc
+    | _ => acc
+    end in
+    (* get read headers *)
+    match psd_trans d with
+    | Unconditional _ => acc'
+    | Select cases _ =>
+      List.fold_left
+        (fun acc'' c => sc_header c :: acc'')
+        cases acc'
+    end) (parser_states p) [].
 
 (* ------------------------------------------------------------------ *)
 (* Bit helpers.  A packet bit stream is represented MSB-first as a      *)

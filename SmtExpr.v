@@ -127,3 +127,11 @@ with eval_smt_mem (e : SmtArrExpr) (v : SmtValuation) : Memory CrVal :=
     | SmtArrInit => @CrVal.tabula_rasa CrVal
     | SmtArrSt e1 e2 e3 e4 => CrVal.st (eval_smt_mem e1 v) ((*eval_smt_ptr*) eval_smt_arith e2 v) (eval_smt_arith e3 v) (eval_smt_arith e4 v)
     end.
+
+Record ConditionalVal (T : Type) := {
+  cvc : SmtBoolExpr;
+  cvv : T;
+}.
+
+Arguments cvc {T} _.
+Arguments cvv {T} _.

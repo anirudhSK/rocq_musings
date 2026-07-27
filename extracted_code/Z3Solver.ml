@@ -90,9 +90,28 @@ let collect_var_widths (expr : SmtExpr.coq_SmtBoolExpr) : (string, int) Hashtbl.
   in
   boolean expr; tbl
 
+(* Memo tables for the lowering below.
+
+   Symbolic execution shares subterms aggressively -- every path merge points
+   both branches at the same header expressions, and a deparser emits one
+   header value once per emitted bit -- so a query is a DAG, not a tree.
+   Lowering it structurally re-expands that sharing: on the PktClass
+   linear-vs-TSS query the DAG has ~390 distinct nodes but an unmemoised walk
+   visits ~4.6 million, which cost about 7 seconds of Z3 FFI calls building
+   nodes Z3 then hash-consed straight back down.  (The solve itself was
+   instant.)  Memoising makes the lowering proportional to the DAG.
+
+   Keyed on the term, so structurally equal subterms share too, not just
+   physically equal ones.  Cleared per [solve]: a Z3 expression belongs to the
+   context it was built in, so entries must never outlive one lowering. *)
+let memo_bool : (SmtExpr.coq_SmtBoolExpr, Z3.Expr.expr) Hashtbl.t = Hashtbl.create 1024
+let memo_arith : (SmtExpr.coq_SmtArithExpr, Z3.Expr.expr) Hashtbl.t = Hashtbl.create 1024
+let reset_lowering_memo () = Hashtbl.reset memo_bool; Hashtbl.reset memo_arith
+
 let rec z3_expr_from_coq_smt_bool_expr (expr : SmtExpr.coq_SmtBoolExpr) (ctx : Z3.context) (vars : var_tracker)
   : Z3.Expr.expr =
-  match expr with
+  match Hashtbl.find_opt memo_bool expr with Some z -> z | None ->
+  let z = (match expr with
   | SmtExpr.SmtTrue -> Z3.Boolean.mk_true ctx
   | SmtExpr.SmtFalse -> Z3.Boolean.mk_false ctx
   | SmtExpr.SmtBoolAnd (e1, e2) -> Z3.Boolean.mk_and ctx [z3_expr_from_coq_smt_bool_expr e1 ctx vars; z3_expr_from_coq_smt_bool_expr e2 ctx vars]
@@ -112,10 +131,13 @@ let rec z3_expr_from_coq_smt_bool_expr (expr : SmtExpr.coq_SmtBoolExpr) (ctx : Z
             let z3_var = Z3.BitVector.mk_const ctx (Z3.Symbol.mk_string ctx name_str) 1 in
             vars := StringMap.add name_str z3_var !vars;
             z3_var in
-      Z3.Boolean.mk_eq ctx bit (Z3.BitVector.mk_numeral ctx "1" 1))
+      Z3.Boolean.mk_eq ctx bit (Z3.BitVector.mk_numeral ctx "1" 1))) in
+  Hashtbl.replace memo_bool expr z; z
+
 and z3_expr_from_coq_smt_arith_expr (expr : SmtExpr.coq_SmtArithExpr) (ctx : Z3.context) (vars : var_tracker)
   : Z3.Expr.expr =
-  match expr with
+  match Hashtbl.find_opt memo_arith expr with Some z -> z | None ->
+  let z = (match expr with
   | SmtExpr.SmtArithConst (v, ty) ->
       (* Encode via an arbitrary-precision decimal string: a u64 constant can
          exceed OCaml's [max_int], so [coq_Z_to_int] would overflow. *)
@@ -202,7 +224,8 @@ and z3_expr_from_coq_smt_arith_expr (expr : SmtExpr.coq_SmtArithExpr) (ctx : Z3.
       | None ->
           let z3_var = Z3.BitVector.mk_const ctx (Z3.Symbol.mk_string ctx name_str) 64 in
           vars := StringMap.add name_str z3_var !vars;
-          z3_var)
+          z3_var)) in
+  Hashtbl.replace memo_arith expr z; z
 
 (* Gets all variable assignments and folds them into a valuation (linked list).
    [var_widths] (from [collect_var_widths]) gives each variable's [CrIntType];
@@ -265,6 +288,9 @@ let solve (expr : SmtExpr.coq_SmtBoolExpr) =
   let solver = Solver.mk_solver ctx None in
   let tracked_vars = ref StringMap.empty in
   let var_widths = collect_var_widths expr in
+  (* Entries cache Z3 expressions belonging to a specific context, so they must
+     not survive into the next query, which builds a fresh one. *)
+  reset_lowering_memo ();
   let z3_expr = z3_expr_from_coq_smt_bool_expr expr ctx tracked_vars in
   Solver.add solver [z3_expr];
 
