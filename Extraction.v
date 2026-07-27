@@ -8,8 +8,10 @@ From MyProject Require Import CrMem.
 From MyProject Require Import CrMemEx.
 From MyProject Require Import TestPrograms.
 From MyProject Require Import TestModulePrograms.
+From MyProject Require Import TestParserPrograms.
 From MyProject Require Import PktClass.
-From MyProject Require Import CrTModConcreteSemantics.
+From MyProject Require Import CrConcreteSemanticsModule.
+From MyProject Require Import CrConcreteSemanticsParser.
 From MyProject Require Import CrDslProperties.
 
 (* Tell extraction to use your external OCaml implementation *)
@@ -25,9 +27,15 @@ Separate Extraction
   CrDsl.CaracaraProgram Integers.repr SmtQuery.equivalence_checker_cr_dsl SmtTypes.SmtResult
   CrSymbolicSemanticsTransformer.eval_sym_state
   CrConcreteSemanticsTransformer.eval_cr_program_concrete
-  CrVarLike.program_state_mapper CrVarLike.init_concrete_state
-  test_programs mod_test_programs
+  CrVarLike.program_state_mapper CrVarLike.init_concrete_transformer_state
+  test_programs parser_test_programs
+  TestModulePrograms.lookup_mod_test_program
+  TestModulePrograms.mod_test_program_names
+  CrConcreteSemanticsParser.eval_parser_concrete
   CrVarLike.init_general_concrete_state
-  CrTModConcreteSemantics.eval_general_program_concrete_sinks
-  PktClass.ex_lin_prog PktClass.ex_tss_prog modnet_equivalence_checker
+  CrConcreteSemanticsModule.eval_general_program_concrete
+  PktClass.ex_lin_prog PktClass.ex_tss_prog
+  PktClass.ex_lin_overlap PktClass.ex_tss_overlap
+  PktClass.ex_lin_distinct PktClass.ex_tss_distinct
+  modnet_equivalence_checker
   well_formed_programb well_formed_general_programb.

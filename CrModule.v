@@ -6,6 +6,7 @@ From Stdlib Require Import ZArith.
 From Stdlib Require Import Strings.String.
 From MyProject Require Import CrIdentifiers.
 From MyProject Require Import CrParser.
+From MyProject Require Import CrDeparser.
 From MyProject Require Import CrTransformer.
 From MyProject Require Import CrDsl.
 From MyProject Require Import CrVal.
@@ -17,6 +18,7 @@ From MyProject Require Import SmtExpr.
 Definition get_mod_name (m : CrModule) : ModuleName :=
   match m with
   | ParserModule name _ => name
+  | DeparserModule name _ => name
   | TransformerModule name _ _ _ => name
   end.
 
@@ -85,12 +87,21 @@ Definition no_fan_in (net : ModuleNetwork) : Prop :=
 Definition is_parser_module (m : CrModule) : bool :=
   match m with
   | ParserModule _ _ => true
+  | DeparserModule _ _ => false
+  | TransformerModule _ _ _ _ => false
+  end.
+
+Definition is_deparser_module (m : CrModule) : bool :=
+  match m with
+  | DeparserModule _ _ => true
+  | ParserModule _ _ => false
   | TransformerModule _ _ _ _ => false
   end.
 
 Definition is_transformer_module (m : CrModule) : bool :=
   match m with
   | ParserModule _ _ => false
+  | DeparserModule _ _ => false
   | TransformerModule _ _ _ _ => true
   end.
 
@@ -126,28 +137,77 @@ Definition mod_names_unique (net : ModuleNetwork) : Prop :=
   Coqlib.list_norepet (map get_mod_name (net_modules net)).
 Definition mod_names_uniqueb (net : ModuleNetwork) : bool :=
   negb (has_duplicates posesque_eqb (map get_mod_name (net_modules net))).
+Lemma mod_names_unique_prop_bool_lemma :
+  forall n, mod_names_unique n <-> mod_names_uniqueb n = true.
+Proof.
+  intros n. unfold mod_names_unique, mod_names_uniqueb.
+  split; intros H.
+  - apply negb_true_iff.
+    apply has_duplicates_false_iff_norepet. assumption.
+  - apply has_duplicates_false_iff_norepet.
+    apply negb_true_iff in H. assumption.
+Qed.
 
 (* The designated start module exists in the network.  The edge-closure
    condition that used to live alongside this is now folded into
    [restricted_edges]. *)
-Definition start_module_defined (net : ModuleNetwork) : Prop :=
+Definition start_module_is_parser (net : ModuleNetwork) : Prop :=
   match lookup_module net (start_module net) with
-  | Some _ => True
-  | None => False
+  | Some (ParserModule _ _) => True
+  | _ => False
   end.
-Definition start_module_definedb (net : ModuleNetwork) : bool :=
+Definition start_module_is_parserb (net : ModuleNetwork) : bool :=
   match lookup_module net (start_module net) with
-  | Some _ => true
-  | None => false
+  | Some (ParserModule _ _) => true
+  | _ => false
   end.
-Lemma start_module_defined_prop_bool_lemma :
+Lemma start_module_is_parser_prop_bool_lemma :
   forall n,
-    start_module_defined n <-> start_module_definedb n = true.
+    start_module_is_parser n <-> start_module_is_parserb n = true.
 Proof.
   intros n.
-  unfold start_module_defined, start_module_definedb.
-  destruct (lookup_module n (start_module n));
-    split; intros; (exact I || reflexivity || contradiction || discriminate).
+  unfold start_module_is_parser, start_module_is_parserb.
+  destruct (lookup_module n (start_module n)); split; intros.
+  - destruct c eqn:Hc; try reflexivity; try exfalso; assumption. 
+  - destruct c eqn:Hc; try apply I; try congruence. 
+  - exfalso. assumption.
+  - congruence.
+Qed.
+
+Definition end_modules_are_deparsers (net : ModuleNetwork) : Prop :=
+  List.Forall (fun m =>
+    match m with
+    | DeparserModule _ _ => True
+    | _ => False
+    end) (sink_modules net).
+Definition end_modules_are_deparsersb (net : ModuleNetwork) : bool :=
+  List.forallb (fun m =>
+    match m with
+    | DeparserModule _ _ => true
+    | _ => false
+    end) (sink_modules net).
+Lemma end_modules_are_deparsers_prop_bool_lemma :
+  forall n,
+    end_modules_are_deparsers n <-> end_modules_are_deparsersb n = true.
+Proof.
+  intros n. unfold end_modules_are_deparsers, end_modules_are_deparsersb.
+  split; intros H.
+  - apply List.forallb_forall. intros m Hm.
+    destruct m eqn:Hd.
+    + apply List.Forall_forall with (x := ParserModule m0 p) in H; try assumption.
+      exfalso. assumption.
+    + apply List.Forall_forall with (x := DeparserModule m0 d) in H; try assumption.
+      reflexivity.
+    + apply List.Forall_forall with (x := TransformerModule m0 s c t) in H; try assumption.
+      exfalso. assumption.
+  - apply List.Forall_forall. intros m Hm.
+    destruct m eqn:Hd.
+    + apply List.forallb_forall with (x := ParserModule m0 p) in H; try assumption.
+      congruence.
+    + apply List.forallb_forall with (x := DeparserModule m0 d) in H; try assumption.
+      exact I.
+    + apply List.forallb_forall with (x := TransformerModule m0 s c t) in H; try assumption.
+      congruence.
 Qed.
 
 Lemma in_names_iff :
@@ -178,35 +238,52 @@ Qed.
 (* A well-formed ModuleNetwork satisfies all conditions. *)
 Definition wf_module_network (net : ModuleNetwork) : Prop :=
   mod_names_unique net /\
-  start_module_defined net /\
-  is_dag net.
+  is_dag net /\
+  start_module_is_parser net /\
+  end_modules_are_deparsers net.
 
 Definition wf_module_networkb (net : ModuleNetwork) : bool :=
   (mod_names_uniqueb net) &&
-  (start_module_definedb net) &&
-  (is_dagb net).
+  (is_dagb net) &&
+  (start_module_is_parserb net) &&
+  (end_modules_are_deparsersb net).
+
+Lemma wf_module_network_prop_bool_lemma :
+  forall n, wf_module_network n <-> wf_module_networkb n = true.
+Proof.
+  intros n. unfold wf_module_network, wf_module_networkb.
+  split; intros H.
+  - destruct H as [H1 [H2 [H3 H4]]].
+    repeat rewrite andb_true_iff. repeat split.
+    + apply mod_names_unique_prop_bool_lemma. exact H1.
+    + apply is_dag_prop_bool_lemma. exact H2.
+    + apply start_module_is_parser_prop_bool_lemma. exact H3.
+    + apply end_modules_are_deparsers_prop_bool_lemma. exact H4.
+  - repeat rewrite andb_true_iff in H. destruct H as [[[H1 H2] H3] H4]. repeat split.
+    + apply mod_names_unique_prop_bool_lemma. exact H1.
+    + apply is_dag_prop_bool_lemma. exact H2.
+    + apply start_module_is_parser_prop_bool_lemma. exact H3.
+    + apply end_modules_are_deparsers_prop_bool_lemma. exact H4.
+Qed.
 
 (* ------------------------------------------------------------------ *)
 
 Inductive GeneralCaracaraProgram : Type :=
   | GeneralCaracaraProgramDef :
-      list Header -> (* Input Header Format *)
+      nat -> (* input packet length *)
       ModuleNetwork ->
-      list Header -> (* Output Header Format *)
       GeneralCaracaraProgram.
 
-Definition get_headers_from_general (p : GeneralCaracaraProgram) : list Header :=
-  match p with GeneralCaracaraProgramDef h _ _ => h end.
+Definition get_inp_len_from_general (p : GeneralCaracaraProgram) : nat :=
+  match p with GeneralCaracaraProgramDef l _ => l end.
 
 Definition get_network_from_general (p : GeneralCaracaraProgram) : ModuleNetwork :=
-  match p with GeneralCaracaraProgramDef _ net _ => net end.
-
-Definition get_signature_from_general (p : GeneralCaracaraProgram) : list Header :=
-  match p with GeneralCaracaraProgramDef _ _ sig => sig end.
+  match p with GeneralCaracaraProgramDef _ net => net end.
 
 Definition module_states (m : CrModule) : list State :=
   match m with
   | ParserModule _ _ => []
+  | DeparserModule _ _ => []
   | TransformerModule _ s _ _ => s
   end.
 Definition get_states_from_general (p : GeneralCaracaraProgram) (m : ModuleName) : option (list State) :=
@@ -218,6 +295,7 @@ Definition get_states_from_general (p : GeneralCaracaraProgram) (m : ModuleName)
 Definition module_ctrls (m : CrModule) : list Ctrl :=
   match m with
   | ParserModule _ _ => []
+  | DeparserModule _ _ => []
   | TransformerModule _ _ c _ => c
   end.
 Definition get_ctrls_from_general (p : GeneralCaracaraProgram) (m : ModuleName) : option (list Ctrl) :=
@@ -231,16 +309,6 @@ Definition get_transformer_from_general (p : GeneralCaracaraProgram) (m : Module
   | Some (TransformerModule _ _ _ t) => Some t
   | _ => None
   end.
-
-Definition inject_headers {T : Type} (packet : PMap.t T) (local : ProgramState T)
-    : ProgramState T :=
-  {| ctrl_map   := ctrl_map local;
-     header_map := packet;
-     state_map  := state_map local |}.
-
-Definition GeneralProgramState (T : Type) : Type := PMap.t (ProgramState T).
-Definition GeneralConcreteState : Type := GeneralProgramState CrVal.
-Definition GeneralSymbolicState : Type := GeneralProgramState SmtArithExpr.
 
 Definition get_sink_states {T : Type}
   (net : ModuleNetwork)
@@ -274,6 +342,28 @@ Definition add_program_to_network (net : ModuleNetwork) (p : CaracaraProgram) : 
     (get_transformer_from_prog p) in
   ({|
     net_modules  := net_modules net ++ [tm];
+    net_edges    := net_edges net;
+    start_module := start_module net;
+  |}, wrap new_id).
+
+(* Parser counterpart of [add_program_to_network]: append a parser module
+   wrapping [p] and return its fresh name. *)
+Definition add_parser_to_network (net : ModuleNetwork) (p : Parser) : ModuleNetwork * ModuleName :=
+  let new_id := max_mod_uid net in
+  let pm := ParserModule (wrap new_id) p in
+  ({|
+    net_modules  := net_modules net ++ [pm];
+    net_edges    := net_edges net;
+    start_module := start_module net;
+  |}, wrap new_id).
+
+(* Deparser counterpart of [add_parser_to_network]: append a deparser module
+   wrapping [d] and return its fresh name. *)
+Definition add_deparser_to_network (net : ModuleNetwork) (d : Deparser) : ModuleNetwork * ModuleName :=
+  let new_id := max_mod_uid net in
+  let dm := DeparserModule (wrap new_id) d in
+  ({|
+    net_modules  := net_modules net ++ [dm];
     net_edges    := net_edges net;
     start_module := start_module net;
   |}, wrap new_id).

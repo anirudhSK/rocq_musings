@@ -1,0 +1,106 @@
+From Stdlib Require Import List.
+Import ListNotations.
+From MyProject Require Import CrIdentifiers.
+From MyProject Require Import CrProgramState.
+From MyProject Require Import CrVal.
+From MyProject Require Import CrParser.
+From MyProject Require Import CrVarLike.
+From MyProject Require Import Maps.
+From Stdlib Require Import ZArith.
+
+(* ================================================================== *)
+(* Concrete parser FSM semantics.                                      *)
+(* ================================================================== *)
+
+(* Apply a single extraction: read [width] bits from the packet at the
+   current cursor (the packet is a [list bool], MSB-first), store the
+   assembled value into header [h], and advance the cursor.  If the slice
+   runs past the end of the packet the parse fails ([None]). *)
+Definition apply_extract_concrete (po : ParserOp) (ps : ConcreteParserState)
+    : option ConcreteParserState :=
+  match po with
+  | SeekForward width =>
+      if Nat.leb (p_cursor ps + width) (List.length (p_packet ps)) then
+        Some {| p_header_map := (p_header_map ps);
+                p_packet := p_packet ps;
+                p_cursor := p_cursor ps + width |}
+      else None
+  | ExtractOpConstructor h width of =>
+      if Nat.leb (p_cursor ps + width) (List.length (p_packet ps)) then
+        let slice := bit_slice (p_packet ps) (p_cursor ps) width in
+        (* Assemble the [width] bits (MSB-first) and coerce into type [of]. *)
+        let v := mk_int of (bits_to_Z slice) in
+        Some {| p_header_map := PMap.set (get_key h) v (p_header_map ps);
+                p_packet     := p_packet ps;
+                p_cursor     := p_cursor ps + width |}
+      else None
+  end.
+
+(* Resolve a [select] case against the current header values: the case fires
+   when bits [sc_start_index, sc_end_index) of header [sc_header]'s current
+   value (LSB-indexed, right-aligned by [slice_val]) equal the value the pattern
+   bits denote. *)
+Definition select_case_matches_concrete (ps : ConcreteParserState) (c : SelectCase)
+    : bool :=
+  let pat_v := mk_int u64 (bits_to_Z (sc_pattern c)) in
+  CrVal.eqb
+    (slice_val (sc_start_index c) (sc_end_index c)
+      (lookup_varlike_map (p_header_map ps) (sc_header c)))
+    pat_v.
+
+Fixpoint resolve_select_concrete (ps : ConcreteParserState)
+    (cases : list SelectCase) (default : ParserTarget) : ParserTarget :=
+  match cases with
+  | [] => default
+  | c :: rest =>
+      if select_case_matches_concrete ps c
+      then sc_target c
+      else resolve_select_concrete ps rest default
+  end.
+
+Definition eval_transition_concrete (ps : ConcreteParserState) (t : Transition)
+    : ParserTarget :=
+  match t with
+  | Unconditional tgt => tgt
+  | Select cases default => resolve_select_concrete ps cases default
+  end.
+
+(* Run the parser FSM from [lbl].  [fuel] bounds the number of state
+   visits.  Returns the parser state on a successful [Accept]; [None] on
+   [Reject], a missing state, a failed extraction, or fuel exhaustion. *)
+Fixpoint run_parser_concrete (p : Parser) (lbl : ParserStateLabel)
+    (ps : ConcreteParserState) (fuel : nat) : option ConcreteParserState :=
+  match fuel with
+  | O => None
+  | S fuel' =>
+      match lookup_def p lbl with
+      | None => None
+      | Some def =>
+          (* apply action *)
+          let ps_post :=
+            match psd_action def with
+            | None => Some ps
+            | Some po => apply_extract_concrete po ps
+            end in
+          match ps_post with
+          | None => None
+          | Some ps' =>
+              match eval_transition_concrete ps' (psd_trans def) with
+              | Accept => Some ps'
+              | Reject => None
+              | TargetState next => run_parser_concrete p next ps' fuel'
+              end
+          end
+      end
+  end.
+
+(* Fuel bounds total state visits.  A parse configuration is a (state, cursor)
+   pair, and a terminating parse never repeats one, so |states| * (|packet| + 1)
+   distinct configurations bound the visits.  This admits P4-style loops (a state
+   may be revisited, once per cursor position) while still guaranteeing
+   termination; exhausting the fuel means a (state, cursor) repeated, i.e. a true
+   infinite loop. *)
+Definition eval_parser_concrete (p : Parser) (ps : ConcreteParserState)
+    : option ConcreteParserState :=
+  run_parser_concrete p (parser_start p) ps
+    (List.length (parser_states p) * S (List.length (p_packet ps))).

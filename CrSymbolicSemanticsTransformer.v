@@ -1,4 +1,5 @@
 From MyProject Require Import CrTransformer.
+From MyProject Require Import CrVal.
 From MyProject Require Import CrIdentifiers.
 From MyProject Require Import CrVarLike.
 From MyProject Require Import CrProgramState.
@@ -7,58 +8,63 @@ From MyProject Require Import SmtTypes.
 From Stdlib Require Import List.
 Import ListNotations.
 
-(* Convert FunctionArgument to SmtArithExpr *)
-Definition lookup_smt (arg : FunctionArgument) (ps : SymbolicState) : SmtArithExpr :=
+(* Convert an operand to its SmtArithExpr at the expected type [ty]: a constant
+   adopts [ty]; a variable carries its stored (symbolic) value. *)
+Definition lookup_smt (ty : CrIntType) (arg : Operand) (ps : SymbolicTransformerState) : SmtArithExpr :=
   match arg with
-  | CtrlPlaneArg c => lookup_varlike_map (@map_from_ps Ctrl _ _ ps) c
-  | HeaderArg h    => lookup_varlike_map (@map_from_ps Header _ _ ps) h
-  | ConstantArg n  => SmtArithConst n
-  | StatefulArg s  => lookup_varlike_map (@map_from_ps State _ _ ps) s
+  | OpCtrlPlane c => lookup_varlike_map (@map_from_ps Ctrl _ _ ps) c
+  | OpHeader h    => lookup_varlike_map (@map_from_ps Header _ _ ps) h
+  | OpConst n     => SmtArithConst n ty
+  | OpStateful s  => lookup_varlike_map (@map_from_ps State _ _ ps) s
   end.
 
+(* Symbolic mirror of [apply_bin_op_of]: the typed SMT op at [ty]; operands are
+   already typed [ty] (looked up at [ty]), so eval type-checks like the concrete. *)
+Definition smt_binop_of (f : BinaryOp) (ty : CrIntType) (e1 e2 : SmtArithExpr) : SmtArithExpr :=
+  match f with
+  | AddOp => SmtBitAdd ty e1 e2
+  | SubOp => SmtBitSub ty e1 e2
+  | AndOp => SmtBitAnd ty e1 e2
+  | OrOp  => SmtBitOr  ty e1 e2
+  | XorOp => SmtBitXor ty e1 e2
+  | MulOp => SmtBitMul ty e1 e2
+  | DivOp => SmtBitDiv ty e1 e2
+  | ModOp => SmtBitMod ty e1 e2
+  end.
+
+(* Symbolic mirror of [apply_cast]. *)
+Definition smt_cast (from to : CrIntType) (e : SmtArithExpr) : SmtArithExpr :=
+  SmtCast from to e.
+
 (* Define the symbolic interpreter for header operation expressions *)
-Definition eval_hdr_op_expr_smt (h : HdrOp) (ps : SymbolicState) : SmtArithExpr :=
+Definition eval_hdr_op_expr_smt (h : HdrOp) (ps : SymbolicTransformerState) : SmtArithExpr :=
     match h with
-    | StatefulOp f arg1 arg2 _ =>
-       match f with 
-         | AddOp => SmtBitAdd (lookup_smt arg1 ps) (lookup_smt arg2 ps)
-         | SubOp => SmtBitSub (lookup_smt arg1 ps) (lookup_smt arg2 ps)
-         | AndOp => SmtBitAnd (lookup_smt arg1 ps) (lookup_smt arg2 ps)
-         | OrOp => SmtBitOr (lookup_smt arg1 ps) (lookup_smt arg2 ps)
-         | XorOp => SmtBitXor (lookup_smt arg1 ps) (lookup_smt arg2 ps)
-         | MulOp => SmtBitMul (lookup_smt arg1 ps) (lookup_smt arg2 ps)
-         | DivOp => SmtBitDiv (lookup_smt arg1 ps) (lookup_smt arg2 ps)
-         | ModOp => SmtBitMod (lookup_smt arg1 ps) (lookup_smt arg2 ps)
-       end
-    | StatelessOp f arg1 arg2 _ =>
-       match f with
-         | AddOp => SmtBitAdd (lookup_smt arg1 ps) (lookup_smt arg2 ps)
-         | SubOp => SmtBitSub (lookup_smt arg1 ps) (lookup_smt arg2 ps)
-         | AndOp => SmtBitAnd (lookup_smt arg1 ps) (lookup_smt arg2 ps)
-         | OrOp => SmtBitOr (lookup_smt arg1 ps) (lookup_smt arg2 ps)
-         | XorOp => SmtBitXor (lookup_smt arg1 ps) (lookup_smt arg2 ps)
-         | MulOp => SmtBitMul (lookup_smt arg1 ps) (lookup_smt arg2 ps)
-         | DivOp => SmtBitDiv (lookup_smt arg1 ps) (lookup_smt arg2 ps)
-         | ModOp => SmtBitMod (lookup_smt arg1 ps) (lookup_smt arg2 ps)
-       end
+    | StatefulOp f ty arg1 arg2 _ => smt_binop_of f ty (lookup_smt ty arg1 ps) (lookup_smt ty arg2 ps)
+    | StatelessOp f ty arg1 arg2 _ => smt_binop_of f ty (lookup_smt ty arg1 ps) (lookup_smt ty arg2 ps)
+    | CastStateOp from to arg _ => smt_cast from to (lookup_smt from arg ps)
+    | CastHeaderOp from to arg _ => smt_cast from to (lookup_smt from arg ps)
     end.
 
 (* Apply SmtValuation f to every entry in the symbolic state across all 3 maps *)
-Definition eval_sym_state (s: SymbolicState) (f : SmtValuation) : ConcreteState :=
+Definition eval_sym_state (s: SymbolicTransformerState) (f : SmtValuation) : ConcreteTransformerState :=
    let sym_eval := fun e => eval_smt_arith e f in
    program_state_mapper sym_eval sym_eval sym_eval s.
 
-Definition eval_hdr_op_assign_smt (ho : HdrOp) (ps: SymbolicState) : SymbolicState :=
+Definition eval_hdr_op_assign_smt (ho : HdrOp) (ps: SymbolicTransformerState) : SymbolicTransformerState :=
     match ho with
-    | StatefulOp f arg1 arg2 target =>
+    | StatefulOp _ _ _ _ target =>
         let op_output := eval_hdr_op_expr_smt ho ps in update_varlike ps target op_output
-    | StatelessOp f arg1 arg2 target => 
+    | StatelessOp _ _ _ _ target =>
+        let op_output := eval_hdr_op_expr_smt ho ps in update_varlike ps target op_output
+    | CastStateOp _ _ _ target =>
+        let op_output := eval_hdr_op_expr_smt ho ps in update_varlike ps target op_output
+    | CastHeaderOp _ _ _ target =>
         let op_output := eval_hdr_op_expr_smt ho ps in update_varlike ps target op_output
     end.
 
 (* Define evaluation over a list of HdrOp *)
 (* The list is evaluated left to right: the head of the list executes first. *)
-Definition eval_hdr_op_list_smt (hol : list HdrOp) (ps : SymbolicState) : SymbolicState :=
+Definition eval_hdr_op_list_smt (hol : list HdrOp) (ps : SymbolicTransformerState) : SymbolicTransformerState :=
   List.fold_left (fun acc op => eval_hdr_op_assign_smt op acc) hol ps.
 
 Definition eval_cmp_smt (op : CmpOp) (e1 e2 : SmtArithExpr) : SmtBoolExpr :=
@@ -68,12 +74,12 @@ Definition eval_cmp_smt (op : CmpOp) (e1 e2 : SmtArithExpr) : SmtBoolExpr :=
   | CmpLt => SmtBoolLt e1 e2
   end.
 
-Definition eval_match_smt (match_pattern : MatchPattern) (ps : SymbolicState) : SmtBoolExpr :=
-  (* For every list element, check if the Header's current value (determined by ps) equals the uint8 *)
+Definition eval_match_smt (match_pattern : MatchPattern) (ps : SymbolicTransformerState) : SmtBoolExpr :=
+  (* For every list element, check if the Header's current value (determined by ps) equals the match value *)
   (* Note that because SmtBoolAnd is associative and commutative, both fold_left and fold_right give the same answer. *)
   List.fold_right (fun '(h, c, v) acc =>
     let v' := match v with
-    | MatchConst k' => SmtArithConst k'
+    | MatchConst k' ty => SmtArithConst k' ty
     | MatchHeader h' => lookup_varlike ps h'
     end in
     SmtBoolAnd (eval_cmp_smt c (lookup_varlike ps h) v') acc) SmtTrue match_pattern.
@@ -81,15 +87,23 @@ Definition eval_match_smt (match_pattern : MatchPattern) (ps : SymbolicState) : 
 (* Maybe there's an intermediate function that evaluates a *single* HdrOp conditionally? *)
 Definition eval_hdr_op_assign_smt_conditional
   (match_condition : MatchPattern)
-  (ho : HdrOp) (ps: SymbolicState) 
-  : SymbolicState :=
+  (ho : HdrOp) (ps: SymbolicTransformerState) 
+  : SymbolicTransformerState :=
   let condition := eval_match_smt match_condition ps in
     match ho with
-    | StatefulOp _ _ _ target =>
+    | StatefulOp _ _ _ _ target =>
         let op_output := SmtConditional condition (eval_hdr_op_expr_smt ho ps)
                         (lookup_varlike ps target) in
                         update_varlike ps target op_output
-    | StatelessOp _ _ _ target =>
+    | StatelessOp _ _ _ _ target =>
+        let op_output := SmtConditional condition (eval_hdr_op_expr_smt ho ps)
+                        (lookup_varlike ps target) in
+                        update_varlike ps target op_output
+    | CastStateOp _ _ _ target =>
+        let op_output := SmtConditional condition (eval_hdr_op_expr_smt ho ps)
+                        (lookup_varlike ps target) in
+                        update_varlike ps target op_output
+    | CastHeaderOp _ _ _ target =>
         let op_output := SmtConditional condition (eval_hdr_op_expr_smt ho ps)
                         (lookup_varlike ps target) in
                         update_varlike ps target op_output
@@ -97,7 +111,7 @@ Definition eval_hdr_op_assign_smt_conditional
 
 (* Function to evaluate a sequential match-action rule,
    meaning header ops within an action are evaluated sequentially *)
-Definition eval_seq_rule_smt (srule : SeqRule) (ps : SymbolicState) : (SymbolicState) :=
+Definition eval_seq_rule_smt (srule : SeqRule) (ps : SymbolicTransformerState) : (SymbolicTransformerState) :=
   match srule with
   | SeqCtr match_pattern action =>
         let condition := eval_match_smt match_pattern ps in
@@ -118,7 +132,7 @@ Definition eval_seq_rule_smt (srule : SeqRule) (ps : SymbolicState) : (SymbolicS
    meaning header ops within an action are evaluated in parallel.
    This is identical to eval_seq_rule, except that the action is a list with some conditions: the targets are all unique
    these conditions are realized using subset types, that's why we need proj1_sig *)
-Definition eval_par_rule_smt (prule : ParRule) (ps : SymbolicState) : (SymbolicState) :=
+Definition eval_par_rule_smt (prule : ParRule) (ps : SymbolicTransformerState) : (SymbolicTransformerState) :=
   match prule with
   | ParCtr match_pattern action =>
         (* First evaluate the match pattern by itself against the original state ps *)
@@ -136,7 +150,7 @@ Definition eval_par_rule_smt (prule : ParRule) (ps : SymbolicState) : (SymbolicS
             (fun (s : State) => SmtConditional condition (lookup_varlike ps' s) (lookup_varlike ps s))
   end.
 
-Definition eval_match_action_rule_smt (rule : MatchActionRule) (ps : SymbolicState) : (SymbolicState) :=
+Definition eval_match_action_rule_smt (rule : MatchActionRule) (ps : SymbolicTransformerState) : (SymbolicTransformerState) :=
   match rule with
   | Seq srule => eval_seq_rule_smt srule ps
   | Par prule => eval_par_rule_smt prule ps
@@ -150,14 +164,14 @@ Fixpoint switch_case_expr (cases : list (SmtBoolExpr * SmtArithExpr)) (default_c
   end.
 
 (* Compute match results for each match pattern (one embedded in each rule) *)
-Definition get_match_results_smt (t : Transformer) (ps : SymbolicState) : list SmtBoolExpr :=
+Definition get_match_results_smt (t : Transformer) (ps : SymbolicTransformerState) : list SmtBoolExpr :=
   List.map (fun rule =>
     match rule with
     | Seq (SeqCtr match_pattern _) => eval_match_smt match_pattern ps
     | Par (ParCtr match_pattern _) => eval_match_smt match_pattern ps
     end) t.
 
-Definition eval_transformer_smt (t : Transformer) (ps : SymbolicState) : SymbolicState :=
+Definition eval_transformer_smt (t : Transformer) (ps : SymbolicTransformerState) : SymbolicTransformerState :=
   (* get all future program states, one for each rule *)
   let program_states := List.map (fun rule => eval_match_action_rule_smt rule ps) t in
   (* map a header to all possible future exprs, one for each future state *)

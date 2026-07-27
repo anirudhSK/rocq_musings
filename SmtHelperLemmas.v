@@ -163,3 +163,12 @@ Proof.
   -- destruct e1, e2; apply crval_concrete_if_else2 in Ex1;
      try unfold eval_smt_arith; try assumption.
 Qed.
+
+(* Evaluating a [u64] constant built from an already-masked value round-trips to
+   [mk_int u64] of the raw value (masking is idempotent, [CrVal]). *)
+Lemma eval_const_mask_u64 : forall z f,
+  eval_smt_arith (SmtArithConst (mask_width W64 z) u64) f = mk_int u64 z.
+Proof.
+  intros z f. cbn [eval_smt_arith].
+  unfold mk_int, u64, it_width. f_equal. apply mask_width_W64_unsigned_idem.
+Qed.

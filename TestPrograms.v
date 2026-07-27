@@ -12,9 +12,9 @@ From MyProject Require Import Integers.
 Definition prog_sub2_h1 : CaracaraProgram :=
   CaracaraProgramDef [HeaderCtr 1] [] [] [
     Seq (SeqCtr [] [
-      StatelessOp SubOp
-        (HeaderArg (HeaderCtr 1))
-        (ConstantArg (CrUInt8 (repr 2)))
+      StatelessOp SubOp u8
+        (OpHeader (HeaderCtr 1))
+        (OpConst (repr 2))
         (HeaderCtr 1)
     ])
   ].
@@ -23,10 +23,10 @@ Definition prog_sub2_h1 : CaracaraProgram :=
  * Used to test that a predicate mismatch leaves the state unchanged. *)
 Definition prog_sub5_h1_if_h1eq0 : CaracaraProgram :=
   CaracaraProgramDef [HeaderCtr 1] [] [] [
-    Seq (SeqCtr [(HeaderCtr 1, CmpEq, MatchConst (CrUInt8 (repr 0)))] [
-      StatelessOp SubOp
-        (HeaderArg (HeaderCtr 1))
-        (ConstantArg (CrUInt8 (repr 5)))
+    Seq (SeqCtr [(HeaderCtr 1, CmpEq, MatchConst (repr 0) u8)] [
+      StatelessOp SubOp u8
+        (OpHeader (HeaderCtr 1))
+        (OpConst (repr 5))
         (HeaderCtr 1)
     ]);
     Seq (SeqCtr [] [])
@@ -35,10 +35,10 @@ Definition prog_sub5_h1_if_h1eq0 : CaracaraProgram :=
 (* Adds 3 to h1 when h1 = 5. *)
 Definition prog_add3_h1_if_h1eq5 : CaracaraProgram :=
   CaracaraProgramDef [HeaderCtr 1] [] [] [
-    Seq (SeqCtr [(HeaderCtr 1, CmpEq, MatchConst (CrUInt8 (repr 5)))] [
-      StatelessOp AddOp
-        (HeaderArg (HeaderCtr 1))
-        (ConstantArg (CrUInt8 (repr 3)))
+    Seq (SeqCtr [(HeaderCtr 1, CmpEq, MatchConst (repr 5) u8)] [
+      StatelessOp AddOp u8
+        (OpHeader (HeaderCtr 1))
+        (OpConst (repr 3))
         (HeaderCtr 1)
     ]);
     Seq (SeqCtr [] [])
@@ -49,16 +49,16 @@ Definition prog_add3_h1_if_h1eq5 : CaracaraProgram :=
  * Rule 1: h1 += 1. Rule 2: h1 += 10. *)
 Definition prog_first_match_h1eq5 : CaracaraProgram :=
   CaracaraProgramDef [HeaderCtr 1] [] [] [
-    Seq (SeqCtr [(HeaderCtr 1, CmpEq, MatchConst (CrUInt8 (repr 5)))] [
-      StatelessOp AddOp
-        (HeaderArg (HeaderCtr 1))
-        (ConstantArg (CrUInt8 (repr 1)))
+    Seq (SeqCtr [(HeaderCtr 1, CmpEq, MatchConst (repr 5) u8)] [
+      StatelessOp AddOp u8
+        (OpHeader (HeaderCtr 1))
+        (OpConst (repr 1))
         (HeaderCtr 1)
     ]);
-    Seq (SeqCtr [(HeaderCtr 1, CmpEq, MatchConst (CrUInt8 (repr 5)))] [
-      StatelessOp AddOp
-        (HeaderArg (HeaderCtr 1))
-        (ConstantArg (CrUInt8 (repr 10)))
+    Seq (SeqCtr [(HeaderCtr 1, CmpEq, MatchConst (repr 5) u8)] [
+      StatelessOp AddOp u8
+        (OpHeader (HeaderCtr 1))
+        (OpConst (repr 10))
         (HeaderCtr 1)
     ]);
     Seq (SeqCtr [] [])
@@ -68,9 +68,9 @@ Definition prog_first_match_h1eq5 : CaracaraProgram :=
 Definition prog_stateful_sub2_s1_from_h1 : CaracaraProgram :=
   CaracaraProgramDef [HeaderCtr 1] [StateCtr 1] [] [
     Seq (SeqCtr [] [
-      StatefulOp SubOp
-        (HeaderArg (HeaderCtr 1))
-        (ConstantArg (CrUInt8 (repr 2)))
+      StatefulOp SubOp u8
+        (OpHeader (HeaderCtr 1))
+        (OpConst (repr 2))
         (StateCtr 1)
     ])
   ].
@@ -79,9 +79,9 @@ Definition prog_stateful_sub2_s1_from_h1 : CaracaraProgram :=
 Definition prog_add_ctrl1_to_h1 : CaracaraProgram :=
   CaracaraProgramDef [HeaderCtr 1] [] [CtrlCtr 1] [
     Seq (SeqCtr [] [
-      StatelessOp AddOp
-        (HeaderArg (HeaderCtr 1))
-        (CtrlPlaneArg (CtrlCtr 1))
+      StatelessOp AddOp u8
+        (OpHeader (HeaderCtr 1))
+        (OpCtrlPlane (CtrlCtr 1))
         (HeaderCtr 1)
     ])
   ].
@@ -92,13 +92,13 @@ Definition prog_add_ctrl1_to_h1 : CaracaraProgram :=
 Definition prog_fold_left_order : CaracaraProgram :=
   CaracaraProgramDef [HeaderCtr 1] [] [] [
     Seq (SeqCtr [] [
-      StatelessOp AddOp
-        (HeaderArg (HeaderCtr 1))
-        (ConstantArg (CrUInt8 (repr 1)))
+      StatelessOp AddOp u8
+        (OpHeader (HeaderCtr 1))
+        (OpConst (repr 1))
         (HeaderCtr 1);
-      StatelessOp MulOp
-        (HeaderArg (HeaderCtr 1))
-        (ConstantArg (CrUInt8 (repr 2)))
+      StatelessOp MulOp u8
+        (OpHeader (HeaderCtr 1))
+        (OpConst (repr 2))
         (HeaderCtr 1)
     ])
   ].
@@ -108,9 +108,9 @@ Definition prog_fold_left_order : CaracaraProgram :=
 Definition prog_sub_underflow_h1 : CaracaraProgram :=
   CaracaraProgramDef [HeaderCtr 1] [] [] [
     Seq (SeqCtr [] [
-      StatelessOp SubOp
-        (HeaderArg (HeaderCtr 1))
-        (ConstantArg (CrUInt8 (repr 5)))
+      StatelessOp SubOp u8
+        (OpHeader (HeaderCtr 1))
+        (OpConst (repr 5))
         (HeaderCtr 1)
     ])
   ].
@@ -120,9 +120,9 @@ Definition prog_sub_underflow_h1 : CaracaraProgram :=
 Definition prog_add_overflow_h1 : CaracaraProgram :=
   CaracaraProgramDef [HeaderCtr 1] [] [] [
     Seq (SeqCtr [] [
-      StatelessOp AddOp
-        (HeaderArg (HeaderCtr 1))
-        (ConstantArg (CrUInt8 (repr 10)))
+      StatelessOp AddOp u8
+        (OpHeader (HeaderCtr 1))
+        (OpConst (repr 10))
         (HeaderCtr 1)
     ])
   ].
@@ -131,9 +131,9 @@ Definition prog_add_overflow_h1 : CaracaraProgram :=
 Definition prog_and_mask_h1 : CaracaraProgram :=
   CaracaraProgramDef [HeaderCtr 1] [] [] [
     Seq (SeqCtr [] [
-      StatelessOp AndOp
-        (HeaderArg (HeaderCtr 1))
-        (ConstantArg (CrUInt8 (repr 15)))
+      StatelessOp AndOp u8
+        (OpHeader (HeaderCtr 1))
+        (OpConst (repr 15))
         (HeaderCtr 1)
     ])
   ].
@@ -142,9 +142,9 @@ Definition prog_and_mask_h1 : CaracaraProgram :=
 Definition prog_or_h1 : CaracaraProgram :=
   CaracaraProgramDef [HeaderCtr 1] [] [] [
     Seq (SeqCtr [] [
-      StatelessOp OrOp
-        (HeaderArg (HeaderCtr 1))
-        (ConstantArg (CrUInt8 (repr 240)))
+      StatelessOp OrOp u8
+        (OpHeader (HeaderCtr 1))
+        (OpConst (repr 240))
         (HeaderCtr 1)
     ])
   ].
@@ -154,9 +154,9 @@ Definition prog_or_h1 : CaracaraProgram :=
 Definition prog_xor_h1 : CaracaraProgram :=
   CaracaraProgramDef [HeaderCtr 1] [] [] [
     Seq (SeqCtr [] [
-      StatelessOp XorOp
-        (HeaderArg (HeaderCtr 1))
-        (ConstantArg (CrUInt8 (repr 255)))
+      StatelessOp XorOp u8
+        (OpHeader (HeaderCtr 1))
+        (OpConst (repr 255))
         (HeaderCtr 1)
     ])
   ].
@@ -165,9 +165,9 @@ Definition prog_xor_h1 : CaracaraProgram :=
 Definition prog_mul_h1 : CaracaraProgram :=
   CaracaraProgramDef [HeaderCtr 1] [] [] [
     Seq (SeqCtr [] [
-      StatelessOp MulOp
-        (HeaderArg (HeaderCtr 1))
-        (ConstantArg (CrUInt8 (repr 7)))
+      StatelessOp MulOp u8
+        (OpHeader (HeaderCtr 1))
+        (OpConst (repr 7))
         (HeaderCtr 1)
     ])
   ].
@@ -176,9 +176,9 @@ Definition prog_mul_h1 : CaracaraProgram :=
 Definition prog_div_h1 : CaracaraProgram :=
   CaracaraProgramDef [HeaderCtr 1] [] [] [
     Seq (SeqCtr [] [
-      StatelessOp DivOp
-        (HeaderArg (HeaderCtr 1))
-        (ConstantArg (CrUInt8 (repr 3)))
+      StatelessOp DivOp u8
+        (OpHeader (HeaderCtr 1))
+        (OpConst (repr 3))
         (HeaderCtr 1)
     ])
   ].
@@ -187,21 +187,21 @@ Definition prog_div_h1 : CaracaraProgram :=
 Definition prog_mod_h1 : CaracaraProgram :=
   CaracaraProgramDef [HeaderCtr 1] [] [] [
     Seq (SeqCtr [] [
-      StatelessOp ModOp
-        (HeaderArg (HeaderCtr 1))
-        (ConstantArg (CrUInt8 (repr 7)))
+      StatelessOp ModOp u8
+        (OpHeader (HeaderCtr 1))
+        (OpConst (repr 7))
         (HeaderCtr 1)
     ])
   ].
 
-(* StatefulArg as operand: read from state variable as an input.
+(* OpStateful as operand: read from state variable as an input.
  * h1 := h1 + s1. With h1 = 3 and s1 = 4: h1 = 7. *)
 Definition prog_stateful_arg_input : CaracaraProgram :=
   CaracaraProgramDef [HeaderCtr 1] [StateCtr 1] [] [
     Seq (SeqCtr [] [
-      StatelessOp AddOp
-        (HeaderArg (HeaderCtr 1))
-        (StatefulArg (StateCtr 1))
+      StatelessOp AddOp u8
+        (OpHeader (HeaderCtr 1))
+        (OpStateful (StateCtr 1))
         (HeaderCtr 1)
     ])
   ].
@@ -212,16 +212,16 @@ Definition prog_stateful_arg_input : CaracaraProgram :=
  * With h1 = 10, only rule 2 fires (find_first_match returns rule 2): h1 = 110. *)
 Definition prog_multi_rule_second_matches : CaracaraProgram :=
   CaracaraProgramDef [HeaderCtr 1] [] [] [
-    Seq (SeqCtr [(HeaderCtr 1, CmpEq, MatchConst (CrUInt8 (repr 5)))] [
-      StatelessOp AddOp
-        (HeaderArg (HeaderCtr 1))
-        (ConstantArg (CrUInt8 (repr 1)))
+    Seq (SeqCtr [(HeaderCtr 1, CmpEq, MatchConst (repr 5) u8)] [
+      StatelessOp AddOp u8
+        (OpHeader (HeaderCtr 1))
+        (OpConst (repr 1))
         (HeaderCtr 1)
     ]);
-    Seq (SeqCtr [(HeaderCtr 1, CmpEq, MatchConst (CrUInt8 (repr 10)))] [
-      StatelessOp AddOp
-        (HeaderArg (HeaderCtr 1))
-        (ConstantArg (CrUInt8 (repr 100)))
+    Seq (SeqCtr [(HeaderCtr 1, CmpEq, MatchConst (repr 10) u8)] [
+      StatelessOp AddOp u8
+        (OpHeader (HeaderCtr 1))
+        (OpConst (repr 100))
         (HeaderCtr 1)
     ]);
     Seq (SeqCtr [] [])
@@ -231,10 +231,10 @@ Definition prog_multi_rule_second_matches : CaracaraProgram :=
  * When h2 = 7, h1 := h1 + 1. With h1 = 5 and h2 = 7: h1 = 6, h2 unchanged. *)
 Definition prog_cross_header_predicate : CaracaraProgram :=
   CaracaraProgramDef [HeaderCtr 1; HeaderCtr 2] [] [] [
-    Seq (SeqCtr [(HeaderCtr 2, CmpEq, MatchConst (CrUInt8 (repr 7)))] [
-      StatelessOp AddOp
-        (HeaderArg (HeaderCtr 1))
-        (ConstantArg (CrUInt8 (repr 1)))
+    Seq (SeqCtr [(HeaderCtr 2, CmpEq, MatchConst (repr 7) u8)] [
+      StatelessOp AddOp u8
+        (OpHeader (HeaderCtr 1))
+        (OpConst (repr 1))
         (HeaderCtr 1)
     ]);
     Seq (SeqCtr [] [])
@@ -243,6 +243,33 @@ Definition prog_cross_header_predicate : CaracaraProgram :=
 (* Empty transformer: no rules. State is left unchanged. *)
 Definition prog_empty_transformer : CaracaraProgram :=
   CaracaraProgramDef [HeaderCtr 1] [] [] [Seq (SeqCtr [] [])].
+
+(* Cast narrowing: h1 := (u8) h1.  Reads h1 at u32 then truncates to u8.
+ * With h1 = 300: 300 mod 256 = 44. *)
+Definition prog_cast_truncate_u8 : CaracaraProgram :=
+  CaracaraProgramDef [HeaderCtr 1] [] [] [
+    Seq (SeqCtr [] [
+      CastHeaderOp u32 u8 (OpHeader (HeaderCtr 1)) (HeaderCtr 1)
+    ])
+  ].
+
+(* Cast widening preserves a value that already fits: h1 := (u32)((u8) h1).
+ * With h1 = 200 (< 256): stays 200. *)
+Definition prog_cast_widen_preserves : CaracaraProgram :=
+  CaracaraProgramDef [HeaderCtr 1] [] [] [
+    Seq (SeqCtr [] [
+      CastHeaderOp u8 u32 (OpHeader (HeaderCtr 1)) (HeaderCtr 1)
+    ])
+  ].
+
+(* Cast into a state variable (CastStateOp): s1 := (u8) h1, h1 unchanged.
+ * With h1 = 258: 258 mod 256 = 2. *)
+Definition prog_cast_to_state : CaracaraProgram :=
+  CaracaraProgramDef [HeaderCtr 1] [StateCtr 1] [] [
+    Seq (SeqCtr [] [
+      CastStateOp u32 u8 (OpHeader (HeaderCtr 1)) (StateCtr 1)
+    ])
+  ].
 
 Definition test_programs := [
   prog_sub2_h1;
@@ -263,5 +290,8 @@ Definition test_programs := [
   prog_stateful_arg_input;
   prog_multi_rule_second_matches;
   prog_cross_header_predicate;
-  prog_empty_transformer
+  prog_empty_transformer;
+  prog_cast_truncate_u8;
+  prog_cast_widen_preserves;
+  prog_cast_to_state
 ].

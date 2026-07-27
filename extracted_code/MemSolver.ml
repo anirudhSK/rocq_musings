@@ -204,32 +204,29 @@ and parse_ptr_expr
   print_endline("dummy pointer handler called");
   Z3.BitVector.mk_numeral ctx "0" 64
 
-(* Helper to extract value from Z3 model for scalar variables *)
-let eval_scalar_var (m : Z3.Model.model) (name : string) (z3_var : Z3.Expr.expr) : coq_CrVal option =
+(* Map a Z3 bitvector width to its CrIntType; unknown widths fall back to u64
+   (mirrors [width_to_ty] in Z3Solver). *)
+let ty_of_bv_size = function
+  | 8  -> W8
+  | 16 -> W16
+  | 32 -> W32
+  | _  -> W64
+
+(* Helper to extract value from Z3 model for scalar variables.  [display_name]
+   is the base variable name (the width suffix is stripped by the caller). *)
+let eval_scalar_var (m : Z3.Model.model) (display_name : string) (z3_var : Z3.Expr.expr) : coq_CrVal option =
   match Z3.Model.eval m z3_var true with
   | Some value ->
       (match Z3.Expr.get_sort value with
       | sort when Z3.Sort.get_sort_kind sort = Z3enums.BV_SORT ->
           let bv_size = Z3.BitVector.get_size sort in
+          (* Reconstruct the numeral at arbitrary precision: a full-width u64
+             value overflows a native int, and [int_of_string] would then throw
+             and silently yield 0. *)
           let num_str = Z3.BitVector.numeral_to_string value in
-          let num_val = 
-            try int_of_string num_str
-            with _ -> 0
-          in
-          (* Strip the "0" suffix for display *)
-          let display_name = 
-            if Stdlib.String.ends_with ~suffix:"0" name then
-              Stdlib.String.sub name 0 (Stdlib.String.length name - 1)
-            else
-              name
-          in
-          Printf.printf "| var( %s ) := %d\n" display_name num_val;
-          if bv_size = 8 then
-            Some (IntVal (CrUInt8 (Shim.int_to_coq_uint8 num_val)))
-          else if bv_size = 32 then
-            Some (IntVal (CrUInt32 (Shim.int_to_coq_uint32 num_val)))
-          else
-            None
+          let ty = ty_of_bv_size bv_size in
+          Printf.printf "| var( %s ) : u%d := %s\n" display_name bv_size num_str;
+          Some (IntVal (Shim.str_to_coq_uint64 num_str, ty))
       | _ -> None)
   | None -> None
 
@@ -263,7 +260,7 @@ let build_sval_map (m : Z3.Model.model) (var_bindings : (string * Z3.Expr.expr) 
     (fun acc (name, z3_var) ->
       match strip_scalar_suffix name with
       | Some base_name -> (
-          match eval_scalar_var m name z3_var with
+          match eval_scalar_var m base_name z3_var with
           | Some value -> (base_name, value) :: acc
           | None -> acc)
       | None -> acc)
@@ -331,13 +328,13 @@ let build_aval_map (_ctx : Z3.context) (m : Z3.Model.model) (var_bindings : (str
               let len = max_idx + 1 in
               (* Initialize PMap with the default value if we have one *)
               let init_status = match default_val with
-                | Some v -> Init (IntVal (CrUInt8 (Shim.int_to_coq_uint8 v)))
+                | Some v -> Init (IntVal (Shim.int_to_coq_uint64 v, u64))
                 | None -> Uninit
               in
               let bytes = Stdlib.List.fold_left
                 (fun pmap (i, v) ->
                   let key = Shim.int_to_pos (i + 1) in (* PMap keys are 1-indexed positives *)
-                  let cval = IntVal (CrUInt8 (Shim.int_to_coq_uint8 v)) in
+                  let cval = IntVal (Shim.int_to_coq_uint64 v, u64) in
                   Maps.PMap.set key (Init cval) pmap)
                 (Maps.PMap.init init_status)
                 entries in
@@ -431,7 +428,7 @@ let sat_check
           for i = 0 to len - 1 do
             let key = Shim.int_to_pos (i + 1) in
             let v = match Maps.PMap.get key arr_bytes with
-              | Init (IntVal (CrUInt8 n)) -> Shim.coq_Z_to_int n
+              | Init (IntVal (n, _)) -> Shim.coq_Z_to_int n
               | _ -> 0
             in
             if i > 0 then Printf.printf ", ";

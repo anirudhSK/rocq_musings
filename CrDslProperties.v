@@ -59,7 +59,11 @@ Definition well_formed_program (p : CaracaraProgram) : Prop :=
 (* TODO: Needs extension once parser semantics are fleshed out *)
 Definition well_formed_module (m : CrModule) : Prop :=
   match m with
+  (* TODO: parser/deparser modules are currently unconstrained.  A deparser
+     should at least require its emit widths to be well-formed (and, once
+     header types carry widths, that each emit width match its header). *)
   | ParserModule _ _ => True
+  | DeparserModule _ _ => True
   | TransformerModule _ states ctrls t =>
       Coqlib.list_norepet states /\ Coqlib.list_norepet ctrls /\
       Sorted varlike_lt states /\ Sorted varlike_lt ctrls /\
@@ -73,20 +77,10 @@ Definition all_network_ctrls (net : ModuleNetwork) : list Ctrl :=
   List.flat_map module_ctrls (net_modules net).
 
 (* extend well-formedness to GeneralCaracaraProgram *)
-(* NOTE: depending on the extent to which sortedness actually matters,
- * it could be possible to remove the 3rd and 4th clauses *)
 Definition well_formed_general_program (p : GeneralCaracaraProgram) : Prop :=
   let net := get_network_from_general p in
-  let headers := get_headers_from_general p in
-  let sig := get_signature_from_general p in
   wf_module_network net /\
-  Coqlib.list_norepet headers /\
-  Coqlib.list_norepet sig /\
-  Sorted varlike_lt headers /\
-  Sorted varlike_lt sig /\
-  List.Forall well_formed_module (net_modules net) /\
-  Coqlib.list_norepet (all_network_states net) /\
-  Coqlib.list_norepet (all_network_ctrls net).
+  List.Forall well_formed_module (net_modules net).
 
 Fixpoint Sortedb {A} (leb : A -> A -> bool) (l : list A) : bool :=
   match l with
@@ -238,6 +232,7 @@ Qed.
 Definition well_formed_moduleb (m : CrModule) : bool :=
   match m with
   | ParserModule _ _ => true
+  | DeparserModule _ _ => true
   | TransformerModule _ states ctrls t =>
       negb (has_duplicates varlike_equal states) &&
       negb (has_duplicates varlike_equal ctrls) &&
@@ -280,102 +275,27 @@ Qed.
 
 Definition well_formed_general_programb (p : GeneralCaracaraProgram) : bool :=
   let net := get_network_from_general p in
-  let headers := get_headers_from_general p in
-  let sig := get_signature_from_general p in
   wf_module_networkb net &&
-  negb (has_duplicates varlike_equal headers) &&
-  negb (has_duplicates varlike_equal sig) &&
-  Sortedb varlike_ltb headers &&
-  Sortedb varlike_ltb sig &&
-  List.forallb well_formed_moduleb (net_modules net) &&
-  negb (has_duplicates varlike_equal (all_network_states net)) &&
-  negb (has_duplicates varlike_equal (all_network_ctrls net)).
+  List.forallb well_formed_moduleb (net_modules net).
 
 Lemma well_formed_general_program_prop_bool_lemma :
   forall p,
     well_formed_general_program p <-> well_formed_general_programb p = true.
 Proof.
   intros p.
-  destruct p as [headers net sig].
+  destruct p as [l net].
   unfold well_formed_general_program, well_formed_general_programb.
   simpl.
-  pose proof (sorted_is_sorted_lemma Header headers varlike_lt varlike_ltb
-    (fun x y => iff_sym (Pos.ltb_lt (get_key x) (get_key y)))) as SIFFh.
-  pose proof (sorted_is_sorted_lemma Header sig varlike_lt varlike_ltb
-    (fun x y => iff_sym (Pos.ltb_lt (get_key x) (get_key y)))) as SIFFsig.
-
-  (* Reflection of [List.Forall] against [List.forallb] for well-formed
-     modules. *)
-  assert (FAFB : List.Forall well_formed_module (net_modules net) <->
-                 List.forallb well_formed_moduleb (net_modules net) = true).
-  { rewrite Forall_forall, forallb_forall. split; intros H x Hx;
-      apply well_formed_module_prop_bool_lemma; auto. }
-
-  (* Reflexivity, symmetry, and injectivity of [posesque_eqb] on
-     [ModuleName], reusing the canonical lemmas from CrIdentifiers.
-     Used to handle [mod_names_unique{,b}] below. *)
-  pose proof (@posesque_eqb_refl ModuleName _) as Hpr.
-  pose proof (@posesque_eqb_sym ModuleName _) as Hps.
-  pose proof (fun x y => proj1 (@posesque_eqb_iff ModuleName _ x y)) as Hpeq.
-
-  (* [mod_names_unique <-> mod_names_uniqueb = true]. *)
-  assert (MNU : mod_names_unique net <-> mod_names_uniqueb net = true).
-  { unfold mod_names_unique, mod_names_uniqueb. split.
-    - intros Hnr. apply Bool.negb_true_iff.
-      induction Hnr as [| x xs Hni _ IH].
-      + reflexivity.
-      + simpl.
-        destruct (List.existsb (fun y => posesque_eqb y x) xs) eqn:He.
-        * exfalso. apply List.existsb_exists in He.
-          destruct He as [y [Hyin Heqyx]]. apply Hpeq in Heqyx.
-          subst. exact (Hni Hyin).
-        * exact IH.
-    - intros Hb. apply Bool.negb_true_iff in Hb.
-      exact (has_duplicates_correct _ posesque_eqb Hpr Hps _ Hb). }
-
-  (* [wf_module_network <-> wf_module_networkb = true]. *)
-  assert (WFB : wf_module_network net <-> wf_module_networkb net = true).
-  { unfold wf_module_network, wf_module_networkb.
-    pose proof (start_module_defined_prop_bool_lemma net) as SMD.
-    pose proof (is_dag_prop_bool_lemma net) as IDP.
-    split.
-    - intros (HMU & HSM & HDG).
-      rewrite (proj1 MNU HMU), (proj1 SMD HSM), (proj1 IDP HDG).
-      reflexivity.
-    - intros Hb. repeat rewrite Bool.andb_true_iff in Hb.
-      destruct Hb as ((HMU & HSM) & HDG).
-      split; [apply MNU | split; [apply SMD | apply IDP]]; assumption. }
-
+  rewrite Bool.andb_true_iff.
   split.
-  - intros (Hwf & Hnrh & Hnrsig & HSh & HSsig & HFa & Hnrst & Hnrct).
-    apply WFB in Hwf.
-    apply list_norepet_implies_no_duplicates in Hnrh.
-    apply list_norepet_implies_no_duplicates in Hnrsig.
-    apply (proj1 SIFFh) in HSh.
-    apply (proj1 SIFFsig) in HSsig.
-    apply FAFB in HFa.
-    apply list_norepet_implies_no_duplicates in Hnrst.
-    apply list_norepet_implies_no_duplicates in Hnrct.
-    rewrite Hwf, Hnrh, Hnrsig, HSh, HSsig, HFa, Hnrst, Hnrct.
-    reflexivity.
-  - intros Hb.
-    repeat rewrite Bool.andb_true_iff in Hb.
-    destruct Hb as (((((((Hwf & Hnrh) & Hnrsig) & HSh) & HSsig) & HFa) & Hnrst)
-                    & Hnrct).
-    rewrite Bool.negb_true_iff in Hnrh, Hnrsig, Hnrst, Hnrct.
-    (* Build the 8-way conjunction explicitly with [conj] so the
-       transparent [wf_module_network] is not unfolded by [split]. *)
-    refine (conj _ (conj _ (conj _ (conj _ (conj _ (conj _ (conj _ _))))))).
-    + apply (proj2 WFB). exact Hwf.
-    + exact (has_duplicates_correct _ varlike_equal varlike_equal_refl
-               varlike_equal_sym_bool headers Hnrh).
-    + exact (has_duplicates_correct _ varlike_equal varlike_equal_refl
-               varlike_equal_sym_bool sig Hnrsig).
-    + exact (proj2 SIFFh HSh).
-    + exact (proj2 SIFFsig HSsig).
-    + apply (proj2 FAFB). exact HFa.
-    + exact (has_duplicates_correct _ varlike_equal varlike_equal_refl
-               varlike_equal_sym_bool (all_network_states net) Hnrst).
-    + exact (has_duplicates_correct _ varlike_equal varlike_equal_refl
-               varlike_equal_sym_bool (all_network_ctrls net) Hnrct).
+  - intros [Hnet Hforall]. split.
+    + apply wf_module_network_prop_bool_lemma. exact Hnet.
+    + apply List.forallb_forall. intros m Hm.
+      apply well_formed_module_prop_bool_lemma.
+      rewrite List.Forall_forall in Hforall. apply Hforall. exact Hm.
+  - intros [Hnetb Hforallb]. split.
+    + apply wf_module_network_prop_bool_lemma. exact Hnetb.
+    + apply List.Forall_forall. intros m Hm.
+      apply well_formed_module_prop_bool_lemma.
+      rewrite List.forallb_forall in Hforallb. apply Hforallb. exact Hm.
 Qed.

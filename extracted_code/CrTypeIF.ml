@@ -7,6 +7,12 @@ module BinNums = struct
 end
 module Datatypes = struct
   include Datatypes
+  type nat = [%import: Datatypes.nat]
+  [@@deriving sexp]
+  type bool = [%import: Datatypes.bool]
+  [@@deriving sexp]
+  type 'a option = [%import: 'a Datatypes.option]
+  [@@deriving sexp]
   type ('a, 'b) prod = [%import: ('a, 'b) Datatypes.prod]
   [@@deriving sexp]
   type 'a list = [%import: 'a Datatypes.list]
@@ -21,8 +27,6 @@ module MyInts = struct
   include MyInts
   type uint8 = [%import: MyInts.uint8]
   [@@deriving sexp]
-  type uint16 = [%import: MyInts.uint16]
-  [@@deriving sexp]
   type uint32 = [%import: MyInts.uint32]
   [@@deriving sexp]
   type uint64 = [%import: MyInts.uint64]
@@ -32,7 +36,9 @@ module MyInts = struct
 end
 module CrVal = struct
 include CrVal
-type coq_CrInt_T = [%import: CrVal.coq_CrInt_T]
+type coq_CrWidth = [%import: CrVal.coq_CrWidth]
+[@@deriving sexp]
+type coq_CrIntType = [%import: CrVal.coq_CrIntType]
 [@@deriving sexp]
 type coq_CrPtr_T = [%import: CrVal.coq_CrPtr_T]
 [@@deriving sexp]
@@ -41,7 +47,7 @@ type coq_CrVal = [%import: CrVal.coq_CrVal]
 end
 module CrIdentifiers = struct
   include CrIdentifiers
-  type coq_ParserState = [%import: CrIdentifiers.coq_ParserState]
+  type coq_ParserStateLabel = [%import: CrIdentifiers.coq_ParserStateLabel]
   [@@deriving sexp]
   type coq_Header = [%import: CrIdentifiers.coq_Header]
   [@@deriving sexp]
@@ -54,7 +60,7 @@ module CrIdentifiers = struct
 end
 module CrTransformer = struct
   include CrTransformer
-  type coq_FunctionArgument = [%import: CrTransformer.coq_FunctionArgument]
+  type coq_Operand = [%import: CrTransformer.coq_Operand]
   [@@deriving sexp]
   type coq_CmpOp = [%import: CrTransformer.coq_CmpOp]
   [@@deriving sexp]
@@ -75,8 +81,25 @@ module CrTransformer = struct
   type coq_Transformer = [%import: CrTransformer.coq_Transformer]
   [@@deriving sexp]
 end
+module CrDeparser = struct
+  include CrDeparser
+  type coq_EmitOp = [%import: CrDeparser.coq_EmitOp]
+  [@@deriving sexp]
+  type coq_Deparser = [%import: CrDeparser.coq_Deparser]
+  [@@deriving sexp]
+end
 module CrParser = struct
   include CrParser
+  type coq_ParserOp = [%import: CrParser.coq_ParserOp]
+  [@@deriving sexp]
+  type coq_ParserTarget = [%import: CrParser.coq_ParserTarget]
+  [@@deriving sexp]
+  type coq_SelectCase = [%import: CrParser.coq_SelectCase]
+  [@@deriving sexp]
+  type coq_Transition = [%import: CrParser.coq_Transition]
+  [@@deriving sexp]
+  type coq_ParserStateDef = [%import: CrParser.coq_ParserStateDef]
+  [@@deriving sexp]
   type coq_Parser = [%import: CrParser.coq_Parser]
   [@@deriving sexp]
 end

@@ -5,7 +5,7 @@ From Stdlib Require Import List.
 Import ListNotations.
 
 (* Define the different types of identifiers in the Caracara DSL *)
-Inductive ParserState : Type := ParserStateCtr (uid : positive).
+Inductive ParserStateLabel : Type := ParserStateLabelCtr (uid : positive).
 Inductive Header : Type := HeaderCtr (uid : positive).
 Inductive State : Type := StateCtr (uid : positive).
 Inductive ModuleName : Type := ModuleNameCtr (uid : positive).
@@ -19,14 +19,14 @@ Class Posesque (A : Type) := {
   unwrap_inj : forall x y : A, unwrap x = unwrap y -> x = y;
 }.
 
-Instance Posesque_ParserState : Posesque ParserState := {
-  wrap := fun p => ParserStateCtr p;
-  unwrap := fun s => match s with ParserStateCtr p => p end;
-  incr := fun s => match s with ParserStateCtr p => ParserStateCtr (p + 1) end;
+Instance Posesque_ParserStateLabel : Posesque ParserStateLabel := {
+  wrap := fun p => ParserStateLabelCtr p;
+  unwrap := fun s => match s with ParserStateLabelCtr p => p end;
+  incr := fun s => match s with ParserStateLabelCtr p => ParserStateLabelCtr (p + 1) end;
   unwrap_inj :=
     fun x y => match x, y with
-               | ParserStateCtr px, ParserStateCtr py =>
-                   fun H => f_equal ParserStateCtr H
+               | ParserStateLabelCtr px, ParserStateLabelCtr py =>
+                   fun H => f_equal ParserStateLabelCtr H
                end;
 }.
 Instance Posesque_Header : Posesque Header := {

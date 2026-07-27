@@ -49,6 +49,39 @@ let int_to_coq_uint64 (n : int) : BinNums.coq_Z =
     if (n = 0) then Z0
     else Zpos (int_to_pos n))
 
+(* Build a Coq [Z] from an arbitrary-precision integer, with no native-int
+   overflow (a solved 64-bit model value can exceed [max_int]). *)
+let coq_Z_of_zarith (z : Z.t) : BinNums.coq_Z =
+  let rec pos_of (z : Z.t) : BinNums.positive =
+    if Z.equal z Z.one then Coq_xH
+    else if Z.equal (Z.logand z Z.one) Z.zero
+         then Coq_xO (pos_of (Z.shift_right z 1))
+         else Coq_xI (pos_of (Z.shift_right z 1)) in
+  if Z.equal z Z.zero then Z0
+  else if Z.gt z Z.zero then Zpos (pos_of z)
+  else Zneg (pos_of (Z.neg z))
+(* A uint64 Coq value from a decimal numeral string (the form Z3 returns). *)
+let str_to_coq_uint64 (s : Stdlib.String.t) : BinNums.coq_Z =
+  repr (Coq_xO (Coq_xO (Coq_xO (Coq_xO (Coq_xO (Coq_xO Coq_xH))))))
+       (coq_Z_of_zarith (Z.of_string s))
+
+(* A zarith integer from a Coq [Z], with no native-int overflow (a full-width
+   u64 constant exceeds [max_int], so [coq_Z_to_int] would be lossy). *)
+let zarith_of_coq_Z (n : BinNums.coq_Z) : Z.t =
+  let rec pos_of (p : BinNums.positive) : Z.t =
+    match p with
+    | Coq_xH -> Z.one
+    | Coq_xO p' -> Z.shift_left (pos_of p') 1
+    | Coq_xI p' -> Z.add (Z.shift_left (pos_of p') 1) Z.one in
+  match n with
+  | Z0 -> Z.zero
+  | Zpos p -> pos_of p
+  | Zneg p -> Z.neg (pos_of p)
+(* Decimal string of a Coq [Z] (the form Z3's [mk_numeral] expects), overflow-
+   free.  [pos_to_str] renders binary, not decimal, so it can't be used here. *)
+let coq_Z_to_str (n : BinNums.coq_Z) : Stdlib.String.t =
+  Z.to_string (zarith_of_coq_Z n)
+
 let rec pos_to_str (n : BinNums.positive) : Stdlib.String.t =
   match n with
   | Coq_xH -> "1"
@@ -81,8 +114,13 @@ let char_to_ascii (c : char) : Ascii.ascii =
     | 1 -> Coq_true
     | _ -> raise (Failure "&0x1 should only result in 0 or 1.") in
   let code : int = Char.code c in
-  Ascii (get_bit code 7, get_bit code 6, get_bit code 5, get_bit code 4,
-         get_bit code 3, get_bit code 2, get_bit code 1, get_bit code 0)
+  (* Coq's [Ascii b0 .. b7] takes b0 as the LEAST significant bit -- the order
+     [coq_str_to_str] above decodes with.  Passing the bits the other way round
+     builds a bit-reversed character, so a Coq-built string and an OCaml-built
+     one for the same text would not be equal: [coq_TraverseMap] would miss
+     every variable, and a name used as a map key would never be found. *)
+  Ascii (get_bit code 0, get_bit code 1, get_bit code 2, get_bit code 3,
+         get_bit code 4, get_bit code 5, get_bit code 6, get_bit code 7)
 let rec str_to_coq_str (s : Stdlib.String.t) : string =
   match s with
   | "" -> EmptyString
@@ -91,38 +129,45 @@ let rec str_to_coq_str (s : Stdlib.String.t) : string =
     let rest = Stdlib.String.sub s 1 (Stdlib.String.length s - 1) in
     String.String ((char_to_ascii c), (str_to_coq_str rest))
 
-let uint8_crval (n : int) : CrVal.coq_CrVal =
-  CrVal.IntVal (CrVal.CrUInt8 (int_to_coq_uint8 n))
+(* Seed values are typed u8 (the transformer test programs operate at u8);
+   [mk_int] masks the value into the u8 width so the stored value is well-typed. *)
+let int_to_crval_u8 (n : int) : CrVal.coq_CrVal =
+  CrVal.mk_int CrVal.u8 (int_to_coq_uint64 n)
+(* Seed a value at an explicit integer width (used by the cast tests, whose
+   source header must carry the cast's [from] type for the cast to type-check). *)
+let typed_int_to_crval (ty : CrVal.coq_CrIntType) (n : int) : CrVal.coq_CrVal =
+  CrVal.mk_int ty (int_to_coq_uint64 n)
 let crval_to_int (v : CrVal.coq_CrVal) : int =
   match v with
-  | CrVal.IntVal (CrVal.CrUInt8 x)  -> coq_Z_to_int x
-  | CrVal.IntVal (CrVal.CrUInt16 x) -> coq_Z_to_int x
-  | CrVal.IntVal (CrVal.CrUInt32 x) -> coq_Z_to_int x
-  | CrVal.IntVal (CrVal.CrUInt64 x) -> coq_Z_to_int x
+  | CrVal.IntVal (x, _) -> coq_Z_to_int x
   | _ -> -1
 
-let get_header (n : int) (s : CrProgramState.coq_ConcreteState) : CrVal.coq_CrVal =
+let get_header (n : int) (s : CrProgramState.coq_ConcreteTransformerState) : CrVal.coq_CrVal =
   CrVarLike.lookup_varlike CrVarLike.coq_CrVarLike_Header s (int_to_pos n)
-let set_header (n : int) (v : CrVal.coq_CrVal) (s : CrProgramState.coq_ConcreteState)
-    : CrProgramState.coq_ConcreteState =
-  CrVarLike.update_varlike CrVarLike.coq_CrVarLike_Header s (int_to_pos n) v
-let get_state (n : int) (s : CrProgramState.coq_ConcreteState) : CrVal.coq_CrVal =
+let set_header_to_int (n : int) (v : int) (s : CrProgramState.coq_ConcreteTransformerState)
+    : CrProgramState.coq_ConcreteTransformerState =
+  CrVarLike.update_varlike CrVarLike.coq_CrVarLike_Header s (int_to_pos n) (int_to_crval_u8 v)
+let set_header_to_typed_int (n : int) (ty : CrVal.coq_CrIntType) (v : int)
+    (s : CrProgramState.coq_ConcreteTransformerState)
+    : CrProgramState.coq_ConcreteTransformerState =
+  CrVarLike.update_varlike CrVarLike.coq_CrVarLike_Header s (int_to_pos n) (typed_int_to_crval ty v)
+let get_state (n : int) (s : CrProgramState.coq_ConcreteTransformerState) : CrVal.coq_CrVal =
   CrVarLike.lookup_varlike CrVarLike.coq_CrVarLike_State s (int_to_pos n)
-let set_state (n : int) (v : CrVal.coq_CrVal) (s : CrProgramState.coq_ConcreteState)
-    : CrProgramState.coq_ConcreteState =
-  CrVarLike.update_varlike CrVarLike.coq_CrVarLike_State s (int_to_pos n) v
-let get_ctrl (n : int) (s : CrProgramState.coq_ConcreteState) : CrVal.coq_CrVal =
+let set_state_to_int (n : int) (v : int) (s : CrProgramState.coq_ConcreteTransformerState)
+    : CrProgramState.coq_ConcreteTransformerState =
+  CrVarLike.update_varlike CrVarLike.coq_CrVarLike_State s (int_to_pos n) (int_to_crval_u8 v)
+let get_ctrl (n : int) (s : CrProgramState.coq_ConcreteTransformerState) : CrVal.coq_CrVal =
   CrVarLike.lookup_varlike CrVarLike.coq_CrVarLike_Ctrl s (int_to_pos n)
-let set_ctrl (n : int) (v : CrVal.coq_CrVal) (s : CrProgramState.coq_ConcreteState)
-    : CrProgramState.coq_ConcreteState =
-  CrVarLike.update_varlike CrVarLike.coq_CrVarLike_Ctrl s (int_to_pos n) v
+let set_ctrl_to_int (n : int) (v : int) (s : CrProgramState.coq_ConcreteTransformerState)
+    : CrProgramState.coq_ConcreteTransformerState =
+  CrVarLike.update_varlike CrVarLike.coq_CrVarLike_Ctrl s (int_to_pos n) (int_to_crval_u8 v)
 
-let run_program (p : CrDsl.coq_CaracaraProgram) (s : CrProgramState.coq_ConcreteState)
-    : CrProgramState.coq_ConcreteState =
+let run_program (p : CrDsl.coq_CaracaraProgram) (s : CrProgramState.coq_ConcreteTransformerState)
+    : CrProgramState.coq_ConcreteTransformerState =
   CrConcreteSemanticsTransformer.eval_cr_program_concrete p s
 
-let print_state' indentation separator (ps : CrProgramState.coq_ConcreteState) =
-  let header_map = ps.header_map in let ctrl_map = ps.ctrl_map in let state_map = ps.state_map in
+let print_state' indentation separator (ps : CrProgramState.coq_ConcreteTransformerState) =
+  let header_map = ps.t_header_map in let ctrl_map = ps.t_ctrl_map in let state_map = ps.t_state_map in
   let header_tree = Datatypes.snd header_map in let ctrl_tree = Datatypes.snd ctrl_map in let state_tree = Datatypes.snd state_map in
   let headers = Maps.PTree.elements header_tree in let ctrls = Maps.PTree.elements ctrl_tree in let states = Maps.PTree.elements state_tree in
   let key p = coq_Z_to_int (BinNums.Zpos p) in
@@ -152,25 +197,52 @@ let start_mod_id (p : CrModule.coq_GeneralCaracaraProgram) : int =
   coq_Z_to_int (BinNums.Zpos
     (CrIdentifiers.coq_Posesque_ModuleName.unwrap net.CrModule.start_module))
 
-let get_mod_state (key : int) (gcs : CrProgramState.coq_ConcreteState Maps.PMap.t)
-    : CrProgramState.coq_ConcreteState =
-  Maps.PMap.get (int_to_pos key) gcs
-let set_mod_state (key : int) (ps : CrProgramState.coq_ConcreteState)
-    (gcs : CrProgramState.coq_ConcreteState Maps.PMap.t)
-    : CrProgramState.coq_ConcreteState Maps.PMap.t =
-  Maps.PMap.set (int_to_pos key) ps gcs
+(* The general concrete state is now a record whose [mod_states] map holds a
+   [ModuleState] (transformer or parser) per module.  The test harness seeds and
+   reads the *transformer* state of the (transformer) start module, so we unwrap
+   [TransformerMod] on the way in and rewrap on the way out. *)
+let get_mod_state (key : int) (gcs : CrGeneralProgramState.coq_GeneralConcreteState)
+    : CrProgramState.coq_ConcreteTransformerState =
+  match Maps.PMap.get (int_to_pos key) gcs.CrGeneralProgramState.mod_states with
+  | CrProgramState.TransformerMod ts -> ts
+  | CrProgramState.ParserMod _ -> failwith "get_mod_state: expected a transformer module"
+  | CrProgramState.DeparserMod _ -> failwith "get_mod_state: expected a transformer module"
+let set_mod_state (key : int) (ps : CrProgramState.coq_ConcreteTransformerState)
+    (gcs : CrGeneralProgramState.coq_GeneralConcreteState)
+    : CrGeneralProgramState.coq_GeneralConcreteState =
+  CrGeneralProgramState.set_gps_mod_states gcs
+    (Maps.PMap.set (int_to_pos key) (CrProgramState.TransformerMod ps)
+       gcs.CrGeneralProgramState.mod_states)
 
-let print_general_state (gcs : CrProgramState.coq_ConcreteState Maps.PMap.t) =
+(* Render a header map as "h<k>=<v>" entries, sorted by key, comma-separated. *)
+let header_map_to_string hmap =
+  let key p = coq_Z_to_int (BinNums.Zpos p) in
+  let rec to_pairs = function
+    | Datatypes.Coq_nil -> []
+    | Datatypes.Coq_cons (Datatypes.Coq_pair (k, v), rest) ->
+        (key k, crval_to_int v) :: to_pairs rest in
+  let pairs =
+    to_pairs (Maps.PTree.elements (Datatypes.snd hmap))
+    |> Stdlib.List.sort (fun (a, _) (b, _) -> Stdlib.compare a b) in
+  Stdlib.String.concat ", "
+    (Stdlib.List.map (fun (k, v) -> Printf.sprintf "h%d=%d" k v) pairs)
+
+let print_general_state (gcs : CrGeneralProgramState.coq_GeneralConcreteState) =
   let rec to_list acc = function
     | Datatypes.Coq_nil -> acc
-    | Datatypes.Coq_cons (Datatypes.Coq_pair (mod_id, local_state), rest) ->
-        to_list ((coq_Z_to_int (BinNums.Zpos mod_id), local_state) :: acc) rest
+    | Datatypes.Coq_cons (Datatypes.Coq_pair (mod_id, ms), rest) ->
+        to_list ((coq_Z_to_int (BinNums.Zpos mod_id), ms) :: acc) rest
   in
-  let pairs = to_list [] (Maps.PTree.elements (Datatypes.snd gcs)) in
+  let pairs = to_list [] (Maps.PTree.elements (Datatypes.snd gcs.CrGeneralProgramState.mod_states)) in
   let sorted = Stdlib.List.sort (fun (a, _) (b, _) -> Stdlib.compare a b) pairs in
-  Stdlib.List.iter (fun (id, local_state) ->
+  Stdlib.List.iter (fun (id, ms) ->
     Printf.printf "Module %d:\n" id;
-    print_state' "  " "" local_state) sorted
+    match ms with
+    | CrProgramState.TransformerMod ts -> print_state' "  " "" ts
+    | CrProgramState.ParserMod ps ->
+        print_endline ("  " ^ header_map_to_string ps.CrProgramState.p_header_map)
+    | CrProgramState.DeparserMod ps ->
+        print_endline ("  " ^ header_map_to_string ps.CrProgramState.p_header_map)) sorted
 
 let listify_coq_list (a_list : 'a Datatypes.list) : 'a Stdlib.List.t =
   let rec aux acc = function
@@ -184,7 +256,86 @@ let print_malformed_prog p pid =
   | Datatypes.Coq_false -> Printf.printf "(%d) malformed\n" pid
   | Datatypes.Coq_true -> ()
 
-let print_malformed_gprog p pid =
+let print_malformed_gprog p name =
   match CrDslProperties.well_formed_general_programb p with
-  | Datatypes.Coq_false -> Printf.printf "(%d) malformed\n" pid
+  | Datatypes.Coq_false -> Printf.printf "(%s) malformed\n" name
   | Datatypes.Coq_true -> ()
+
+(* ------------------------------------------------------------------ *)
+(* Parser test helpers: build a packet from bytes, run the parser FSM, *)
+(* and render the resulting header map.                                *)
+
+let rec coq_list_of_list = function
+  | [] -> Datatypes.Coq_nil
+  | x :: xs -> Datatypes.Coq_cons (x, coq_list_of_list xs)
+
+let rec int_to_coq_nat (n : int) : Datatypes.nat =
+  if n <= 0 then Datatypes.O else Datatypes.S (int_to_coq_nat (n - 1))
+
+let rec coq_nat_to_int (n : Datatypes.nat) : int =
+  match n with Datatypes.O -> 0 | Datatypes.S m -> 1 + coq_nat_to_int m
+
+(* A Coq [list Header] from header ids (Header extracts to positive). *)
+let headers_of_ints (ns : int Stdlib.List.t) : CrIdentifiers.coq_Header Datatypes.list =
+  coq_list_of_list (Stdlib.List.map int_to_pos ns)
+
+(* MSB-first 8 bits of byte [b] as Coq bools (in a native OCaml list). *)
+let byte_bits (b : int) : Datatypes.bool Stdlib.List.t =
+  Stdlib.List.init 8 (fun k ->
+    if (b lsr (7 - k)) land 1 = 1 then Datatypes.Coq_true else Datatypes.Coq_false)
+
+(* The MSB-first bytes concatenated into a Coq [bool list] packet. *)
+let packet_of_bytes (bytes : int Stdlib.List.t) : Datatypes.bool Datatypes.list =
+  coq_list_of_list (Stdlib.List.concat_map byte_bits bytes)
+
+let mk_parser_state (packet : Datatypes.bool Datatypes.list)
+    : CrProgramState.coq_ConcreteParserState =
+  { CrProgramState.p_header_map = Maps.PMap.init (CrVal.UninitVal);
+    p_packet = packet;
+    p_cursor = Datatypes.O }
+
+let run_parser (p : CrParser.coq_Parser) (bytes : int Stdlib.List.t)
+    : CrProgramState.coq_ConcreteParserState option =
+  CrConcreteSemanticsParser.eval_parser_concrete p (mk_parser_state (packet_of_bytes bytes))
+
+(* Seed the network's input packet (the shared bit map) from a byte list.  This
+   threads through the modules: the start module parses it, and each module hands
+   the residual (unparsed) bits to its downstream neighbours. *)
+let set_net_packet (bytes : int Stdlib.List.t)
+    (gcs : CrGeneralProgramState.coq_GeneralConcreteState)
+    : CrGeneralProgramState.coq_GeneralConcreteState =
+  { gcs with CrGeneralProgramState.sh_read_tape = packet_of_bytes bytes }
+
+(* Render the network's output packet -- the write tape the sink deparser left
+   behind -- as MSB-first bytes.  A trailing partial byte is rendered from the
+   bits that are there. *)
+let print_net_output (gcs : CrGeneralProgramState.coq_GeneralConcreteState) =
+  let bit_val = function Datatypes.Coq_true -> 1 | Datatypes.Coq_false -> 0 in
+  let rec pack acc cur n = function
+    | [] -> Stdlib.List.rev (if n = 0 then acc else cur :: acc)
+    | b :: rest ->
+      let cur = (cur lsl 1) lor bit_val b in
+      if n + 1 = 8 then pack (cur :: acc) 0 0 rest else pack acc cur (n + 1) rest in
+  let bytes = pack [] 0 0
+    (listify_coq_list gcs.CrGeneralProgramState.sh_write_tape) in
+  print_endline
+    (Stdlib.String.concat ", " (Stdlib.List.map string_of_int bytes))
+
+(* How many bits of the input packet the network consumed, summed over its
+   parsers. *)
+let net_bits_read (gcs : CrGeneralProgramState.coq_GeneralConcreteState) : int =
+  crval_to_int gcs.CrGeneralProgramState.sh_bits_read
+
+let print_net_bits_read (gcs : CrGeneralProgramState.coq_GeneralConcreteState) =
+  Printf.printf "bits_read=%d\n" (net_bits_read gcs)
+
+(* Render the parsed headers ("h<k>=<v>", sorted), or "Reject" on parse failure. *)
+let print_parser_result (r : CrProgramState.coq_ConcreteParserState option) =
+  match r with
+  | None -> print_endline "Reject"
+  | Some ps -> print_endline (header_map_to_string ps.CrProgramState.p_header_map)
+
+let find_modprog (name : Stdlib.String.t) =
+  match TestModulePrograms.lookup_mod_test_program (str_to_coq_str name) with
+  | Some p -> p
+  | None -> failwith ("find_modprog: no module test program named " ^ name)

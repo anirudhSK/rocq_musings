@@ -13,7 +13,7 @@ Import ListNotations.
 
 (* The convenient equivalence: c1 and c2 agree on every program-variable
    lookup. *)
-Definition cs_lookup_eq (c1 c2 : ConcreteState) : Prop :=
+Definition cs_lookup_eq (c1 c2 : ConcreteTransformerState) : Prop :=
   (forall h : Header, lookup_varlike c1 h = lookup_varlike c2 h) /\
   (forall s : State,  lookup_varlike c1 s = lookup_varlike c2 s) /\
   (forall c : Ctrl,   lookup_varlike c1 c = lookup_varlike c2 c).
@@ -22,6 +22,18 @@ Transparent lookup_varlike_map.
 Transparent map_from_ps.
 Transparent update_varlike.
 Transparent lookup_varlike.
+
+(* A ctrl lookup reads only the ctrl map, so two states with equal ctrl maps
+   agree on every ctrl lookup. *)
+Lemma lookup_varlike_ctrl_t_ctrl_map :
+  forall (c1 c2 : ConcreteTransformerState) (v : Ctrl),
+    t_ctrl_map c1 = t_ctrl_map c2 ->
+    lookup_varlike c1 v = lookup_varlike c2 v.
+Proof.
+  intros c1 c2 v H.
+  unfold lookup_varlike. cbn [map_from_ps CrVarLike_Ctrl].
+  rewrite H. reflexivity.
+Qed.
 
 (* update_varlike preserves cs_lookup_eq, regardless of the variable type.
 
@@ -69,11 +81,11 @@ Qed.
 (* lookup_concrete (used to evaluate function arguments) commutes with
    cs_lookup_eq. *)
 Lemma lookup_concrete_eq :
-  forall c1 c2 arg,
+  forall c1 c2 ty arg,
   cs_lookup_eq c1 c2 ->
-  lookup_concrete arg c1 = lookup_concrete arg c2.
+  lookup_concrete ty arg c1 = lookup_concrete ty arg c2.
 Proof.
-  intros c1 c2 arg [Hh [Hs Hc]]. destruct arg; simpl;
+  intros c1 c2 ty arg [Hh [Hs Hc]]. destruct arg; simpl;
     [apply Hc | apply Hh | reflexivity | apply Hs].
 Qed.
 
@@ -83,10 +95,8 @@ Lemma eval_hdr_op_expr_concrete_eq :
   eval_hdr_op_expr_concrete op c1 = eval_hdr_op_expr_concrete op c2.
 Proof.
   intros c1 c2 op Hcs.
-  destruct op; simpl;
-    rewrite (lookup_concrete_eq _ _ arg1 Hcs);
-    rewrite (lookup_concrete_eq _ _ arg2 Hcs);
-    reflexivity.
+  destruct op; cbn [eval_hdr_op_expr_concrete];
+    rewrite !(lookup_concrete_eq _ _ _ _ Hcs); reflexivity.
 Qed.
 
 Lemma eval_match_concrete_eq :
@@ -110,7 +120,10 @@ Proof.
   intros c1 c2 op Hcs.
   pose proof (eval_hdr_op_expr_concrete_eq c1 c2 op Hcs) as Hexp.
   unfold eval_hdr_op_assign_concrete.
-  destruct op as [f arg1 arg2 target | f arg1 arg2 target]; rewrite Hexp.
+  destruct op as [f ty arg1 arg2 target | f ty arg1 arg2 target
+                 | from to arg target | from to arg target]; rewrite Hexp.
+  - apply cs_lookup_eq_update_state. assumption.
+  - apply cs_lookup_eq_update_header. assumption.
   - apply cs_lookup_eq_update_state. assumption.
   - apply cs_lookup_eq_update_header. assumption.
 Qed.
