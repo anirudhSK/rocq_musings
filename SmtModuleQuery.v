@@ -17,10 +17,6 @@ From MyProject Require Import CrDslProperties.
 From MyProject Require Import CrSymbolicSemanticsParser.
 From MyProject Require Import CrSymbolicSemanticsModule.
 From MyProject Require Import CrConcreteSemanticsModule.
-(* From MyProject Require Import ModnetHeaderLemmas.
-From MyProject Require Import ModnetParserSourceLemmas. *)
-From MyProject Require Import BitstreamResidualLemmas.
-(* From MyProject Require Import BitstreamNetworkLemmas. *)
 From MyProject Require Import SmtHelperLemmas.
 
 Definition keys_from_map {T A : Type} (fn : positive -> A) (m : PMap.t T) : list A :=
