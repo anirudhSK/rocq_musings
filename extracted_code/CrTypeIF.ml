@@ -1,18 +1,3 @@
-(* ------------------------------------------------------------------ *)
-(* Sexp interface to the extracted Coq types.
-
-   The derived converters speak Coq's own encoding -- a [positive] is a spine
-   of [Coq_xI]/[Coq_xO], a [nat] is a tower of [S] -- which is fine to read
-   back but unusable to write by hand or from another program: the parser's
-   input length alone would be 64 nested [S]s.  So the numeric types below
-   accept *either* form and emit the decimal one.  The old encoding still
-   parses (every [test/*.out] fixture is written in it); anything generated
-   from outside the tree -- notably the eBPF transpiler in [~/proj/ect] --
-   writes decimals.
-
-   Arbitrary precision matters here: a [uint64] operand can exceed OCaml's
-   63-bit native int, so the conversions go through Zarith rather than
-   [int_of_string]. *)
 module BinNums = struct
   include BinNums
   type positive = [%import: BinNums.positive]
@@ -20,37 +5,33 @@ module BinNums = struct
   type coq_Z = [%import: BinNums.coq_Z]
   [@@deriving sexp]
 
+(* Arbitrary precision matters here: a [uint64] operand can exceed OCaml's
+   63-bit native int, so the conversions go through Zarith rather than
+   [int_of_string]. *)
   let rec positive_of_zarith (n : Z.t) : positive =
     if Z.equal n Z.one then Coq_xH
     else if Z.equal (Z.logand n Z.one) Z.zero
     then Coq_xO (positive_of_zarith (Z.shift_right n 1))
     else Coq_xI (positive_of_zarith (Z.shift_right n 1))
-
   let rec zarith_of_positive (p : positive) : Z.t =
     match p with
     | Coq_xH -> Z.one
     | Coq_xO p' -> Z.shift_left (zarith_of_positive p') 1
     | Coq_xI p' -> Z.succ (Z.shift_left (zarith_of_positive p') 1)
-
   let zarith_of_coq_Z (z : coq_Z) : Z.t =
     match z with
     | Z0 -> Z.zero
     | Zpos p -> zarith_of_positive p
     | Zneg p -> Z.neg (zarith_of_positive p)
-
   let coq_Z_of_zarith (n : Z.t) : coq_Z =
     match Z.sign n with
     | 0 -> Z0
     | s when s > 0 -> Zpos (positive_of_zarith n)
     | _ -> Zneg (positive_of_zarith (Z.neg n))
-
-  (* [Z.of_string] accepts "0x..." and "_" separators too, which is handy for
-     generated input; anything it rejects falls through to the Coq encoding. *)
   let decimal_of_sexp (s : Sexplib.Sexp.t) : Z.t option =
     match s with
     | Sexplib.Sexp.Atom a -> (try Some (Z.of_string a) with _ -> None)
     | Sexplib.Sexp.List _ -> None
-
   let coq_positive_of_sexp = positive_of_sexp
   let positive_of_sexp (s : Sexplib.Sexp.t) : positive =
     match decimal_of_sexp s with
@@ -58,7 +39,6 @@ module BinNums = struct
     | _ -> coq_positive_of_sexp s
   let sexp_of_positive (p : positive) : Sexplib.Sexp.t =
     Sexplib.Sexp.Atom (Z.to_string (zarith_of_positive p))
-
   let coq_coq_Z_of_sexp = coq_Z_of_sexp
   let coq_Z_of_sexp (s : Sexplib.Sexp.t) : coq_Z =
     match decimal_of_sexp s with
@@ -74,7 +54,6 @@ module Datatypes = struct
 
   let rec nat_of_int (n : int) : nat = if n <= 0 then O else S (nat_of_int (n - 1))
   let rec int_of_nat (n : nat) : int = match n with O -> 0 | S n' -> 1 + int_of_nat n'
-
   let coq_nat_of_sexp = nat_of_sexp
   let nat_of_sexp (s : Sexplib.Sexp.t) : nat =
     match s with
@@ -186,6 +165,7 @@ module CrDsl = struct
   [@@deriving sexp]
   type coq_CrModule = [%import: CrDsl.coq_CrModule]
   [@@deriving sexp]
+
   (* [Connections] is a *function* [ModuleName -> ModuleName -> bool], so the
      derived converters are the sexplib stubs for arrow types: [sexp_of] emits
      "<fun>" and [of_sexp] raises.  That is why a network could be dumped but
@@ -194,9 +174,7 @@ module CrDsl = struct
      [sexp_of_edges] below can enumerate a closure and the round trip is
      total. *)
   type coq_Connections = CrDsl.coq_Connections
-
   type edge_list = (BinNums.positive * BinNums.positive) list
-
   let edges_of_sexp (s : Sexplib.Sexp.t) : edge_list =
     let pair = function
       | Sexplib.Sexp.List [a; b] ->
@@ -209,24 +187,18 @@ module CrDsl = struct
     | Sexplib.Sexp.Atom _ ->
       Sexplib.Conv.of_sexp_error
         "CrTypeIF.edges_of_sexp: expected a list of (src dst) pairs" s
-
   let sexp_of_edges (l : edge_list) : Sexplib.Sexp.t =
     Sexplib.Sexp.List
       (Stdlib.List.map
          (fun (a, b) ->
             Sexplib.Sexp.List [BinNums.sexp_of_positive a; BinNums.sexp_of_positive b])
          l)
-
   (* [coq_ModuleName] is a singleton inductive, so extraction erases it to
      [positive]; a name and its uid are the same value here. *)
   let connections_of_edges (l : edge_list) : coq_Connections =
     fun src dst ->
       if Stdlib.List.exists (fun (a, b) -> a = src && b = dst) l
       then Datatypes.Coq_true else Datatypes.Coq_false
-
-  (* Enumerate [c] over the given names.  Only pairs of declared modules can
-     matter: [CrModule.restricted_edges] already drops every edge whose
-     endpoints are not both in [net_modules]. *)
   let edges_of_connections (names : BinNums.positive list) (c : coq_Connections)
     : edge_list =
     Stdlib.List.concat_map
@@ -239,8 +211,6 @@ module CrDsl = struct
            names)
       names
 end
-(* Re-export at top level for backwards compatibility with the rest of
-   the OCaml shim. *)
 type coq_CaracaraProgram = CrDsl.coq_CaracaraProgram
 let sexp_of_coq_CaracaraProgram = CrDsl.sexp_of_coq_CaracaraProgram
 let coq_CaracaraProgram_of_sexp = CrDsl.coq_CaracaraProgram_of_sexp
@@ -253,13 +223,11 @@ module CrModule = struct
      record converter would have produced, so a dumped network and a
      hand-written one look the same apart from the edge list. *)
   type coq_ModuleNetwork = CrModule.coq_ModuleNetwork
-
   let mod_names (ms : CrDsl.coq_CrModule Datatypes.list) : BinNums.positive list =
     let rec go acc = function
       | Datatypes.Coq_nil -> Stdlib.List.rev acc
       | Datatypes.Coq_cons (m, rest) -> go (CrModule.get_mod_name m :: acc) rest in
     go [] ms
-
   let sexp_of_coq_ModuleNetwork (n : coq_ModuleNetwork) : Sexplib.Sexp.t =
     let modules = n.CrModule.net_modules in
     Sexplib.Sexp.List [
@@ -272,7 +240,6 @@ module CrModule = struct
       Sexplib.Sexp.List [Sexplib.Sexp.Atom "start_module";
                          CrIdentifiers.sexp_of_coq_ModuleName n.CrModule.start_module];
     ]
-
   let coq_ModuleNetwork_of_sexp (s : Sexplib.Sexp.t) : coq_ModuleNetwork =
     let fields =
       match s with

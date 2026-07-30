@@ -67,38 +67,14 @@ let int_to_coq_uint64 (n : int) : BinNums.coq_Z =
     if (n = 0) then Z0
     else Zpos (int_to_pos n))
 
-(* Build a Coq [Z] from an arbitrary-precision integer, with no native-int
-   overflow (a solved 64-bit model value can exceed [max_int]). *)
-let coq_Z_of_zarith (z : Z.t) : BinNums.coq_Z =
-  let rec pos_of (z : Z.t) : BinNums.positive =
-    if Z.equal z Z.one then Coq_xH
-    else if Z.equal (Z.logand z Z.one) Z.zero
-         then Coq_xO (pos_of (Z.shift_right z 1))
-         else Coq_xI (pos_of (Z.shift_right z 1)) in
-  if Z.equal z Z.zero then Z0
-  else if Z.gt z Z.zero then Zpos (pos_of z)
-  else Zneg (pos_of (Z.neg z))
 (* A uint64 Coq value from a decimal numeral string (the form Z3 returns). *)
 let str_to_coq_uint64 (s : Stdlib.String.t) : BinNums.coq_Z =
   repr (Coq_xO (Coq_xO (Coq_xO (Coq_xO (Coq_xO (Coq_xO Coq_xH))))))
-       (coq_Z_of_zarith (Z.of_string s))
-
-(* A zarith integer from a Coq [Z], with no native-int overflow (a full-width
-   u64 constant exceeds [max_int], so [coq_Z_to_int] would be lossy). *)
-let zarith_of_coq_Z (n : BinNums.coq_Z) : Z.t =
-  let rec pos_of (p : BinNums.positive) : Z.t =
-    match p with
-    | Coq_xH -> Z.one
-    | Coq_xO p' -> Z.shift_left (pos_of p') 1
-    | Coq_xI p' -> Z.add (Z.shift_left (pos_of p') 1) Z.one in
-  match n with
-  | Z0 -> Z.zero
-  | Zpos p -> pos_of p
-  | Zneg p -> Z.neg (pos_of p)
+       (CrTypeIF.BinNums.coq_Z_of_zarith (Z.of_string s))
 (* Decimal string of a Coq [Z] (the form Z3's [mk_numeral] expects), overflow-
    free.  [pos_to_str] renders binary, not decimal, so it can't be used here. *)
 let coq_Z_to_str (n : BinNums.coq_Z) : Stdlib.String.t =
-  Z.to_string (zarith_of_coq_Z n)
+  Z.to_string (CrTypeIF.BinNums.zarith_of_coq_Z n)
 
 let rec pos_to_str (n : BinNums.positive) : Stdlib.String.t =
   match n with
