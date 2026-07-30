@@ -91,7 +91,7 @@ Definition check_sym_mem_equal (rs : list MemRegionDecl) (s1 s2 : GeneralSymboli
    a region needs more of it to be there, so it can fault where the other does
    not, even when the two emit identical packets and leave identical contents
    behind.  This is the access-extent equivalence the memory IR checked with
-   [CrMem.query_bounds]. *)
+   an access-extent check. *)
 Definition check_sym_mem_extent (rs : list MemRegionDecl) (s1 s2 : GeneralSymbolicState)
   : SmtBoolExpr :=
   List.fold_right (fun d acc =>

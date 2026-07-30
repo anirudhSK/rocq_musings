@@ -14,20 +14,11 @@ let get_general_program f =
   Shim.print_malformed_gprog p f;
   p
 
-let get_mem_program f = MemSolver.load_program f
-
 let print_equiv = function
   | SmtQuery.Equivalent -> print_endline "Equivalent"
   | SmtQuery.NotEquivalent _ -> print_endline "NotEquivalent"
   | SmtQuery.NotEquivalentUnknown -> print_endline "NotEquivalentUnknown"
   | SmtQuery.NotEquivalentVariablesDiffer -> print_endline "NotEquivalentVariablesDiffer"
-
-let print_z3 = function
-  | CrMem.Z3Unsat -> print_endline "Z3Unsat"
-  | CrMem.Z3Unknown -> print_endline "Z3Unknown"
-  | CrMem.Z3Sat (_, _, ValueMismatch) -> print_endline "Z3Sat(ValueMismatch)"
-  | CrMem.Z3Sat (_, _, BoundsMismatch) -> print_endline "Z3Sat(BoundsMismatch)"
-  | CrMem.Z3Sat (_, _, FullMismatch) -> print_endline "Z3Sat(FullMismatch)"
 
 (* Test 1: A program should be equal to itself. *)
 let%expect_test "refl_0: identical programs are equivalent" =
@@ -80,119 +71,7 @@ let%expect_test "complex_add_sub: dropping an op breaks equivalence" =
     NotEquivalent
     |}]
 
-(* Test 6: Address offsets should alias.
- * p1: *(x+4), p2: *(x+2+2) *)
-let%expect_test "basic address alias" =
-  let p1 = get_mem_program "../test/mem1a.out" in
-  let p2 = get_mem_program "../test/mem1b.out" in
-  print_z3 (MemSolver.mem_solve p1 p2);
-  [%expect {|
-    casting query to z3 expression...
-    adding query to solver...
-    running query...
-    Z3Unsat
-    |}]
-
-(* Test 7: Writing a variable value vs writing a constant value differ.
- * p1: *(x+4) = y, p2: *(x+4) = 1 *)
-let%expect_test "basic memory overwrite: value differs" =
-  let p1 = get_mem_program "../test/mem1a.out" in
-  let p2 = get_mem_program "../test/mem1c.out" in
-  print_z3 (MemSolver.mem_solve p1 p2);
-  [%expect {|
-    casting query to z3 expression...
-    adding query to solver...
-    running query...
-    ┌ SAT Valuation
-    | var( 10 ) : u8 := 254
-    | var( 11 ) : u8 := 0
-    | arr( 1 ) := [0] (len=1)
-    | Outputs equal: false
-    | Bounds equal: true
-    └
-    Z3Sat(ValueMismatch)
-    |}]
-
-(* Test 8: Programs with different segfault behavior.
- * p1: ret *(x+0), p2: *(x+1); ret *(x+0) *)
-let%expect_test "divergent load extents: bounds differ" =
-  let p1 = get_mem_program "../test/mem2a.out" in
-  let p2 = get_mem_program "../test/mem2b.out" in
-  print_z3 (MemSolver.mem_solve p1 p2);
-  [%expect {|
-    casting query to z3 expression...
-    adding query to solver...
-    running query...
-    ┌ SAT Valuation
-    | arr( 1 ) := [0] (len=1)
-    | Outputs equal: true
-    | Bounds equal: false
-    └
-    Z3Sat(BoundsMismatch)
-    |}]
-
-(* Test 9: Access extents and output variables match.
- * p1: *(x+1); ret *(x+0), p2: *(x+1)=0; ret *(x+0) *)
-let%expect_test "mem nop are equiv" =
-  let p1 = get_mem_program "../test/mem2b.out" in
-  let p2 = get_mem_program "../test/mem2c.out" in
-  print_z3 (MemSolver.mem_solve p1 p2);
-  [%expect {|
-    casting query to z3 expression...
-    adding query to solver...
-    running query...
-    Z3Unsat
-    |}]
-
-(* Test 10: If statement collapses.
- * p1: if (0 == 0) then A else B, p2: A *)
-let%expect_test "degenerate branch collapses" =
-  let p1 = get_mem_program "../test/mem3a.out" in
-  let p2 = get_mem_program "../test/mem3b.out" in
-  print_z3 (MemSolver.mem_solve p1 p2);
-  [%expect {|
-    casting query to z3 expression...
-    Met nil expression
-    adding query to solver...
-    running query...
-    Z3Unsat
-    |}]
-
-(* Test 11: Array values may differ.
- * p1: *(x+1); ret *(x+0), p2: *(x+0); ret *(x+1) *)
-let%expect_test "sat aval: array values differ" =
-  let p1 = get_mem_program "../test/mem4a.out" in
-  let p2 = get_mem_program "../test/mem4b.out" in
-  print_z3 (MemSolver.mem_solve p1 p2);
-  [%expect {|
-    casting query to z3 expression...
-    adding query to solver...
-    running query...
-    ┌ SAT Valuation
-    | arr( 1 ) := [255, 0] (len=2)
-    | Outputs equal: false
-    | Bounds equal: true
-    └
-    Z3Sat(ValueMismatch)
-    |}]
-
-(* Test 12: End-to-end -O0 vs -O2 compilation of a basic bpf program, in the
-   OLD memory IR.  Superseded by the network version below and kept only until
-   CrMem goes; `~/proj/ect` still regenerates ../test/O0.ir and O2.ir via
-   `make O0.crmem.ir O2.crmem.ir`. *)
-let%expect_test "e2e bpf test: O0 ≡ O2" =
-  let p1 = get_mem_program "../test/O0.ir" in
-  let p2 = get_mem_program "../test/O2.ir" in
-  print_z3 (MemSolver.mem_solve p1 p2);
-  [%expect {|
-    casting query to z3 expression...
-    Met nil expression
-    adding query to solver...
-    running query...
-    Z3Unsat
-    |}]
-
-(* Test 12b: the same claim in the unified IR -- the point of the whole memory
+(* Test 6: -O0 vs -O2 of one eBPF program -- the point of the whole memory
    merge.  ../test/bpf_O{0,2}.ir are `~/proj/ect/bpf_to_ir` output for the -O0
    and -O2 lowerings of one XDP program (test/bpf_ref.c), regenerated there
    with `make O0.ir O2.ir`.  They are module networks, so unlike test 12 this
@@ -206,7 +85,7 @@ let%expect_test "e2e bpf test: O0 ≡ O2" =
    [mr_len] separate [SmtArrSel] comparisons, which removes a cost that was
    quadratic in both the cells compared and the number of stores.  See
    memo-memo.txt. *)
-let%expect_test "e2e bpf test: O0 ≡ O2, unified IR" =
+let%expect_test "e2e bpf test: O0 ≡ O2" =
   let p1 = get_general_program "../test/bpf_O0.ir" in
   let p2 = get_general_program "../test/bpf_O2.ir" in
   print_equiv (SmtModuleQuery.modnet_equivalence_checker p1 p2);
@@ -469,4 +348,12 @@ let%expect_test "mem: in bounds, load-then-store differs from store-then-load" =
    this pins the bound down from both sides. *)
 let%expect_test "mem: out of bounds, the order stops mattering" =
   check "mem_oob_load_store" "mem_oob_store_load";
+  [%expect {| Equivalent |}]
+
+(* The replacement for the retired memory IR's "a branch on a constant
+   collapses": a match pattern that cannot fail is the same as no pattern.
+   [CrVal.eqb] is reflexive on every constructor, so a header compared to
+   itself always matches. *)
+let%expect_test "mem: a guard that cannot fail is the same as no guard" =
+  check "mem_guard_tautology" "mem_store_load";
   [%expect {| Equivalent |}]

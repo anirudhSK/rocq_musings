@@ -83,11 +83,7 @@ module MyInts = struct
   include MyInts
   type uint8 = [%import: MyInts.uint8]
   [@@deriving sexp]
-  type uint32 = [%import: MyInts.uint32]
-  [@@deriving sexp]
   type uint64 = [%import: MyInts.uint64]
-  [@@deriving sexp]
-  type uintbptr = [%import: MyInts.uintbptr]
   [@@deriving sexp]
 end
 module CrVal = struct
@@ -266,29 +262,5 @@ module CrModule = struct
   type coq_MemRegionDecl = [%import: CrModule.coq_MemRegionDecl]
   [@@deriving sexp]
   type coq_GeneralCaracaraProgram = [%import: CrModule.coq_GeneralCaracaraProgram]
-  [@@deriving sexp]
-end
-
-module CrMem = struct
-  type var_id = [%import : CrMem.var_id]
-  [@@deriving sexp]
-  type coq_Imm = [%import: CrMem.coq_Imm]
-  [@@deriving sexp]
-  type coq_FnArg = [%import: CrMem.coq_FnArg]
-  [@@deriving sexp]
-  type coq_ArithBinOp = [%import: CrMem.coq_ArithBinOp]
-  [@@deriving sexp]
-  type coq_Instruction = [%import: CrMem.coq_Instruction]
-  [@@deriving sexp]
-  type coq_ValType = [%import: CrMem.coq_ValType]
-  [@@deriving sexp]
-  type coq_IM_Program = [%import: CrMem.coq_IM_Program]
-  [@@deriving sexp]
-
-  type arith_expr = [%import: CrMem.arith_expr]
-  and ptr_expr = [%import: CrMem.ptr_expr]
-  and arr_expr = [%import: CrMem.arr_expr]
-  and bool_expr = [%import: CrMem.bool_expr]
-  and coq_Z3Expr = [%import: CrMem.coq_Z3Expr]
   [@@deriving sexp]
 end

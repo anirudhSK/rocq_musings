@@ -5,12 +5,6 @@
  (libraries extracted_code_lib))
 
 (executable
-  (public_name mem_eq)
-  (name MemEq)
-  (modules MemEq)
-  (libraries extracted_code_lib))
-
-(executable
   (public_name dump_sexp)
   (name DumpSexp)
   (modules DumpSexp)
@@ -31,11 +25,11 @@
   Ascii BinInt BinNums BinPos Coqlib CrConcreteSemanticsDeparser
   CrConcreteSemanticsModule CrConcreteSemanticsParser
   CrConcreteSemanticsTransformer CrDeparser CrDsl CrDslProperties
-  CrGeneralProgramState CrIdentifiers CrMem CrMemEx CrModule CrParser
-  CrProgramState CrSymbolicSemanticsDeparser CrSymbolicSemanticsModule
+  CrGeneralProgramState CrIdentifiers CrModule CrParser CrProgramState
+  CrSymbolicSemanticsDeparser CrSymbolicSemanticsModule
   CrSymbolicSemanticsParser CrSymbolicSemanticsTransformer CrTransformer
   CrTypeIF CrVal CrVarLike Datatypes EquivDec Integers List ListDef ListUtils
-  Maps MemSolver Mergesort MyInts Nat NatDef Orders PeanoNat PktClass PosDef
+  Maps Mergesort MyInts Nat NatDef Orders PeanoNat PktClass PosDef
   PosGraphLemmas Rocqlib Shim SmtExpr SmtModuleQuery SmtQuery SmtTypes Specif
   String TestModulePrograms TestParserPrograms TestPrograms Z3Solver ZArith_dec
   Zpower)

@@ -518,7 +518,8 @@ let%expect_test "ModProgs: registry contents" =
     mem_ib_load_store
     mem_oob_load_store
     mem_oob_store_load
-    (25 programs)
+    mem_guard_tautology
+    (26 programs)
     |}]
 
 (* ------------------------------------------------------------------ *)

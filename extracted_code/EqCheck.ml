@@ -16,10 +16,7 @@ let equivalence_check_programs str1 str2 =
   | NotEquivalentUnknown -> print_endline "Not Equivalent (unknown)"
   | NotEquivalentVariablesDiffer -> print_endline "Not Equivalent (variables differ)"
 
-(* Network programs: [GeneralCaracaraProgram]s go through the network checker,
-   which compares the emitted packet, the bits read, and every declared memory
-   region's contents and access extent. *)
-let equivalence_check_networks file_1 file_2 =
+  let equivalence_check_networks file_1 file_2 =
   let prog_1 = Shim.load_general_program file_1 in
   let prog_2 = Shim.load_general_program file_2 in
 

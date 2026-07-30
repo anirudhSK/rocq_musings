@@ -448,9 +448,9 @@ Definition mod_prog_two_deparsers : GeneralCaracaraProgram :=
    All of these share one shape -- parse a byte into h1, run a transformer that
    touches memory and leaves its result in h2, emit h2 -- and one declared
    region: [region_1], four cells, so offsets 0..3 are in bounds and 4 is not.
-   They are ports of the [CrMemEx.v] battery from the memory IR, which covered
-   the same cases (address aliasing, a differing stored value, divergent load
-   extents) but could only be run through [MemSolver].
+   They started as ports of the battery the retired memory IR carried (address
+   aliasing, a differing stored value, divergent load extents), which could only
+   be run through its own solver.
 
    Note that h2 is written only by the transformer -- no parser extracts it.
    That is deliberate: [update_all_varlike] cannot introduce a header, so until
@@ -469,12 +469,12 @@ Definition mod_prog_two_deparsers : GeneralCaracaraProgram :=
 Definition region_1 : MemRegion := MemRegionCtr 1.
 Definition mem_regions_4 : list MemRegionDecl := [mkMemRegionDecl region_1 4].
 
-Definition mem_prog (ops : list HdrOp) : GeneralCaracaraProgram :=
+Definition mem_prog_rules (rules : Transformer) : GeneralCaracaraProgram :=
   GeneralCaracaraProgramDef 8 mem_regions_4
     (mkModuleNetwork [
       ParserModule (ModuleNameCtr 1)
         (simple_parser_generator [SParserTgt 0 8 1 u8]);
-      TransformerModule (ModuleNameCtr 2) [] [] [Seq (SeqCtr [] ops)];
+      TransformerModule (ModuleNameCtr 2) [] [] rules;
       DeparserModule (ModuleNameCtr 3)
         (linear_dump_headers [(HeaderCtr 2, 8)])]
       (fun m1 m2 =>
@@ -484,6 +484,9 @@ Definition mem_prog (ops : list HdrOp) : GeneralCaracaraProgram :=
         | _, _ => false
         end)
       (ModuleNameCtr 1)).
+
+Definition mem_prog (ops : list HdrOp) : GeneralCaracaraProgram :=
+  mem_prog_rules [Seq (SeqCtr [] ops)].
 
 (* Store the parsed byte at offset 2, read it straight back. *)
 Definition mod_prog_mem_store_load : GeneralCaracaraProgram :=
@@ -544,6 +547,22 @@ Definition mod_prog_mem_oob_store_load : GeneralCaracaraProgram :=
     StoreOp u8 region_1 (OpConst (repr 4)) (OpHeader (HeaderCtr 1));
     LoadOp  u8 region_1 (OpConst (repr 4)) (HeaderCtr 2)].
 
+(* A guard that cannot fail is the same as no guard.  [CrVal.eqb] is reflexive
+   on every constructor -- including [UninitVal] and [ErrorVal] -- so comparing
+   a header to itself always holds, and this must be equivalent to
+   [mem_store_load], which runs the same ops unguarded.
+
+   This replaces the retired memory IR's "a branch on a constant collapses"
+   (a [BrzOp] on 0 against its taken arm inlined).  There is no direct
+   translation: the unified IR has no nested conditional, so the analogue of a
+   statically-true branch is a tautological match pattern. *)
+Definition mod_prog_mem_guard_tautology : GeneralCaracaraProgram :=
+  mem_prog_rules [
+    Seq (SeqCtr [(HeaderCtr 1, CmpEq, MatchHeader (HeaderCtr 1))] [
+      StoreOp u8 region_1 (OpConst (repr 2)) (OpHeader (HeaderCtr 1));
+      LoadOp  u8 region_1 (OpConst (repr 2)) (HeaderCtr 2)]);
+    Seq (SeqCtr [] [])].
+
 (* The single registry of module test programs, keyed by name.
 
    [Extraction.v] extracts this tree rather than each program individually, so
@@ -581,7 +600,8 @@ Definition mod_test_program_list
   ("mem_load0",              mod_prog_mem_load0);
   ("mem_ib_load_store",      mod_prog_mem_ib_load_store);
   ("mem_oob_load_store",     mod_prog_mem_oob_load_store);
-  ("mem_oob_store_load",     mod_prog_mem_oob_store_load)
+  ("mem_oob_store_load",     mod_prog_mem_oob_store_load);
+  ("mem_guard_tautology",    mod_prog_mem_guard_tautology)
 ].
 
 Definition mod_test_programs : PTree.t GeneralCaracaraProgram :=
