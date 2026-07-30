@@ -69,6 +69,14 @@ Definition bump_extent_concrete (mc : ConcreteMemCtx) (r : MemRegion) (off : CrV
   let prev := (mc_extent mc) !! k in
   set_mc_extent mc (PMap.set k (if CrVal.ltb prev off then off else prev) (mc_extent mc)).
 
+(* Every cell an access covers counts towards the extent, not just its base:
+   a u64 load at the last byte of a region reaches seven bytes past it, and
+   that is exactly the difference the extent exists to expose. *)
+Definition bump_extent_span_concrete (mc : ConcreteMemCtx) (r : MemRegion)
+    (base : CrVal) (n : nat) : ConcreteMemCtx :=
+  List.fold_left (fun acc i => bump_extent_concrete acc r (byte_addr base i))
+    (List.seq 0 n) mc.
+
 Definition eval_hdr_op_assign_concrete_mem
   (op : HdrOp) (mc : ConcreteMemCtx) (ps : ConcreteTransformerState)
   : ConcreteMemCtx * ConcreteTransformerState :=
@@ -83,26 +91,20 @@ Definition eval_hdr_op_assign_concrete_mem
         (mc, update_varlike ps target (eval_hdr_op_expr_concrete op ps))
   | LoadOp ty r off target =>
       let o := as_offset (lookup_concrete u64 off ps) in
-      let raw := match ld_arr ((mc_mem mc) !! (unwrap r)) o with
-                 | Legal v => v
-                 | Illegal => ErrorVal   (* out of bounds / undeclared region *)
-                 end in
-      (* [cast ty ty] is the identity on a value already typed [ty] and
-         ErrorVal otherwise, so a load checks the cell's type the same way an
-         arithmetic op checks its operands.  A cell that was never written
-         reads [UninitVal], which fails that check and so lands as ErrorVal --
-         same observable behaviour as UninitVal (matches nothing, emits no
-         bits), and it keeps this in exact lockstep with [SmtCast]. *)
-      (bump_extent_concrete mc r o, update_varlike ps target (apply_cast ty ty raw))
+      (* [it_bytes ty] cells, little-endian.  A cell that is out of bounds or
+         was never written reads ErrorVal, and the assembly propagates that to
+         the whole value -- same observable behaviour as before (matches
+         nothing, emits no bits), and in exact lockstep with the symbolic
+         mirror, which gets it from [SmtArrSel] and [SmtCast]. *)
+      (bump_extent_span_concrete mc r o (it_bytes ty),
+       update_varlike ps target (ld_val ty ((mc_mem mc) !! (unwrap r)) o))
   | StoreOp ty r off val =>
       let o := as_offset (lookup_concrete u64 off ps) in
       let v := apply_cast ty ty (lookup_concrete ty val ps) in
-      let region := (mc_mem mc) !! (unwrap r) in
-      let region' := match st_arr region o v with
-                     | Legal a => a
-                     | Illegal => region  (* out of bounds: dropped *)
-                     end in
-      (bump_extent_concrete (set_mc_mem mc (PMap.set (unwrap r) region' (mc_mem mc))) r o, ps)
+      let region' := st_val ty ((mc_mem mc) !! (unwrap r)) o v in
+      (bump_extent_span_concrete
+         (set_mc_mem mc (PMap.set (unwrap r) region' (mc_mem mc))) r o (it_bytes ty),
+       ps)
   end.
 
 (* ------------------------------------------------------------------ *)

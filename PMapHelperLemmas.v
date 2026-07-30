@@ -83,11 +83,11 @@ Proof.
 Qed.
 
 (* ============================================================ *)
-(*  Bridge: lookup_varlike <-> PMap.get                          *)
+(*  Bridge: lookup_varlike <-> PMap.get                         *)
 (* ============================================================ *)
-(* These are essentially definitional, but stating them as       *)
-(* lemmas makes them easy to use with `rewrite`.                  *)
 
+(* These are essentially definitional, but stating them *)
+(* as lemmas makes them easy to use with `rewrite`.     *)
 Lemma lookup_varlike_header_PMap :
   forall (s : SymbolicTransformerState) (id : positive),
     lookup_varlike s (HeaderCtr id) = PMap.get id (t_header_map s).
@@ -130,11 +130,11 @@ Proof.
   intros. reflexivity.
 Qed.
 
-(* ============================================================ *)
-(*  When the PMap default is (UninitVal), every non-default        *)
-(*  lookup result must come from an entry in the underlying      *)
-(*  PTree.                                                        *)
-(* ============================================================ *)
+(* ======================================================== *)
+(*  When the PMap default is (UninitVal), every non-default *)
+(*  lookup result must come from an entry in the underlying *)
+(*  PTree.                                                  *)
+(* ======================================================== *)
 
 Lemma cs_initialized_in_tree_header :
   forall (cs : ConcreteTransformerState) id w,
@@ -179,7 +179,7 @@ Proof.
 Qed.
 
 (* ============================================================ *)
-(*  Lookup of init_symbolic_state for keys present in the lists  *)
+(*  Lookup of init_symbolic_state for keys present in the lists *)
 (* ============================================================ *)
 
 Lemma init_sym_header_lookup :
@@ -264,7 +264,7 @@ Proof.
 Qed.
 
 (* ============================================================ *)
-(*  init_symbolic_state lookup default for keys NOT in the list  *)
+(*  init_symbolic_state lookup default for keys NOT in the list *)
 (* ============================================================ *)
 
 Lemma init_sym_header_lookup_default :
@@ -325,12 +325,8 @@ Proof.
 Qed.
 
 (* ============================================================ *)
-(*  lookup_varlike after update_varlike                          *)
+(*  lookup_varlike after update_varlike                         *)
 (* ============================================================ *)
-(* Same-type updates: lookup at the same id returns the new      *)
-(* value; lookup at a different id returns the original.         *)
-(* Cross-type updates do not affect the other map.               *)
-
 Lemma lookup_update_header_header :
   forall (ps : ConcreteTransformerState) (h h' : Header) (x : CrVal),
   lookup_varlike (update_varlike ps h x) h' =

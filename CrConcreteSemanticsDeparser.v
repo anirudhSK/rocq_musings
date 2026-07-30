@@ -10,15 +10,15 @@ From MyProject Require Import Integers.
 From MyProject Require Import MyInts.
 From Stdlib Require Import ZArith.
 
-(* ================================================================== *)
+(* =================================================================== *)
 (* Concrete deparser semantics.                                        *)
 (*                                                                     *)
 (* A deparser reads header values and writes bits.  It is the inverse  *)
 (* of the parser: [apply_extract_concrete] read [width] bits into a    *)
 (* header; here each [emit] reads a header value and appends its low   *)
-(* [width] bits (MSB-first) to the outgoing packet.  The header map is  *)
+(* [width] bits (MSB-first) to the outgoing packet.  The header map is *)
 (* left untouched, so every emit reads the same (input) header values. *)
-(* ================================================================== *)
+(* =================================================================== *)
 
 (* The [i]th emitted bit of a value: bit [i] of an integer value (via the
    already-proven [slice_val]), [false] for a non-integer value.  Phrasing it

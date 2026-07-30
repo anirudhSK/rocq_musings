@@ -106,7 +106,7 @@ Proof.
 Qed.
 
 (* ============================================================ *)
-(*  String append helpers                                        *)
+(*  String append helpers                                       *)
 (* ============================================================ *)
 
 Lemma string_length_append :

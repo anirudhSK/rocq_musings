@@ -357,3 +357,12 @@ let%expect_test "mem: out of bounds, the order stops mattering" =
 let%expect_test "mem: a guard that cannot fail is the same as no guard" =
   check "mem_guard_tautology" "mem_store_load";
   [%expect {| Equivalent |}]
+
+(* Memory is an array of BYTES, so a u16 store is exactly the two u8 stores an
+   optimiser coalesces it from.  This pair is the reason for that model: under
+   the previous one-value-per-cell scheme they landed in different cells with
+   different types and came back NotEquivalent -- a false positive on any
+   -O0 vs -O2 comparison, since -O2 merges adjacent narrow stores. *)
+let%expect_test "mem: a u16 store is the two u8 stores it coalesces from" =
+  check "mem_two_u8_stores" "mem_one_u16_store";
+  [%expect {| Equivalent |}]

@@ -1,12 +1,12 @@
-(* ================================================================== *)
-(* P4-style packet deparser.                                          *)
-(*                                                                     *)
-(* A deparser is the inverse of a parser: where a parser reads a run   *)
-(* of bits off the incoming packet into a header, a deparser reads a   *)
-(* header value and writes (emits) a run of bits back onto the         *)
-(* outgoing packet.  It is a straight-line sequence of [emit]s (no     *)
-(* FSM / loops), so no fuel is needed.                                 *)
-(* ================================================================== *)
+(* ================================================================= *)
+(* P4-style packet deparser.                                         *)
+(*                                                                   *)
+(* A deparser is the inverse of a parser: where a parser reads a run *)
+(* of bits off the incoming packet into a header, a deparser reads a *)
+(* header value and writes (emits) a run of bits back onto the       *)
+(* outgoing packet.  It is a straight-line sequence of [emit]s (no   *)
+(* FSM / loops), so no fuel is needed.                               *)
+(* ================================================================= *)
 From Stdlib Require Import List.
 From Stdlib Require Import ZArith.
 Import ListNotations.

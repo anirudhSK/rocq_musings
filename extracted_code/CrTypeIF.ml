@@ -162,13 +162,6 @@ module CrDsl = struct
   type coq_CrModule = [%import: CrDsl.coq_CrModule]
   [@@deriving sexp]
 
-  (* [Connections] is a *function* [ModuleName -> ModuleName -> bool], so the
-     derived converters are the sexplib stubs for arrow types: [sexp_of] emits
-     "<fun>" and [of_sexp] raises.  That is why a network could be dumped but
-     never read back.  Represent it instead as the list of edges it accepts;
-     the graph is finite and its endpoints are exactly the module names, so
-     [sexp_of_edges] below can enumerate a closure and the round trip is
-     total. *)
   type coq_Connections = CrDsl.coq_Connections
   type edge_list = (BinNums.positive * BinNums.positive) list
   let edges_of_sexp (s : Sexplib.Sexp.t) : edge_list =
@@ -189,8 +182,6 @@ module CrDsl = struct
          (fun (a, b) ->
             Sexplib.Sexp.List [BinNums.sexp_of_positive a; BinNums.sexp_of_positive b])
          l)
-  (* [coq_ModuleName] is a singleton inductive, so extraction erases it to
-     [positive]; a name and its uid are the same value here. *)
   let connections_of_edges (l : edge_list) : coq_Connections =
     fun src dst ->
       if Stdlib.List.exists (fun (a, b) -> a = src && b = dst) l

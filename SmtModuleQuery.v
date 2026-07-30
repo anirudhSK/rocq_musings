@@ -148,9 +148,9 @@ Definition is_linear_chain (p : GeneralCaracaraProgram) : Prop :=
   no_fan_out net /\
   no_fan_in net.
 
-(* ================================================================== *)
-(* Soundness of [modnet_equivalence_checker].                          *)
-(*                                                                     *)
+(* ==================================================================== *)
+(* Soundness of [modnet_equivalence_checker].                           *)
+(*                                                                      *)
 (* The statement is about [concretize_sym_modnet_state] applied to the  *)
 (* symbolic final states -- not about running the concrete semantics -- *)
 (* so this proof does not need the concrete/symbolic commutation.  What *)
@@ -162,7 +162,7 @@ Definition is_linear_chain (p : GeneralCaracaraProgram) : Prop :=
 (* regions have the same declared length before an equality of loaded   *)
 (* values becomes an equality of loads), and threading both invariants  *)
 (* through the network recursion.                                       *)
-(* ================================================================== *)
+(* ==================================================================== *)
 
 (* ---------- boolean plumbing ---------- *)
 
@@ -414,16 +414,46 @@ Proof.
     split; [exact Ha | apply IH; assumption].
 Qed.
 
+(* Bumping extents never touches the contents, however many cells the access
+   spans. *)
+Lemma bump_extent_span_smt_mem : forall l mc r base,
+  mc_mem (List.fold_left
+            (fun acc i => bump_extent_smt acc r (smt_byte_addr base i)) l mc)
+  = mc_mem mc.
+Proof.
+  induction l as [| i l IH]; intros mc r base; cbn [List.fold_left].
+  - reflexivity.
+  - rewrite IH. unfold bump_extent_smt, set_mc_extent. reflexivity.
+Qed.
+
+(* A width-[ty] store is [it_bytes ty] nested [SmtArrSt]s; each keeps the
+   leaves of what it wraps, so the whole fold does. *)
+Lemma smt_st_val_rooted : forall l root a base v,
+  arr_rooted root a ->
+  arr_rooted root
+    (List.fold_left
+      (fun acc i => SmtArrSt acc (smt_byte_addr base i) (smt_byte_of_val v i)) l a).
+Proof.
+  induction l as [| i l IH]; intros root a base v H; cbn [List.fold_left].
+  - exact H.
+  - apply IH. cbn. exact H.
+Qed.
+
 Lemma eval_hdr_op_assign_smt_mem_rooted : forall m0 op mc ps,
   mem_rooted m0 (mc_mem mc) ->
   mem_rooted m0 (mc_mem (fst (eval_hdr_op_assign_smt_mem op mc ps))).
 Proof.
   intros m0 op mc ps H.
-  destruct op; cbn [eval_hdr_op_assign_smt_mem fst];
-    unfold bump_extent_smt, set_mc_extent, set_mc_mem; cbn [mc_mem]; try exact H.
-  (* StoreOp: the region is wrapped in SmtArrSt, which keeps its leaves *)
-  intro k. rewrite PMap.gsspec.
-  destruct (Coqlib.peq k (unwrap region)); [subst; cbn; apply H | apply H].
+  destruct op; cbn [eval_hdr_op_assign_smt_mem fst]; try exact H.
+  - (* LoadOp: only the extents move *)
+    unfold bump_extent_span_smt. rewrite bump_extent_span_smt_mem. exact H.
+  - (* StoreOp: the region becomes a chain of SmtArrSt, which keeps its leaves *)
+    unfold bump_extent_span_smt. rewrite bump_extent_span_smt_mem.
+    unfold set_mc_mem. cbn [mc_mem].
+    intro k. rewrite PMap.gsspec.
+    destruct (Coqlib.peq k (unwrap region)) as [He | Hne].
+    + subst k. unfold smt_st_val. apply smt_st_val_rooted. apply H.
+    + apply H.
 Qed.
 
 Lemma eval_hdr_op_list_smt_mem_rooted : forall m0 hol mc ps,

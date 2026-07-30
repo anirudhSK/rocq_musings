@@ -519,7 +519,31 @@ let%expect_test "ModProgs: registry contents" =
     mem_oob_load_store
     mem_oob_store_load
     mem_guard_tautology
-    (26 programs)
+    mem_two_u8_stores
+    mem_one_u16_store
+    mem_u16_readback
+    (29 programs)
+    |}]
+
+(* A u16 store lands in two byte cells, little-endian: 0x1234 -> [0x34, 0x12].
+   This is what makes it the same thing as the two u8 stores it coalesces
+   from, and it is the whole point of memory being an array of bytes. *)
+let%expect_test "mem_one_u16_store: 0x1234 decomposes little-endian" =
+  report (run "mem_one_u16_store" [0x2A]);
+  [%expect {|
+    52
+    mem1=[52, 18, -, -]
+    extent1=1
+    |}]
+
+(* And reassembles on the way back out: the u16 load sees 0x1234, whose low
+   byte is what the deparser emits. *)
+let%expect_test "mem_u16_readback: two bytes reassemble into a u16" =
+  report (run "mem_u16_readback" [0x2A]);
+  [%expect {|
+    52
+    mem1=[52, 18, -, -]
+    extent1=1
     |}]
 
 (* ------------------------------------------------------------------ *)

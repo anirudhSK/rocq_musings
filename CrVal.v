@@ -192,6 +192,68 @@ Definition st_arr (a : Array) (i : CrVal) (v : CrVal) : Check_T Array :=
   | _, _ => Illegal
   end.
 
+(* ------------------------------------------------------------------ *)
+(* Multi-byte access.
+
+   A region is an array of BYTES: every cell holds a [u8] (or [UninitVal] if it
+   was never written), and a width-[ty] access covers [it_bytes ty] consecutive
+   cells, little-endian -- the order eBPF uses.  [ld_arr]/[st_arr] above stay
+   single-cell primitives; the decomposition lives here and is what
+   [CrTransformer.LoadOp]/[StoreOp] are defined in terms of.
+
+   The previous model stored a whole [CrVal] in one cell, with the width
+   carried by the value's own [CrIntType].  That made a [u32] store occupy a
+   single address, so a later access to the next byte saw nothing, a load at a
+   different width read [ErrorVal] rather than the right bits, and two u8
+   stores were not the same thing as the u16 store an optimiser coalesces them
+   into -- which reported real -O0/-O2 pairs as inequivalent. *)
+
+Definition it_bytes (ty : CrIntType) : nat :=
+  match it_width ty with W8 => 1 | W16 => 2 | W32 => 4 | W64 => 8 end.
+
+(* A cell read, with the partiality already collapsed the way every caller
+   wants it: out of bounds, undeclared, or a non-integer offset all read
+   [ErrorVal], exactly as [SmtExpr.eval_smt_arith] does for [SmtArrSel]. *)
+Definition ld_cell (a : Array) (i : CrVal) : CrVal :=
+  match ld_arr a i with Legal v => v | Illegal => ErrorVal end.
+
+(* Byte [i] of [base]: the address of the i'th cell of the access. *)
+Definition byte_addr (base : CrVal) (i : nat) : CrVal :=
+  add_at u64 base (mk_int u64 (Z.of_nat i)).
+
+(* Byte [i] of a value being stored, as a [u8] cell.  [slice_val] yields
+   ErrorVal on a non-integer, so storing a poisoned value poisons every cell it
+   covers -- which is what the symbolic side does too. *)
+Definition byte_of_val (v : CrVal) (i : nat) : CrVal :=
+  cast u64 u8 (slice_val (8 * i) (8 * i + 8) v).
+
+(* Contribution of cell [i] to an assembled value: widen the byte and shift it
+   into place.  A bad cell (out of bounds, never written, not a u8) is
+   ErrorVal, and [or_at]/[mul_at] propagate that to the whole result. *)
+Definition byte_into_val (b : CrVal) (i : nat) : CrVal :=
+  mul_at u64 (cast u8 u64 b) (mk_int u64 (2 ^ (8 * Z.of_nat i))).
+
+(* Read a width-[ty] value at [base], little-endian. *)
+Definition ld_val (ty : CrIntType) (a : Array) (base : CrVal) : CrVal :=
+  cast u64 ty
+    (List.fold_left
+      (fun acc i => or_at u64 acc (byte_into_val (ld_cell a (byte_addr base i)) i))
+      (List.seq 0 (it_bytes ty)) (mk_int u64 0)).
+
+(* Write a width-[ty] value at [base], little-endian.  A byte that falls
+   outside the region is dropped and the rest are still written; the store is
+   NOT atomic.  That is what the symbolic side gives -- [SmtArrSt] is guarded
+   per cell and there is no way to express "all of these are in bounds" as an
+   [SmtBoolExpr] -- and the two have to agree. *)
+Definition st_val (ty : CrIntType) (a : Array) (base v : CrVal) : Array :=
+  List.fold_left
+    (fun acc i =>
+      match st_arr acc (byte_addr base i) (byte_of_val v i) with
+      | Legal a' => a'
+      | Illegal => acc
+      end)
+    (List.seq 0 (it_bytes ty)) a.
+
 Lemma crwidth_eqb_true : forall a b, crwidth_eqb a b = true -> a = b.
 Proof. intros a b H; destruct a, b; simpl in H; try discriminate; reflexivity. Qed.
 

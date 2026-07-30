@@ -1,11 +1,11 @@
 (* ================================================================== *)
 (* P4-style packet parser.                                            *)
-(*                                                                     *)
-(* A parser is a finite state machine.  Each parser state may extract  *)
-(* a contiguous run of bits from the incoming packet into a header,    *)
-(* then transition to a successor state (possibly conditioned on the   *)
-(* bits just observed).  Parsing terminates at the distinguished       *)
-(* [Accept] (success) or [Reject] (failure) pseudo-states.             *)
+(*                                                                    *)
+(* A parser is a finite state machine.  Each parser state may extract *)
+(* a contiguous run of bits from the incoming packet into a header,   *)
+(* then transition to a successor state (possibly conditioned on the  *)
+(* bits just observed).  Parsing terminates at the distinguished      *)
+(* [Accept] (success) or [Reject] (failure) pseudo-states.            *)
 (* ================================================================== *)
 From Stdlib Require Import List.
 From Stdlib Require Import ZArith.

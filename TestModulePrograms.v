@@ -547,6 +547,31 @@ Definition mod_prog_mem_oob_store_load : GeneralCaracaraProgram :=
     StoreOp u8 region_1 (OpConst (repr 4)) (OpHeader (HeaderCtr 1));
     LoadOp  u8 region_1 (OpConst (repr 4)) (HeaderCtr 2)].
 
+(* Multi-byte access.  A region is an array of bytes, so a u16 store covers two
+   cells little-endian and is EXACTLY the two u8 stores an optimiser coalesces
+   it from.  Under the old one-value-per-cell model these two were reported
+   inequivalent -- a real false positive on -O0 vs -O2 pairs, since -O2 merges
+   adjacent narrow stores. *)
+Definition mod_prog_mem_two_u8_stores : GeneralCaracaraProgram :=
+  mem_prog [
+    StoreOp u8 region_1 (OpConst (repr 0)) (OpConst (repr 52));   (* 0x34 *)
+    StoreOp u8 region_1 (OpConst (repr 1)) (OpConst (repr 18));   (* 0x12 *)
+    LoadOp  u8 region_1 (OpConst (repr 0)) (HeaderCtr 2)].
+
+Definition mod_prog_mem_one_u16_store : GeneralCaracaraProgram :=
+  mem_prog [
+    StoreOp u16 region_1 (OpConst (repr 0)) (OpConst (repr 4660));  (* 0x1234 *)
+    LoadOp  u8  region_1 (OpConst (repr 0)) (HeaderCtr 2)].
+
+(* And the other direction: two byte stores read back as one u16 reassemble
+   little-endian.  The low byte reaches the deparser. *)
+Definition mod_prog_mem_u16_readback : GeneralCaracaraProgram :=
+  mem_prog [
+    StoreOp u8 region_1 (OpConst (repr 0)) (OpConst (repr 52));
+    StoreOp u8 region_1 (OpConst (repr 1)) (OpConst (repr 18));
+    LoadOp  u16 region_1 (OpConst (repr 0)) (HeaderCtr 3);
+    CastHeaderOp u16 u8 (OpHeader (HeaderCtr 3)) (HeaderCtr 2)].
+
 (* A guard that cannot fail is the same as no guard.  [CrVal.eqb] is reflexive
    on every constructor -- including [UninitVal] and [ErrorVal] -- so comparing
    a header to itself always holds, and this must be equivalent to
@@ -601,7 +626,10 @@ Definition mod_test_program_list
   ("mem_ib_load_store",      mod_prog_mem_ib_load_store);
   ("mem_oob_load_store",     mod_prog_mem_oob_load_store);
   ("mem_oob_store_load",     mod_prog_mem_oob_store_load);
-  ("mem_guard_tautology",    mod_prog_mem_guard_tautology)
+  ("mem_guard_tautology",    mod_prog_mem_guard_tautology);
+  ("mem_two_u8_stores",      mod_prog_mem_two_u8_stores);
+  ("mem_one_u16_store",      mod_prog_mem_one_u16_store);
+  ("mem_u16_readback",       mod_prog_mem_u16_readback)
 ].
 
 Definition mod_test_programs : PTree.t GeneralCaracaraProgram :=

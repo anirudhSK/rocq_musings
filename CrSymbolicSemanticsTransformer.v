@@ -70,6 +70,43 @@ Definition bump_extent_smt (mc : SymbolicMemCtx) (r : MemRegion) (off : SmtArith
   let prev := (mc_extent mc) !! k in
   set_mc_extent mc (PMap.set k (SmtConditional (SmtBoolLt prev off) off prev) (mc_extent mc)).
 
+(* ------------------------------------------------------------------ *)
+(* Multi-byte access, the mirror of [CrVal.ld_val] / [st_val] / [byte_*].
+   Each definition below lines up node-for-node with its concrete counterpart:
+   [SmtArrSel] with [ld_cell], [SmtCast] with [cast], [SmtBitMul]/[SmtBitOr]
+   with [mul_at]/[or_at], [SmtBitSlice] with [slice_val].  Keep them in step --
+   a divergence here is invisible to the Coq development, which only relates
+   the two through [eval_smt_*]. *)
+
+Definition smt_byte_addr (base : SmtArithExpr) (i : nat) : SmtArithExpr :=
+  SmtBitAdd u64 base (SmtArithConst (mask_width W64 (Z.of_nat i)) u64).
+
+Definition smt_byte_of_val (v : SmtArithExpr) (i : nat) : SmtArithExpr :=
+  SmtCast u64 u8 (SmtBitSlice (8 * i) (8 * i + 8) v).
+
+Definition smt_byte_into_val (b : SmtArithExpr) (i : nat) : SmtArithExpr :=
+  SmtBitMul u64 (SmtCast u8 u64 b)
+    (SmtArithConst (mask_width W64 (2 ^ (8 * Z.of_nat i))) u64).
+
+Definition smt_ld_val (ty : CrIntType) (a : SmtArrExpr) (base : SmtArithExpr)
+    : SmtArithExpr :=
+  SmtCast u64 ty
+    (List.fold_left
+      (fun acc i =>
+        SmtBitOr u64 acc (smt_byte_into_val (SmtArrSel a (smt_byte_addr base i)) i))
+      (List.seq 0 (it_bytes ty)) (SmtArithConst (mask_width W64 0) u64)).
+
+Definition smt_st_val (ty : CrIntType) (a : SmtArrExpr)
+    (base v : SmtArithExpr) : SmtArrExpr :=
+  List.fold_left
+    (fun acc i => SmtArrSt acc (smt_byte_addr base i) (smt_byte_of_val v i))
+    (List.seq 0 (it_bytes ty)) a.
+
+Definition bump_extent_span_smt (mc : SymbolicMemCtx) (r : MemRegion)
+    (base : SmtArithExpr) (n : nat) : SymbolicMemCtx :=
+  List.fold_left (fun acc i => bump_extent_smt acc r (smt_byte_addr base i))
+    (List.seq 0 n) mc.
+
 Definition eval_hdr_op_assign_smt_mem
   (ho : HdrOp) (mc : SymbolicMemCtx) (ps : SymbolicTransformerState)
   : SymbolicMemCtx * SymbolicTransformerState :=
@@ -84,13 +121,15 @@ Definition eval_hdr_op_assign_smt_mem
         (mc, update_varlike ps target (eval_hdr_op_expr_smt ho ps))
     | LoadOp ty r off target =>
         let o := smt_as_offset (lookup_smt u64 off ps) in
-        let e := SmtArrSel ((mc_mem mc) !! (unwrap r)) o in
-        (bump_extent_smt mc r o, update_varlike ps target (smt_cast ty ty e))
+        (bump_extent_span_smt mc r o (it_bytes ty),
+         update_varlike ps target
+           (smt_ld_val ty ((mc_mem mc) !! (unwrap r)) o))
     | StoreOp ty r off val =>
         let o := smt_as_offset (lookup_smt u64 off ps) in
         let v := smt_cast ty ty (lookup_smt ty val ps) in
-        let region' := SmtArrSt ((mc_mem mc) !! (unwrap r)) o v in
-        (bump_extent_smt (set_mc_mem mc (PMap.set (unwrap r) region' (mc_mem mc))) r o, ps)
+        let region' := smt_st_val ty ((mc_mem mc) !! (unwrap r)) o v in
+        (bump_extent_span_smt (set_mc_mem mc (PMap.set (unwrap r) region' (mc_mem mc)))
+           r o (it_bytes ty), ps)
     end.
 
 (* Merge two memory contexts under a condition, the memory counterpart of the

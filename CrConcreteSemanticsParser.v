@@ -9,7 +9,7 @@ From MyProject Require Import Maps.
 From Stdlib Require Import ZArith.
 
 (* ================================================================== *)
-(* Concrete parser FSM semantics.                                      *)
+(* Concrete parser FSM semantics.                                     *)
 (* ================================================================== *)
 
 (* Apply a single extraction: read [width] bits from the packet at the

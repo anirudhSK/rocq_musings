@@ -324,11 +324,7 @@ let print_net_bits_read (gcs : CrGeneralProgramState.coq_GeneralConcreteState) =
   Printf.printf "bits_read=%d\n" (net_bits_read gcs)
 
 (* ------------------------------------------------------------------ *)
-(* Memory.
-
-   A region is addressed by its [MemRegion] uid and a cell offset; the inner
-   PMap is keyed by [CrVal.offset_to_key], i.e. the offset shifted by one so
-   that offset 0 does not collide with the map's default. *)
+(* Memory *)
 let mem_cell_key (off : int) : BinNums.positive = int_to_pos (off + 1)
 
 let get_net_mem_region (region : int)
@@ -340,17 +336,19 @@ let get_net_mem_region (region : int)
    the program -- [init_general_concrete_state] allocates it at its declared
    length -- since writing into an unallocated region is exactly what the
    semantics refuses to do. *)
+(* Seed a width-[ty] value at [off].  Goes through [CrVal.st_val] rather than
+   writing one cell, so a test seeds memory exactly the way a [StoreOp] would:
+   [it_bytes ty] little-endian byte cells. *)
 let set_net_mem_cell (region : int) (off : int) (ty : CrVal.coq_CrIntType) (v : int)
     (gcs : CrGeneralProgramState.coq_GeneralConcreteState)
     : CrGeneralProgramState.coq_GeneralConcreteState =
-  let arr = get_net_mem_region region gcs in
-  match arr with
+  match get_net_mem_region region gcs with
   | CrVal.Unallocated ->
       failwith (Printf.sprintf "set_net_mem_cell: region %d is not declared" region)
-  | CrVal.Allocated blk ->
-      let bytes = Maps.PMap.set (mem_cell_key off)
-        (CrVal.Init (typed_int_to_crval ty v)) blk.CrVal.arr_bytes in
-      let arr' = CrVal.Allocated { blk with CrVal.arr_bytes = bytes } in
+  | CrVal.Allocated _ as arr ->
+      let arr' = CrVal.st_val ty arr
+                   (CrVal.mk_int CrVal.u64 (int_to_coq_uint64 off))
+                   (typed_int_to_crval ty v) in
       { gcs with CrGeneralProgramState.sh_mem =
           Maps.PMap.set (int_to_pos region) arr' gcs.CrGeneralProgramState.sh_mem }
 

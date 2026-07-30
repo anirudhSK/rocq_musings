@@ -23,5 +23,5 @@ From MyProject Require Import PMapHelperLemmas.
 From MyProject Require Import SmtHelperLemmas.
 
 (* ====================================================================== *)
-(* Value-level sublemmas for the commutation proof.                        *)
+(* Value-level sublemmas for the commutation proof.                       *)
 (* ====================================================================== *)

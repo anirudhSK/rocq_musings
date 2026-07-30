@@ -16,20 +16,20 @@ From MyProject Require Import CrVal.
 From MyProject Require Import Maps.
 From Stdlib Require Import ZArith.
 
-(* ================================================================== *)
-(* Symbolic module / network semantics, plus concretization of a       *)
-(* symbolic network state under a valuation.                           *)
-(*                                                                     *)
-(* This is the symbolic mirror of [CrConcreteSemanticsModule].  It      *)
+(* ===================================================================== *)
+(* Symbolic module / network semantics, plus concretization of a         *)
+(* symbolic network state under a valuation.                             *)
+(*                                                                       *)
+(* This is the symbolic mirror of [CrConcreteSemanticsModule].  It       *)
 (* dispatches each module to its symbolic engine and threads the shared  *)
 (* header map and read/write tapes along the network's edges.  Two       *)
 (* differences from the concrete semantics follow from path-merging:     *)
-(*   - a parser never fail-closes; its (data-dependent) accept condition  *)
-(*     is conjoined into [gps_valid] instead of aborting the network;     *)
-(*   - correspondingly there is no [gps_valid] guard on the network        *)
-(*     recursion (the validity is a symbolic formula, not a decidable      *)
-(*     bool), so execution always proceeds and merges every path.          *)
-(* ================================================================== *)
+(*   - a parser never fail-closes; its (data-dependent) accept condition *)
+(*     is conjoined into [gps_valid] instead of aborting the network;    *)
+(*   - correspondingly there is no [gps_valid] guard on the network      *)
+(*     recursion (the validity is a symbolic formula, not a decidable    *)
+(*     bool), so execution always proceeds and merges every path.        *)
+(* ===================================================================== *)
 
 Definition module_update_gs_symbolic
   (m : CrModule) (ls : SymbolicModuleState)
@@ -122,16 +122,16 @@ Definition eval_general_program_symbolic
       net start (sh_hdr_map gs) (sh_read_tape gs) gs fuel
   end.
 
-(* ================================================================== *)
-(* Concretization of a symbolic network state under a valuation.       *)
-(*                                                                     *)
-(* The mirror of [eval_sym_state] (transformers) lifted to the whole    *)
-(* network: every symbolic header value runs through [eval_smt_arith],  *)
+(* ===================================================================== *)
+(* Concretization of a symbolic network state under a valuation.         *)
+(*                                                                       *)
+(* The mirror of [eval_sym_state] (transformers) lifted to the whole     *)
+(* network: every symbolic header value runs through [eval_smt_arith],   *)
 (* every symbolic packet bit's value through [eval_smt_bool], and the    *)
 (* validity through [eval_smt_bool] on its [cvv].  The result is a       *)
 (* [GeneralConcreteState], so equivalence can be stated over concretized *)
 (* outputs (see [SmtModuleQuery.modnet_equivalence_checker_sound]).      *)
-(* ================================================================== *)
+(* ===================================================================== *)
 
 Definition concretize_sym_module_state
   (m : SymbolicModuleState) (f : SmtValuation) : ConcreteModuleState :=

@@ -14,11 +14,11 @@ From MyProject Require Import CrVarLike.
 From MyProject Require Import Maps.
 From Stdlib Require Import ZArith.
 
-(* ================================================================== *)
+(* ==================================================================== *)
 (* Concrete module / network semantics.  Dispatches each module to its  *)
-(* engine (transformer or parser FSM) and threads the shared header map  *)
-(* along the network's edges.                                          *)
-(* ================================================================== *)
+(* engine (transformer or parser FSM) and threads the shared header map *)
+(* along the network's edges.                                           *)
+(* ==================================================================== *)
 
 Definition module_update_gs_concrete
   (m : CrModule) (ls : ConcreteModuleState)
