@@ -21,6 +21,15 @@ Inductive SmtBoolExpr : Type :=
     (* A free boolean variable (e.g. a single symbolic packet bit).  Evaluated
        via the valuation, interpreting a nonzero stored value as [true]. *)
     | SmtBoolVar (name : string)
+    (* Two regions hold the same thing over their first [n] cells.
+
+       [n] is here for the SEMANTICS, the mirror image of the [len] on
+       [SmtArrSel] being there for the Z3 lowering: [eval_smt_bool] has to
+       return a bool, so it needs a finite bound to fold over, and the region's
+       own [arr_len] is a runtime value.  The Z3 lowering ignores [n] and emits
+       one extensional array equality -- see [SOUNDNESS.md] for why that is the
+       same statement on the terms this checker builds, and what would break it. *)
+    | SmtArrEq (n : nat) (a1 a2 : SmtArrExpr)
 with SmtArithExpr : Type :=
     | SmtArithConst (val : uint64) (ty : CrIntType)
     | SmtUninit  (* the uninitialized value; evaluates to UninitVal *)
@@ -48,13 +57,35 @@ with SmtArithExpr : Type :=
     | SmtBitMul (ty : CrIntType) (e1 e2 : SmtArithExpr)
     | SmtBitDiv (ty : CrIntType) (e1 e2 : SmtArithExpr)
     | SmtBitMod (ty : CrIntType) (e1 e2 : SmtArithExpr)
-    | SmtArrSel (e1 : SmtArrExpr) (e2 : (*SmtPtrExpr*) SmtArithExpr) (e3 : SmtArithExpr)
-(* with SmtPtrExpr : Type := *)
-    | SmtPtrConst (e1 : CrPtr_T) (* e.g. 0x7fffffff0000 *)
-    | SmtPtrVar (e1 : string) (* e.g. x *)
+    (* Read offset [idx] of region [a].  Out of bounds is [ErrorVal], where the
+       bound is the region's declared length -- see [smt_arr_len]. *)
+    | SmtArrSel (a : SmtArrExpr) (idx : SmtArithExpr)
 with SmtArrExpr : Type :=
+    (* An undeclared region: reads are out of bounds, writes are dropped. *)
     | SmtArrInit
-    | SmtArrSt (e1 : SmtArrExpr) (e2 : (*SmtPtrExpr*) SmtArithExpr) (e3 : SmtArithExpr) (e4 : SmtArithExpr).
+    (* A region's contents on entry, as a free array variable. *)
+    | SmtArrVar (name : string) (len : uint64)
+    | SmtArrSt (a : SmtArrExpr) (idx : SmtArithExpr) (v : SmtArithExpr)
+    (* Path merging.  [SmtConditional] only builds arith expressions, so
+       merging two versions of a region needs its own conditional. *)
+    | SmtArrIte (cond : SmtBoolExpr) (a1 a2 : SmtArrExpr).
+
+(* Do two loads agree?  [ld_arr] is partial, and an out-of-bounds read on both
+   sides counts as agreement -- the same convention the concrete semantics uses
+   when it turns [Illegal] into [ErrorVal]. *)
+Definition check_crval_eqb (x y : Check_T CrVal) : bool :=
+  match x, y with
+  | Legal a, Legal b => CrVal.eqb a b
+  | Illegal, Illegal => true
+  | _, _ => false
+  end.
+
+(* Cell-by-cell agreement of two regions over their first [n] cells. *)
+Definition arr_agree_upto (n : nat) (a1 a2 : @Array CrVal) : bool :=
+  List.forallb
+    (fun i => check_crval_eqb (ld_arr a1 (mk_int u64 (Z.of_nat i)))
+                              (ld_arr a2 (mk_int u64 (Z.of_nat i))))
+    (List.seq 0 n).
 
 (* Evaluate a SMT Bool expression given a valuation *)
 Fixpoint eval_smt_bool (e : SmtBoolExpr) (v : SmtValuation) : bool :=
@@ -68,16 +99,18 @@ Fixpoint eval_smt_bool (e : SmtBoolExpr) (v : SmtValuation) : bool :=
       (eval_smt_arith e1 v) (eval_smt_arith e2 v)) then true else false
     | SmtBoolLt e1 e2 => CrVal.ltb
       (eval_smt_arith e1 v) (eval_smt_arith e2 v)
-    | SmtBoolVar name => match v name with
+    | SmtBoolVar name => match sv_ints v name with
       | IntVal a _ => negb (Integers.eq a Integers.zero)
       | _ => false
       end
+    | SmtArrEq n a1 a2 =>
+        arr_agree_upto n (eval_smt_mem a1 v) (eval_smt_mem a2 v)
     end
 with eval_smt_arith (e : SmtArithExpr) (v : SmtValuation) : CrVal :=
     match e with
     | SmtArithConst val ty => mk_int ty (unsigned val)
     | SmtUninit => UninitVal
-    | SmtArithVar name => match v name with
+    | SmtArithVar name => match sv_ints v name with
       | IntVal a t => IntVal a t
       | _ => ErrorVal
       end
@@ -107,26 +140,48 @@ with eval_smt_arith (e : SmtArithExpr) (v : SmtValuation) : CrVal :=
     | SmtBitMul ty e1 e2 => mul_at  ty (eval_smt_arith e1 v) (eval_smt_arith e2 v)
     | SmtBitDiv ty e1 e2 => divu_at ty (eval_smt_arith e1 v) (eval_smt_arith e2 v)
     | SmtBitMod ty e1 e2 => modu_at ty (eval_smt_arith e1 v) (eval_smt_arith e2 v)
-    | SmtArrSel e1 e2 e3 =>
-        match CrVal.ld
-            (eval_smt_mem e1 v)
-            (eval_smt_arith e2 v)
-            (eval_smt_arith e3 v)
-        with
+    (* An out-of-bounds (or undeclared-region) read is [ErrorVal], not a
+       rejection: see the totality argument on [CrTransformer.LoadOp].  The
+       [len] on the node is redundant with the region's own [arr_len] here --
+       it exists for the Z3 lowering, which has no [arr_len] to consult. *)
+    | SmtArrSel a idx =>
+        match CrVal.ld_arr (eval_smt_mem a v) (eval_smt_arith idx v) with
         | Legal v' => v'
         | Illegal => ErrorVal
         end
-    | SmtPtrConst value => PtrVal value
-    | SmtPtrVar name => match v name with
-      | PtrVal v' => PtrVal v'
-      | _ => ErrorVal
-      end
     end
-with eval_smt_mem (e : SmtArrExpr) (v : SmtValuation) : Memory CrVal :=
+with eval_smt_mem (e : SmtArrExpr) (v : SmtValuation) : @Array CrVal :=
     match e with
-    | SmtArrInit => @CrVal.tabula_rasa CrVal
-    | SmtArrSt e1 e2 e3 e4 => CrVal.st (eval_smt_mem e1 v) ((*eval_smt_ptr*) eval_smt_arith e2 v) (eval_smt_arith e3 v) (eval_smt_arith e4 v)
+    | SmtArrInit => Unallocated
+    (* The model supplies the bytes; the declaration supplies the length. *)
+    | SmtArrVar name len => region_with_len len (sv_arrs v name)
+    (* An out-of-bounds write is dropped rather than invalidating the region,
+       the store-side mirror of [SmtArrSel]'s [ErrorVal].  Z3's [store] is
+       total, but a total store is observationally equal to this one: the only
+       index it differs at is out of bounds, and every read of an out-of-bounds
+       index is guarded, as is the checker's memory-equality conjunct. *)
+    | SmtArrSt a idx val =>
+        let a' := eval_smt_mem a v in
+        match CrVal.st_arr a' (eval_smt_arith idx v) (eval_smt_arith val v) with
+        | Legal a'' => a''
+        | Illegal => a'
+        end
+    | SmtArrIte cond a1 a2 =>
+        if eval_smt_bool cond v then eval_smt_mem a1 v else eval_smt_mem a2 v
     end.
+
+(* The declared length of the region an array expression denotes.  A store
+   preserves it and a path merge joins two versions of the same region, so it
+   is fixed by the leaf.  The Z3 lowering uses this to emit the bounds guard
+   that [ld_arr] applies here: Z3's [select] is total, so without it the solver
+   and the concrete semantics would disagree on every out-of-bounds read. *)
+Fixpoint smt_arr_len (a : SmtArrExpr) : uint64 :=
+  match a with
+  | SmtArrInit => repr 0
+  | SmtArrVar _ len => len
+  | SmtArrSt a' _ _ => smt_arr_len a'
+  | SmtArrIte _ a1 _ => smt_arr_len a1
+  end.
 
 Record ConditionalVal (T : Type) := {
   cvc : SmtBoolExpr;

@@ -236,6 +236,7 @@ Definition linear_db (db : FilterDatabase) : GeneralCaracaraProgram :=
     [] db' in
   GeneralCaracaraProgramDef
     field_extractor_width
+    []
     {|
       net_modules := [
         field_extractor;
@@ -448,7 +449,7 @@ Definition tss_db (db : FilterDatabase) : GeneralCaracaraProgram :=
     | Some last => add_connection_to_network net last copy_id
     end in
   let net := add_connection_to_network net copy_id (get_mod_name dump_label) in
-  GeneralCaracaraProgramDef field_extractor_width net.
+  GeneralCaracaraProgramDef field_extractor_width [] net.
 
 (* Every pattern tests a header [field_extractor] populates, at the int type
    that extract wrote.  Both are required: [CrVal.eqb] compares the CrIntType

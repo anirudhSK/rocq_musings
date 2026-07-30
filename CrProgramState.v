@@ -1,3 +1,4 @@
+From Stdlib Require Import ZArith.
 From MyProject Require Import SmtExpr.
 From MyProject Require Import Maps.
 From MyProject Require Import CrVal.
@@ -16,6 +17,46 @@ Arguments t_ctrl_map {T} _.
 
 Definition ConcreteTransformerState := TransformerState CrVal.
 Definition SymbolicTransformerState := TransformerState SmtArithExpr.
+
+(* ------------------------------------------------------------------ *)
+(* Memory, as seen by a transformer.  [mc_mem] maps a [MemRegion]'s key to
+   that region's contents and [mc_extent] to the largest offset touched so far.
+
+   This is a separate bundle rather than a fourth field on [TransformerState]
+   because [TransformerState T] is homogeneous in one element type -- ctrl,
+   header and state values all have type [T], and [CrVarLike] and
+   [program_state_mapper] are built on that.  A region's contents are not of
+   that type ([Array CrVal] concretely, [SmtArrExpr] symbolically), so it is
+   threaded alongside the state instead of inside it. *)
+Record MemCtx (Th Tm : Type) := {
+  mc_mem    : PMap.t Tm;
+  mc_extent : PMap.t Th;
+}.
+
+Arguments mc_mem {Th Tm} _.
+Arguments mc_extent {Th Tm} _.
+
+Definition set_mc_mem {Th Tm : Type} (mc : MemCtx Th Tm) (m : PMap.t Tm)
+    : MemCtx Th Tm :=
+  {| mc_mem := m; mc_extent := mc_extent mc |}.
+
+Definition set_mc_extent {Th Tm : Type} (mc : MemCtx Th Tm) (e : PMap.t Th)
+    : MemCtx Th Tm :=
+  {| mc_mem := mc_mem mc; mc_extent := e |}.
+
+Definition ConcreteMemCtx := MemCtx CrVal (@Array CrVal).
+Definition SymbolicMemCtx := MemCtx SmtArithExpr SmtArrExpr.
+
+(* The memory a program with no declared regions runs against: every region is
+   undeclared, so every access is out of bounds.  This is what the memory-free
+   entry points ([eval_transformer_concrete] and friends) supply. *)
+Definition empty_concrete_mem_ctx : ConcreteMemCtx :=
+  {| mc_mem := PMap.init (@Unallocated CrVal);
+     mc_extent := PMap.init (mk_int u64 0%Z) |}.
+
+Definition empty_symbolic_mem_ctx : SymbolicMemCtx :=
+  {| mc_mem := PMap.init SmtArrInit;
+     mc_extent := PMap.init (SmtArithConst (mask_width W64 0) u64) |}.
 
 (* ------------------------------------------------------------------ *)
 (* Parser-specific runtime state.  Carries its own header map (the shared

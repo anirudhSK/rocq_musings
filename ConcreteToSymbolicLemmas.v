@@ -41,10 +41,14 @@ Proof.
   intros ho s f.
   (* Split on the operation; each operand commutes via [commute_lookup_eval]
      regardless of width. *)
+  (* The two memory cases have no operands to commute: neither side is an
+     expression of the state, and both are ErrorVal ([smt_error] is a cast of
+     [SmtUninit] to a different width). *)
   destruct ho; cbn [eval_hdr_op_expr_concrete eval_hdr_op_expr_smt];
-    first [ rewrite eval_smt_binop_of | rewrite eval_smt_cast ];
-    unfold apply_bin_op_of, apply_cast;
-    rewrite ?commute_lookup_eval; reflexivity.
+    try (first [ rewrite eval_smt_binop_of | rewrite eval_smt_cast ];
+         unfold apply_bin_op_of, apply_cast;
+         rewrite ?commute_lookup_eval);
+    reflexivity.
 Qed.
 
 Lemma commute_update_eval_varlike:
@@ -72,8 +76,12 @@ Proof.
   unfold eval_hdr_op_assign_concrete.
   unfold eval_hdr_op_assign_smt.
   rewrite commute_sym_conc_expr.
+  (* Both memory-free evaluators give a load ErrorVal and a store no effect, so
+     the load case still goes through [commute_update_eval_varlike] and the
+     store case is an identity on both sides. *)
   destruct ho; simpl;
-  rewrite commute_update_eval_varlike; reflexivity.
+    try (rewrite commute_update_eval_varlike; reflexivity).
+  reflexivity.
 Qed.
 
 Lemma commute_sym_vs_conc_hdr_op_list :

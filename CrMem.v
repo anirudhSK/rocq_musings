@@ -513,7 +513,11 @@ Fixpoint eval_z3_arith (e : arith_expr) (sval : z3_s_val) (aval : z3_a_val) : Cr
   end
 with eval_z3_ptr (e : ptr_expr) (sval : z3_s_val) (aval : z3_a_val) : CrVal :=
   match e with
-  | Z3_ptr x => PtrVal (CrPtr x)
+  (* [CrVal] no longer has a pointer constructor -- the unified IR names memory
+     regions statically instead -- so a concrete pointer is its 64-bit address.
+     This also matches [MemSolver.ml], which reconstructs every model value as
+     a [u64] [IntVal]. *)
+  | Z3_ptr x => IntVal (repr (unsigned x)) u64
   | Z3_ptr_var name => sval name
   | Z3_ptr_ite c e1 e2 =>
     match eval_z3_bool c sval aval with

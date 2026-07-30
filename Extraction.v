@@ -38,4 +38,7 @@ Separate Extraction
   PktClass.ex_lin_overlap PktClass.ex_tss_overlap
   PktClass.ex_lin_distinct PktClass.ex_tss_distinct
   modnet_equivalence_checker
+  (* [Z3Solver] needs the declared length of a region to emit the same bounds
+     guard the concrete [ld_arr] applies. *)
+  SmtExpr.smt_arr_len
   well_formed_programb well_formed_general_programb.

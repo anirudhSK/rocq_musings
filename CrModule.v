@@ -268,17 +268,45 @@ Qed.
 
 (* ------------------------------------------------------------------ *)
 
+(* A memory region a program can address: a name and a declared length in
+   cells.  Regions are static -- there is no runtime allocation -- so this is
+   the analogue of the declared input packet length, and like it, two programs
+   must agree on it to be comparable at all. *)
+Record MemRegionDecl : Type := mkMemRegionDecl {
+  mr_id  : MemRegion;
+  mr_len : nat;
+}.
+
+Definition mem_region_decl_eqb (a b : MemRegionDecl) : bool :=
+  posesque_eqb (mr_id a) (mr_id b) && Nat.eqb (mr_len a) (mr_len b).
+
+Definition mem_region_decls_eqb (a b : list MemRegionDecl) : bool :=
+  (Nat.eqb (List.length a) (List.length b)) &&
+  List.forallb (fun '(x, y) => mem_region_decl_eqb x y) (List.combine a b).
+
 Inductive GeneralCaracaraProgram : Type :=
   | GeneralCaracaraProgramDef :
       nat -> (* input packet length *)
+      list MemRegionDecl -> (* addressable memory regions *)
       ModuleNetwork ->
       GeneralCaracaraProgram.
 
 Definition get_inp_len_from_general (p : GeneralCaracaraProgram) : nat :=
-  match p with GeneralCaracaraProgramDef l _ => l end.
+  match p with GeneralCaracaraProgramDef l _ _ => l end.
+
+Definition get_mem_regions_from_general (p : GeneralCaracaraProgram) : list MemRegionDecl :=
+  match p with GeneralCaracaraProgramDef _ r _ => r end.
 
 Definition get_network_from_general (p : GeneralCaracaraProgram) : ModuleNetwork :=
-  match p with GeneralCaracaraProgramDef _ net => net end.
+  match p with GeneralCaracaraProgramDef _ _ net => net end.
+
+(* The declared length of [r], or 0 if [r] was never declared -- an undeclared
+   region has no addressable cells, so every access to it is out of bounds. *)
+Definition mem_region_len (rs : list MemRegionDecl) (r : MemRegion) : nat :=
+  match find (fun d => posesque_eqb (mr_id d) r) rs with
+  | Some d => mr_len d
+  | None => 0
+  end.
 
 Definition module_states (m : CrModule) : list State :=
   match m with

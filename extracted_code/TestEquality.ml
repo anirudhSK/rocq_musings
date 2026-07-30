@@ -9,12 +9,10 @@ let get_program f =
   Shim.print_malformed_prog p 0;
   p
 
-(* let get_general_program f =
-  let x = open_in f in
-  let len = in_channel_length x in
-  let str = really_input_string x len in
-  close_in x;
-  str |> Sexp.of_string |> CrTypeIF.CrModule.coq_GeneralCaracaraProgram_of_sexp *)
+let get_general_program f =
+  let p = Shim.load_general_program f in
+  Shim.print_malformed_gprog p f;
+  p
 
 let get_mem_program f = MemSolver.load_program f
 
@@ -47,7 +45,7 @@ let%expect_test "hdr_diff: different constants are NotEquivalent" =
      constant), so its width is unconstrained by the query and defaults to u64. *)
   [%expect {|
     ┌ SAT Valuation
-    | var( hdr_1 ) : u64 := 0
+    | var( hdr_1 ) := uninit
     └
     NotEquivalent
     |}]
@@ -178,7 +176,10 @@ let%expect_test "sat aval: array values differ" =
     Z3Sat(ValueMismatch)
     |}]
 
-(* Test 12: End-to-end -O0 vs -O2 compilation of a basic bpf program. *)
+(* Test 12: End-to-end -O0 vs -O2 compilation of a basic bpf program, in the
+   OLD memory IR.  Superseded by the network version below and kept only until
+   CrMem goes; `~/proj/ect` still regenerates ../test/O0.ir and O2.ir via
+   `make O0.crmem.ir O2.crmem.ir`. *)
 let%expect_test "e2e bpf test: O0 ≡ O2" =
   let p1 = get_mem_program "../test/O0.ir" in
   let p2 = get_mem_program "../test/O2.ir" in
@@ -191,16 +192,60 @@ let%expect_test "e2e bpf test: O0 ≡ O2" =
     Z3Unsat
     |}]
 
+(* Test 12b: the same claim in the unified IR -- the point of the whole memory
+   merge.  ../test/bpf_O{0,2}.ir are `~/proj/ect/bpf_to_ir` output for the -O0
+   and -O2 lowerings of one XDP program (test/bpf_ref.c), regenerated there
+   with `make O0.ir O2.ir`.  They are module networks, so unlike test 12 this
+   runs through modnet_equivalence_checker and Z3Solver, and compares the
+   emitted return value, the bits read, and the contents and access extents of
+   the ctx and packet regions.
+
+   This used to be by far the slowest test in the suite (~10s against ~2s for
+   everything else), all of it inside Solver.check on the memory conjunct.  It
+   is now ~0.02s: [check_sym_region_equal] emits one [SmtArrEq] instead of
+   [mr_len] separate [SmtArrSel] comparisons, which removes a cost that was
+   quadratic in both the cells compared and the number of stores.  See
+   memo-memo.txt. *)
+let%expect_test "e2e bpf test: O0 ≡ O2, unified IR" =
+  let p1 = get_general_program "../test/bpf_O0.ir" in
+  let p2 = get_general_program "../test/bpf_O2.ir" in
+  print_equiv (SmtModuleQuery.modnet_equivalence_checker p1 p2);
+  [%expect {| Equivalent |}]
+
 (* Test 13: linear scan vs tss for simple filter database.  Both are full
    parser -> table chain -> deparser networks over a 192-bit input packet (what
    field_extractor consumes), so they go through the bitstream checker: the
    observable is the label byte the deparser emits.
 
-   NOTE: this test is weaker than it looks -- it reported Equivalent even while
-   tss_db concretely produced nothing and linear_db emitted a label.  Agreeing
-   on output packets does not pin down which label a classifier assigns.  The
-   concrete labels are checked in TestModuleSemantics ("pktclass..."); keep
-   both tests. *)
+   NOTE: this test used to be weaker than it looks -- it reported Equivalent
+   even while tss_db concretely produced nothing and linear_db emitted a label.
+   Agreeing on output packets still does not pin down which label a classifier
+   assigns, so the concrete labels are checked in TestModuleSemantics
+   ("pktclass..."); keep both tests.
+
+   Its Equivalent is now meaningful, and getting there took two fixes worth
+   recording, because this test sat at the intersection of both:
+
+   - Both constructions accumulate the label in [h_out], a header no parser
+     extracts, and copy it into (HeaderCtr 1) at the end.  While
+     [eval_transformer_smt] dropped headers first written inside a transformer
+     (it merges through [update_all_varlike], which cannot introduce a key),
+     the copy read the map default on both sides and both programs emitted
+     zeros -- so this said Equivalent vacuously, exactly as the note above
+     suspected.  Fixed by seeding the network's header interface in
+     [CrVarLike.init_general_symbolic_state]; see [collect_write_headers].
+   - With [h_out] retained the labels reached the query and Z3 started
+     returning SAT -- on a model that did NOT survive [eval_smt_bool], and
+     whose witness packet gave label 42 from both classifiers concretely.  That
+     was the untyped Z3 encoding: [eqb]/[ltb]/[iv_binop_at] type-check their
+     operands and the lowering did not, so Z3 could satisfy the query in states
+     the concrete semantics cannot reach -- making
+     [SmtQuery.smt_query_sound_some] false rather than imprecise.  Fixed by
+     lowering each arith expression to a (value, tag) pair; see the header of
+     Z3Solver.ml.
+
+   So a NotEquivalent here is now backed by a witness that [eval_smt_bool]
+   agrees with.  That is worth re-checking by hand whenever this test moves. *)
 let%expect_test "tss basic" =
   (* let p1 = get_general_program "../test/lin_pkt.out" in
   let p2 = get_general_program "../test/tss_pkt.out" in *)
@@ -323,4 +368,105 @@ let%expect_test "bitstream: one deparser emitting h1,h2 = two deparsers chained"
   let p1 = Shim.find_modprog "parse_deparse" in
   let p2 = Shim.find_modprog "two_deparsers" in
   print_equiv (SmtModuleQuery.modnet_equivalence_checker p1 p2);
+  [%expect {| Equivalent |}]
+
+(* ------------------------------------------------------------------ *)
+(* Tests 21-26: memory.                                                 *)
+(*                                                                      *)
+(* All of these run through the SAME checker and the SAME solver as the  *)
+(* network tests above -- the point of the unification.  Region 1 is     *)
+(* declared with 4 cells in every one of these programs, so offsets      *)
+(* 0..3 are in bounds and 4 is not.                                     *)
+(* ------------------------------------------------------------------ *)
+
+let check n1 n2 =
+  print_equiv (SmtModuleQuery.modnet_equivalence_checker
+                 (Shim.find_modprog n1) (Shim.find_modprog n2))
+
+(* Test 21: address aliasing.  One program writes the offset literally, the
+   other computes it into a header first.  Which header holds an address is
+   internal, so the two agree -- and the solver has to reason about the
+   computed index to see it, since [SmtArrSel] takes the index symbolically. *)
+let%expect_test "mem: a computed offset aliases a literal one" =
+  check "mem_store_load" "mem_store_load_alias";
+  [%expect {| Equivalent |}]
+
+(* Test 22: same shape, same extent, different value stored.  Caught by the
+   region-contents conjunct and by the output packet. *)
+let%expect_test "mem: a different stored value is not equivalent" =
+  check "mem_store_load" "mem_store_load_differs";
+  [%expect {|
+    ┌ SAT Valuation
+    | var( pkt_1 ) : u64 := 1
+    | var( pkt_10 ) : u64 := 1
+    | var( pkt_100 ) : u64 := 1
+    | var( pkt_1000 ) : u64 := 1
+    | var( pkt_101 ) : u64 := 1
+    | var( pkt_11 ) : u64 := 1
+    | var( pkt_110 ) : u64 := 1
+    | var( pkt_111 ) : u64 := 1
+    | mem( mem_1 ) : len=4 := [-, -, -, -]
+    └
+    NotEquivalent
+    |}]
+
+(* Test 23: two programs whose only difference is which scratch header a dead
+   load lands in.  Headers are internal, so this is unobservable. *)
+let%expect_test "mem: the scratch header a dead load targets is internal" =
+  check "mem_load1_load0" "mem_load1_load0_alt";
+  [%expect {| Equivalent |}]
+
+(* Test 24: THE extent test, and the reason [sh_mem_extent] exists.  Both
+   programs read only cells that were never written, so both emit the same
+   zero byte and leave the region untouched -- output equality and contents
+   equality cannot tell them apart.  They differ solely in that one reaches
+   cell 1 and the other stops at cell 0, which is a real difference: one can
+   fault where the other cannot.  If this reports Equivalent, the extent is
+   not reaching the query.  (Compare test 18, its bitstream analogue.) *)
+let%expect_test "mem: reading one cell further is not equivalent" =
+  check "mem_load1_load0" "mem_load0";
+  [%expect {|
+    ┌ SAT Valuation
+    | mem( mem_1 ) : len=4 := [-, -, -, -]
+    └
+    NotEquivalent
+    |}]
+
+(* Test 25: in bounds, the order of a load and a store to one cell matters --
+   the second program reads back what it just wrote, the first does not. *)
+let%expect_test "mem: in bounds, load-then-store differs from store-then-load" =
+  check "mem_ib_load_store" "mem_store_load";
+  [%expect {|
+    ┌ SAT Valuation
+    | var( pkt_1 ) : u64 := 1
+    | var( pkt_10 ) : u64 := 1
+    | var( pkt_100 ) : u64 := 1
+    | var( pkt_1000 ) : u64 := 1
+    | var( pkt_101 ) : u64 := 1
+    | var( pkt_11 ) : u64 := 1
+    | var( pkt_110 ) : u64 := 1
+    | var( pkt_111 ) : u64 := 1
+    | mem( mem_1 ) : len=4 := [254:u8, 254:u8, 254:u8, 254:u8]
+    └
+    NotEquivalent
+    |}]
+
+(* Test 26: the same pair at an out-of-bounds offset, where order stops
+   mattering: the store is dropped and the load yields ErrorVal either way.
+   This is the test that the Z3 lowering guards BOTH memory operations with the
+   region's declared length -- Z3's array theory is total, so:
+
+     - an unguarded [select] would let the store-then-load program read its own
+       out-of-bounds write back;
+     - an unguarded [store] would leave the two regions differing at offset 4,
+       which the [SmtArrEq] encoding *does* see (extensional array equality
+       looks at every index, unlike the old per-cell conjunction over 0..3).
+
+   Either way the checker would report NotEquivalent on a difference the
+   concrete semantics cannot produce, i.e. an unsound verdict.  The store half
+   of that became load-bearing when the cell-by-cell comparison was replaced;
+   before, nothing in the query ever looked at offset 4.  Together with test 25
+   this pins the bound down from both sides. *)
+let%expect_test "mem: out of bounds, the order stops mattering" =
+  check "mem_oob_load_store" "mem_oob_store_load";
   [%expect {| Equivalent |}]

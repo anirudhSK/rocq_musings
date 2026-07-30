@@ -5,7 +5,8 @@ include Datatypes
 include MyInts
 include String
 
-(* Helpers for constructing an SMT valuation *)
+(* Helpers for constructing an SMT valuation.  A valuation has two components,
+   scalars and memory regions; each is an association list walked by name. *)
 type coq_ValueMap =
 | VMap of string * CrVal.coq_CrVal * coq_ValueMap
 | VMap_DNE
@@ -17,6 +18,23 @@ let rec coq_TraverseMap (vm : coq_ValueMap) (s : string) : CrVal.coq_CrVal =
     else
       coq_TraverseMap nxt_ s
   | VMap_DNE -> UninitVal
+
+type coq_ArrayMap =
+| AMap of string * CrVal.coq_CrVal CrVal.coq_Array * coq_ArrayMap
+| AMap_DNE
+let rec coq_TraverseArrayMap (am : coq_ArrayMap) (s : string)
+    : CrVal.coq_CrVal CrVal.coq_Array =
+  match am with
+  | AMap (var_, val_, nxt_) ->
+    if (s = var_) then
+      val_
+    else
+      coq_TraverseArrayMap nxt_ s
+  | AMap_DNE -> CrVal.Unallocated
+
+let mk_valuation (vm : coq_ValueMap) (am : coq_ArrayMap) : SmtTypes.coq_SmtValuation =
+  { SmtTypes.sv_ints = coq_TraverseMap vm;
+    SmtTypes.sv_arrs = coq_TraverseArrayMap am }
 
 (* Helpers for casting between ocaml and rocq types *)
 let coq_Z_to_int (n : BinNums.coq_Z) : int =
@@ -329,11 +347,81 @@ let net_bits_read (gcs : CrGeneralProgramState.coq_GeneralConcreteState) : int =
 let print_net_bits_read (gcs : CrGeneralProgramState.coq_GeneralConcreteState) =
   Printf.printf "bits_read=%d\n" (net_bits_read gcs)
 
+(* ------------------------------------------------------------------ *)
+(* Memory.
+
+   A region is addressed by its [MemRegion] uid and a cell offset; the inner
+   PMap is keyed by [CrVal.offset_to_key], i.e. the offset shifted by one so
+   that offset 0 does not collide with the map's default. *)
+let mem_cell_key (off : int) : BinNums.positive = int_to_pos (off + 1)
+
+let get_net_mem_region (region : int)
+    (gcs : CrGeneralProgramState.coq_GeneralConcreteState)
+    : CrVal.coq_CrVal CrVal.coq_Array =
+  Maps.PMap.get (int_to_pos region) gcs.CrGeneralProgramState.sh_mem
+
+(* Seed one cell of a declared region.  The region must already be declared on
+   the program -- [init_general_concrete_state] allocates it at its declared
+   length -- since writing into an unallocated region is exactly what the
+   semantics refuses to do. *)
+let set_net_mem_cell (region : int) (off : int) (ty : CrVal.coq_CrIntType) (v : int)
+    (gcs : CrGeneralProgramState.coq_GeneralConcreteState)
+    : CrGeneralProgramState.coq_GeneralConcreteState =
+  let arr = get_net_mem_region region gcs in
+  match arr with
+  | CrVal.Unallocated ->
+      failwith (Printf.sprintf "set_net_mem_cell: region %d is not declared" region)
+  | CrVal.Allocated blk ->
+      let bytes = Maps.PMap.set (mem_cell_key off)
+        (CrVal.Init (typed_int_to_crval ty v)) blk.CrVal.arr_bytes in
+      let arr' = CrVal.Allocated { blk with CrVal.arr_bytes = bytes } in
+      { gcs with CrGeneralProgramState.sh_mem =
+          Maps.PMap.set (int_to_pos region) arr' gcs.CrGeneralProgramState.sh_mem }
+
+(* Render a region's cells over its declared length: "-" for a cell that was
+   never written, "!" for one holding a non-integer (an ErrorVal a failed load
+   or a type-mismatched store left behind). *)
+let print_net_mem_region (region : int)
+    (gcs : CrGeneralProgramState.coq_GeneralConcreteState) =
+  match get_net_mem_region region gcs with
+  | CrVal.Unallocated -> Printf.printf "mem%d=<undeclared>\n" region
+  | CrVal.Allocated blk ->
+      let len = coq_Z_to_int blk.CrVal.arr_len in
+      let cell i =
+        match Maps.PMap.get (mem_cell_key i) blk.CrVal.arr_bytes with
+        | CrVal.Uninit -> "-"
+        | CrVal.Init (CrVal.IntVal (x, _)) -> string_of_int (coq_Z_to_int x)
+        | CrVal.Init _ -> "!" in
+      Printf.printf "mem%d=[%s]\n" region
+        (Stdlib.String.concat ", " (Stdlib.List.init len cell))
+
+(* The largest offset the run touched in [region], in bounds or not.  This is
+   the memory analogue of [net_bits_read]. *)
+let print_net_mem_extent (region : int)
+    (gcs : CrGeneralProgramState.coq_GeneralConcreteState) =
+  Printf.printf "extent%d=%d\n" region
+    (crval_to_int (Maps.PMap.get (int_to_pos region)
+                     gcs.CrGeneralProgramState.sh_mem_extent))
+
 (* Render the parsed headers ("h<k>=<v>", sorted), or "Reject" on parse failure. *)
 let print_parser_result (r : CrProgramState.coq_ConcreteParserState option) =
   match r with
   | None -> print_endline "Reject"
   | Some ps -> print_endline (header_map_to_string ps.CrProgramState.p_header_map)
+
+(* Read a whole network program from a file.  The sexp encoding is the one
+   [CrTypeIF] derives, with two departures that make it writable from outside
+   this tree (see the header comment there): numbers are decimal, and
+   [net_edges] is an explicit edge list rather than a closure.
+   [~/proj/ect/bpf_to_ir] emits exactly this. *)
+let load_general_program (f : Stdlib.String.t)
+    : CrModule.coq_GeneralCaracaraProgram =
+  let x = open_in f in
+  let len = in_channel_length x in
+  let str = really_input_string x len in
+  close_in x;
+  str |> Sexplib.Sexp.of_string
+      |> CrTypeIF.CrModule.coq_GeneralCaracaraProgram_of_sexp
 
 let find_modprog (name : Stdlib.String.t) =
   match TestModulePrograms.lookup_mod_test_program (str_to_coq_str name) with

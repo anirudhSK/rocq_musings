@@ -5,6 +5,8 @@ From MyProject Require Import Integers.
 From MyProject Require Import MyInts.
 From MyProject Require Import CrIdentifiers.
 From MyProject Require Import CrProgramState.
+From MyProject Require Import CrParser.
+From MyProject Require Import CrDeparser.
 From MyProject Require Import CrModule.
 From MyProject Require Import CrGeneralProgramState.
 From MyProject Require Import CrTransformer.
@@ -524,24 +526,83 @@ Definition init_sym_net_p_state (prog_prefix : string) (m_id : ModuleName)
   let prefix := prog_prefix ++ "_m" ++ pos_to_string (unwrap m_id) ++ "_" in
   init_symbolic_parser_state prefix.
 
+(* Every header the network mentions: transformer write targets, parser
+   extraction targets and select-case reads, deparser emits.  This is the
+   network's header interface, and seeding it into the initial state is what
+   makes the interface *stable* -- the same set of keys on every path and in
+   both semantics.
+
+   That matters more than it looks.  [update_all_varlike] rebuilds a header map
+   from the keys already in it ([new_pmap_from_old] maps the old tree), so it
+   can never introduce one; [eval_transformer_smt] merges its rules through
+   [update_all_varlike], and so used to DROP any header first written inside a
+   transformer, while the concrete [update_varlike] ([PMap.set]) kept it.  A
+   network whose output header no parser populated then emitted bits concretely
+   and nothing symbolically, and [modnet_equivalence_checker] compared two empty
+   packets and answered Equivalent.
+
+   Seeding the domain here fixes that at the root rather than widening
+   [update_all_varlike]: the [CrVarLike] class gives that field the type
+   [(A -> T) -> TransformerState T -> TransformerState T], with no key list to
+   extend, so widening it would change the class, all three instances, and the
+   [Qed] proofs resting on [update_all_varlike_lookup_unchanged].  Seeding costs
+   nothing semantically -- a seeded key holds exactly the map's default
+   ([SmtUninit] / [UninitVal]), so every lookup is unchanged -- it only makes
+   the key present so the merge can see it. *)
+Definition collect_module_headers (m : CrModule) : list Header :=
+  match m with
+  | ParserModule _ p => parser_headers p
+  | DeparserModule _ d =>
+    List.map (fun e => match e with EmitOpConstructor h _ => h end) (deparser_emits d)
+  | TransformerModule _ _ _ t =>
+    List.flat_map (fun rule =>
+      match rule with
+      | Seq (SeqCtr _ ops) => snd (extract_all_targets ops)
+      | Par (ParCtr _ ops) => snd (extract_all_targets (proj1_sig ops))
+      end) t
+  end.
+
 Definition collect_write_headers (mods : list CrModule) : list Header :=
-  List.flat_map (fun m =>
-    match m with
-    | ParserModule _ _ => []
-    | DeparserModule _ _ => []
-    | TransformerModule _ _ _ t =>
-      List.flat_map (fun rule =>
-        match rule with
-        | Seq (SeqCtr _ ops) => snd (extract_all_targets ops)
-        | Par (ParCtr _ ops) => snd (extract_all_targets (proj1_sig ops))
-        end) t
-    end) mods.
+  List.flat_map collect_module_headers mods.
+
+(* A header map whose domain is [hs] and whose every entry is the default, so
+   that seeding is observationally a no-op. *)
+Definition seed_header_map {T : Type} (dflt : T) (hs : list Header) : PMap.t T :=
+  List.fold_left (fun acc h => PMap.set (unwrap h) dflt acc) hs (PMap.init dflt).
 
 Definition symbolic_input_bits (n : nat) : list (ConditionalVal SmtBoolExpr) :=
   List.map (fun i => {|
     cvc := SmtTrue;
     cvv := SmtBoolVar ("pkt_" ++ pos_to_string (Pos.of_succ_nat i))
   |}) (List.seq 0 n).
+
+(* Seed each declared region with a free array variable, and everything else
+   with the undeclared-region default.
+
+   The variable name carries NO program prefix -- deliberately, and unlike
+   [state_]/[ctrl_].  A region's contents on entry are an *input*, like the
+   packet bits from [symbolic_input_bits] (which are likewise unprefixed), and
+   the two programs have to be run against the same input or the query is
+   vacuous: give them independent variables and the solver satisfies "the
+   outputs differ" by simply handing them different memories.  Module-local
+   state and ctrl config do take a prefix, because those are each program's own
+   internals rather than a shared input.
+
+   Sharing the name is well defined because [modnet_equivalence_checker]
+   already refuses to compare programs whose region declarations differ. *)
+Definition init_symbolic_mem (rs : list MemRegionDecl) : PMap.t SmtArrExpr :=
+  List.fold_left
+    (fun acc d =>
+      let k := unwrap (mr_id d) in
+      PMap.set k (SmtArrVar ("mem_" ++ pos_to_string k)
+                            (repr (Z.of_nat (mr_len d)))) acc)
+    rs (PMap.init SmtArrInit).
+
+Definition init_concrete_mem (rs : list MemRegionDecl) : PMap.t (@Array CrVal) :=
+  List.fold_left
+    (fun acc d =>
+      PMap.set (unwrap (mr_id d)) (mk_region (repr (Z.of_nat (mr_len d)))) acc)
+    rs (PMap.init (@Unallocated CrVal)).
 
 Definition empty_transformer_mod : SymbolicModuleState :=
   TransformerMod {| t_ctrl_map := PMap.init SmtUninit; t_header_map := PMap.init SmtUninit; t_state_map := PMap.init SmtUninit; |}.
@@ -551,10 +612,17 @@ Definition init_general_symbolic_state
   (p : GeneralCaracaraProgram)
   : GeneralSymbolicState :=
   {|
-    sh_hdr_map := PMap.init SmtUninit;
+    (* Seeded with the network's whole header interface -- see
+       [collect_write_headers].  This map is what flows down the edges as
+       [f_hdrs] and becomes each module's [t_header_map], so seeding it here is
+       enough to stabilise the domain for every module. *)
+    sh_hdr_map := seed_header_map SmtUninit
+                    (collect_write_headers (net_modules (get_network_from_general p)));
     sh_read_tape := symbolic_input_bits (get_inp_len_from_general p);
     sh_bits_read := SmtArithConst (mask_width W64 0) u64;
     sh_write_tape := @nil (ConditionalVal SmtBoolExpr);
+    sh_mem := init_symbolic_mem (get_mem_regions_from_general p);
+    sh_mem_extent := PMap.init (SmtArithConst (mask_width W64 0) u64);
     mod_states := List.fold_left
       (fun acc m =>
         let m_key := unwrap (get_mod_name m) in
@@ -592,10 +660,17 @@ Definition init_general_concrete_state (p : GeneralCaracaraProgram)
       end)
     (net_modules net)
     (PMap.init (TransformerMod (init_concrete_transformer_state (CaracaraProgramDef [] [] [] [])))) in
-  {| sh_hdr_map := PMap.init (UninitVal);
+  (* Seeded identically to the symbolic side.  The concrete semantics does not
+     need it -- [update_varlike] is a [PMap.set] and adds keys as it goes -- but
+     keeping the two domains equal is the point: the asymmetry between a
+     concrete map that grows and a symbolic one that cannot is what produced the
+     dropped-header bug in the first place. *)
+  {| sh_hdr_map := seed_header_map UninitVal (collect_write_headers (net_modules net));
      sh_read_tape := @nil bool;
      sh_bits_read := mk_int u64 0;
      sh_write_tape := @nil bool;
+     sh_mem := init_concrete_mem (get_mem_regions_from_general p);
+     sh_mem_extent := PMap.init (mk_int u64 0);
      mod_states := ms;
      gps_valid := true; |}.
 

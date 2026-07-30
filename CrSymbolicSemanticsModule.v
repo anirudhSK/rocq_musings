@@ -36,11 +36,18 @@ Definition module_update_gs_symbolic
   (gs : GeneralSymbolicState) : GeneralSymbolicState :=
   match m, ls with
   | TransformerModule m_id _ _ t, TransformerMod ts =>
-    let ls' := TransformerMod (eval_transformer_smt t ts) in
+    (* Mirrors the concrete side: memory is forwarded in from the general state
+       and copied back out. *)
+    let r := eval_transformer_smt_mem t
+               {| mc_mem := sh_mem gs; mc_extent := sh_mem_extent gs |} ts in
+    let mc' := fst r in
+    let ls' := TransformerMod (snd r) in
     let ms' := PMap.set (unwrap m_id) ls' (mod_states gs) in
     let f_hdrs' := module_header_map ls' in
     set_gps_mod_states
-      (set_gps_shared_headers gs f_hdrs') ms'
+      (set_gps_mem_extent
+        (set_gps_mem
+          (set_gps_shared_headers gs f_hdrs') (mc_mem mc')) (mc_extent mc')) ms'
   | ParserModule m_id p, ParserMod ps =>
     let r := eval_parser_symbolic p ps in
     let ls' := ParserMod {| p_header_map := spr_headers r;
@@ -148,5 +155,7 @@ Definition concretize_sym_modnet_state
      sh_read_tape := List.map (fun b => eval_smt_bool (cvv b) f) (sh_read_tape s);
      sh_bits_read := eval_smt_arith (sh_bits_read s) f;
      sh_write_tape := List.map (fun b => eval_smt_bool (cvv b) f) (sh_write_tape s);
+     sh_mem := PMap.map (fun a => eval_smt_mem a f) (sh_mem s);
+     sh_mem_extent := PMap.map (fun e => eval_smt_arith e f) (sh_mem_extent s);
      mod_states := PMap.map (fun sym_st => concretize_sym_module_state sym_st f) (mod_states s);
      gps_valid := eval_smt_bool (cvv (gps_valid s)) f |}.
