@@ -15,7 +15,7 @@ let run_net name seed = run_named_prog name (Shim.find_modprog name) seed
 let run name bytes = run_net name (Shim.set_net_packet bytes)
 
 (* ------------------------------------------------------------------ *)
-(* mod_prog_single_add3 (pid 0): parser byte0 -> h1; h1 := h1 + 3      *)
+(* mod_prog_single_add3 (pid 0): parser byte0 -> h1; h1 := h1 + 3     *)
 (* ------------------------------------------------------------------ *)
 
 let%expect_test "single_add3: packet [5] -> h1=8" =
@@ -41,7 +41,7 @@ let%expect_test "single_add3: packet [0] -> h1=3" =
   |}]
 
 (* ------------------------------------------------------------------ *)
-(* mod_prog_add1_then_mul2 (pid 1): h1 -> (h1+1)*2                     *)
+(* mod_prog_add1_then_mul2 (pid 1): h1 -> (h1+1)*2                    *)
 (* ------------------------------------------------------------------ *)
 
 let%expect_test "add1_then_mul2: packet [5] -> 12" =
@@ -71,8 +71,8 @@ let%expect_test "add1_then_mul2: packet [0] -> 2 (0+1)*2" =
   |}]
 
 (* ------------------------------------------------------------------ *)
-(* mod_prog_conditional_pipeline (pid 2)                               *)
-(*   Module 2: h1=7 -> h1:=1, else no-op.  Module 3: h1 := h1+10.      *)
+(* mod_prog_conditional_pipeline (pid 2)                              *)
+(*   Module 2: h1=7 -> h1:=1, else no-op.  Module 3: h1 := h1+10.     *)
 (* ------------------------------------------------------------------ *)
 
 let%expect_test "conditional_pipeline: packet [7] hits guard -> 11" =
@@ -102,8 +102,8 @@ let%expect_test "conditional_pipeline: packet [3] misses guard -> 13" =
   |}]
 
 (* ------------------------------------------------------------------ *)
-(* mod_prog_cmplt_matchheader (pid 3)                                  *)
-(*   Module 2: h1<h2 -> h1:=h1+h2.  Module 3: h1 := h1+1.              *)
+(* mod_prog_cmplt_matchheader (pid 3)                                 *)
+(*   Module 2: h1<h2 -> h1:=h1+h2.  Module 3: h1 := h1+1.             *)
 (* ------------------------------------------------------------------ *)
 
 let%expect_test "cmplt_matchheader: packet [3;5] fires -> h1=9" =
@@ -160,7 +160,7 @@ let%expect_test "two_parsers: packet [7;42] threads -> h1=7, h2=42" =
     |}]
 
 (* ------------------------------------------------------------------ *)
-(* sh_bits_read: how much of the input packet the network consumed.     *)
+(* sh_bits_read: how much of the input packet the network consumed.   *)
 (* ------------------------------------------------------------------ *)
 
 (* One parser, one 8-bit extract. *)
@@ -191,17 +191,17 @@ let%expect_test "parse_deparse_swapped: packet [0x12;0x34] -> bytes swapped" =
   Shim.print_net_output (run "parse_deparse_swapped" [0x12; 0x34]);
   [%expect {| 52, 18 |}]
 
-(* ------------------------------------------------------------------ *)
-(* PktClass: linear-scan vs tuple-space-search classifiers.             *)
-(*                                                                      *)
+(* --------------------------------------------------------------------- *)
+(* PktClass: linear-scan vs tuple-space-search classifiers.              *)
+(*                                                                       *)
 (* These are concrete on purpose.  Test 13 in TestEquality runs the same *)
 (* two programs through modnet_equivalence_checker, and it reported      *)
-(* Equivalent throughout a period when tss_db rejected every packet and   *)
-(* linear_db emitted a label -- a symbolic checker comparing output       *)
-(* packets cannot pin down WHICH label a classifier produces.  Checking   *)
-(* concrete labels here is what makes these two constructions actually    *)
-(* agree rather than merely fail to be distinguished.                     *)
-(* ------------------------------------------------------------------ *)
+(* Equivalent throughout a period when tss_db rejected every packet and  *)
+(* linear_db emitted a label -- a symbolic checker comparing output      *)
+(* packets cannot pin down WHICH label a classifier produces.  Checking  *)
+(* concrete labels here is what makes these two constructions actually   *)
+(* agree rather than merely fail to be distinguished.                    *)
+(* --------------------------------------------------------------------- *)
 
 (* Run a standalone GeneralCaracaraProgram on a byte packet; print the emitted
    output packet, or "reject" if the network invalidated.  Only a parser can
@@ -287,14 +287,14 @@ let%expect_test "pktclass precedence: no match emits 0 in both" =
     tss: 0
   |}]
 
-(* ------------------------------------------------------------------ *)
-(* Why a match-action rule silently never fires.                        *)
-(*                                                                      *)
+(* --------------------------------------------------------------------- *)
+(* Why a match-action rule silently never fires.                         *)
+(*                                                                       *)
 (* These are the two root causes behind the PktClass divergence, reduced *)
-(* to the smallest networks that show them.  Both are silent: the rule    *)
-(* simply never fires, the guarded header is never written, and the       *)
-(* deparser emits zeros -- there is no error anywhere to notice.          *)
-(* ------------------------------------------------------------------ *)
+(* to the smallest networks that show them.  Both are silent: the rule   *)
+(* simply never fires, the guarded header is never written, and the      *)
+(* deparser emits zeros -- there is no error anywhere to notice.         *)
+(* --------------------------------------------------------------------- *)
 
 (* Baseline: guard type matches the extract type, so the rule fires. *)
 let%expect_test "match guard: u8 extract vs u8 constant fires" =
@@ -326,16 +326,16 @@ let%expect_test "match guard: unwritten header never matches" =
   run_prog (Shim.find_modprog "guard_unwritten") [0];
   [%expect {| 0 |}]
 
-(* ------------------------------------------------------------------ *)
-(* Packet width: a parser that runs off the end rejects the network.    *)
-(*                                                                      *)
-(* field_extractor consumes 192 bits (72 + 8 + 16 + 32 + 32 + 16 + 16). *)
+(* --------------------------------------------------------------------- *)
+(* Packet width: a parser that runs off the end rejects the network.     *)
+(*                                                                       *)
+(* field_extractor consumes 192 bits (72 + 8 + 16 + 32 + 32 + 16 + 16).  *)
 (* The PktClass programs used to declare a 160-bit input, so every       *)
 (* packet failed mid-parse and BOTH classifiers rejected everything --   *)
 (* which is why modnet_equivalence_checker called them Equivalent while  *)
 (* they were in fact both broken.  A vacuous pass is the failure mode to *)
 (* watch for here.                                                       *)
-(* ------------------------------------------------------------------ *)
+(* --------------------------------------------------------------------- *)
 
 let%expect_test "packet width: 192 bits is exactly enough for field_extractor" =
   run_prog PktClass.ex_lin_prog (pkt 1);
@@ -379,7 +379,7 @@ let%expect_test "pktclass: emits the label, not the parsed src_ip" =
   |}]
 
 (* ------------------------------------------------------------------ *)
-(* Write tape: several deparsers concatenate, they do not clobber.      *)
+(* Write tape: several deparsers concatenate, they do not clobber.    *)
 (* ------------------------------------------------------------------ *)
 
 (* mod_prog_two_deparsers parses two bytes into h1, h2, then chains a deparser
@@ -390,17 +390,17 @@ let%expect_test "two_deparsers: write tape is the concatenation, in run order" =
   run_prog (Shim.find_modprog "two_deparsers") [0xAA; 0xBB];
   [%expect {| 170, 187 |}]
 
-(* ------------------------------------------------------------------ *)
-(* Memory.                                                              *)
-(*                                                                      *)
+(* --------------------------------------------------------------------- *)
+(* Memory.                                                               *)
+(*                                                                       *)
 (* These check the concrete semantics directly rather than trusting the  *)
 (* equivalence checker, which by design accepts any pair of programs     *)
 (* that both reject or both emit the same nothing -- and a memory        *)
 (* program that only ever reads uninitialized cells emits a zero byte.   *)
-(* Region 1 is declared with 4 cells, so offsets 0..3 are in bounds and   *)
-(* 4 is not.  The packet is one byte, parsed into h1; h2 is written only  *)
-(* by the transformer.                                                    *)
-(* ------------------------------------------------------------------ *)
+(* Region 1 is declared with 4 cells, so offsets 0..3 are in bounds and  *)
+(* 4 is not.  The packet is one byte, parsed into h1; h2 is written only *)
+(* by the transformer.                                                   *)
+(* --------------------------------------------------------------------- *)
 
 let run_mem name bytes seed =
   run_net name (fun gcs -> seed (Shim.set_net_packet bytes gcs))
@@ -546,12 +546,12 @@ let%expect_test "mem_u16_readback: two bytes reassemble into a u16" =
     extent1=2
     |}]
 
-(* ------------------------------------------------------------------ *)
-(* The transpiled eBPF programs (../test/bpf_O{0,2}.ir).               *)
-(*                                                                     *)
+(* -------------------------------------------------------------------- *)
+(* The transpiled eBPF programs (../test/bpf_O{0,2}.ir).                *)
+(*                                                                      *)
 (* TestEquality proves these two equivalent, and on its own that proves *)
-(* very little: a deparser emits a header holding no integer as zeroed   *)
-(* bits, so two programs that both fail to compute anything also agree.  *)
+(* very little: a deparser emits a header holding no integer as zeroed  *)
+(* bits, so two programs that both fail to compute anything also agree. *)
 (* These runs are what say the translation actually does the XDP        *)
 (* program's work.                                                      *)
 (*                                                                      *)
@@ -560,7 +560,7 @@ let%expect_test "mem_u16_readback: two bytes reassemble into a u16" =
 (* data + sizeof(ethhdr) + 1 against data_end, then reads the 2-byte    *)
 (* ethertype at packet offsets 12/13 and, if it is IP, writes 0xff at   *)
 (* offset 14 and returns XDP_PASS (2).                                  *)
-(* ------------------------------------------------------------------ *)
+(* -------------------------------------------------------------------- *)
 
 let bpf_prog f = Shim.load_general_program f
 
