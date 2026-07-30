@@ -403,21 +403,21 @@ Fixpoint pos_to_string (p : positive) : string :=
   | xI p' => String.append (pos_to_string p') "1"
   end.
 
-(* ------------------------------------------------------------------ *)
-(* Encoding a string as a positive, so that arbitrary text can key a    *)
-(* PTree / PMap (whose keys are positives).                             *)
-(*                                                                      *)
-(* NOT the inverse of [pos_to_string], which renders a positive as its  *)
-(* binary numeral -- these two do different jobs and do not compose.    *)
+(* --------------------------------------------------------------------- *)
+(* Encoding a string as a positive, so that arbitrary text can key a     *)
+(* PTree / PMap (whose keys are positives).                              *)
+(*                                                                       *)
+(* NOT the inverse of [pos_to_string], which renders a positive as its   *)
+(* binary numeral -- these two do different jobs and do not compose.     *)
 (* This appends the eight bits of each character to an accumulator that  *)
-(* starts at [xH], so the leading 1 pins down the length and the whole  *)
+(* starts at [xH], so the leading 1 pins down the length and the whole   *)
 (* encoding is injective: distinct strings, including strings of         *)
 (* different lengths, get distinct positives.                            *)
-(*                                                                      *)
+(*                                                                       *)
 (* The resulting key is 8n+1 bits wide for an n-character string, so the *)
 (* PTree path is that deep.  Fine for a registry keyed by short names;   *)
 (* not something to put on a hot path.                                   *)
-(* ------------------------------------------------------------------ *)
+(* --------------------------------------------------------------------- *)
 
 Definition pos_push_bit (b : bool) (p : positive) : positive :=
   if b then xI p else xO p.

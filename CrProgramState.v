@@ -79,7 +79,7 @@ Arguments p_cursor {Th Tb} _.
 Definition ConcreteParserState := ParserState CrVal bool.
 Definition SymbolicParserState := ParserState SmtArithExpr (ConditionalVal SmtBoolExpr).
 
-(* ------------------------------------------------------------------ *)
+(* ------------------------------------------------------------------------ *)
 (* Inject a fresh header map into a [TransformerState], keeping ctrl/state. *)
 Definition inject_headers {T : Type} (packet : PMap.t T) (local : TransformerState T)
     : TransformerState T :=

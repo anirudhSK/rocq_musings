@@ -92,9 +92,9 @@ Definition Interpretation := ConcreteTransformerState -> option Label.
 (* The output label is written to (HeaderCtr 1).  A StatelessOp targets a
    Header (StatefulOp targets a State), so each rule uses StatelessOp. *)
 (* ------------------------------------------------------------------ *)
-(*  Collect the input Headers read by a FilterDatabase.  These become   *)
-(*  the input-header list of the resulting GeneralCaracaraProgram --    *)
-(*  i.e. the program's "parameters".                                     *)
+(*  Collect the input Headers read by a FilterDatabase.  These become *)
+(*  the input-header list of the resulting GeneralCaracaraProgram --  *)
+(*  i.e. the program's "parameters".                                  *)
 (* ------------------------------------------------------------------ *)
 
 Definition header_eqb (h1 h2 : Header) : bool :=
@@ -128,13 +128,13 @@ Definition dedup_headers (hs : list Header) : list Header :=
 Definition headers_in_db (db : FilterDatabase) : list Header :=
   dedup_headers (List.flat_map (fun '(f, _) => headers_in_filter f) db).
 
-(* ------------------------------------------------------------------ *)
+(* ---------------------------------------------------------------------- *)
 (*  Compute h_base / h_out dynamically: pick Header uids strictly greater *)
 (*  than every Header uid mentioned in any MatchPattern of [db].  This    *)
 (*  guarantees the (label, priority) header pairs written by              *)
 (*  make_table_transformer (and the linear-program output) never collide  *)
-(*  with the headers tested by the filter match patterns.                  *)
-(* ------------------------------------------------------------------ *)
+(*  with the headers tested by the filter match patterns.                 *)
+(* ---------------------------------------------------------------------- *)
 
 Definition max_pos (a b : positive) : positive :=
   if Pos.ltb a b then b else a.

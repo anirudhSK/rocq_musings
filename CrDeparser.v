@@ -12,7 +12,7 @@ From Stdlib Require Import ZArith.
 Import ListNotations.
 From MyProject Require Import CrIdentifiers.
 
-(* ------------------------------------------------------------------ *)
+(* -------------------------------------------------------------------- *)
 (* Emit: write the low [width] bits of header [eo_header] onto the      *)
 (* outgoing packet (MSB-first, the same wire order [CrParser.bits_to_Z] *)
 (* reads).  The mirror image of [CrParser.ExtractOp].                   *)
@@ -24,7 +24,7 @@ Record Deparser : Type := mkDeparser {
   deparser_emits : list EmitOp;
 }.
 
-(* ------------------------------------------------------------------ *)
+(* -------------------------------------------------------------------- *)
 (* Bit helper.  Inverse of [CrParser.bits_to_Z]: the [width]-bit,       *)
 (* MSB-first representation of [z]'s low [width] bits (index 0 of the   *)
 (* result is the most significant bit on the wire).                     *)

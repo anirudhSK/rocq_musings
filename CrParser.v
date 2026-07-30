@@ -15,7 +15,7 @@ From MyProject Require Import Integers.
 From MyProject Require Import MyInts.
 From MyProject Require Import CrVal.
 
-(* ------------------------------------------------------------------ *)
+(* ------------------------------------------------------------------- *)
 (* Extraction: read [width] bits from the packet's current cursor and  *)
 (* store them into header [eo_header].  The [width] is given as a bit  *)
 (* count (the number of bits consumed from the stream); the assembled  *)
@@ -24,7 +24,7 @@ Inductive ParserOp : Type :=
   | SeekForward (width: nat)
   | ExtractOpConstructor (eo_header : Header) (width : nat) (of : CrIntType).
 
-(* ------------------------------------------------------------------ *)
+(* ------------------------------------------------------------------- *)
 (* A target of a transition is either another parser state, or one of  *)
 (* the two terminal pseudo-states.                                     *)
 Inductive ParserTarget : Type :=
@@ -65,7 +65,7 @@ Record Parser : Type := mkParser {
   parser_states : list ParserStateDef;
 }.
 
-(* ------------------------------------------------------------------ *)
+(* ------------------------------------------------------------------- *)
 (* Look up the definition of a parser state by its label.              *)
 Definition lookup_def (p : Parser) (lbl : ParserStateLabel)
     : option ParserStateDef :=
@@ -88,9 +88,9 @@ Definition parser_headers (p : Parser) : list Header :=
         cases acc'
     end) (parser_states p) [].
 
-(* ------------------------------------------------------------------ *)
-(* Bit helpers.  A packet bit stream is represented MSB-first as a      *)
-(* [list bool]; index 0 is the first bit on the wire.                   *)
+(* --------------------------------------------------------------- *)
+(* Bit helpers.  A packet bit stream is represented MSB-first as a *)
+(* [list bool]; index 0 is the first bit on the wire.              *)
 
 (* Interpret a bit list (MSB-first) as a non-negative integer. *)
 Definition bits_to_Z (bs : list bool) : Z :=

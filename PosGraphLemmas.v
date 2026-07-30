@@ -98,10 +98,10 @@ Proof.
       * exact Hwalk.
 Qed.
 
-(* ------------------------------------------------------------------ *)
-(* Bridging the pruned implementation [reachableb_v] to the spec       *)
-(* [reachableb].                                                       *)
-(* ------------------------------------------------------------------ *)
+(* ------------------------------------------------------------- *)
+(* Bridging the pruned implementation [reachableb_v] to the spec *)
+(* [reachableb].                                                 *)
+(* ------------------------------------------------------------- *)
 
 (* Soundness: the pruned search only ever takes a subset of the branches
    of the unpruned search (it adds the [negb (in_listb visited w)]
@@ -183,11 +183,11 @@ Proof.
            ++ simpl in Hlen. lia.
 Qed.
 
-(* ------------------------------------------------------------------ *)
+(* ------------------------------------------------------------------- *)
 (* Shortening walks: a walk whose intermediate vertices all lie in     *)
 (* [nodes] can be reduced to one with no repeated intermediate vertex, *)
 (* hence with at most |nodes| intermediate vertices.                   *)
-(* ------------------------------------------------------------------ *)
+(* ------------------------------------------------------------------- *)
 
 Lemma is_walk_app :
   forall g a l1 w l2,
@@ -228,7 +228,7 @@ Proof.
 Qed.
 
 (* ------------------------------------------------------------------ *)
-(* Pigeonhole: a reaches-walk can be made short.                       *)
+(* Pigeonhole: a reaches-walk can be made short.                      *)
 (* ------------------------------------------------------------------ *)
 
 Lemma remove_one_repeat :
@@ -386,7 +386,7 @@ Proof.
 Qed.
 
 (* ------------------------------------------------------------------ *)
-(* Main lemma                                                          *)
+(* Main lemma                                                         *)
 (* ------------------------------------------------------------------ *)
 
 Lemma is_dag_prop_bool_lemma :

@@ -366,20 +366,20 @@ Definition mod_prog_varlen_emit1 : GeneralCaracaraProgram :=
         end)
       (ModuleNameCtr 1)).
 
-(* ------------------------------------------------------------------ *)
-(* Why a match-action rule silently never fires.                        *)
-(*                                                                      *)
-(* Both of the ways below made every filter in PktClass's databases      *)
+(* ---------------------------------------------------------------------- *)
+(* Why a match-action rule silently never fires.                          *)
+(*                                                                        *)
+(* Both of the ways below made every filter in PktClass's databases       *)
 (* match nothing, which is what let linear_db and tss_db disagree while   *)
 (* still looking plausible: neither classifier was classifying at all.    *)
 (* They are properties of the IR's match semantics, not of PktClass, so   *)
 (* they are pinned down here on the smallest programs that exhibit them.  *)
-(*                                                                      *)
-(* All three share a shape: parse byte 0 into a header, run one guarded  *)
+(*                                                                        *)
+(* All three share a shape: parse byte 0 into a header, run one guarded   *)
 (* rule that would set h2 := 99, and emit h2.  They differ only in        *)
 (* whether the guard can fire.  When it does not, h2 is never written, so *)
 (* the (total) deparser emits it as zero bits.                            *)
-(* ------------------------------------------------------------------ *)
+(* ---------------------------------------------------------------------- *)
 
 Definition set_h2_when (guard : MatchPattern) : Transformer :=
   [Seq (SeqCtr guard

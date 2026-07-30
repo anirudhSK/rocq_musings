@@ -77,14 +77,7 @@ let%expect_test "complex_add_sub: dropping an op breaks equivalence" =
    with `make O0.ir O2.ir`.  They are module networks, so unlike test 12 this
    runs through modnet_equivalence_checker and Z3Solver, and compares the
    emitted return value, the bits read, and the contents and access extents of
-   the ctx and packet regions.
-
-   This used to be by far the slowest test in the suite (~10s against ~2s for
-   everything else), all of it inside Solver.check on the memory conjunct.  It
-   is now ~0.02s: [check_sym_region_equal] emits one [SmtArrEq] instead of
-   [mr_len] separate [SmtArrSel] comparisons, which removes a cost that was
-   quadratic in both the cells compared and the number of stores.  See
-   memo-memo.txt. *)
+   the ctx and packet regions. *)
 let%expect_test "e2e bpf test: O0 ≡ O2" =
   let p1 = get_general_program "../test/bpf_O0.ir" in
   let p2 = get_general_program "../test/bpf_O2.ir" in
@@ -94,37 +87,7 @@ let%expect_test "e2e bpf test: O0 ≡ O2" =
 (* Test 13: linear scan vs tss for simple filter database.  Both are full
    parser -> table chain -> deparser networks over a 192-bit input packet (what
    field_extractor consumes), so they go through the bitstream checker: the
-   observable is the label byte the deparser emits.
-
-   NOTE: this test used to be weaker than it looks -- it reported Equivalent
-   even while tss_db concretely produced nothing and linear_db emitted a label.
-   Agreeing on output packets still does not pin down which label a classifier
-   assigns, so the concrete labels are checked in TestModuleSemantics
-   ("pktclass..."); keep both tests.
-
-   Its Equivalent is now meaningful, and getting there took two fixes worth
-   recording, because this test sat at the intersection of both:
-
-   - Both constructions accumulate the label in [h_out], a header no parser
-     extracts, and copy it into (HeaderCtr 1) at the end.  While
-     [eval_transformer_smt] dropped headers first written inside a transformer
-     (it merges through [update_all_varlike], which cannot introduce a key),
-     the copy read the map default on both sides and both programs emitted
-     zeros -- so this said Equivalent vacuously, exactly as the note above
-     suspected.  Fixed by seeding the network's header interface in
-     [CrVarLike.init_general_symbolic_state]; see [collect_write_headers].
-   - With [h_out] retained the labels reached the query and Z3 started
-     returning SAT -- on a model that did NOT survive [eval_smt_bool], and
-     whose witness packet gave label 42 from both classifiers concretely.  That
-     was the untyped Z3 encoding: [eqb]/[ltb]/[iv_binop_at] type-check their
-     operands and the lowering did not, so Z3 could satisfy the query in states
-     the concrete semantics cannot reach -- making
-     [SmtQuery.smt_query_sound_some] false rather than imprecise.  Fixed by
-     lowering each arith expression to a (value, tag) pair; see the header of
-     Z3Solver.ml.
-
-   So a NotEquivalent here is now backed by a witness that [eval_smt_bool]
-   agrees with.  That is worth re-checking by hand whenever this test moves. *)
+   observable is the label byte the deparser emits.*)
 let%expect_test "tss basic" =
   (* let p1 = get_general_program "../test/lin_pkt.out" in
   let p2 = get_general_program "../test/tss_pkt.out" in *)
@@ -249,14 +212,14 @@ let%expect_test "bitstream: one deparser emitting h1,h2 = two deparsers chained"
   print_equiv (SmtModuleQuery.modnet_equivalence_checker p1 p2);
   [%expect {| Equivalent |}]
 
-(* ------------------------------------------------------------------ *)
+(* -------------------------------------------------------------------- *)
 (* Tests 21-26: memory.                                                 *)
 (*                                                                      *)
-(* All of these run through the SAME checker and the SAME solver as the  *)
-(* network tests above -- the point of the unification.  Region 1 is     *)
-(* declared with 4 cells in every one of these programs, so offsets      *)
+(* All of these run through the SAME checker and the SAME solver as the *)
+(* network tests above -- the point of the unification.  Region 1 is    *)
+(* declared with 4 cells in every one of these programs, so offsets     *)
 (* 0..3 are in bounds and 4 is not.                                     *)
-(* ------------------------------------------------------------------ *)
+(* -------------------------------------------------------------------- *)
 
 let check n1 n2 =
   print_equiv (SmtModuleQuery.modnet_equivalence_checker
