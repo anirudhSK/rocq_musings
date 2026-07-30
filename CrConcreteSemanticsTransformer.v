@@ -60,14 +60,13 @@ Definition eval_hdr_op_expr_concrete (op : HdrOp) (ps : ConcreteTransformerState
    [SmtBitSlice 0 64], which is exactly what [slice_val 0 64] computes. *)
 Definition as_offset (v : CrVal) : CrVal := slice_val 0 64 v.
 
-(* Grow the region's recorded access extent to cover [off].  Every access
-   updates it, in bounds or not: reaching past a region's end is precisely the
-   difference between two programs that this is here to expose. *)
+(* Grow the region's recorded access extent to cover [off]. *)
 Definition bump_extent_concrete (mc : ConcreteMemCtx) (r : MemRegion) (off : CrVal)
     : ConcreteMemCtx :=
   let k := unwrap r in
   let prev := (mc_extent mc) !! k in
-  set_mc_extent mc (PMap.set k (if CrVal.ltb prev off then off else prev) (mc_extent mc)).
+  let reach := byte_addr off 1 in
+  set_mc_extent mc (PMap.set k (if CrVal.ltb prev reach then reach else prev) (mc_extent mc)).
 
 (* Every cell an access covers counts towards the extent, not just its base:
    a u64 load at the last byte of a region reaches seven bytes past it, and

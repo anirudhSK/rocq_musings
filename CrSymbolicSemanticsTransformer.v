@@ -64,11 +64,17 @@ Definition eval_hdr_op_expr_smt (h : HdrOp) (ps : SymbolicTransformerState) : Sm
    to ErrorVal. *)
 Definition smt_as_offset (e : SmtArithExpr) : SmtArithExpr := SmtBitSlice 0 64 e.
 
+Definition smt_byte_addr (base : SmtArithExpr) (i : nat) : SmtArithExpr :=
+  SmtBitAdd u64 base (SmtArithConst (mask_width W64 (Z.of_nat i)) u64).
+
+(* Mirror of [bump_extent_concrete]: count bytes required by the program. *)
 Definition bump_extent_smt (mc : SymbolicMemCtx) (r : MemRegion) (off : SmtArithExpr)
     : SymbolicMemCtx :=
   let k := unwrap r in
   let prev := (mc_extent mc) !! k in
-  set_mc_extent mc (PMap.set k (SmtConditional (SmtBoolLt prev off) off prev) (mc_extent mc)).
+  let reach := smt_byte_addr off 1 in
+  set_mc_extent mc
+    (PMap.set k (SmtConditional (SmtBoolLt prev reach) reach prev) (mc_extent mc)).
 
 (* ------------------------------------------------------------------ *)
 (* Multi-byte access, the mirror of [CrVal.ld_val] / [st_val] / [byte_*].
@@ -77,9 +83,6 @@ Definition bump_extent_smt (mc : SymbolicMemCtx) (r : MemRegion) (off : SmtArith
    with [mul_at]/[or_at], [SmtBitSlice] with [slice_val].  Keep them in step --
    a divergence here is invisible to the Coq development, which only relates
    the two through [eval_smt_*]. *)
-
-Definition smt_byte_addr (base : SmtArithExpr) (i : nat) : SmtArithExpr :=
-  SmtBitAdd u64 base (SmtArithConst (mask_width W64 (Z.of_nat i)) u64).
 
 Definition smt_byte_of_val (v : SmtArithExpr) (i : nat) : SmtArithExpr :=
   SmtCast u64 u8 (SmtBitSlice (8 * i) (8 * i + 8) v).

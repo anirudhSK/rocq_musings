@@ -417,8 +417,8 @@ let%expect_test "mem_store_load: round-trips a byte through cell 2" =
   [%expect {|
     42
     mem1=[-, -, 42, -]
-    extent1=2
-  |}]
+    extent1=3
+    |}]
 
 (* Reading a cell that was never written gives UninitVal, which fails the
    load's type check and lands as ErrorVal -- so the deparser emits no bits at
@@ -428,7 +428,7 @@ let%expect_test "mem_load0: an unwritten cell reads as no output at all" =
   [%expect {|
     0
     mem1=[-, -, -, -]
-    extent1=0
+    extent1=1
     |}]
 
 (* Same empty output as [mem_load0] -- both programs are, observably, equally
@@ -439,7 +439,7 @@ let%expect_test "mem_load1_load0: a dead load still widens the extent" =
   [%expect {|
     0
     mem1=[-, -, -, -]
-    extent1=1
+    extent1=2
     |}]
 
 (* Out of bounds is total, not a rejection: the store is dropped, the load
@@ -453,7 +453,7 @@ let%expect_test "mem_oob_store_load: out of bounds is dropped, not a reject" =
   [%expect {|
     0
     mem1=[-, -, -, -]
-    extent1=4
+    extent1=5
     valid=true
     |}]
 
@@ -465,8 +465,8 @@ let%expect_test "mem_load0: a seeded cell reads back" =
   [%expect {|
     127
     mem1=[127, -, -, -]
-    extent1=0
-  |}]
+    extent1=1
+    |}]
 
 (* In bounds, a load before a store sees the old contents; the store still
    happens.  Compare [mem_store_load] above, where the order is reversed and
@@ -476,8 +476,8 @@ let%expect_test "mem_ib_load_store: load-then-store sees the old cell" =
   [%expect {|
     17
     mem1=[-, -, 42, -]
-    extent1=2
-  |}]
+    extent1=3
+    |}]
 
 (* Names cannot drift the way indices could -- a renamed or removed program
    makes find_modprog raise at initialisation.  This catches the quieter
@@ -533,7 +533,7 @@ let%expect_test "mem_one_u16_store: 0x1234 decomposes little-endian" =
   [%expect {|
     52
     mem1=[52, 18, -, -]
-    extent1=1
+    extent1=2
     |}]
 
 (* And reassembles on the way back out: the u16 load sees 0x1234, whose low
@@ -543,7 +543,7 @@ let%expect_test "mem_u16_readback: two bytes reassemble into a u16" =
   [%expect {|
     52
     mem1=[52, 18, -, -]
-    extent1=1
+    extent1=2
     |}]
 
 (* ------------------------------------------------------------------ *)
@@ -591,7 +591,7 @@ let%expect_test "bpf O2: an IP packet is stamped and passed" =
   [%expect {|
     0, 0, 0, 2
     mem2=[-, -, -, -, -, -, -, -, -, -, -, -, 0, 8, 255, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -]
-    extent2=14
+    extent2=15
     |}]
 
 (* -O0 is a different instruction sequence -- it spills every value to the
@@ -603,7 +603,7 @@ let%expect_test "bpf O0: same packet, same stamp and verdict" =
   [%expect {|
     0, 0, 0, 2
     mem2=[-, -, -, -, -, -, -, -, -, -, -, -, 0, 8, 255, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -]
-    extent2=14
+    extent2=15
     |}]
 
 (* A non-IP ethertype takes the other arm: nothing is written and the verdict
@@ -615,7 +615,7 @@ let%expect_test "bpf: a non-IP packet is dropped, untouched" =
   [%expect {|
     0, 0, 0, 1
     mem2=[-, -, -, -, -, -, -, -, -, -, -, -, 221, 134, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -]
-    extent2=13
+    extent2=14
     |}]
 
 (* Too short for an ethernet header plus a byte: the bounds check fails and the
