@@ -605,6 +605,84 @@ Proof.
   cbn [init_general_symbolic_state sh_mem]. apply init_symbolic_mem_rooted.
 Qed.
 
+(* ------------------------------------------------------------------ *)
+(* What the Z3 lowering is entitled to assume about [smt_arr_len].      *)
+(*                                                                      *)
+(* [smt_arr_len] plays no part in the Coq semantics -- [eval_smt_mem]   *)
+(* bounds a read by the DENOTED array's [arr_len], not by this.  It     *)
+(* exists solely so [Z3Solver.ml] can emit the bounds guard on          *)
+(* [SmtArrSel]/[SmtArrSt] that [ld_arr] applies here, Z3's [select]     *)
+(* being total.  So the two agree only if the syntactic walk and the    *)
+(* denoted length coincide, and nothing in Coq forces that: the         *)
+(* [SmtArrIte] case reads a1 and discards a2.                           *)
+(*                                                                      *)
+(* Taking the left branch is sound because both branches of every merge *)
+(* the checker builds are rooted at the same region.  That is what      *)
+(* [arr_rooted] says, so state the consequence and use it -- otherwise  *)
+(* the invariant has no call site and nothing notices if it rots.       *)
+Lemma arr_rooted_smt_arr_len : forall root a,
+  arr_rooted root a -> smt_arr_len a = smt_arr_len root.
+Proof.
+  intros root a. revert root.
+  induction a as [| name len | a' IH idx val | c a1 IH1 a2 IH2]; intros root H.
+  - cbn in H. subst. reflexivity.
+  - cbn in H. subst. reflexivity.
+  - cbn in H. cbn [smt_arr_len]. apply IH. exact H.
+  - cbn in H. destruct H as [H1 _]. cbn [smt_arr_len]. apply IH1. exact H1.
+Qed.
+
+(* The guard Z3 emits for a region of a reachable symbolic state uses the
+   length that region was DECLARED with: neither a store nor a path merge
+   moves it.  This is the property [Z3Solver.ml]'s [SmtArrSel]/[SmtArrSt]
+   bounds check depends on, and breaking [mem_rooted] now breaks this proof
+   rather than silently weakening the solver's guard.  Regression test on the
+   other side of the extraction boundary: [TestEquality]'s "out of bounds, the
+   order stops mattering". *)
+Lemma eval_general_program_symbolic_smt_arr_len : forall p pre s k,
+  eval_general_program_symbolic p (init_general_symbolic_state pre p) = Some s ->
+  smt_arr_len ((sh_mem s) !! k)
+  = smt_arr_len ((init_symbolic_mem (get_mem_regions_from_general p)) !! k).
+Proof.
+  intros p pre s k H.
+  apply arr_rooted_smt_arr_len.
+  apply (eval_general_program_symbolic_mem_rooted p pre s H).
+Qed.
+
+(* A leaf denotes an array of exactly the length it names, which is the base
+   case the syntactic walk bottoms out at. *)
+Lemma arr_leaf_eval_len : forall a f b,
+  arr_leaf a -> eval_smt_mem a f = Allocated b -> arr_len b = smt_arr_len a.
+Proof.
+  intros a f b Hl He. destruct a; cbn in Hl; try contradiction.
+  - cbn in He. discriminate.
+  - cbn in He. unfold region_with_len in He.
+    injection He as He. subst b. reflexivity.
+Qed.
+
+(* The statement the Z3 lowering actually needs: for a region of a reachable
+   symbolic state, the bound [Z3Solver.ml] computes syntactically is the bound
+   [ld_arr] applies to the array that region DENOTES.  Z3's [select] is total,
+   so if these two ever parted the guard would admit out-of-bounds reads that
+   the Coq semantics answers with [ErrorVal].  Uses both halves of the rooted
+   invariant, so breaking either breaks this proof. *)
+Lemma eval_general_program_symbolic_arr_len_agrees : forall p pre s k f blk,
+  eval_general_program_symbolic p (init_general_symbolic_state pre p) = Some s ->
+  eval_smt_mem ((sh_mem s) !! k) f = Allocated blk ->
+  arr_len blk = smt_arr_len ((sh_mem s) !! k).
+Proof.
+  intros p pre s k f blk H He.
+  pose proof (eval_general_program_symbolic_mem_rooted p pre s H k) as Hr.
+  rewrite (arr_rooted_smt_arr_len _ _ Hr).
+  pose proof (eval_smt_mem_rooted _ ((sh_mem s) !! k) f Hr) as Hm.
+  destruct (eval_smt_mem
+              ((init_symbolic_mem (get_mem_regions_from_general p)) !! k) f)
+    as [b0 |] eqn:Hroot.
+  - destruct Hm as [blk' [Hev Hlen]]. rewrite He in Hev.
+    injection Hev as Hev. subst blk'. rewrite Hlen.
+    apply (arr_leaf_eval_len _ f b0 (init_symbolic_mem_leaf _ k) Hroot).
+  - rewrite He in Hm. discriminate.
+Qed.
+
 (* The checker's region guard is an equality test, so the two programs really
    do declare the same list -- which is what lets both symbolic runs be rooted
    at ONE initial memory map. *)
@@ -1026,3 +1104,10 @@ Proof.
   - (* both rejected is an accepting case, so this cannot be a Sat witness *)
     cbn in HA. discriminate.
 Qed.
+
+(* The trust base.  Anything here beyond [smt_query], its two soundness
+   axioms, and CompCert's [Archi.ppc64] is a new assumption. *)
+Print Assumptions modnet_equivalence_checker_sound.
+Print Assumptions modnet_equivalence_checker_complete.
+Print Assumptions eval_general_program_symbolic_smt_arr_len.
+Print Assumptions eval_general_program_symbolic_arr_len_agrees.
