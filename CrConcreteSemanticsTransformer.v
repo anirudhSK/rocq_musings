@@ -203,10 +203,12 @@ Definition eval_seq_rule_concrete (srule : SeqRule) (ps : ConcreteTransformerSta
 (* This is identical to eval_seq_rule,
    except that the action is a list with some conditions: the targets are all unique
    these conditions are realized using subset types, that's why we need proj1_sig *)
-(* [ParRule] carries no memory: [CrDslProperties.no_mem_ops_in_parb] rejects a
-   program whose parallel rules contain loads or stores, so threading memory
-   through here would only be dead weight.  See the comment on
-   [CrTransformer.extract_targets] for why. *)
+(* [ParRule] is not *supposed* to carry memory --
+   [CrDslProperties.no_mem_ops_in_parb] is the check that would say so -- but
+   nothing enforces that check, so a parallel rule containing loads or stores
+   does reach here.  Memory is threaded anyway rather than dropped, and since
+   this function is [eval_seq_rule_concrete_mem] with a [proj1_sig] the result
+   is the sequential one.  See the comment on [CrTransformer.extract_targets]. *)
 Definition eval_par_rule_concrete_mem (prule : ParRule)
   (mc : ConcreteMemCtx) (ps : ConcreteTransformerState)
   : ConcreteMemCtx * ConcreteTransformerState :=

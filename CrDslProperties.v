@@ -55,13 +55,16 @@ Definition well_formed_program (p : CaracaraProgram) : Prop :=
 (* TODO: This would involve checking for duplicates and sorting the lists *)
 (* TODO: And then verifying the well_formed_program property holds *)
 
-(* Memory ops are barred from parallel rules.  [ParRule]'s subset type
-   guarantees the actions write distinct targets, which is what makes running
-   them "in parallel" meaningful.  For two stores the corresponding property is
-   that they hit different offsets of a region -- a runtime property, not a
-   statically decidable one -- so there is nothing [ParCtr] could carry that
-   would make a parallel store well-defined.  See the comment on
-   [CrTransformer.extract_targets]. *)
+(* The check that memory ops do not appear in parallel rules.  [ParRule]'s
+   subset type guarantees the actions write distinct targets, which is what
+   makes running them "in parallel" meaningful.  For two stores the
+   corresponding property is that they hit different offsets of a region -- a
+   runtime property, not a statically decidable one -- so there is nothing
+   [ParCtr] could carry that would make a parallel store well-defined.
+
+   This is a check, not a guarantee: it is reachable only through
+   [well_formed_general_programb], which no checker calls.  See the comment on
+   [CrTransformer.extract_targets] for what that means, and TODO.md 1.5. *)
 Definition rule_has_no_mem_ops (rule : MatchActionRule) : Prop :=
   match rule with
   | Seq _ => True
