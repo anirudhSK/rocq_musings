@@ -148,9 +148,14 @@ Proof.
     apply negb_true_iff in H. assumption.
 Qed.
 
-(* The designated start module exists in the network.  The edge-closure
-   condition that used to live alongside this is now folded into
-   [restricted_edges]. *)
+(* The designated start module exists in the network AND is a parser.  The
+   edge-closure condition that used to live alongside this is now folded into
+   [restricted_edges].
+
+   NOT part of [wf_module_network] (README.md says why), so nothing references
+   it.  Kept because it is still the right check for a frontend whose input
+   really is a packet -- a P4 one, say -- which can conjoin it with
+   [wf_module_networkb] itself.  Delete it if that never materialises. *)
 Definition start_module_is_parser (net : ModuleNetwork) : Prop :=
   match lookup_module net (start_module net) with
   | Some (ParserModule _ _) => True
@@ -235,7 +240,14 @@ Proof.
   split; apply in_names_iff; assumption.
 Qed.
 
-(* A well-formed ModuleNetwork satisfies all conditions. *)
+(* A well-formed ModuleNetwork satisfies all conditions.
+
+   Unique names, a DAG, and every SINK is a deparser.  Deliberately says nothing
+   about the start module: a program whose input is memory has nothing to parse.
+   Nothing here constrains evaluation -- [module_update_gs_*] has arms for all
+   three module kinds -- and no checker consults this predicate at all (TODO.md
+   1.5).  The asymmetry with [end_modules_are_deparsers] is untouched rather
+   than principled; README.md has the reasoning. *)
 Definition wf_module_network (net : ModuleNetwork) : Prop :=
   mod_names_unique net /\
   is_dag net /\

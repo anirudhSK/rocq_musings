@@ -448,24 +448,14 @@ Definition mod_prog_two_deparsers : GeneralCaracaraProgram :=
    All of these share one shape -- parse a byte into h1, run a transformer that
    touches memory and leaves its result in h2, emit h2 -- and one declared
    region: [region_1], four cells, so offsets 0..3 are in bounds and 4 is not.
-   They started as ports of the battery the retired memory IR carried (address
-   aliasing, a differing stored value, divergent load extents), which could only
-   be run through its own solver.
-
-   Note that h2 is written only by the transformer -- no parser extracts it.
-   That is deliberate: [update_all_varlike] cannot introduce a header, so until
-   [CrVarLike.init_general_symbolic_state] seeded the network's header
-   interface, [eval_transformer_smt] dropped exactly this kind of header and
-   these programs all emitted nothing symbolically while emitting real bits
-   concretely.  "In bounds, load-then-store differs from store-then-load" in
-   [TestEquality] is the regression test for that.
+   h2 is written only by the transformer -- no parser extracts it -- which
+   deliberately exercises header seeding ([CrVarLike.collect_write_headers]).
 
    A cell that was never written reads [UninitVal], which fails the load's type
-   check and so lands as ErrorVal; a deparser is total and emits a non-integer
+   check and lands as ErrorVal; a deparser is total and emits a non-integer
    header as zero bits of its full width.  So a program that only ever loads
-   emits a zero byte -- which is the "two programs that are both broken agree"
-   trap, and is why the extent conjunct is what separates several of these
-   pairs. *)
+   emits a zero byte, and two such programs agree on their output -- which is
+   why the extent conjunct is what separates several of these pairs. *)
 Definition region_1 : MemRegion := MemRegionCtr 1.
 Definition mem_regions_4 : list MemRegionDecl := [mkMemRegionDecl region_1 4].
 

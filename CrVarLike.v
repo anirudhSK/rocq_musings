@@ -532,23 +532,13 @@ Definition init_sym_net_p_state (prog_prefix : string) (m_id : ModuleName)
    makes the interface *stable* -- the same set of keys on every path and in
    both semantics.
 
-   That matters more than it looks.  [update_all_varlike] rebuilds a header map
-   from the keys already in it ([new_pmap_from_old] maps the old tree), so it
-   can never introduce one; [eval_transformer_smt] merges its rules through
-   [update_all_varlike], and so used to DROP any header first written inside a
-   transformer, while the concrete [update_varlike] ([PMap.set]) kept it.  A
-   network whose output header no parser populated then emitted bits concretely
-   and nothing symbolically, and [modnet_equivalence_checker] compared two empty
-   packets and answered Equivalent.
-
-   Seeding the domain here fixes that at the root rather than widening
-   [update_all_varlike]: the [CrVarLike] class gives that field the type
-   [(A -> T) -> TransformerState T -> TransformerState T], with no key list to
-   extend, so widening it would change the class, all three instances, and the
-   [Qed] proofs resting on [update_all_varlike_lookup_unchanged].  Seeding costs
-   nothing semantically -- a seeded key holds exactly the map's default
-   ([SmtUninit] / [UninitVal]), so every lookup is unchanged -- it only makes
-   the key present so the merge can see it. *)
+   REQUIRED, not a convenience.  [update_all_varlike] rebuilds a header map
+   from the keys already present, so it cannot introduce one, and
+   [eval_transformer_smt] merges through it -- an unseeded header first written
+   inside a transformer would be dropped symbolically while the concrete
+   [PMap.set] kept it.  Seeding is observationally a no-op (a seeded key holds
+   the map's own default); it exists so the merge can see the key.  Do not
+   replace it with [PMap.init].  SOUNDNESS.md has the failure it prevents. *)
 Definition collect_module_headers (m : CrModule) : list Header :=
   match m with
   | ParserModule _ p => parser_headers p

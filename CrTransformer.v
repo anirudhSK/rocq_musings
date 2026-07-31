@@ -59,14 +59,10 @@ Inductive HdrOp :=
 
      Both are TOTAL.  An access outside the region's declared length yields
      [ErrorVal] into the target (load) or is dropped (store); neither clears
-     [gps_valid].  That is deliberate: [SmtModuleQuery.check_sym_pkt_out]
-     treats "both runs rejected" as agreement, so any imprecision in
-     [gps_valid] is unsound in either direction (over-approximating acceptance
-     compares outputs that never happen, under-approximating hides real
-     differences).  The same argument is spelled out on
-     [CrConcreteSemanticsDeparser.eval_deparser_concrete].  What distinguishes
-     a program that reads further is not a rejection but
-     [CrGeneralProgramState.sh_mem_extent], which every access updates. *)
+     [gps_valid].  What distinguishes a program that reads further is
+     [CrGeneralProgramState.sh_mem_extent], which every access updates, not a
+     rejection.  Do not make these partial -- SOUNDNESS.md, on the
+     both-rejected disjunct, says why. *)
   | LoadOp  (ty : CrIntType) (region : MemRegion) (off : Operand) (target : Header)
   | StoreOp (ty : CrIntType) (region : MemRegion) (off : Operand) (val : Operand).
 
@@ -88,25 +84,11 @@ Inductive SeqRule :=
    obligation on [ParRule] below is about two actions writing the same
    variable, and the corresponding property for memory -- two stores hitting
    the same offset of the same region -- is not statically decidable, since
-   offsets are runtime values.  Rather than pretend otherwise with a [NoDup]
-   over regions (which would also wrongly reject two stores at different
-   offsets of one region), memory ops SHOULD be barred from [ParRule] --
-   [CrDslProperties.no_mem_ops_in_parb] is that check.
-
-   Nothing enforces it.  [well_formed_general_programb] is its only caller,
-   and no checker consults that: [modnet_equivalence_checker] compares packet
-   length and region declarations only, and [Shim.print_malformed_gprog]
-   prints a warning without gating.  A program with stores in a [ParRule]
-   runs.  That is not unsound today only because [Par] has no parallel
-   semantics to be wrong about -- [eval_par_rule_*] is [eval_seq_rule_*] with
-   a [proj1_sig], so both threading evaluators run the action sequentially and
-   agree.  The same caveat applies to the [NoDup] obligation below: nothing
-   proves it makes evaluation order irrelevant, because nothing evaluates out
-   of order (see the TODO at [CrConcreteSemanticsTransformer]'s end).
-
-   So a racy program is expressible and silently accepted.  Catching one needs
-   either a real parallel semantics for [Par] or an enforced well-formedness
-   gate; see TODO.md 1.5. *)
+   offsets are runtime values.  Memory ops SHOULD therefore be barred from
+   [ParRule] -- [CrDslProperties.no_mem_ops_in_parb] is that check -- but
+   nothing enforces it, and nothing proves what the [NoDup] below buys either.
+   A racy program is expressible and silently accepted; TODO.md 1.5 has why
+   that is currently harmless and what it would take to catch. *)
 Definition extract_targets (op : HdrOp) : (list State) * (list Header) :=
   match op with
   | StatefulOp _ _ _ _ target => ([target], [])

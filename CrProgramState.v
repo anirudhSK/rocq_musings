@@ -20,7 +20,9 @@ Definition SymbolicTransformerState := TransformerState SmtArithExpr.
 
 (* ------------------------------------------------------------------ *)
 (* Memory, as seen by a transformer.  [mc_mem] maps a [MemRegion]'s key to
-   that region's contents and [mc_extent] to the largest offset touched so far.
+   that region's contents and [mc_extent] to how many bytes of it have been
+   required so far -- one PAST the highest byte touched, not that byte's offset.
+   See [CrGeneralProgramState.sh_mem_extent], which it is copied to and from.
 
    This is a separate bundle rather than a fourth field on [TransformerState]
    because [TransformerState T] is homogeneous in one element type -- ctrl,

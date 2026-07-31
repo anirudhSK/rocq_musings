@@ -201,12 +201,9 @@ Definition st_arr (a : Array) (i : CrVal) (v : CrVal) : Check_T Array :=
    single-cell primitives; the decomposition lives here and is what
    [CrTransformer.LoadOp]/[StoreOp] are defined in terms of.
 
-   The previous model stored a whole [CrVal] in one cell, with the width
-   carried by the value's own [CrIntType].  That made a [u32] store occupy a
-   single address, so a later access to the next byte saw nothing, a load at a
-   different width read [ErrorVal] rather than the right bits, and two u8
-   stores were not the same thing as the u16 store an optimiser coalesces them
-   into -- which reported real -O0/-O2 pairs as inequivalent. *)
+   A width-w store must therefore be indistinguishable from the w/8 byte
+   stores an optimiser coalesces it from; [TestEquality]'s "a u16 store is the
+   two u8 stores it coalesces from" is the regression test. *)
 
 Definition it_bytes (ty : CrIntType) : nat :=
   match it_width ty with W8 => 1 | W16 => 2 | W32 => 4 | W64 => 8 end.

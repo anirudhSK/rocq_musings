@@ -10,26 +10,18 @@ module StringMap = Stdlib.Map.Make(CoqStringOrd)
 type var_tracker = Z3.Expr.expr StringMap.t ref
 
 (* ------------------------------------------------------------------ *)
-(* A [CrVal] is a value AND a tag, so an arith expression lowers to a PAIR.
-
-   [eval_smt_arith] is the specification this encoding has to meet, and it is
-   type-checked throughout: [eqb]/[ltb] require both operands to carry the same
-   [CrIntType] and are false otherwise, [iv_binop_at ty] requires both operands
-   to already be typed [ty] and yields [ErrorVal] otherwise, [cast from to]
-   checks [from], and [UninitVal] and [ErrorVal] are values in their own right
-   (with [eqb UninitVal UninitVal = true]).  An encoding that lowers everything
-   to a bare 64-bit bitvector cannot express any of that: it lets Z3 satisfy a
-   query in states the concrete semantics cannot reach, which makes
-   [SmtQuery.smt_query_sound_some] -- the axiom [solve] is extracted to
-   discharge -- false rather than merely imprecise.
-
-   So each arith expression lowers to [(value, tag)]:
+(* A [CrVal] is a value AND a type tag, so an arith expression lowers to the
+   PAIR [(value, tag)]:
 
      tag 0 = ErrorVal, 1 = UninitVal, 2..5 = IntVal at W8/W16/W32/W64
 
    Values stay 64-bit and unmasked; only op *results* are masked, mirroring
-   [mk_int].  (A variable's value may therefore exceed its nominal width, which
-   is exactly what [eval_smt_arith] permits -- comparisons test full values.) *)
+   [mk_int], so a variable's value may exceed its nominal width -- which is what
+   [eval_smt_arith] permits, since comparisons test full values.
+
+   A new constructor must lower its tag as well as its value.  Dropping the tag
+   makes [SmtQuery.smt_query_sound_some] false rather than imprecise; see
+   SOUNDNESS.md on the type-tag encoding. *)
 let tag_bits = 3
 let tag_err = 0
 let tag_uninit = 1
@@ -132,38 +124,14 @@ let mem_sort ctx =
   Z3.Z3Array.mk_sort ctx (Z3.BitVector.mk_sort ctx 64)
                          (Z3.BitVector.mk_sort ctx cell_bits)
 
-(* The invariant: every [SmtArrInit] must lower to ONE Z3 term, because
-   [eval_smt_mem] sends them all to [Unallocated], a single fixed value.  Two
-   distinct [mk_fresh_const]s are freely unequal under [mk_eq], whereas
-   [arr_agree_upto n Unallocated Unallocated] is [true] for every n ([ld_arr]
-   is [Illegal] both sides, [check_crval_eqb Illegal Illegal] is [true]).
-
-   THIS FUNCTION IS REDUNDANT TODAY and removing it changes nothing you can
-   observe: [memo_arr] already collapses the occurrences, because [SmtArrInit]
-   is a constant constructor and therefore an immediate, so its physical-
-   equality key collides.  It is here because that is a fact about OCaml's
-   value representation rather than about the encoding, and it fails silently:
-   give [SmtArrInit] an argument and each occurrence becomes a separately
-   allocated block, [==] stops holding, and the sharing evaporates.
-
-   The sharper hazard needs no Coq change at all.  Unlike every other node
-   here, [mk_fresh_const] is GENERATIVE, not idempotent -- calling it twice
-   yields two different constants -- so for this one constructor a memo miss
-   changes the answer instead of costing time.  A reasonable-looking "leaves
-   are cheap, don't cache them" tidy-up in this file would break correctness.
-   That inverts the usual rule in memo-memo.txt; keeping the sharing owned
-   here as well means such a change stays a performance change.
-
-   Kept [fresh] rather than named so it cannot collide with an [SmtArrVar];
-   context-bound like the memo tables, hence reset with them.
-
-   What actually guards the invariant is [TestEquality]'s "witness: two
-   undeclared regions agree" -- NOT this function, which that test passes with
-   or without.  The test hand-builds an [SmtArrEq] over [SmtArrInit], which the
-   checker itself never emits ([check_sym_mem_equal] folds over DECLARED
-   regions, and [init_symbolic_mem] seeds those with [SmtArrVar]), so it
-   detects lost sharing today rather than waiting for a checker that compares
-   touched regions instead of declared ones. *)
+(* The one Z3 term every [SmtArrInit] lowers to.  They must share it:
+   [eval_smt_mem] sends them all to the single value [Unallocated], but two
+   [mk_fresh_const]s are freely unequal under [mk_eq].  Fresh rather than named
+   so it cannot collide with an [SmtArrVar]; context-bound, hence reset with the
+   memo tables.  Redundant with [memo_arr] today -- see memo-memo.txt, which
+   also explains why this is the one node where a memo miss changes the answer
+   rather than costing time.  Guarded by [TestEquality]'s "witness: two
+   undeclared regions agree". *)
 let get_undeclared_arr ctx =
   match !undeclared_arr with
   | Some z -> z
@@ -416,7 +384,7 @@ let to_vmap (m : Z3.Model.model) (acc : Shim.coq_ValueMap)
   | None -> raise (Failure ("Z3 failed to return valuation for " ^ name))
 
 (* Read a memory region back out of the model. *)
-  let to_amap (ctx : Z3.context) (m : Z3.Model.model)
+let to_amap (ctx : Z3.context) (m : Z3.Model.model)
     (acc : Shim.coq_ArrayMap) (name : string) (z3_var : Z3.Expr.expr) : Shim.coq_ArrayMap =
   let len = match Hashtbl.find_opt arr_lens name with Some l -> l | None -> 0 in
   let cells = ref [] in

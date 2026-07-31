@@ -310,10 +310,18 @@ let print_net_output (gcs : CrGeneralProgramState.coq_GeneralConcreteState) =
     | b :: rest ->
       let cur = (cur lsl 1) lor bit_val b in
       if n + 1 = 8 then pack (cur :: acc) 0 0 rest else pack acc cur (n + 1) rest in
-  let bytes = pack [] 0 0
-    (listify_coq_list gcs.CrGeneralProgramState.sh_write_tape) in
-  print_endline
+  let bits = listify_coq_list gcs.CrGeneralProgramState.sh_write_tape in
+  let bytes = pack [] 0 0 bits in
+  (* The bit count is printed because the bytes alone cannot tell an EMPTY
+     packet from one zero byte -- both render as no visible digits or as "0"
+     depending on how you squint -- and that is exactly the pair the
+     both-rejected trap produces.  A deparser is total, so a header holding no
+     integer emits its full width as zeros rather than emitting nothing; a
+     fixture that cannot see the difference would let a program that emits
+     nothing and a program that emits zeros agree. *)
+  Printf.printf "[%s] %db\n"
     (Stdlib.String.concat ", " (Stdlib.List.map string_of_int bytes))
+    (Stdlib.List.length bits)
 
 (* How many bits of the input packet the network consumed, summed over its
    parsers. *)
@@ -332,13 +340,14 @@ let get_net_mem_region (region : int)
     : CrVal.coq_CrVal CrVal.coq_Array =
   Maps.PMap.get (int_to_pos region) gcs.CrGeneralProgramState.sh_mem
 
-(* Seed one cell of a declared region.  The region must already be declared on
-   the program -- [init_general_concrete_state] allocates it at its declared
-   length -- since writing into an unallocated region is exactly what the
-   semantics refuses to do. *)
-(* Seed a width-[ty] value at [off].  Goes through [CrVal.st_val] rather than
-   writing one cell, so a test seeds memory exactly the way a [StoreOp] would:
-   [it_bytes ty] little-endian byte cells. *)
+(* Seed a width-[ty] value at [off] of a declared region.  Goes through
+   [CrVal.st_val] rather than writing one cell, so a test seeds memory exactly
+   the way a [StoreOp] would: [it_bytes ty] little-endian byte cells.
+
+   The region must already be declared on the program --
+   [init_general_concrete_state] allocates it at its declared length -- since
+   writing into an unallocated region is exactly what the semantics refuses to
+   do.  (The name predates the widening to [ty]; it seeds a value, not a cell.) *)
 let set_net_mem_cell (region : int) (off : int) (ty : CrVal.coq_CrIntType) (v : int)
     (gcs : CrGeneralProgramState.coq_GeneralConcreteState)
     : CrGeneralProgramState.coq_GeneralConcreteState =
@@ -369,8 +378,9 @@ let print_net_mem_region (region : int)
       Printf.printf "mem%d=[%s]\n" region
         (Stdlib.String.concat ", " (Stdlib.List.init len cell))
 
-(* The largest offset the run touched in [region], in bounds or not.  This is
-   the memory analogue of [net_bits_read]. *)
+(* How many bytes of [region] the run required -- one past the highest byte it
+   touched, in bounds or not, so it is a COUNT and not an offset.  The memory
+   analogue of [net_bits_read], and comparable for the same reason. *)
 let print_net_mem_extent (region : int)
     (gcs : CrGeneralProgramState.coq_GeneralConcreteState) =
   Printf.printf "extent%d=%d\n" region

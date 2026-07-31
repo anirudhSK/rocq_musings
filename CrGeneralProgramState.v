@@ -16,11 +16,13 @@ Import ListNotations.
    comment on [CrConcreteSemanticsTransformer.eval_transformer_concrete_mem]
    for how it is threaded into a transformer instead.
 
-   [sh_mem_extent] is the memory analogue of [sh_bits_read]: per region, the
-   largest offset the run has touched.  Two programs that emit the same packet
-   while reaching different distances into a region are not interchangeable,
-   because one can fault where the other does not.  It is updated on every
-   access, in bounds or not, which is what lets loads and stores stay total. *)
+   [sh_mem_extent] is the memory analogue of [sh_bits_read]: per region, HOW
+   MANY BYTES of it the run required -- one past the highest byte touched, not
+   that byte's offset.  A count, so 0 still means "never touched".  Updated on
+   every access, in bounds or not, which is what lets loads and stores stay
+   total: two programs emitting the same packet while reaching different
+   distances into a region are not interchangeable, since one can fault where
+   the other does not. *)
 Record GeneralProgramState (Th Tb Tm : Type) := {
   sh_hdr_map : PMap.t Th;
   sh_read_tape : list Tb;

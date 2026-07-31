@@ -63,19 +63,11 @@ Definition check_sym_bits_read (s1 s2 : GeneralSymbolicState) : SmtBoolExpr :=
    how a program talks to a map or to its caller's buffer -- so it is compared,
    not treated as internal scratch.
 
-   ONE array equality, not a cell-by-cell conjunction.  It used to be the
-   latter -- [mr_len] separate [SmtArrSel] comparisons -- on the grounds that a
-   memory-sorted equality in [SmtBoolExpr] would need a decidable equality on
-   [Array CrVal].  It does not: [SmtArrEq] carries the bound to fold over, so
-   the Coq side still says "agree cell by cell over the declared length" while
-   the Z3 side emits a single extensional array equality.
-
-   This is the difference between a checker that can look at a program which
-   writes a header and one that cannot.  The old encoding was quadratic in the
-   number of cells compared AND quadratic in the number of stores -- 32 cells
-   against one store cost 10s, four stores cost two minutes -- because every
-   [select] had to be resolved against the whole store chain independently.  See
-   [memo-memo.txt] for the measurements. *)
+   ONE [SmtArrEq], not a cell-by-cell conjunction: [SmtArrEq] carries the bound
+   to fold over, so the Coq side reads "agree cell by cell over the declared
+   length" while Z3 emits a single extensional array equality.  Do not expand it
+   back -- the conjunction is quadratic in both cells and stores.  Measurements
+   in memo-memo.txt. *)
 Definition check_sym_region_equal (d : MemRegionDecl) (s1 s2 : GeneralSymbolicState)
   : SmtBoolExpr :=
   let k := unwrap (mr_id d) in

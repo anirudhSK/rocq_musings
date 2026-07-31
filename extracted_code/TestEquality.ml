@@ -305,10 +305,8 @@ let%expect_test "mem: in bounds, load-then-store differs from store-then-load" =
        looks at every index, unlike the old per-cell conjunction over 0..3).
 
    Either way the checker would report NotEquivalent on a difference the
-   concrete semantics cannot produce, i.e. an unsound verdict.  The store half
-   of that became load-bearing when the cell-by-cell comparison was replaced;
-   before, nothing in the query ever looked at offset 4.  Together with test 25
-   this pins the bound down from both sides. *)
+   concrete semantics cannot produce.  With test 25 this pins the bound from
+   both sides. *)
 let%expect_test "mem: out of bounds, the order stops mattering" =
   check "mem_oob_load_store" "mem_oob_store_load";
   [%expect {| Equivalent |}]
@@ -331,14 +329,12 @@ let%expect_test "mem: a u16 store is the two u8 stores it coalesces from" =
   [%expect {| Equivalent |}]
 
 (* ===================================================================== *)
-(* Witness checking: [smt_query_sound_some] on hand-built queries.        *)
-(*                                                                       *)
-(* A verdict test cannot see this class of bug -- the verdict is right    *)
-(* and only the [SmtValuation] handed back with it is wrong.  This is the *)
-(* spot-check SOUNDNESS.md describes, run directly on [SmtBoolExpr]s so   *)
-(* no program plumbing is needed: solve, then re-evaluate the very same   *)
+(* Witness checking: solve an [SmtBoolExpr], then re-evaluate that same   *)
 (* expression under the model Z3 returned.  [eval_smt_bool] is the Coq    *)
-(* semantics, so a "REJECTED" line is Z3 and Rocq disagreeing.            *)
+(* semantics, so a "REJECTED" line is Z3 and Rocq disagreeing -- i.e.     *)
+(* [smt_query_sound_some] failing.  No verdict test can see this: the     *)
+(* verdict is right, only the witness is wrong.  SOUNDNESS.md, on reading *)
+(* a tag back, has the bugs these were written for.                       *)
 (* ===================================================================== *)
 
 let u64 n = Shim.int_to_coq_uint64 n

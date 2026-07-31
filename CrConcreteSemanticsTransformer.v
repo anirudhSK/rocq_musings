@@ -109,19 +109,13 @@ Definition eval_hdr_op_assign_concrete_mem
 (* ------------------------------------------------------------------ *)
 (* Memory-free evaluation.
 
-   This is the transformer-level semantics: the domain of [CaracaraProgram]
-   and of [SmtQuery]'s checker, where memory does not exist because a
-   [CaracaraProgram] has nowhere to declare a region.  It is a separate
-   recursion from the [_mem] one above rather than [snd (... empty ...)]: an
-   op's effect on memory persists into the next op, so specialising the
-   threading version to an empty memory is not definitionally the same
-   function, and every induction over an action list would need an invariant
-   about the memory staying empty to say otherwise.
-
-   The two must agree on the non-memory ops, and they do -- both delegate to
-   [eval_hdr_op_expr_concrete].  On the memory ops this one takes the answer
-   the threading version gives for an undeclared region: a load yields
-   ErrorVal, a store does nothing. *)
+   The transformer-level semantics: the domain of [CaracaraProgram] and of
+   [SmtQuery]'s checker, where memory does not exist because a
+   [CaracaraProgram] has nowhere to declare a region.  Agrees with the [_mem]
+   recursion above -- both delegate to [eval_hdr_op_expr_concrete], and on the
+   memory ops this gives what the threading version gives for an undeclared
+   region: a load yields ErrorVal, a store does nothing.  Why it is a separate
+   recursion rather than [snd (... empty ...)]: TODO.md 1.4. *)
 Definition eval_hdr_op_assign_concrete (op : HdrOp) (ps: ConcreteTransformerState) : ConcreteTransformerState :=
   match op with
   | StatefulOp _ _ _ _ target =>

@@ -184,12 +184,12 @@ let%expect_test "bits_read: two_parsers accumulates across the chain" =
    [modnet_equivalence_checker] reasons about symbolically. *)
 let%expect_test "parse_deparse: packet [0x12;0x34] round-trips" =
   Shim.print_net_output (run "parse_deparse" [0x12; 0x34]);
-  [%expect {| 18, 52 |}]
+  [%expect {| [18, 52] 16b |}]
 
 (* Same parser, deparser emits the two headers in the other order. *)
 let%expect_test "parse_deparse_swapped: packet [0x12;0x34] -> bytes swapped" =
   Shim.print_net_output (run "parse_deparse_swapped" [0x12; 0x34]);
-  [%expect {| 52, 18 |}]
+  [%expect {| [52, 18] 16b |}]
 
 (* --------------------------------------------------------------------- *)
 (* PktClass: linear-scan vs tuple-space-search classifiers.              *)
@@ -231,16 +231,16 @@ let both bytes =
 let%expect_test "pktclass: protocol 1 classifies to label 42 in both" =
   both (pkt 1);
   [%expect {|
-    lin: 42
-    tss: 42
-  |}]
+    lin: [42] 8b
+    tss: [42] 8b
+    |}]
 
 let%expect_test "pktclass: protocol 2 classifies to label 67 in both" =
   both (pkt 2);
   [%expect {|
-    lin: 67
-    tss: 67
-  |}]
+    lin: [67] 8b
+    tss: [67] 8b
+    |}]
 
 (* No filter matches: h_out is never written, so the copy-to-output leaves
    (HeaderCtr 1) non-integer.  A deparser is total (see
@@ -251,17 +251,17 @@ let%expect_test "pktclass: protocol 2 classifies to label 67 in both" =
 let%expect_test "pktclass: unknown protocol emits 0 in both" =
   both (pkt 3);
   [%expect {|
-    lin: 0
-    tss: 0
-  |}]
+    lin: [0] 8b
+    tss: [0] 8b
+    |}]
 
 (* Protocol matches a filter but another field does not. *)
 let%expect_test "pktclass: nonzero src_ip emits 0 in both" =
   both (pkt ~src_ip0:7 1);
   [%expect {|
-    lin: 0
-    tss: 0
-  |}]
+    lin: [0] 8b
+    tss: [0] 8b
+    |}]
 
 (* Precedence: OverlapDB's two filters both match a protocol-1 packet but sit in
    different tables (different tuple shapes).  A LOWER priority number means
@@ -276,16 +276,16 @@ let both_overlap bytes =
 let%expect_test "pktclass precedence: lower priority number wins in both" =
   both_overlap (pkt 1);
   [%expect {|
-    lin: 42
-    tss: 42
-  |}]
+    lin: [42] 8b
+    tss: [42] 8b
+    |}]
 
 let%expect_test "pktclass precedence: no match emits 0 in both" =
   both_overlap (pkt 3);
   [%expect {|
-    lin: 0
-    tss: 0
-  |}]
+    lin: [0] 8b
+    tss: [0] 8b
+    |}]
 
 (* --------------------------------------------------------------------- *)
 (* Why a match-action rule silently never fires.                         *)
@@ -299,14 +299,14 @@ let%expect_test "pktclass precedence: no match emits 0 in both" =
 (* Baseline: guard type matches the extract type, so the rule fires. *)
 let%expect_test "match guard: u8 extract vs u8 constant fires" =
   run_prog (Shim.find_modprog "guard_type_agrees") [5];
-  [%expect {| 99 |}]
+  [%expect {| [99] 8b |}]
 
 (* Same packet, same constant, only the extract type differs.  CrVal.eqb
    compares the CrIntType before the value, so this never fires -- for any
    packet, not just this one. *)
 let%expect_test "match guard: u64 extract vs u8 constant never fires" =
   run_prog (Shim.find_modprog "guard_type_differs") [5];
-  [%expect {| 0 |}]
+  [%expect {| [0] 8b |}]
 
 (* And it really is type, not value: the packet whose byte IS 5 still fails. *)
 let%expect_test "match guard: u64/u8 mismatch fails on every packet" =
@@ -314,17 +314,17 @@ let%expect_test "match guard: u64/u8 mismatch fails on every packet" =
     (fun b -> run_prog (Shim.find_modprog "guard_type_differs") [b])
     [0; 5; 255];
   [%expect {|
-    0
-    0
-    0
-  |}]
+    [0] 8b
+    [0] 8b
+    [0] 8b
+    |}]
 
 (* Guarding on a header no module writes: it stays UninitVal, and CrVal.eqb is
    false on UninitVal, so the rule cannot fire even though the constant it is
    compared against is 0. *)
 let%expect_test "match guard: unwritten header never matches" =
   run_prog (Shim.find_modprog "guard_unwritten") [0];
-  [%expect {| 0 |}]
+  [%expect {| [0] 8b |}]
 
 (* --------------------------------------------------------------------- *)
 (* Packet width: a parser that runs off the end rejects the network.     *)
@@ -339,7 +339,7 @@ let%expect_test "match guard: unwritten header never matches" =
 
 let%expect_test "packet width: 192 bits is exactly enough for field_extractor" =
   run_prog PktClass.ex_lin_prog (pkt 1);
-  [%expect {| 42 |}]
+  [%expect {| [42] 8b |}]
 
 let%expect_test "packet width: one byte short rejects mid-parse" =
   (* 23 bytes = 184 bits: the final dst_port extract runs past the end. *)
@@ -374,9 +374,9 @@ let%expect_test "pktclass: emits the label, not the parsed src_ip" =
   print_string "lin: "; run_prog PktClass.ex_lin_distinct p;
   print_string "tss: "; run_prog PktClass.ex_tss_distinct p;
   [%expect {|
-    lin: 42
-    tss: 42
-  |}]
+    lin: [42] 8b
+    tss: [42] 8b
+    |}]
 
 (* ------------------------------------------------------------------ *)
 (* Write tape: several deparsers concatenate, they do not clobber.    *)
@@ -388,7 +388,7 @@ let%expect_test "pktclass: emits the label, not the parsed src_ip" =
    replaced rather than appended, only the last deparser's byte would survive. *)
 let%expect_test "two_deparsers: write tape is the concatenation, in run order" =
   run_prog (Shim.find_modprog "two_deparsers") [0xAA; 0xBB];
-  [%expect {| 170, 187 |}]
+  [%expect {| [170, 187] 16b |}]
 
 (* --------------------------------------------------------------------- *)
 (* Memory.                                                               *)
@@ -411,47 +411,52 @@ let report gcs =
   Shim.print_net_mem_extent 1 gcs
 
 (* Store the parsed byte at cell 2 and read it straight back: it comes out of
-   the deparser unchanged, cell 2 holds it, and the extent records offset 2. *)
+   the deparser unchanged, cell 2 holds it, and the extent records that three
+   bytes of the region were needed -- one PAST the byte touched, not its
+   offset. *)
 let%expect_test "mem_store_load: round-trips a byte through cell 2" =
   report (run "mem_store_load" [0x2A]);
   [%expect {|
-    42
+    [42] 8b
     mem1=[-, -, 42, -]
     extent1=3
     |}]
 
 (* Reading a cell that was never written gives UninitVal, which fails the
-   load's type check and lands as ErrorVal -- so the deparser emits no bits at
-   all.  The output packet is empty, not zero. *)
-let%expect_test "mem_load0: an unwritten cell reads as no output at all" =
+   load's type check and lands as ErrorVal.  The deparser is TOTAL, so it does
+   not decline to emit: a header holding no integer goes out as its full width
+   in zeroed bits.  The output is one zero byte, not an empty packet.  That is
+   the "two broken programs agree" trap in the flesh -- see
+   [TestModulePrograms]'s comment on [mem_load0]. *)
+let%expect_test "mem_load0: an unwritten cell reads as a zero byte" =
   report (run "mem_load0" [0x2A]);
   [%expect {|
-    0
+    [0] 8b
     mem1=[-, -, -, -]
     extent1=1
     |}]
 
-(* Same empty output as [mem_load0] -- both programs are, observably, equally
-   broken -- but this one reached one cell further in.  The extent is the only
+(* Same zero-byte output as [mem_load0] -- both programs are, observably,
+   equally broken -- but this one reached one cell further in.  The extent is the only
    thing that separates them, which is what it is for. *)
 let%expect_test "mem_load1_load0: a dead load still widens the extent" =
   report (run "mem_load1_load0" [0x2A]);
   [%expect {|
-    0
+    [0] 8b
     mem1=[-, -, -, -]
     extent1=2
     |}]
 
 (* Out of bounds is total, not a rejection: the store is dropped, the load
    yields ErrorVal, [gps_valid] stays true and the run completes.  The extent
-   still records offset 4, which is how a program that walks off the end is
-   distinguished from one that does not. *)
+   still records the five bytes the run required, which is how a program that
+   walks off the end is distinguished from one that does not. *)
 let%expect_test "mem_oob_store_load: out of bounds is dropped, not a reject" =
   let gcs = run "mem_oob_store_load" [0x2A] in
   report gcs;
   Printf.printf "valid=%b\n" (gcs.CrGeneralProgramState.gps_valid = Datatypes.Coq_true);
   [%expect {|
-    0
+    [0] 8b
     mem1=[-, -, -, -]
     extent1=5
     valid=true
@@ -463,7 +468,7 @@ let%expect_test "mem_oob_store_load: out of bounds is dropped, not a reject" =
 let%expect_test "mem_load0: a seeded cell reads back" =
   report (run_mem "mem_load0" [0x2A] (Shim.set_net_mem_cell 1 0 CrVal.W8 0x7F));
   [%expect {|
-    127
+    [127] 8b
     mem1=[127, -, -, -]
     extent1=1
     |}]
@@ -474,7 +479,7 @@ let%expect_test "mem_load0: a seeded cell reads back" =
 let%expect_test "mem_ib_load_store: load-then-store sees the old cell" =
   report (run_mem "mem_ib_load_store" [0x2A] (Shim.set_net_mem_cell 1 2 CrVal.W8 0x11));
   [%expect {|
-    17
+    [17] 8b
     mem1=[-, -, 42, -]
     extent1=3
     |}]
@@ -531,7 +536,7 @@ let%expect_test "ModProgs: registry contents" =
 let%expect_test "mem_one_u16_store: 0x1234 decomposes little-endian" =
   report (run "mem_one_u16_store" [0x2A]);
   [%expect {|
-    52
+    [52] 8b
     mem1=[52, 18, -, -]
     extent1=2
     |}]
@@ -541,7 +546,7 @@ let%expect_test "mem_one_u16_store: 0x1234 decomposes little-endian" =
 let%expect_test "mem_u16_readback: two bytes reassemble into a u16" =
   report (run "mem_u16_readback" [0x2A]);
   [%expect {|
-    52
+    [52] 8b
     mem1=[52, 18, -, -]
     extent1=2
     |}]
@@ -589,7 +594,7 @@ let%expect_test "bpf O2: an IP packet is stamped and passed" =
   report_bpf (run_bpf "bpf_O2" "../test/bpf_O2.ir"
                 (fun gcs -> gcs |> seed_ctx |> seed_ethertype 0x08 0x00));
   [%expect {|
-    0, 0, 0, 2
+    [0, 0, 0, 2] 32b
     mem2=[-, -, -, -, -, -, -, -, -, -, -, -, 0, 8, 255, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -]
     extent2=15
     |}]
@@ -601,7 +606,7 @@ let%expect_test "bpf O0: same packet, same stamp and verdict" =
   report_bpf (run_bpf "bpf_O0" "../test/bpf_O0.ir"
                 (fun gcs -> gcs |> seed_ctx |> seed_ethertype 0x08 0x00));
   [%expect {|
-    0, 0, 0, 2
+    [0, 0, 0, 2] 32b
     mem2=[-, -, -, -, -, -, -, -, -, -, -, -, 0, 8, 255, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -]
     extent2=15
     |}]
@@ -613,7 +618,7 @@ let%expect_test "bpf: a non-IP packet is dropped, untouched" =
   report_bpf (run_bpf "bpf_O2" "../test/bpf_O2.ir"
                 (fun gcs -> gcs |> seed_ctx |> seed_ethertype 0x86 0xDD));
   [%expect {|
-    0, 0, 0, 1
+    [0, 0, 0, 1] 32b
     mem2=[-, -, -, -, -, -, -, -, -, -, -, -, 221, 134, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -]
     extent2=14
     |}]
@@ -627,7 +632,7 @@ let%expect_test "bpf: a short packet is aborted before any packet read" =
                    |> Shim.set_net_mem_cell 1 0 CrVal.W32 0
                    |> Shim.set_net_mem_cell 1 4 CrVal.W32 8));
   [%expect {|
-    0, 0, 0, 0
+    [0, 0, 0, 0] 32b
     mem2=[-, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -]
     extent2=0
     |}]
