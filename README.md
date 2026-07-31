@@ -96,15 +96,73 @@ Two things to know before you fight the build:
 
 If the test program that you add isn't well-formed, the test harness will print `(<pid>) malformed` before the test body, so either a) if the program is intentionally malformed, this must be added to the expected output or b) you should fix your program or c) if you believe the program is well-formed, open an issue. 
 
-# Memory IR
+# Memory
 
-The memory IR mirrors a subset of the base IR but introduces the notion of loads, stores, and data types (e.g. you can have a uint8, but you can also have a pointer). 
+Loads and stores are part of the base IR. A program declares the memory regions it can
+address, and a region is named statically while the offset within it is a runtime value:
 
-The notion of a "program" in this IR is a function body, a set of IO variables, absolute memory addresses, and variable memory addresses. That is, it contains both the state transformer as well as possible side effects.
+```coq
+GeneralCaracaraProgramDef 16 [mkMemRegionDecl (MemRegionCtr 1) 4] net
+...
+  LoadOp  u8 (MemRegionCtr 1) (OpConst (repr 2)) (HeaderCtr 2)
+  StoreOp u8 (MemRegionCtr 1) (OpConst (repr 2)) (OpHeader (HeaderCtr 1))
+```
 
-A new type, CrVal, was introduced that encodes integers of various byte widths as well as pointers.
+A region is an array of bytes: a width-`ty` access covers `it_bytes ty` consecutive
+cells, little-endian, so a `u16` store is exactly the two `u8` stores an optimiser
+coalesces it from. Static provenance plus a dynamic offset is how eBPF actually works — the verifier fixes
+which object a pointer refers to before the program runs — so `CrVal` has no pointer
+constructor at all. Memory lives on `GeneralProgramState` (`sh_mem`, a region → contents
+map) rather than on `TransformerState`, because `TransformerState T` is homogeneous in one
+element type and a region's contents are not of that type; it is threaded into a
+transformer alongside the state, forwarded in and copied back out the same way the header
+map is.
 
-The notion of equivalence for two programs has been extended for memory programs to include equivalence of memory access extents, that is, if you pass in a pointer for example, for two programs to be identical, the greatest offset into that pointer used by the programs should be the same (since otherwise there could be a segfault on one and not the other).
+Both operations are **total**. An access outside the region's declared length yields
+`ErrorVal` (load) or is dropped (store), and neither clears `gps_valid`. See
+`SOUNDNESS.md` for why a partial operation would be unsound here rather than merely
+conservative.
+
+What distinguishes a program that walks off the end is instead `sh_mem_extent`: per region,
+how many bytes of it the run required — one past the largest offset touched, in bounds or
+not, so 0 means the region was never touched at all. This is the memory analogue of
+`sh_bits_read`, and equivalence compares it — if you hand two programs the same buffer and
+one reads further into it, they are not interchangeable, because one can fault where the
+other does not. Equivalence also compares each declared region's final contents, cell by
+cell, since a region is an observable side effect rather than internal scratch.
+
+A separate, older memory IR (`CrMem.v`, `MemSolver.ml`) used to sit alongside this one with
+its own syntax, solver and test path. It was removed once the eBPF transpiler stopped
+targeting it; its examples live on as the `mem_*` module test programs.
+
+## eBPF
+
+The transpiler in `~/proj/ect` compiles eBPF bytecode into this IR:
+`bpf_to_ir <obj.o>` writes a `GeneralCaracaraProgram` s-expression. A register
+becomes one `u64` header, the context and the packet become declared regions, the BPF
+stack becomes one header per slot (it is private scratch, and comparing it would report
+`-O0` and `-O2` as differing over a spill nothing can observe), and control flow becomes a
+chain of transformer modules guarded on a program-counter header — a transformer runs only
+the first rule that matches, so sequencing has to come from the chain. That repo's README
+has the details and the list of unsupported instructions.
+
+To check a pair:
+
+```bash
+./_build/default/extracted_code/EqCheck.exe --net path/to/a.ir path/to/b.ir
+```
+
+`test/bpf_O0.ir` and `test/bpf_O2.ir` are the two lowerings of `test/bpf_ref.c`, checked
+in `TestEquality` ("e2e bpf test: O0 ≡ O2, unified IR") and run concretely in
+`TestModuleSemantics` — the verdict alone would also be satisfied by two programs that are
+equally broken, so both halves are needed.
+
+Two departures from the derived sexp encoding make a program writable from outside this
+tree, both in `extracted_code/CrTypeIF.ml`: numbers are decimal on the way out and either
+decimal or Coq-encoded on the way in (a `nat` input length would otherwise be 64 nested
+`S`s), and `ModuleNetwork.net_edges` — a *function*, so the derived converters are
+sexplib's arrow stubs and reading one back was impossible — is written as an explicit edge
+list.
 
 # Execution Semantics
 
@@ -112,9 +170,11 @@ There are two execution domains: symbolic and concrete. These two execution doma
 
 Essentially, these lemmas boil down to executing the symbolic programs, running an equivalence query between the two resultant symbolic states, and proving that Z3's result either guarantees that all concrete executions will be identical, or at least one concrete execution will differ. They more or less connect `eval_general_program_symbolic` to `eval_general_program_concrete`
 
-Execution consumes and emits program state. `GeneralProgramState` is a bundle of a global header map, a global read tape, a global write tape, a count of how many bits have been read off the input packet, each module's local state, and a validity flag. It is parameterised by the header-value type `Th` and the packet-bit type `Tb`, which is what lets the concrete and symbolic domains share one definition: concretely `(CrVal, bool)`, symbolically `(SmtArithExpr, ConditionalVal SmtBoolExpr)`. Within state, `sh_bits_read` is typed `Th` rather than `nat` because the amount consumed is data-dependent. Also, `gps_valid` is the network's accept flag: a parser that rejects clears it, and a cleared flag stops the recursion.
+Execution consumes and emits program state. `GeneralProgramState` is a bundle of a global header map, a global read tape, a global write tape, a count of how many bits have been read off the input packet, the memory (contents and access extents, per declared region), each module's local state, and a validity flag. It is parameterised by the header-value type `Th`, the packet-bit type `Tb`, and the memory-contents type `Tm`, which is what lets the concrete and symbolic domains share one definition: concretely `(CrVal, bool, Array CrVal)`, symbolically `(SmtArithExpr, ConditionalVal SmtBoolExpr, SmtArrExpr)`. Within state, `sh_bits_read` is typed `Th` rather than `nat` because the amount consumed is data-dependent. Also, `gps_valid` is the network's accept flag: a parser that rejects clears it, and a cleared flag stops the recursion.
 
-Right now, the semantics assume a linear chain topology (e.g. we don't collect traces when there is fan-in/fan-out, and we have no notion of coherent shared state across parallel modules). A well-formed network additionally starts at a parser and ends at deparsers (`wf_module_networkb`), so a program's input is always a packet and its output is always a packet.
+Right now, the semantics assume a linear chain topology (e.g. we don't collect traces when there is fan-in/fan-out, and we have no notion of coherent shared state across parallel modules). A well-formed network additionally ends at deparsers (`wf_module_networkb`), so a program's output is always a packet.
+
+It used to have to *start* at a parser too, making the input always a packet. That was dropped once memory arrived: a program can take its input from a declared region instead, and an eBPF program does exactly that — requiring a parser source only forced a stub that accepts immediately and extracts nothing. The evaluator never cared, since it dispatches on each module's kind as it reaches it. The output side has not had the same treatment, so a network whose result is purely a region still needs a deparser to be considered well-formed; that asymmetry is untouched rather than intended.
 
 ## Concrete Semantics
 
@@ -257,13 +317,17 @@ In this light, the only way in which two equivalent programs are allowed to diff
 
 Two runs count as agreeing when either both rejected, or both accepted and
 
-- their output packets are equal (`sym_out_equal`, comparing presence conditions as well as bit values, so differing output *lengths* count as differing), and
-- they read the same number of bits (`check_sym_bits_read`).
+- their output packets are equal (`sym_out_equal`, comparing presence conditions as well as bit values, so differing output *lengths* count as differing),
+- they read the same number of bits (`check_sym_bits_read`),
+- every declared memory region holds the same contents (`check_sym_mem_equal`), and
+- they required the same number of bytes of every region (`check_sym_mem_extent`).
 
-The read-extent conjunct is the bitstream analogue of the memory IR's access-extent equivalence described above: a network that reads further into its input needs more of it to be there, so two networks that emit identical packets while consuming different amounts are not interchangeable.
+The read-extent conjunct is the bitstream analogue of the memory access-extent equivalence described above: a network that reads further into its input needs more of it to be there, so two networks that emit identical packets while consuming different amounts are not interchangeable.
+
+The checker also refuses to compare two programs whose declared regions differ, the same way it refuses when their input lengths differ: the two runs share one set of region input variables, so the comparison would not be meaningful otherwise.
 
 Note the shape of that condition — "both rejected" is an accepting case, which is correct but makes the checker only as good as its notion of validity. Any imprecision in `gps_valid`, in *either* direction, is unsound: over-approximating acceptance compares outputs that concretely never happened, and under-approximating it hides real differences inside the both-rejected case. That is why the deparser has no validity condition on either side rather than an approximate one.
 
-The soundness and completeness lemmas at the bottom of `SmtModuleQuery.v` state exactly this correspondence. They are currently `Admitted`.
+The soundness and completeness lemmas at the bottom of `SmtModuleQuery.v` state exactly this correspondence, and both are proved. Note what they cover: they relate the checker's verdict to the concretization of the *symbolic* final states, not to a concrete run — see `SOUNDNESS.md`.
 
 A caveat worth internalising when adding tests: a program that rejects every packet is equivalent to any other program that rejects every packet. It is easy to write two "equivalent" programs that are both simply broken, and the checker will agree with you. `TestModuleSemantics` therefore checks concrete outputs for the classifier examples rather than relying on the checker alone.

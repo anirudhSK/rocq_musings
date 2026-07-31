@@ -14,22 +14,33 @@ From MyProject Require Import CrVarLike.
 From MyProject Require Import Maps.
 From Stdlib Require Import ZArith.
 
-(* ================================================================== *)
+(* ==================================================================== *)
 (* Concrete module / network semantics.  Dispatches each module to its  *)
-(* engine (transformer or parser FSM) and threads the shared header map  *)
-(* along the network's edges.                                          *)
-(* ================================================================== *)
+(* engine (transformer or parser FSM) and threads the shared header map *)
+(* along the network's edges.                                           *)
+(* ==================================================================== *)
 
 Definition module_update_gs_concrete
   (m : CrModule) (ls : ConcreteModuleState)
   (gs : GeneralConcreteState) : GeneralConcreteState :=
   match m, ls with
   | TransformerModule m_id _ _ t, TransformerMod ts =>
-    let ls' := TransformerMod (eval_transformer_concrete t ts) in
+    (* Memory is forwarded in from the general state and copied back out, the
+       same shape as the header map.  Unlike the header map it is not also
+       passed along the network's edges: memory is global machine state, not a
+       value carried on an edge.  Under the linear-chain assumption the two are
+       the same thing; with fan-out they would not be, which is one more reason
+       [is_linear_chain] is a precondition of the equivalence lemmas. *)
+    let r := eval_transformer_concrete_mem t
+               {| mc_mem := sh_mem gs; mc_extent := sh_mem_extent gs |} ts in
+    let mc' := fst r in
+    let ls' := TransformerMod (snd r) in
     let ms' := PMap.set (unwrap m_id) ls' (mod_states gs) in
     let f_hdrs' := module_header_map ls' in
     set_gps_mod_states
-      (set_gps_shared_headers gs f_hdrs') ms'
+      (set_gps_mem_extent
+        (set_gps_mem
+          (set_gps_shared_headers gs f_hdrs') (mc_mem mc')) (mc_extent mc')) ms'
   | ParserModule m_id p, ParserMod ps =>
     match eval_parser_concrete p ps with
     | Some ps' =>

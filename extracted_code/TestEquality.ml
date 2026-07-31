@@ -9,27 +9,16 @@ let get_program f =
   Shim.print_malformed_prog p 0;
   p
 
-(* let get_general_program f =
-  let x = open_in f in
-  let len = in_channel_length x in
-  let str = really_input_string x len in
-  close_in x;
-  str |> Sexp.of_string |> CrTypeIF.CrModule.coq_GeneralCaracaraProgram_of_sexp *)
-
-let get_mem_program f = MemSolver.load_program f
+let get_general_program f =
+  let p = Shim.load_general_program f in
+  Shim.print_malformed_gprog p f;
+  p
 
 let print_equiv = function
   | SmtQuery.Equivalent -> print_endline "Equivalent"
   | SmtQuery.NotEquivalent _ -> print_endline "NotEquivalent"
   | SmtQuery.NotEquivalentUnknown -> print_endline "NotEquivalentUnknown"
   | SmtQuery.NotEquivalentVariablesDiffer -> print_endline "NotEquivalentVariablesDiffer"
-
-let print_z3 = function
-  | CrMem.Z3Unsat -> print_endline "Z3Unsat"
-  | CrMem.Z3Unknown -> print_endline "Z3Unknown"
-  | CrMem.Z3Sat (_, _, ValueMismatch) -> print_endline "Z3Sat(ValueMismatch)"
-  | CrMem.Z3Sat (_, _, BoundsMismatch) -> print_endline "Z3Sat(BoundsMismatch)"
-  | CrMem.Z3Sat (_, _, FullMismatch) -> print_endline "Z3Sat(FullMismatch)"
 
 (* Test 1: A program should be equal to itself. *)
 let%expect_test "refl_0: identical programs are equivalent" =
@@ -47,7 +36,7 @@ let%expect_test "hdr_diff: different constants are NotEquivalent" =
      constant), so its width is unconstrained by the query and defaults to u64. *)
   [%expect {|
     ┌ SAT Valuation
-    | var( hdr_1 ) : u64 := 0
+    | var( hdr_1 ) := error
     └
     NotEquivalent
     |}]
@@ -82,125 +71,23 @@ let%expect_test "complex_add_sub: dropping an op breaks equivalence" =
     NotEquivalent
     |}]
 
-(* Test 6: Address offsets should alias.
- * p1: *(x+4), p2: *(x+2+2) *)
-let%expect_test "basic address alias" =
-  let p1 = get_mem_program "../test/mem1a.out" in
-  let p2 = get_mem_program "../test/mem1b.out" in
-  print_z3 (MemSolver.mem_solve p1 p2);
-  [%expect {|
-    casting query to z3 expression...
-    adding query to solver...
-    running query...
-    Z3Unsat
-    |}]
-
-(* Test 7: Writing a variable value vs writing a constant value differ.
- * p1: *(x+4) = y, p2: *(x+4) = 1 *)
-let%expect_test "basic memory overwrite: value differs" =
-  let p1 = get_mem_program "../test/mem1a.out" in
-  let p2 = get_mem_program "../test/mem1c.out" in
-  print_z3 (MemSolver.mem_solve p1 p2);
-  [%expect {|
-    casting query to z3 expression...
-    adding query to solver...
-    running query...
-    ┌ SAT Valuation
-    | var( 10 ) : u8 := 254
-    | var( 11 ) : u8 := 0
-    | arr( 1 ) := [0] (len=1)
-    | Outputs equal: false
-    | Bounds equal: true
-    └
-    Z3Sat(ValueMismatch)
-    |}]
-
-(* Test 8: Programs with different segfault behavior.
- * p1: ret *(x+0), p2: *(x+1); ret *(x+0) *)
-let%expect_test "divergent load extents: bounds differ" =
-  let p1 = get_mem_program "../test/mem2a.out" in
-  let p2 = get_mem_program "../test/mem2b.out" in
-  print_z3 (MemSolver.mem_solve p1 p2);
-  [%expect {|
-    casting query to z3 expression...
-    adding query to solver...
-    running query...
-    ┌ SAT Valuation
-    | arr( 1 ) := [0] (len=1)
-    | Outputs equal: true
-    | Bounds equal: false
-    └
-    Z3Sat(BoundsMismatch)
-    |}]
-
-(* Test 9: Access extents and output variables match.
- * p1: *(x+1); ret *(x+0), p2: *(x+1)=0; ret *(x+0) *)
-let%expect_test "mem nop are equiv" =
-  let p1 = get_mem_program "../test/mem2b.out" in
-  let p2 = get_mem_program "../test/mem2c.out" in
-  print_z3 (MemSolver.mem_solve p1 p2);
-  [%expect {|
-    casting query to z3 expression...
-    adding query to solver...
-    running query...
-    Z3Unsat
-    |}]
-
-(* Test 10: If statement collapses.
- * p1: if (0 == 0) then A else B, p2: A *)
-let%expect_test "degenerate branch collapses" =
-  let p1 = get_mem_program "../test/mem3a.out" in
-  let p2 = get_mem_program "../test/mem3b.out" in
-  print_z3 (MemSolver.mem_solve p1 p2);
-  [%expect {|
-    casting query to z3 expression...
-    Met nil expression
-    adding query to solver...
-    running query...
-    Z3Unsat
-    |}]
-
-(* Test 11: Array values may differ.
- * p1: *(x+1); ret *(x+0), p2: *(x+0); ret *(x+1) *)
-let%expect_test "sat aval: array values differ" =
-  let p1 = get_mem_program "../test/mem4a.out" in
-  let p2 = get_mem_program "../test/mem4b.out" in
-  print_z3 (MemSolver.mem_solve p1 p2);
-  [%expect {|
-    casting query to z3 expression...
-    adding query to solver...
-    running query...
-    ┌ SAT Valuation
-    | arr( 1 ) := [255, 0] (len=2)
-    | Outputs equal: false
-    | Bounds equal: true
-    └
-    Z3Sat(ValueMismatch)
-    |}]
-
-(* Test 12: End-to-end -O0 vs -O2 compilation of a basic bpf program. *)
+(* Test 6: -O0 vs -O2 of one eBPF program -- the point of the whole memory
+   merge.  ../test/bpf_O{0,2}.ir are `~/proj/ect/bpf_to_ir` output for the -O0
+   and -O2 lowerings of one XDP program (test/bpf_ref.c), regenerated there
+   with `make O0.ir O2.ir`.  They are module networks, so unlike test 12 this
+   runs through modnet_equivalence_checker and Z3Solver, and compares the
+   emitted return value, the bits read, and the contents and access extents of
+   the ctx and packet regions. *)
 let%expect_test "e2e bpf test: O0 ≡ O2" =
-  let p1 = get_mem_program "../test/O0.ir" in
-  let p2 = get_mem_program "../test/O2.ir" in
-  print_z3 (MemSolver.mem_solve p1 p2);
-  [%expect {|
-    casting query to z3 expression...
-    Met nil expression
-    adding query to solver...
-    running query...
-    Z3Unsat
-    |}]
+  let p1 = get_general_program "../test/bpf_O0.ir" in
+  let p2 = get_general_program "../test/bpf_O2.ir" in
+  print_equiv (SmtModuleQuery.modnet_equivalence_checker p1 p2);
+  [%expect {| Equivalent |}]
 
 (* Test 13: linear scan vs tss for simple filter database.  Both are full
    parser -> table chain -> deparser networks over a 192-bit input packet (what
    field_extractor consumes), so they go through the bitstream checker: the
-   observable is the label byte the deparser emits.
-
-   NOTE: this test is weaker than it looks -- it reported Equivalent even while
-   tss_db concretely produced nothing and linear_db emitted a label.  Agreeing
-   on output packets does not pin down which label a classifier assigns.  The
-   concrete labels are checked in TestModuleSemantics ("pktclass..."); keep
-   both tests. *)
+   observable is the label byte the deparser emits.*)
 let%expect_test "tss basic" =
   (* let p1 = get_general_program "../test/lin_pkt.out" in
   let p2 = get_general_program "../test/tss_pkt.out" in *)
@@ -324,3 +211,195 @@ let%expect_test "bitstream: one deparser emitting h1,h2 = two deparsers chained"
   let p2 = Shim.find_modprog "two_deparsers" in
   print_equiv (SmtModuleQuery.modnet_equivalence_checker p1 p2);
   [%expect {| Equivalent |}]
+
+(* -------------------------------------------------------------------- *)
+(* Tests 21-26: memory.                                                 *)
+(*                                                                      *)
+(* All of these run through the SAME checker and the SAME solver as the *)
+(* network tests above -- the point of the unification.  Region 1 is    *)
+(* declared with 4 cells in every one of these programs, so offsets     *)
+(* 0..3 are in bounds and 4 is not.                                     *)
+(* -------------------------------------------------------------------- *)
+
+let check n1 n2 =
+  print_equiv (SmtModuleQuery.modnet_equivalence_checker
+                 (Shim.find_modprog n1) (Shim.find_modprog n2))
+
+(* Test 21: address aliasing.  One program writes the offset literally, the
+   other computes it into a header first.  Which header holds an address is
+   internal, so the two agree -- and the solver has to reason about the
+   computed index to see it, since [SmtArrSel] takes the index symbolically. *)
+let%expect_test "mem: a computed offset aliases a literal one" =
+  check "mem_store_load" "mem_store_load_alias";
+  [%expect {| Equivalent |}]
+
+(* Test 22: same shape, same extent, different value stored.  Caught by the
+   region-contents conjunct and by the output packet. *)
+let%expect_test "mem: a different stored value is not equivalent" =
+  check "mem_store_load" "mem_store_load_differs";
+  [%expect {|
+    ┌ SAT Valuation
+    | var( pkt_1 ) : u64 := 1
+    | var( pkt_10 ) : u64 := 1
+    | var( pkt_100 ) : u64 := 1
+    | var( pkt_1000 ) : u64 := 1
+    | var( pkt_101 ) : u64 := 1
+    | var( pkt_11 ) : u64 := 1
+    | var( pkt_110 ) : u64 := 1
+    | var( pkt_111 ) : u64 := 1
+    | mem( mem_1 ) : len=4 := [err, err, err, err]
+    └
+    NotEquivalent
+    |}]
+
+(* Test 23: two programs whose only difference is which scratch header a dead
+   load lands in.  Headers are internal, so this is unobservable. *)
+let%expect_test "mem: the scratch header a dead load targets is internal" =
+  check "mem_load1_load0" "mem_load1_load0_alt";
+  [%expect {| Equivalent |}]
+
+(* Test 24: THE extent test, and the reason [sh_mem_extent] exists.  Both
+   programs read only cells that were never written, so both emit the same
+   zero byte and leave the region untouched -- output equality and contents
+   equality cannot tell them apart.  They differ solely in that one reaches
+   cell 1 and the other stops at cell 0, which is a real difference: one can
+   fault where the other cannot.  If this reports Equivalent, the extent is
+   not reaching the query.  (Compare test 18, its bitstream analogue.) *)
+let%expect_test "mem: reading one cell further is not equivalent" =
+  check "mem_load1_load0" "mem_load0";
+  [%expect {|
+    ┌ SAT Valuation
+    | mem( mem_1 ) : len=4 := [0:u64, 0:u64, 0:u64, 0:u64]
+    └
+    NotEquivalent
+    |}]
+
+(* Test 25: in bounds, the order of a load and a store to one cell matters --
+   the second program reads back what it just wrote, the first does not. *)
+let%expect_test "mem: in bounds, load-then-store differs from store-then-load" =
+  check "mem_ib_load_store" "mem_store_load";
+  [%expect {|
+    ┌ SAT Valuation
+    | var( pkt_1 ) : u64 := 1
+    | var( pkt_10 ) : u64 := 1
+    | var( pkt_100 ) : u64 := 1
+    | var( pkt_1000 ) : u64 := 1
+    | var( pkt_101 ) : u64 := 1
+    | var( pkt_11 ) : u64 := 1
+    | var( pkt_110 ) : u64 := 1
+    | var( pkt_111 ) : u64 := 1
+    | mem( mem_1 ) : len=4 := [0:u64, 0:u64, 253:u8, 0:u64]
+    └
+    NotEquivalent
+    |}]
+
+(* Test 26: the same pair at an out-of-bounds offset, where order stops
+   mattering: the store is dropped and the load yields ErrorVal either way.
+   This is the test that the Z3 lowering guards BOTH memory operations with the
+   region's declared length -- Z3's array theory is total, so:
+
+     - an unguarded [select] would let the store-then-load program read its own
+       out-of-bounds write back;
+     - an unguarded [store] would leave the two regions differing at offset 4,
+       which the [SmtArrEq] encoding *does* see (extensional array equality
+       looks at every index, unlike the old per-cell conjunction over 0..3).
+
+   Either way the checker would report NotEquivalent on a difference the
+   concrete semantics cannot produce.  With test 25 this pins the bound from
+   both sides. *)
+let%expect_test "mem: out of bounds, the order stops mattering" =
+  check "mem_oob_load_store" "mem_oob_store_load";
+  [%expect {| Equivalent |}]
+
+(* The replacement for the retired memory IR's "a branch on a constant
+   collapses": a match pattern that cannot fail is the same as no pattern.
+   [CrVal.eqb] is reflexive on every constructor, so a header compared to
+   itself always matches. *)
+let%expect_test "mem: a guard that cannot fail is the same as no guard" =
+  check "mem_guard_tautology" "mem_store_load";
+  [%expect {| Equivalent |}]
+
+(* Memory is an array of BYTES, so a u16 store is exactly the two u8 stores an
+   optimiser coalesces it from.  This pair is the reason for that model: under
+   the previous one-value-per-cell scheme they landed in different cells with
+   different types and came back NotEquivalent -- a false positive on any
+   -O0 vs -O2 comparison, since -O2 merges adjacent narrow stores. *)
+let%expect_test "mem: a u16 store is the two u8 stores it coalesces from" =
+  check "mem_two_u8_stores" "mem_one_u16_store";
+  [%expect {| Equivalent |}]
+
+(* ===================================================================== *)
+(* Witness checking: solve an [SmtBoolExpr], then re-evaluate that same   *)
+(* expression under the model Z3 returned.  [eval_smt_bool] is the Coq    *)
+(* semantics, so a "REJECTED" line is Z3 and Rocq disagreeing -- i.e.     *)
+(* [smt_query_sound_some] failing.  No verdict test can see this: the     *)
+(* verdict is right, only the witness is wrong.  SOUNDNESS.md, on reading *)
+(* a tag back, has the bugs these were written for.                       *)
+(* ===================================================================== *)
+
+let u64 n = Shim.int_to_coq_uint64 n
+let konst n ty = SmtExpr.SmtArithConst (u64 n, ty)
+let svar s = SmtExpr.SmtArithVar (Shim.str_to_coq_str s)
+let avar s len = SmtExpr.SmtArrVar (Shim.str_to_coq_str s, u64 len)
+(* [cast] of a non-[IntVal] is [ErrorVal] (CrVal.v), so this is an error
+   literal -- the language has none, and [SmtUninit] is not one. *)
+let err_lit = SmtExpr.SmtCast (CrVal.W8, CrVal.W16, SmtExpr.SmtUninit)
+
+let witness name (e : SmtExpr.coq_SmtBoolExpr) =
+  match Z3Solver.solve e with
+  | SmtTypes.SmtSat v ->
+      (match SmtExpr.eval_smt_bool e v with
+       | Datatypes.Coq_true  -> Printf.printf "%s: SAT, witness verified\n" name
+       | Datatypes.Coq_false ->
+           Printf.printf "%s: SAT, WITNESS REJECTED by eval_smt_bool\n" name)
+  | SmtTypes.SmtUnsat   -> Printf.printf "%s: UNSAT\n" name
+  | SmtTypes.SmtUnknown -> Printf.printf "%s: unknown\n" name
+
+let%expect_test "witness: a scalar the model leaves non-integer" =
+  (* Companion to the next test, and it does NOT discriminate: a scalar is
+     safe by construction because [eval_smt_arith]'s [SmtArithVar] arm coerces
+     every non-[IntVal] to [ErrorVal], mirroring the lowering's
+     [ite (tag_is_int t) t tag_err].  [SmtArrSel] has no such arm, which is
+     exactly why the array version below is a real check. *)
+  witness "scalar-error" (SmtExpr.SmtBoolEq (svar "x", err_lit));
+  [%expect {|
+    ┌ SAT Valuation
+    | var( x ) := error
+    └
+    scalar-error: SAT, witness verified
+    |}]
+
+let%expect_test "witness: a memory cell the model leaves non-integer" =
+  witness "cell-error"
+    (SmtExpr.SmtBoolEq (SmtExpr.SmtArrSel (avar "a" 4, konst 0 CrVal.W64), err_lit));
+  [%expect {|
+    ┌ SAT Valuation
+    | mem( a ) : len=4 := [err, 0:u64, 0:u64, 0:u64]
+    └
+    cell-error: SAT, witness verified
+    |}]
+
+let%expect_test "witness: a cell read back is the cell that is there" =
+  (* Stores cell 0 back onto itself, then asks whether the region changed.
+     [SmtArrEq] lowers to [mk_eq] on whole arrays, which sees RAW cell tags,
+     while [SmtArrSel] sees normalised ones -- if those two disagree, Z3 finds
+     a difference that the reconstruction cannot represent. *)
+  let a = avar "a" 4 in
+  let sel0 = SmtExpr.SmtArrSel (a, konst 0 CrVal.W64) in
+  let stored = SmtExpr.SmtArrSt (a, konst 0 CrVal.W64, sel0) in
+  witness "noop-store"
+    (SmtExpr.SmtBoolNot (SmtExpr.SmtArrEq (Shim.int_to_coq_nat 4, a, stored)));
+  [%expect {| noop-store: UNSAT |}]
+
+let%expect_test "witness: two undeclared regions agree" =
+  (* [SmtArrInit] denotes [Unallocated], and [arr_agree_upto n Unallocated
+     Unallocated] is [true] for every n -- [ld_arr] is [Illegal] on both sides.
+     So the negation must be UNSAT, which holds only if both occurrences lower
+     to ONE Z3 term.  If they ever lower to two fresh consts this comes back
+     SAT (and the witness is unreconstructable), which is what would happen if
+     [SmtArrInit] gained an argument and stopped being an immediate. *)
+  witness "undeclared-agree"
+    (SmtExpr.SmtBoolNot
+       (SmtExpr.SmtArrEq
+          (Shim.int_to_coq_nat 4, SmtExpr.SmtArrInit, SmtExpr.SmtArrInit)));
+  [%expect {| undeclared-agree: UNSAT |}]

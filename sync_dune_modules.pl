@@ -21,7 +21,7 @@ close $gi;
 # extracted_code_lib:
 #   - standalone executables (each has its own (executable ...) stanza)
 #   - ppx_expect test modules (the semantics_tests library), matched by Test* name
-my %executable = map { $_ => 1 } qw(EqCheck MemEq DumpSexp);
+my %executable = map { $_ => 1 } qw(EqCheck DumpSexp);
 my @tests  = sort grep {  /^Test/ && !$executable{$_} } @handwritten;
 my @manual = sort grep { !/^Test/ && !$executable{$_} } @handwritten;
 

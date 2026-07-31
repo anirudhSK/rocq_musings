@@ -563,8 +563,11 @@ Proof.
     + exact IH.
 Qed.
 
+(* A transformer-level state has no memory (a [CaracaraProgram] cannot declare
+   a region), so the array component of the valuation is everywhere the
+   undeclared region. *)
 Definition build_valuation_for_cs (cs : ConcreteTransformerState) : SmtValuation :=
-  fun name =>
+  {| sv_ints := fun name =>
     match try_match_prefix "hdr_" (PTree.elements (snd (t_header_map cs))) name with
     | Some v => v
     | None =>
@@ -576,14 +579,15 @@ Definition build_valuation_for_cs (cs : ConcreteTransformerState) : SmtValuation
         | None => UninitVal
         end
       end
-    end.
+    end;
+     sv_arrs := fun _ => @Unallocated CrVal |}.
 
 Local Ltac int_value_finalize valid_lemma id_var :=
   pose proof (valid_lemma id_var) as Hvv;
   unfold value_is_valid in Hvv;
   match goal with
   | |- context [PMap.get ?i ?m] =>
-      destruct (PMap.get i m) as [i'| | |] eqn:Hpm; try contradiction;
+      destruct (PMap.get i m) as [i'| |] eqn:Hpm; try contradiction;
       destruct i'; try contradiction; reflexivity
   end.
 Lemma valid_states_realizable :
@@ -643,7 +647,7 @@ Proof.
       rewrite lookup_varlike_header_PMap_concrete in Hiff.
       pose proof (Hh_valid id) as Hvv. unfold value_is_valid, PMap.get in *.
       destruct ((snd (t_header_map cs)) ! id) as [w|] eqn:Htree.
-      * destruct w as [i| | |]; try contradiction.
+      * destruct w as [i| |]; try contradiction.
         destruct i; try contradiction.
         -- exfalso. apply Hnin. apply (proj1 Hiff). discriminate.
         -- reflexivity.
@@ -677,7 +681,7 @@ Proof.
       rewrite lookup_varlike_state_PMap_concrete in Hiff.
       pose proof (Hs_valid id) as Hvv. unfold value_is_valid, PMap.get in *.
       destruct ((snd (t_state_map cs)) ! id) as [w|] eqn:Htree.
-      * destruct w as [i| | |]; try contradiction.
+      * destruct w as [i| |]; try contradiction.
         destruct i; try contradiction.
         -- exfalso. apply Hnin. apply (proj1 Hiff). discriminate.
         -- reflexivity.
@@ -713,7 +717,7 @@ Proof.
       rewrite lookup_varlike_ctrl_PMap_concrete in Hiff.
       pose proof (Hc_valid id) as Hvv. unfold value_is_valid, PMap.get in *.
       destruct ((snd (t_ctrl_map cs)) ! id) as [w|] eqn:Htree.
-      * destruct w as [i| | |]; try contradiction.
+      * destruct w as [i| |]; try contradiction.
         destruct i; try contradiction.
         -- exfalso. apply Hnin. apply (proj1 Hiff). discriminate.
         -- reflexivity.

@@ -4,8 +4,6 @@ Extraction Language OCaml.
 From MyProject Require Import SmtQuery.
 From MyProject Require Import SmtModuleQuery.
 
-From MyProject Require Import CrMem.
-From MyProject Require Import CrMemEx.
 From MyProject Require Import TestPrograms.
 From MyProject Require Import TestModulePrograms.
 From MyProject Require Import TestParserPrograms.
@@ -16,14 +14,11 @@ From MyProject Require Import CrDslProperties.
 
 (* Tell extraction to use your external OCaml implementation *)
 Extract Constant smt_query => "Z3Solver.solve".
-Extract Constant z3_query => "MemSolver.mem_solve".
 
 Set Extraction Output Directory "extracted_code".
 
 (* Extract everything else normally *)
 Separate Extraction
-  CrMem.query_expression CrMem.Z3Res
-  CrMemEx.example_programs
   CrDsl.CaracaraProgram Integers.repr SmtQuery.equivalence_checker_cr_dsl SmtTypes.SmtResult
   CrSymbolicSemanticsTransformer.eval_sym_state
   CrConcreteSemanticsTransformer.eval_cr_program_concrete
@@ -38,4 +33,7 @@ Separate Extraction
   PktClass.ex_lin_overlap PktClass.ex_tss_overlap
   PktClass.ex_lin_distinct PktClass.ex_tss_distinct
   modnet_equivalence_checker
+  (* [Z3Solver] needs the declared length of a region to emit the same bounds
+     guard the concrete [ld_arr] applies. *)
+  SmtExpr.smt_arr_len
   well_formed_programb well_formed_general_programb.

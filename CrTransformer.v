@@ -50,7 +50,21 @@ Inductive HdrOp :=
   | StatefulOp   (f : BinaryOp) (ty : CrIntType) (arg1 : Operand) (arg2 : Operand) (target : State)
   | StatelessOp  (f : BinaryOp) (ty : CrIntType) (arg1 : Operand) (arg2 : Operand) (target : Header)
   | CastStateOp  (from : CrIntType) (to : CrIntType) (arg : Operand) (target : State)
-  | CastHeaderOp (from : CrIntType) (to : CrIntType) (arg : Operand) (target : Header).
+  | CastHeaderOp (from : CrIntType) (to : CrIntType) (arg : Operand) (target : Header)
+  (* Memory.  The region is named statically and the offset within it is a
+     runtime value, which is how eBPF works in practice -- the verifier fixes
+     pointer provenance before the program runs.  [ty] is the type the loaded
+     value is produced at / the stored value is read at, exactly as on the
+     arithmetic ops.
+
+     Both are TOTAL.  An access outside the region's declared length yields
+     [ErrorVal] into the target (load) or is dropped (store); neither clears
+     [gps_valid].  What distinguishes a program that reads further is
+     [CrGeneralProgramState.sh_mem_extent], which every access updates, not a
+     rejection.  Do not make these partial -- SOUNDNESS.md, on the
+     both-rejected disjunct, says why. *)
+  | LoadOp  (ty : CrIntType) (region : MemRegion) (off : Operand) (target : Header)
+  | StoreOp (ty : CrIntType) (region : MemRegion) (off : Operand) (val : Operand).
 
 (* Define MatchPattern as a list of header, pattern pairs.  A [MatchConst]
    carries its own [CrIntType]: the constant is read at [ty] and compared
@@ -65,13 +79,30 @@ Definition MatchPattern := list (Header * CmpOp * MatchValue).
 Inductive SeqRule :=
   | SeqCtr (match_pattern : MatchPattern) (action : list HdrOp).
 
-(* Extract targets out of a HdrOp *)
+(* Extract targets out of a HdrOp.  A [StoreOp]'s target is a memory cell, not
+   a [State] or a [Header], and it contributes nothing here: the [NoDup]
+   obligation on [ParRule] below is about two actions writing the same
+   variable, and the corresponding property for memory -- two stores hitting
+   the same offset of the same region -- is not statically decidable, since
+   offsets are runtime values.  Memory ops SHOULD therefore be barred from
+   [ParRule] -- [CrDslProperties.no_mem_ops_in_parb] is that check -- but
+   nothing enforces it, and nothing proves what the [NoDup] below buys either.
+   A racy program is expressible and silently accepted; TODO.md 1.5 has why
+   that is currently harmless and what it would take to catch. *)
 Definition extract_targets (op : HdrOp) : (list State) * (list Header) :=
   match op with
   | StatefulOp _ _ _ _ target => ([target], [])
   | StatelessOp _ _ _ _ target => ([], [target])
   | CastStateOp _ _ _ target => ([target], [])
   | CastHeaderOp _ _ _ target => ([], [target])
+  | LoadOp _ _ _ target => ([], [target])
+  | StoreOp _ _ _ _ => ([], [])
+  end.
+
+Definition is_mem_op (op : HdrOp) : bool :=
+  match op with
+  | LoadOp _ _ _ _ | StoreOp _ _ _ _ => true
+  | _ => false
   end.
 
 (* Extract all targets from a list of HdrOps *)

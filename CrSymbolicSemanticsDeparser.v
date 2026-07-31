@@ -11,16 +11,16 @@ From MyProject Require Import Integers.
 From MyProject Require Import MyInts.
 From Stdlib Require Import ZArith.
 
-(* ================================================================== *)
-(* Symbolic deparser semantics.  Mirrors [eval_deparser_concrete]      *)
+(* ==================================================================== *)
+(* Symbolic deparser semantics.  Mirrors [eval_deparser_concrete]       *)
 (* symbol-for-symbol: each emitted bit becomes an [SmtBoolExpr] testing *)
-(* the corresponding bit of the header's symbolic value.               *)
-(*                                                                     *)
+(* the corresponding bit of the header's symbolic value.                *)
+(*                                                                      *)
 (* The packet-bit type is [ConditionalVal SmtBoolExpr]: [cvv] is the    *)
 (* bit's value and [cvc] its presence/validity condition.  Every bit a  *)
-(* deparser emits is unconditionally present (a fixed-width emit always  *)
-(* writes its bits), so each emitted position carries [cvc := SmtTrue].  *)
-(* ================================================================== *)
+(* deparser emits is unconditionally present (a fixed-width emit always *)
+(* writes its bits), so each emitted position carries [cvc := SmtTrue]. *)
+(* ==================================================================== *)
 
 (* The [i]th emitted bit of a symbolic value [e]: bit [i] is set iff the
    1-bit slice [i, i+1) equals 1.  The concrete counterpart is [emit_bit_val],

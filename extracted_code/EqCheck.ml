@@ -15,7 +15,21 @@ let equivalence_check_programs str1 str2 =
   | NotEquivalent _ -> print_endline "Not Equivalent"
   | NotEquivalentUnknown -> print_endline "Not Equivalent (unknown)"
   | NotEquivalentVariablesDiffer -> print_endline "Not Equivalent (variables differ)"
-  
+
+  let equivalence_check_networks file_1 file_2 =
+  let prog_1 = Shim.load_general_program file_1 in
+  let prog_2 = Shim.load_general_program file_2 in
+
+  Shim.print_malformed_gprog prog_1 file_1;
+  Shim.print_malformed_gprog prog_2 file_2;
+
+  let res = SmtModuleQuery.modnet_equivalence_checker prog_1 prog_2 in
+  match res with
+  | Equivalent -> print_endline "Equivalent"
+  | NotEquivalent _ -> print_endline "Not Equivalent"
+  | NotEquivalentUnknown -> print_endline "Not Equivalent (unknown)"
+  | NotEquivalentVariablesDiffer -> print_endline "Not Equivalent (variables differ)"
+
 let load f =
   let x = open_in f in
   let len = in_channel_length x in
@@ -23,14 +37,14 @@ let load f =
   close_in x;
   str
 
-let () =
-  if Array.length Sys.argv != 3 then (
-    prerr_endline "usage: ./bin <path/to/s/expr/1> <path/to/s/expr/2>";
-    exit 1
-  );
+let usage () =
+  prerr_endline "usage: ./bin [--net] <path/to/s/expr/1> <path/to/s/expr/2>";
+  prerr_endline "  default: two CaracaraProgram (single-transformer) s-expressions";
+  prerr_endline "  --net:   two GeneralCaracaraProgram (module network) s-expressions";
+  exit 1
 
-  let file_1 = Sys.argv.(1) in
-  let f1_str = load file_1 in
-  let file_2 = Sys.argv.(2) in
-  let f2_str = load file_2 in
-  equivalence_check_programs f1_str f2_str
+let () =
+  match Stdlib.List.tl (Array.to_list Sys.argv) with
+  | ["--net"; f1; f2] -> equivalence_check_networks f1 f2
+  | [f1; f2] -> equivalence_check_programs (load f1) (load f2)
+  | _ -> usage ()

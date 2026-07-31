@@ -148,32 +148,6 @@ Proof.
     apply negb_true_iff in H. assumption.
 Qed.
 
-(* The designated start module exists in the network.  The edge-closure
-   condition that used to live alongside this is now folded into
-   [restricted_edges]. *)
-Definition start_module_is_parser (net : ModuleNetwork) : Prop :=
-  match lookup_module net (start_module net) with
-  | Some (ParserModule _ _) => True
-  | _ => False
-  end.
-Definition start_module_is_parserb (net : ModuleNetwork) : bool :=
-  match lookup_module net (start_module net) with
-  | Some (ParserModule _ _) => true
-  | _ => false
-  end.
-Lemma start_module_is_parser_prop_bool_lemma :
-  forall n,
-    start_module_is_parser n <-> start_module_is_parserb n = true.
-Proof.
-  intros n.
-  unfold start_module_is_parser, start_module_is_parserb.
-  destruct (lookup_module n (start_module n)); split; intros.
-  - destruct c eqn:Hc; try reflexivity; try exfalso; assumption. 
-  - destruct c eqn:Hc; try apply I; try congruence. 
-  - exfalso. assumption.
-  - congruence.
-Qed.
-
 Definition end_modules_are_deparsers (net : ModuleNetwork) : Prop :=
   List.Forall (fun m =>
     match m with
@@ -235,17 +209,22 @@ Proof.
   split; apply in_names_iff; assumption.
 Qed.
 
-(* A well-formed ModuleNetwork satisfies all conditions. *)
+(* A well-formed ModuleNetwork satisfies all conditions.
+
+   Unique names, a DAG, and every SINK is a deparser.  Deliberately says nothing
+   about the start module: a program whose input is memory has nothing to parse.
+   Nothing here constrains evaluation -- [module_update_gs_*] has arms for all
+   three module kinds -- and no checker consults this predicate at all (TODO.md
+   1.5).  The asymmetry with [end_modules_are_deparsers] is untouched rather
+   than principled; README.md has the reasoning. *)
 Definition wf_module_network (net : ModuleNetwork) : Prop :=
   mod_names_unique net /\
   is_dag net /\
-  start_module_is_parser net /\
   end_modules_are_deparsers net.
 
 Definition wf_module_networkb (net : ModuleNetwork) : bool :=
   (mod_names_uniqueb net) &&
   (is_dagb net) &&
-  (start_module_is_parserb net) &&
   (end_modules_are_deparsersb net).
 
 Lemma wf_module_network_prop_bool_lemma :
@@ -253,32 +232,50 @@ Lemma wf_module_network_prop_bool_lemma :
 Proof.
   intros n. unfold wf_module_network, wf_module_networkb.
   split; intros H.
-  - destruct H as [H1 [H2 [H3 H4]]].
+  - destruct H as [H1 [H2 H3]].
     repeat rewrite andb_true_iff. repeat split.
     + apply mod_names_unique_prop_bool_lemma. exact H1.
     + apply is_dag_prop_bool_lemma. exact H2.
-    + apply start_module_is_parser_prop_bool_lemma. exact H3.
-    + apply end_modules_are_deparsers_prop_bool_lemma. exact H4.
-  - repeat rewrite andb_true_iff in H. destruct H as [[[H1 H2] H3] H4]. repeat split.
+    + apply end_modules_are_deparsers_prop_bool_lemma. exact H3.
+  - repeat rewrite andb_true_iff in H. destruct H as [[H1 H2] H3]. repeat split.
     + apply mod_names_unique_prop_bool_lemma. exact H1.
     + apply is_dag_prop_bool_lemma. exact H2.
-    + apply start_module_is_parser_prop_bool_lemma. exact H3.
-    + apply end_modules_are_deparsers_prop_bool_lemma. exact H4.
+    + apply end_modules_are_deparsers_prop_bool_lemma. exact H3.
 Qed.
 
 (* ------------------------------------------------------------------ *)
 
+(* A memory region a program can address: a name and a declared length in
+   cells.  Regions are static -- there is no runtime allocation -- so this is
+   the analogue of the declared input packet length, and like it, two programs
+   must agree on it to be comparable at all. *)
+Record MemRegionDecl : Type := mkMemRegionDecl {
+  mr_id  : MemRegion;
+  mr_len : nat;
+}.
+
+Definition mem_region_decl_eqb (a b : MemRegionDecl) : bool :=
+  posesque_eqb (mr_id a) (mr_id b) && Nat.eqb (mr_len a) (mr_len b).
+
+Definition mem_region_decls_eqb (a b : list MemRegionDecl) : bool :=
+  (Nat.eqb (List.length a) (List.length b)) &&
+  List.forallb (fun '(x, y) => mem_region_decl_eqb x y) (List.combine a b).
+
 Inductive GeneralCaracaraProgram : Type :=
   | GeneralCaracaraProgramDef :
       nat -> (* input packet length *)
+      list MemRegionDecl -> (* addressable memory regions *)
       ModuleNetwork ->
       GeneralCaracaraProgram.
 
 Definition get_inp_len_from_general (p : GeneralCaracaraProgram) : nat :=
-  match p with GeneralCaracaraProgramDef l _ => l end.
+  match p with GeneralCaracaraProgramDef l _ _ => l end.
+
+Definition get_mem_regions_from_general (p : GeneralCaracaraProgram) : list MemRegionDecl :=
+  match p with GeneralCaracaraProgramDef _ r _ => r end.
 
 Definition get_network_from_general (p : GeneralCaracaraProgram) : ModuleNetwork :=
-  match p with GeneralCaracaraProgramDef _ net => net end.
+  match p with GeneralCaracaraProgramDef _ _ net => net end.
 
 Definition module_states (m : CrModule) : list State :=
   match m with

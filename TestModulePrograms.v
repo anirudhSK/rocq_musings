@@ -89,7 +89,7 @@ Definition linear_dump_headers (hdrs : list (Header * nat)) : Deparser :=
 (* Single-module: unconditionally adds 3 to h1.
    h1=5 → h1=8. *)
 Definition mod_prog_single_add3 : GeneralCaracaraProgram :=
-  GeneralCaracaraProgramDef 8
+  GeneralCaracaraProgramDef 8 []
     (mkModuleNetwork [
       ParserModule (ModuleNameCtr 1)
         (simple_parser_generator [SParserTgt 0 8 1 u8]);
@@ -112,7 +112,7 @@ Definition mod_prog_single_add3 : GeneralCaracaraProgram :=
 (* Two-module pipeline: module 1 adds 1, module 2 multiplies by 2.
    h1=5 → (5+1)*2 = 12. *)
 Definition mod_prog_add1_then_mul2 : GeneralCaracaraProgram :=
-  GeneralCaracaraProgramDef 8
+  GeneralCaracaraProgramDef 8 []
     (mkModuleNetwork [
       ParserModule (ModuleNameCtr 1)
         (simple_parser_generator [SParserTgt 0 8 1 u8]);
@@ -144,7 +144,7 @@ Definition mod_prog_add1_then_mul2 : GeneralCaracaraProgram :=
    Module 2: h1 := h1 + 10.
    h1=7 → 1 → 11.  h1=3 → 3 → 13. *)
 Definition mod_prog_conditional_pipeline : GeneralCaracaraProgram :=
-  GeneralCaracaraProgramDef 8
+  GeneralCaracaraProgramDef 8 []
     (mkModuleNetwork [
       ParserModule (ModuleNameCtr 1)
         (simple_parser_generator [SParserTgt 0 8 1 u8]);
@@ -178,7 +178,7 @@ Definition mod_prog_conditional_pipeline : GeneralCaracaraProgram :=
    h1=3, h2=5 → 3<5 fires → h1=8 → h1=9.
    h1=5, h2=3 → no match  → h1=5 → h1=6. *)
 Definition mod_prog_cmplt_matchheader : GeneralCaracaraProgram :=
-  GeneralCaracaraProgramDef 16
+  GeneralCaracaraProgramDef 16 []
     (mkModuleNetwork [
       ParserModule (ModuleNameCtr 1)
         (simple_parser_generator [SParserTgt 0 8 1 u8; SParserTgt 8 8 2 u8]);
@@ -210,7 +210,7 @@ Definition mod_prog_cmplt_matchheader : GeneralCaracaraProgram :=
 (* Two parser modules in a pipeline: parser 1 extracts a byte into h1, parser 2
    extracts a byte (from its own packet) into h2, carrying h1 forward. *)
 Definition mod_prog_two_parsers : GeneralCaracaraProgram :=
-  GeneralCaracaraProgramDef 16
+  GeneralCaracaraProgramDef 16 []
     (mkModuleNetwork [
       ParserModule (ModuleNameCtr 1)
         (simple_parser_generator [SParserTgt 0 8 1 u8]);
@@ -232,7 +232,7 @@ Definition mod_prog_two_parsers : GeneralCaracaraProgram :=
    parse-then-deparse reproduces the input packet, so the pipeline is
    equivalent to itself over any input bitstream. *)
 Definition mod_prog_parse_deparse : GeneralCaracaraProgram :=
-  GeneralCaracaraProgramDef 16
+  GeneralCaracaraProgramDef 16 []
     (mkModuleNetwork [
       ParserModule (ModuleNameCtr 1)
         (simple_parser_generator [SParserTgt 0 8 1 u8; SParserTgt 8 8 2 u8]);
@@ -249,7 +249,7 @@ Definition mod_prog_parse_deparse : GeneralCaracaraProgram :=
    pipeline is NOT equivalent to [mod_prog_parse_deparse]: on any input whose two
    bytes differ, the emitted output packets differ. *)
 Definition mod_prog_parse_deparse_swapped : GeneralCaracaraProgram :=
-  GeneralCaracaraProgramDef 16
+  GeneralCaracaraProgramDef 16 []
     (mkModuleNetwork [
       ParserModule (ModuleNameCtr 1)
         (simple_parser_generator [SParserTgt 0 8 1 u8; SParserTgt 8 8 2 u8]);
@@ -270,7 +270,7 @@ Definition mod_prog_parse_deparse_swapped : GeneralCaracaraProgram :=
    one rejects and the other accepts.  The old swallow-the-reject symbolic
    semantics wrongly called them equivalent. *)
 Definition mod_prog_parse_reject_deparse : GeneralCaracaraProgram :=
-  GeneralCaracaraProgramDef 8
+  GeneralCaracaraProgramDef 8 []
     (mkModuleNetwork [
       ParserModule (ModuleNameCtr 1)
         (mkParser (ParserStateLabelCtr 1) [
@@ -290,7 +290,7 @@ Definition mod_prog_parse_reject_deparse : GeneralCaracaraProgram :=
 
 (* Always-accepting counterpart of [mod_prog_parse_reject_deparse]. *)
 Definition mod_prog_parse_accept_deparse : GeneralCaracaraProgram :=
-  GeneralCaracaraProgramDef 8
+  GeneralCaracaraProgramDef 8 []
     (mkModuleNetwork [
       ParserModule (ModuleNameCtr 1)
         (simple_parser_generator [SParserTgt 0 8 1 u8]);
@@ -310,7 +310,7 @@ Definition mod_prog_parse_accept_deparse : GeneralCaracaraProgram :=
 
 (* Consume one byte into h1, emit h1: output = byte0 ++ (input past byte 0). *)
 Definition mod_prog_consume1_emit1 : GeneralCaracaraProgram :=
-  GeneralCaracaraProgramDef 24
+  GeneralCaracaraProgramDef 24 []
     (mkModuleNetwork [
       ParserModule (ModuleNameCtr 1)
         (simple_parser_generator [SParserTgt 0 8 1 u8]);
@@ -327,7 +327,7 @@ Definition mod_prog_consume1_emit1 : GeneralCaracaraProgram :=
    byte 1) — it drops byte 1.  Not equivalent to [mod_prog_consume1_emit1], which
    keeps byte 1; the old whole-packet residual wrongly called them equivalent. *)
 Definition mod_prog_consume2_emit1 : GeneralCaracaraProgram :=
-  GeneralCaracaraProgramDef 24
+  GeneralCaracaraProgramDef 24 []
     (mkModuleNetwork [
       ParserModule (ModuleNameCtr 1)
         (simple_parser_generator [SParserTgt 0 8 1 u8; SParserTgt 8 8 2 u8]);
@@ -345,7 +345,7 @@ Definition mod_prog_consume2_emit1 : GeneralCaracaraProgram :=
    unconsumed-tail length depends on the input, so its residual is a genuinely
    variable-length bitstream (exercises [merge_bitstream]). *)
 Definition mod_prog_varlen_emit1 : GeneralCaracaraProgram :=
-  GeneralCaracaraProgramDef 24
+  GeneralCaracaraProgramDef 24 []
     (mkModuleNetwork [
       ParserModule (ModuleNameCtr 1)
         (mkParser (ParserStateLabelCtr 1) [
@@ -366,20 +366,20 @@ Definition mod_prog_varlen_emit1 : GeneralCaracaraProgram :=
         end)
       (ModuleNameCtr 1)).
 
-(* ------------------------------------------------------------------ *)
-(* Why a match-action rule silently never fires.                        *)
-(*                                                                      *)
-(* Both of the ways below made every filter in PktClass's databases      *)
+(* ---------------------------------------------------------------------- *)
+(* Why a match-action rule silently never fires.                          *)
+(*                                                                        *)
+(* Both of the ways below made every filter in PktClass's databases       *)
 (* match nothing, which is what let linear_db and tss_db disagree while   *)
 (* still looking plausible: neither classifier was classifying at all.    *)
 (* They are properties of the IR's match semantics, not of PktClass, so   *)
 (* they are pinned down here on the smallest programs that exhibit them.  *)
-(*                                                                      *)
-(* All three share a shape: parse byte 0 into a header, run one guarded  *)
+(*                                                                        *)
+(* All three share a shape: parse byte 0 into a header, run one guarded   *)
 (* rule that would set h2 := 99, and emit h2.  They differ only in        *)
 (* whether the guard can fire.  When it does not, h2 is never written, so *)
 (* the (total) deparser emits it as zero bits.                            *)
-(* ------------------------------------------------------------------ *)
+(* ---------------------------------------------------------------------- *)
 
 Definition set_h2_when (guard : MatchPattern) : Transformer :=
   [Seq (SeqCtr guard
@@ -387,7 +387,7 @@ Definition set_h2_when (guard : MatchPattern) : Transformer :=
 
 Definition guarded_parse_emit (extract_ty : CrIntType) (guard : MatchPattern)
   : GeneralCaracaraProgram :=
-  GeneralCaracaraProgramDef 8
+  GeneralCaracaraProgramDef 8 []
     (mkModuleNetwork [
       ParserModule (ModuleNameCtr 1)
         (simple_parser_generator [SParserTgt 0 8 1 extract_ty]);
@@ -426,7 +426,7 @@ Definition mod_prog_guard_unwritten : GeneralCaracaraProgram :=
    so this pins down whether a second deparser appends to the first's output or
    replaces it. *)
 Definition mod_prog_two_deparsers : GeneralCaracaraProgram :=
-  GeneralCaracaraProgramDef 16
+  GeneralCaracaraProgramDef 16 []
     (mkModuleNetwork [
       ParserModule (ModuleNameCtr 1)
         (simple_parser_generator [SParserTgt 0 8 1 u8; SParserTgt 8 8 2 u8]);
@@ -441,6 +441,153 @@ Definition mod_prog_two_deparsers : GeneralCaracaraProgram :=
         | _, _ => false
         end)
       (ModuleNameCtr 1)).
+
+(* ------------------------------------------------------------------ *)
+(* Memory programs.
+
+   All of these share one shape -- parse a byte into h1, run a transformer that
+   touches memory and leaves its result in h2, emit h2 -- and one declared
+   region: [region_1], four cells, so offsets 0..3 are in bounds and 4 is not.
+   h2 is written only by the transformer -- no parser extracts it -- which
+   deliberately exercises header seeding ([CrVarLike.collect_write_headers]).
+
+   A cell that was never written reads [UninitVal], which fails the load's type
+   check and lands as ErrorVal; a deparser is total and emits a non-integer
+   header as zero bits of its full width.  So a program that only ever loads
+   emits a zero byte, and two such programs agree on their output -- which is
+   why the extent conjunct is what separates several of these pairs. *)
+Definition region_1 : MemRegion := MemRegionCtr 1.
+Definition mem_regions_4 : list MemRegionDecl := [mkMemRegionDecl region_1 4].
+
+Definition mem_prog_rules (rules : Transformer) : GeneralCaracaraProgram :=
+  GeneralCaracaraProgramDef 8 mem_regions_4
+    (mkModuleNetwork [
+      ParserModule (ModuleNameCtr 1)
+        (simple_parser_generator [SParserTgt 0 8 1 u8]);
+      TransformerModule (ModuleNameCtr 2) [] [] rules;
+      DeparserModule (ModuleNameCtr 3)
+        (linear_dump_headers [(HeaderCtr 2, 8)])]
+      (fun m1 m2 =>
+        match m1, m2 with
+        | ModuleNameCtr 1, ModuleNameCtr 2 => true
+        | ModuleNameCtr 2, ModuleNameCtr 3 => true
+        | _, _ => false
+        end)
+      (ModuleNameCtr 1)).
+
+Definition mem_prog (ops : list HdrOp) : GeneralCaracaraProgram :=
+  mem_prog_rules [Seq (SeqCtr [] ops)].
+
+(* Store the parsed byte at offset 2, read it straight back. *)
+Definition mod_prog_mem_store_load : GeneralCaracaraProgram :=
+  mem_prog [
+    StoreOp u8 region_1 (OpConst (repr 2)) (OpHeader (HeaderCtr 1));
+    LoadOp  u8 region_1 (OpConst (repr 2)) (HeaderCtr 2)].
+
+(* Same, but the offset is computed into h3 rather than written literally.
+   Equivalent to the above: which header holds the address is not observable. *)
+Definition mod_prog_mem_store_load_alias : GeneralCaracaraProgram :=
+  mem_prog [
+    StatelessOp AddOp u64 (OpConst (repr 0)) (OpConst (repr 2)) (HeaderCtr 3);
+    StoreOp u8 region_1 (OpConst (repr 2)) (OpHeader (HeaderCtr 1));
+    LoadOp  u8 region_1 (OpHeader (HeaderCtr 3)) (HeaderCtr 2)].
+
+(* Stores a different value: same extent, same shape, differing contents. *)
+Definition mod_prog_mem_store_load_differs : GeneralCaracaraProgram :=
+  mem_prog [
+    StatelessOp AddOp u8 (OpHeader (HeaderCtr 1)) (OpConst (repr 1)) (HeaderCtr 4);
+    StoreOp u8 region_1 (OpConst (repr 2)) (OpHeader (HeaderCtr 4));
+    LoadOp  u8 region_1 (OpConst (repr 2)) (HeaderCtr 2)].
+
+(* A dead load at offset 1 before the real one at offset 0.  Reaches further
+   into the region than [mem_load0] while emitting the same packet. *)
+Definition mod_prog_mem_load1_load0 : GeneralCaracaraProgram :=
+  mem_prog [
+    LoadOp u8 region_1 (OpConst (repr 1)) (HeaderCtr 3);
+    LoadOp u8 region_1 (OpConst (repr 0)) (HeaderCtr 2)].
+
+(* The same, into a different scratch header: internal, so equivalent. *)
+Definition mod_prog_mem_load1_load0_alt : GeneralCaracaraProgram :=
+  mem_prog [
+    LoadOp u8 region_1 (OpConst (repr 1)) (HeaderCtr 4);
+    LoadOp u8 region_1 (OpConst (repr 0)) (HeaderCtr 2)].
+
+Definition mod_prog_mem_load0 : GeneralCaracaraProgram :=
+  mem_prog [LoadOp u8 region_1 (OpConst (repr 0)) (HeaderCtr 2)].
+
+(* In bounds, the order of a load and a store to the same cell is observable. *)
+Definition mod_prog_mem_ib_load_store : GeneralCaracaraProgram :=
+  mem_prog [
+    LoadOp  u8 region_1 (OpConst (repr 2)) (HeaderCtr 2);
+    StoreOp u8 region_1 (OpConst (repr 2)) (OpHeader (HeaderCtr 1))].
+
+(* Out of bounds (offset 4 in a 4-cell region), it is not: the store is dropped
+   and the load yields ErrorVal either way.  This pair is equivalent only if
+   the Z3 lowering guards [select] with the declared length -- Z3's array
+   theory is total, so an unguarded encoding would let the second program read
+   its own out-of-bounds store back and the checker would report a difference
+   the concrete semantics cannot produce. *)
+Definition mod_prog_mem_oob_load_store : GeneralCaracaraProgram :=
+  mem_prog [
+    LoadOp  u8 region_1 (OpConst (repr 4)) (HeaderCtr 2);
+    StoreOp u8 region_1 (OpConst (repr 4)) (OpHeader (HeaderCtr 1))].
+
+Definition mod_prog_mem_oob_store_load : GeneralCaracaraProgram :=
+  mem_prog [
+    StoreOp u8 region_1 (OpConst (repr 4)) (OpHeader (HeaderCtr 1));
+    LoadOp  u8 region_1 (OpConst (repr 4)) (HeaderCtr 2)].
+
+(* Multi-byte access.  A region is an array of bytes, so a u16 store covers two
+   cells little-endian and is EXACTLY the two u8 stores an optimiser coalesces
+   it from.  Under the old one-value-per-cell model these two were reported
+   inequivalent -- a real false positive on -O0 vs -O2 pairs, since -O2 merges
+   adjacent narrow stores. *)
+Definition mod_prog_mem_two_u8_stores : GeneralCaracaraProgram :=
+  mem_prog [
+    StoreOp u8 region_1 (OpConst (repr 0)) (OpConst (repr 52));   (* 0x34 *)
+    StoreOp u8 region_1 (OpConst (repr 1)) (OpConst (repr 18));   (* 0x12 *)
+    LoadOp  u8 region_1 (OpConst (repr 0)) (HeaderCtr 2)].
+
+Definition mod_prog_mem_one_u16_store : GeneralCaracaraProgram :=
+  mem_prog [
+    StoreOp u16 region_1 (OpConst (repr 0)) (OpConst (repr 4660));  (* 0x1234 *)
+    LoadOp  u8  region_1 (OpConst (repr 0)) (HeaderCtr 2)].
+
+(* Storing a header that was never written.  [apply_cast ty ty] rejects a
+   non-integer, and [byte_of_val] sends the result to ErrorVal, so EVERY cell
+   the store covers ends up holding a poisoned value rather than a number --
+   [Init ErrorVal], which the region printer shows as [!] and which no other
+   program here produces.  The load then reads one back, so h2 is poisoned too
+   and the deparser emits a zero byte. *)
+Definition mod_prog_mem_store_poisoned : GeneralCaracaraProgram :=
+  mem_prog [
+    StoreOp u16 region_1 (OpConst (repr 0)) (OpHeader (HeaderCtr 9));
+    LoadOp  u8  region_1 (OpConst (repr 0)) (HeaderCtr 2)].
+
+(* And the other direction: two byte stores read back as one u16 reassemble
+   little-endian.  The low byte reaches the deparser. *)
+Definition mod_prog_mem_u16_readback : GeneralCaracaraProgram :=
+  mem_prog [
+    StoreOp u8 region_1 (OpConst (repr 0)) (OpConst (repr 52));
+    StoreOp u8 region_1 (OpConst (repr 1)) (OpConst (repr 18));
+    LoadOp  u16 region_1 (OpConst (repr 0)) (HeaderCtr 3);
+    CastHeaderOp u16 u8 (OpHeader (HeaderCtr 3)) (HeaderCtr 2)].
+
+(* A guard that cannot fail is the same as no guard.  [CrVal.eqb] is reflexive
+   on every constructor -- including [UninitVal] and [ErrorVal] -- so comparing
+   a header to itself always holds, and this must be equivalent to
+   [mem_store_load], which runs the same ops unguarded.
+
+   This replaces the retired memory IR's "a branch on a constant collapses"
+   (a [BrzOp] on 0 against its taken arm inlined).  There is no direct
+   translation: the unified IR has no nested conditional, so the analogue of a
+   statically-true branch is a tautological match pattern. *)
+Definition mod_prog_mem_guard_tautology : GeneralCaracaraProgram :=
+  mem_prog_rules [
+    Seq (SeqCtr [(HeaderCtr 1, CmpEq, MatchHeader (HeaderCtr 1))] [
+      StoreOp u8 region_1 (OpConst (repr 2)) (OpHeader (HeaderCtr 1));
+      LoadOp  u8 region_1 (OpConst (repr 2)) (HeaderCtr 2)]);
+    Seq (SeqCtr [] [])].
 
 (* The single registry of module test programs, keyed by name.
 
@@ -470,7 +617,21 @@ Definition mod_test_program_list
   ("guard_type_agrees",    mod_prog_guard_type_agrees);
   ("guard_type_differs",   mod_prog_guard_type_differs);
   ("guard_unwritten",      mod_prog_guard_unwritten);
-  ("two_deparsers",        mod_prog_two_deparsers)
+  ("two_deparsers",        mod_prog_two_deparsers);
+  ("mem_store_load",         mod_prog_mem_store_load);
+  ("mem_store_load_alias",   mod_prog_mem_store_load_alias);
+  ("mem_store_load_differs", mod_prog_mem_store_load_differs);
+  ("mem_load1_load0",        mod_prog_mem_load1_load0);
+  ("mem_load1_load0_alt",    mod_prog_mem_load1_load0_alt);
+  ("mem_load0",              mod_prog_mem_load0);
+  ("mem_ib_load_store",      mod_prog_mem_ib_load_store);
+  ("mem_oob_load_store",     mod_prog_mem_oob_load_store);
+  ("mem_oob_store_load",     mod_prog_mem_oob_store_load);
+  ("mem_guard_tautology",    mod_prog_mem_guard_tautology);
+  ("mem_two_u8_stores",      mod_prog_mem_two_u8_stores);
+  ("mem_one_u16_store",      mod_prog_mem_one_u16_store);
+  ("mem_store_poisoned",     mod_prog_mem_store_poisoned);
+  ("mem_u16_readback",       mod_prog_mem_u16_readback)
 ].
 
 Definition mod_test_programs : PTree.t GeneralCaracaraProgram :=

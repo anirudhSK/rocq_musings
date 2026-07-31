@@ -1,0 +1,471 @@
+memo-memo: why the Z3 lowering memoises BOTH expression types
+==============================================================
+
+Short answer up front, because the honest one is not the expected one:
+
+  Neither table is individually necessary to avoid the catastrophe.  Either
+  one alone turns 4.6 million node expansions into a few thousand.  Both are
+  kept because only both together make the cost linear in the formula, and
+  because which single one would suffice is an accident of formula shape.
+
+The rest of this file is the measurement and the reasoning.
+
+
+THE PROBLEM
+-----------
+
+`Z3Solver.z3_expr_from_coq_smt_bool_expr` (and its arith counterpart) lower a
+Coq `SmtBoolExpr` into a Z3 AST.  They originally recursed structurally with no
+memoisation.
+
+A symbolic query is a DAG, not a tree.  Sharing comes from two places:
+
+  - path merging: `merge_header_maps` points both branches of every merge at
+    the same header expressions, so one subterm is reachable along many paths;
+  - the deparser: `emit_bits_symbolic` slices the SAME header value once per
+    emitted bit, so an 8-bit emit references one arith subterm 8 times.
+
+Lowering that structurally re-expands the sharing.  On the PktClass
+linear-vs-TSS query (`tss basic` in TestEquality) the numbers were:
+
+    distinct nodes in the DAG            388
+    nodes an unmemoised walk expands   4,592,444
+
+roughly a 12,000x expansion.  Each expansion is an OCaml->C++ call building a
+node Z3 then hash-conses straight back down, so it cost ~7.2 seconds -- while
+`Solver.check` on the resulting (tiny) AST took 0.000s.  The whole test suite
+was 12.5s, of which this one query was 7.2s.
+
+
+WHY TWO TABLES AT ALL
+---------------------
+
+`SmtBoolExpr` and `SmtArithExpr` are mutually recursive in `SmtExpr.v`:
+
+    SmtBoolExpr  contains SmtArithExpr   via SmtBoolEq, SmtBoolLt
+    SmtArithExpr contains SmtBoolExpr    via SmtConditional (the condition)
+                                         and SmtBitsToInt (a list of bits)
+
+so the lowering is a mutually recursive pair and any deep path alternates
+bool -> arith -> bool -> arith.  A memo table only short-circuits at nodes of
+its own type.
+
+
+THE MEASUREMENT
+---------------
+
+Expansions (recursions that actually build Z3 nodes) for the `tss basic` query,
+counted by simulating each policy:
+
+    policy        bool expansions   arith expansions      total
+    ----------    ---------------   ----------------   --------
+    neither             4,083,734            508,710  4,592,444
+    bool only                 317             12,190     12,507
+    arith only              2,144                 71      2,215
+    both                      317                 71        388
+
+The DAG really is 317 distinct bool nodes + 71 distinct arith nodes = 388, so
+"both" is exactly optimal.
+
+Wall clock for the same four, via the `tss basic` test:
+
+    neither      7.18 s
+    bool only    0.028 s
+    arith only   0.025 s
+    both         0.025 s
+
+which is consistent with ~1.5us per expansion, and explains why the three
+memoised configurations are indistinguishable by eye: 12,507 expansions is
+~19ms and 388 is under a millisecond, both lost in the noise.
+
+
+WHY EITHER ONE ALONE ALREADY FIXES THE BLOWUP
+---------------------------------------------
+
+Because the recursion strictly alternates, the multiplicative chain that
+produces the 4.6M needs BOTH levels to be re-expandable.  Cap either level and
+a repeated node of that type terminates the walk, so the exponential collapses.
+What survives is a product, not a power:
+
+  - bool only: each of the 317 distinct bool nodes is expanded once, but the
+    arith subtree under each is rebuilt per distinct bool parent -- 12,190
+    arith expansions instead of 71, about 172x redundancy.
+
+  - arith only: each of the 71 distinct arith nodes is expanded once, but bool
+    nodes are rebuilt per distinct arith parent -- 2,144 instead of 317, about
+    6.8x redundancy.
+
+Only memoising both removes the product and makes the work linear in the DAG.
+
+
+SO WHY KEEP BOTH
+----------------
+
+1. The residual product term scales with the formula.  Today the gap is
+   12,507 vs 388 expansions -- ~19ms vs <1ms, invisible.  The product term is
+   what bites on a formula an order of magnitude larger, and these queries grow
+   with the programs being compared.
+
+2. Which single table would suffice depends on formula shape, not on anything
+   stable.  Here arith-only is the better single choice (2,215 vs 12,507)
+   because this query has few distinct arith nodes (71) and many bool (317) --
+   lots of packet-bit structure under a small number of header values.  A query
+   shaped the other way, deep arithmetic under few conditions, would flip it.
+   Picking one table means betting on the current shape.
+
+3. Symmetric code is easier to reason about than "we memoise one side because
+   it happened to dominate the one query we profiled".
+
+The cost of the second table is a hash table and one lookup per node, so there
+is nothing to trade off against.
+
+
+WHAT THE TABLES ARE KEYED ON (added after the eBPF work)
+--------------------------------------------------------
+
+They are keyed on PHYSICAL identity.  They originally used the polymorphic
+`Hashtbl`, i.e. structural equality, on the reasoning that it is strictly
+better: it shares two subterms that are equal but not the same value.  That
+reasoning is wrong, and expensively so.
+
+`Hashtbl.hash` inspects only a bounded prefix of a term.  The merge nodes a
+chain of transformers produces are all `SmtConditional` over a guard on the
+same header, so they hash alike and land in one bucket.  Resolving the
+collision runs structural `=`, which walks the DAG as a tree -- re-expanding
+precisely the sharing the memo exists to exploit.  The memo becomes the thing
+it was added to prevent.
+
+The failure is worst when the comparison is EASIEST.  Comparing a program
+against itself makes every subterm of the two symbolic states structurally
+equal, so every lookup collides and every collision runs the full walk:
+
+    bpf_O0 vs bpf_O0, structural keys     131 s   (all of it in caml_compare)
+    bpf_O0 vs bpf_O0, physical keys         0.01 s
+
+which is why this hid for so long -- the pair anybody actually runs
+(`bpf_O0` vs `bpf_O2`) is barely affected, 10.5s either way, because its two
+states genuinely differ and the collisions resolve quickly.  A `sample` of the
+131s run has 100% of the stack in `caml_compare` under `Hashtbl.find_opt`.
+
+Physical identity is the right key because that is where the sharing comes
+from: a merge points both branches at the same OCaml value.  A collision is
+then an O(1) pointer comparison.  What it gives up -- distinct-but-equal
+subterms are lowered twice -- costs nothing, because Z3 hash-conses them back
+together.  Every expect test passes with byte-identical output after the
+change, including the ones asserting exact SAT valuations.
+
+Same argument applies to the visited set in `collect_arr_lens`, with the extra
+wrinkle that a constant constructor extracts to an immediate, so `SmtTrue`,
+`SmtUninit` and `SmtArrInit` are all `Obj.repr 0`: it uses one table per sort
+rather than one shared table.
+
+
+WHAT IS NOT WORTH DOING
+-----------------------
+
+Rewriting away `SmtConditional`/`SmtArrIte` nodes whose two arms are the same
+node.  A transformer merges EVERY variable through `switch_case_expr`,
+including the ones the matched rule never wrote, so about 40% of the
+conditionals and 50% of the array-ites in an eBPF query are `ite c x x`.  That
+looks like obvious waste and it is not worth removing: a memoised rewrite pass
+that drops them, measured on `bpf_O0` vs `bpf_O2`, made the solve marginally
+SLOWER (11.6s vs 10.5s).  Z3 already handles `ite c x x`.  Filtering the merge
+by `extract_all_targets` on the Coq side would produce a smaller DAG for the
+same reason and buy the same nothing.
+
+The section below explains why: the array-ites that are identities are exactly
+the ones over a region NO rule in that transformer stored to, and those are
+already free -- region 1 of the eBPF query carries ~34 of them and costs 0.00s.
+The ones that cost are the ites straddling a store, and those are not
+identities, so no such rewrite can touch them.
+
+WHERE THE eBPF QUERY'S 10.5s ACTUALLY GOES
+------------------------------------------
+
+By conjunct:
+
+    out_equal    0.02s      bits_read   0.00s
+    mem_extent   0.01s      valid       0.00s
+    mem_equal    9.6 s
+
+so it is all `check_sym_mem_equal`, and within that, all of it is ONE region:
+
+    region 1 (ctx, 0 stores,  ~34 array-ites, 32 cells)    0.00s
+    region 2 (pkt, 1 store,   ~34 array-ites, 32 cells)    9.95s
+
+It is QUADRATIC in the number of cells compared, not flat:
+
+    cells   1     2     4     8    12    16    20    24    28    32
+    sec    0.05  0.08  0.24  0.71  1.59  2.70  4.96  6.74  7.96 10.32
+
+which fits about n^1.9.  (An earlier note here claimed the cost was flat in the
+region length.  That was a measurement artifact: it varied `PKT_LEN` in the
+transpiler and regenerated the programs, which changes the programs -- their
+declared lengths and hence their bounds guards -- not just the number of
+comparisons.  Truncating `mr_len` in the checker alone, holding the symbolic
+states fixed, is the right ablation and gives the curve above.)
+
+Three ablations, to find the trigger:
+
+  - Remove the store.  Region 1 has the same ~34-deep array-ite merge chain and
+    the same 32 selects, and no store: free.  So the ite chain is not the cost.
+  - Make the store index a CONSTANT (leaving loads, merges and region alone).
+    10.30s vs 10.32s -- no change.  So a symbolic address is not the cost
+    either, which is what an earlier version of this note guessed.
+  - Take a program whose store is UNCONDITIONAL (`ex/a.c`: one store, no
+    branches, 6 array-ites): 32 cells cost 0.00s.
+
+What is left, and what the numbers point at, is a store sitting under a
+non-trivial PATH CONDITION that the two programs express differently.  Comparing
+`bpf_O2` against ITSELF is 0.02s at the same depth with the same conditional
+store -- so it is not the depth and not the store in isolation, it is having to
+match up two different encodings of the same guard, once per compared cell.
+
+AND IT IS ALSO QUADRATIC IN THE NUMBER OF STORES
+-----------------------------------------------
+
+The curve above varies cells at one store.  Varying stores at 32 cells, using
+`-O0` vs `-O2` of a synthetic XDP program that writes k packet bytes under one
+guard (offsets spaced 4 apart so `-O2` cannot coalesce them; verified k StoreOps
+in both `.ir` files):
+
+    stores    1      2      3      4
+    sec     11.8   40.9   75.6  125.4
+
+about k^1.7.  So it is polynomial, not exponential -- but it compounds with the
+cell axis, and it degrades fast in absolute terms: four stores is already two
+minutes.  Extrapolating the fit (from four points, so treat it as an
+indication): ten stores ~10 min, twenty ~30 min.  A realistic XDP program that
+rewrites a whole IP header is out of reach of the checker as it stands.
+
+Note what this says about the mechanism.  All k stores sit under the SAME path
+condition, so no guard-matching work is added -- what grows is the length of the
+store chain each select has to be resolved against.  So "matching two encodings
+of one guard" is necessary to make it expensive at all (an unconditional store
+in a shallow program is free, and a program compared against itself is free at
+the same depth) but the growth is in stores x cells.
+
+The joint scaling was not measured: the cell curve is at one store and the store
+curve is at 32 cells.
+
+WHAT WAS DONE ABOUT IT
+----------------------
+
+Two things did NOT help and are recorded above so nobody retries them:
+shortening the module chain (depth is not the cost) and rewriting away identity
+merges.
+
+The fix was to stop comparing cell by cell.  `check_sym_region_equal` used to
+emit `mr_len` separate `SmtArrSel` comparisons; it now emits ONE `SmtArrEq`,
+which the Z3 lowering turns into a single extensional array equality:
+
+    O0 vs O2, whole query        10.4 s  ->  0.02 s
+    O0 vs O0                      0.02s  ->  0.02 s
+    synthetic, 1 store           11.8 s  ->  0.07 s
+    synthetic, 2 stores          40.9 s  ->  0.03 s
+    synthetic, 3 stores          75.6 s  ->  0.06 s
+    synthetic, 4 stores         125.4 s  ->  0.10 s
+    synthetic, 16 stores / 96 cells   --  ->  0.13 s
+
+Both axes are gone: 16 stores over a 96-cell region now costs less than one
+store over 32 cells used to cost squared.  The whole test suite went from ~12s
+back to ~2s.
+
+`SmtArrEq n a1 a2` carries the bound `n` for the SEMANTICS -- `eval_smt_bool`
+returns a bool and so needs something finite to fold over -- and the lowering
+ignores it, emitting `mk_eq` on the two array terms.  That is the same statement
+only because of two facts about the terms this checker builds:
+
+  - both arrays are rooted at the same `SmtArrVar`, so outside the declared
+    length they are literally the same term.  This is proved in Coq:
+    `SmtModuleQuery.eval_general_program_symbolic_mem_rooted`.
+  - every `SmtArrSt` is guarded in bounds, so no write escapes the length.
+
+The second one became load-bearing with this change: extensional equality looks
+at every index, whereas the old per-cell conjunction never looked past the
+declared length and so could not have noticed an unguarded store.  Regression
+test: `TestEquality` "out of bounds, the order stops mattering".
+
+Verdict-preservation was checked rather than assumed: the whole suite reports
+the same Equivalent/NotEquivalent verdicts as before (only one witness changed,
+to an equally valid model), and every NotEquivalent witness was re-verified by
+evaluating `eval_smt_bool (check_sym_pkt_out regions s1 s2) f` -- all true.
+
+
+THE INVARIANT THAT MATTERS
+--------------------------
+
+A Z3 expression belongs to the `Z3.context` it was built in, and `solve` builds
+a fresh context per call.  So the tables MUST NOT survive one lowering:
+`solve` calls `reset_lowering_memo ()` before lowering.  Dropping that reset
+would hand expressions from a dead context to a new solver.  This is the one
+way to get the memoisation wrong that a test would not obviously catch, since
+the failure depends on query order.
+
+Memoising is otherwise semantically transparent -- same term, same expression,
+and Z3 hash-conses internally regardless.  Evidence: every expect test passes
+with byte-identical output after the change, including the tests that assert
+exact SAT valuations (`emit order swapped`, `reject-on-0xFF vs always-accept`),
+which would shift if the constructed AST changed observably.
+
+
+REPRODUCING THE NUMBERS
+-----------------------
+
+The expansion counts come from a throwaway expect test that walks the query
+under each policy, counting recursions and short-circuiting on a hash table for
+whichever types the policy memoises.  Build the query with
+
+    CrSymbolicSemanticsModule.eval_general_program_symbolic p
+      (CrVarLike.init_general_symbolic_state (Shim.str_to_coq_str "p1") p)
+
+for both PktClass programs and combine with `SmtModuleQuery.check_sym_pkt_out`.
+Per-test wall clock, which is how the 7.2s was localised in the first place:
+
+    dune build
+    cd _build/default/extracted_code
+    ./.semantics_tests.inline-tests/inline-test-runner.exe \
+        inline-test-runner semantics_tests -verbose
+
+then sort the reported per-test times.  To split lowering from solving, time
+`collect_var_widths`, `z3_expr_from_coq_smt_bool_expr` and `Solver.check`
+separately rather than timing `smt_query` as a whole -- the whole point of this
+memo is that the expensive phase was not the one anybody would guess.
+
+
+THE TYPE TAG (measured after the SmtArrEq change)
+-------------------------------------------------
+
+Every arith expression lowers to a `(value, tag)` pair.  Ablating the tag
+reasoning -- unsound, the encoding that made `smt_query_sound_some` false, used
+here purely as a stopwatch -- on a 766-instruction -O0-vs-O2 pair:
+
+    tags on   ~2.5 s
+    tags off  ~0.6 s
+
+about 3x.  On the 40-instruction `bpf_ref` pair it is 0.02s either way.  So the
+tags are the next wall, not a current problem, and the trigger is program size.
+
+Abstracting each arith node by the SET of CrVals it can denote:
+
+    type-set size 1   42%      type-set size 3   18%
+    type-set size 2   40%      type-set size 6   0.3%
+
+and 81% of comparisons have both operands confined to <=2 types.  Sizing the tag
+to the set would be a pure lowering specialisation -- no Coq or proof changes.
+Written up as TODO.md 1.3.
+
+A SMALLER, INDEPENDENT WIN, NOW DONE
+------------------------------------
+
+The header map is seeded with `SmtUninit`, and a transformer's merge keeps the
+old value where its guard did not match, so every register's expression carried
+an `SmtUninit` leaf.  `bpf_to_ir` now initialises every register the program
+mentions in its preamble.  Back to back on the same 766-instruction pair:
+
+    before  ~2.5-2.7 s
+    after   ~1.9-2.2 s
+
+about 1.25x.  NOTE: an earlier estimate here said 2x.  That came from comparing
+runs taken at different times whose baselines had drifted (a 3.19s baseline
+against a 1.62s figure); measured back to back in one run it is 1.25x.  Worth
+keeping -- it is a handful of lines and costs nothing in fidelity, since the BPF
+verifier rejects reading an uninitialised register anyway -- but it is not the
+lever the tags are.
+
+Initialising the scratch (`H_TMP`) headers as well, and initialising registers
+the program never mentions, were both measured and made no difference beyond
+noise.  The preamble does neither.
+
+
+THE COST OF BYTE-ADDRESSED MEMORY
+---------------------------------
+
+A region became an array of u8 cells, so a width-w access is w cell accesses
+plus the arithmetic to assemble or decompose the value.  That is a correctness
+fix -- a u16 store is now exactly the two u8 stores -O2 coalesces it from, which
+the previous one-value-per-cell model reported as INEQUIVALENT -- and it is not
+free:
+
+    bpf_ref -O0 vs -O2                 0.02 s  ->  0.02 s   (unchanged)
+    synthetic, 1..16 stores       0.02-0.13 s  ->  0.02-0.22 s
+    766-instruction pair            ~2.0 s     ->  ~4.9 s   (~2.4x)
+
+The regression is concentrated where the ACCESSES are wide, not where the
+program is big.  The 766-instruction program has 4 u8 loads and 1 u8 store --
+all unchanged at one cell -- plus 2 W32 loads (ctx->data and ctx->data_end).
+Those two become 4 selects, 4 casts, 4 muls and 4 ors each, and every packet
+address is computed from them, so the whole address DAG grows with them.
+
+Worth it: the coalescing false positive would have made real -O0/-O2
+comparisons fail outright on any program that writes adjacent narrow fields,
+which is most of them.  A false NotEquivalent is worse than a slow Equivalent.
+
+
+ONE NODE WHERE A MEMO MISS IS NOT A PERFORMANCE QUESTION
+========================================================
+
+Everything above treats the memo as a cache: a miss re-walks a subtree and
+costs time.  That holds for every constructor except SmtArrInit.
+
+SmtArrInit lowers with Z3.Expr.mk_fresh_const, which is generative -- call it
+twice and you get two constants Z3 is free to make unequal.  Every other node
+lowers idempotently, so for those a miss is invisible except on the clock.
+Here it changes the answer:  eval_smt_mem sends every SmtArrInit to the single
+value Unallocated, and arr_agree_upto n Unallocated Unallocated is true for all
+n (ld_arr is Illegal on both sides), so two unequal constants make SmtArrEq
+between undeclared regions satisfiable-false -- a spurious NotEquivalent, with
+a witness that cannot be reconstructed.
+
+The occurrences share today because SmtArrInit is a constant constructor and
+therefore an immediate, so memo_arr's physical-equality key collides.  That is
+a property of OCaml's value representation, not of the encoding.
+
+Consequence for anyone tuning this file: "leaves are cheap, don't bother
+caching them" is a pure performance change for every constructor but this one.
+get_undeclared_arr owns the sharing separately so that stays true, and
+TestEquality's "witness: two undeclared regions agree" is what actually fails
+if the sharing is lost -- it hand-builds an SmtArrEq over SmtArrInit, which the
+checker itself never emits, since check_sym_mem_equal folds over DECLARED
+regions and init_symbolic_mem seeds those with SmtArrVar.
+
+
+DEGENERATE ARRAY ITES: WORTH DROPPING, UNLIKE THE ARITH ONES
+============================================================
+
+An earlier note here records that eliminating "ite c x x" on ARITH nodes is not
+worth doing (~40% of merge nodes, no measurable gain).  That verdict does not
+carry over to arrays, and the reason is structural rather than incidental.
+
+merge_mem_ctx_smt rebuilds EVERY key on every rule merge, whether the rule
+touched that region or not, and eval_transformer_smt_mem wraps the results
+again in switch_case_arr.  So the redundancy scales with regions x rules rather
+than showing up by chance.  Measured on bpf_O0 vs bpf_O2:
+
+    136 array ites built, 66 of them with identical branches (49%)
+
+Z3's mk_ite does not fold ite c x x, and an array-sorted ite is not a
+bitvector-sorted one.  Z3Solver.ml's SmtArrIte case now compares the two
+lowered branches and returns the branch when they are equal.  ASTs are
+hash-consed, so Z3.Expr.equal is an id comparison -- the guard is O(1).
+
+Best of 7, bpf_O0 vs bpf_O2 with N declared regions (extra regions are declared
+but unused, which is exactly the case that generates degenerate ites):
+
+    regions      2      16      32      64     128
+    no guard   0.02    0.07    0.12    0.32    0.38
+    guard      0.02    0.06    0.08    0.25    0.29
+
+Nothing at the 2 regions the eBPF programs actually declare; ~1.3x once a
+program declares a lot of them.  Cheap and correct either way, so it is in.
+
+WHAT DID NOT PAY: deduplicating merge_mem_ctx_smt's key list.  It concatenates
+four pmap_keys results that overlap almost entirely, so most keys get PMap.set
+up to four times.  The sets are idempotent -- each writes a value computed from
+mc1/mc2, never from the accumulator -- so this is pure waste, but List.nodup is
+quadratic and measured no better at 64 and 128 regions and WORSE at 32 (0.12 vs
+0.08).  Left alone deliberately.
+
+Also do not try to prune the degenerate ites on the Coq side: deciding
+a1 = a2 on an SmtArrExpr is a structural walk of a DAG as a tree, which is the
+blowup this file opens with.  The lowering is the only place the test is cheap.

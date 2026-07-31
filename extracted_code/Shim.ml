@@ -5,7 +5,8 @@ include Datatypes
 include MyInts
 include String
 
-(* Helpers for constructing an SMT valuation *)
+(* Helpers for constructing an SMT valuation.  A valuation has two components,
+   scalars and memory regions; each is an association list walked by name. *)
 type coq_ValueMap =
 | VMap of string * CrVal.coq_CrVal * coq_ValueMap
 | VMap_DNE
@@ -17,6 +18,23 @@ let rec coq_TraverseMap (vm : coq_ValueMap) (s : string) : CrVal.coq_CrVal =
     else
       coq_TraverseMap nxt_ s
   | VMap_DNE -> UninitVal
+
+type coq_ArrayMap =
+| AMap of string * CrVal.coq_CrVal CrVal.coq_Array * coq_ArrayMap
+| AMap_DNE
+let rec coq_TraverseArrayMap (am : coq_ArrayMap) (s : string)
+    : CrVal.coq_CrVal CrVal.coq_Array =
+  match am with
+  | AMap (var_, val_, nxt_) ->
+    if (s = var_) then
+      val_
+    else
+      coq_TraverseArrayMap nxt_ s
+  | AMap_DNE -> CrVal.Unallocated
+
+let mk_valuation (vm : coq_ValueMap) (am : coq_ArrayMap) : SmtTypes.coq_SmtValuation =
+  { SmtTypes.sv_ints = coq_TraverseMap vm;
+    SmtTypes.sv_arrs = coq_TraverseArrayMap am }
 
 (* Helpers for casting between ocaml and rocq types *)
 let coq_Z_to_int (n : BinNums.coq_Z) : int =
@@ -49,38 +67,14 @@ let int_to_coq_uint64 (n : int) : BinNums.coq_Z =
     if (n = 0) then Z0
     else Zpos (int_to_pos n))
 
-(* Build a Coq [Z] from an arbitrary-precision integer, with no native-int
-   overflow (a solved 64-bit model value can exceed [max_int]). *)
-let coq_Z_of_zarith (z : Z.t) : BinNums.coq_Z =
-  let rec pos_of (z : Z.t) : BinNums.positive =
-    if Z.equal z Z.one then Coq_xH
-    else if Z.equal (Z.logand z Z.one) Z.zero
-         then Coq_xO (pos_of (Z.shift_right z 1))
-         else Coq_xI (pos_of (Z.shift_right z 1)) in
-  if Z.equal z Z.zero then Z0
-  else if Z.gt z Z.zero then Zpos (pos_of z)
-  else Zneg (pos_of (Z.neg z))
 (* A uint64 Coq value from a decimal numeral string (the form Z3 returns). *)
 let str_to_coq_uint64 (s : Stdlib.String.t) : BinNums.coq_Z =
   repr (Coq_xO (Coq_xO (Coq_xO (Coq_xO (Coq_xO (Coq_xO Coq_xH))))))
-       (coq_Z_of_zarith (Z.of_string s))
-
-(* A zarith integer from a Coq [Z], with no native-int overflow (a full-width
-   u64 constant exceeds [max_int], so [coq_Z_to_int] would be lossy). *)
-let zarith_of_coq_Z (n : BinNums.coq_Z) : Z.t =
-  let rec pos_of (p : BinNums.positive) : Z.t =
-    match p with
-    | Coq_xH -> Z.one
-    | Coq_xO p' -> Z.shift_left (pos_of p') 1
-    | Coq_xI p' -> Z.add (Z.shift_left (pos_of p') 1) Z.one in
-  match n with
-  | Z0 -> Z.zero
-  | Zpos p -> pos_of p
-  | Zneg p -> Z.neg (pos_of p)
+       (CrTypeIF.BinNums.coq_Z_of_zarith (Z.of_string s))
 (* Decimal string of a Coq [Z] (the form Z3's [mk_numeral] expects), overflow-
    free.  [pos_to_str] renders binary, not decimal, so it can't be used here. *)
 let coq_Z_to_str (n : BinNums.coq_Z) : Stdlib.String.t =
-  Z.to_string (zarith_of_coq_Z n)
+  Z.to_string (CrTypeIF.BinNums.zarith_of_coq_Z n)
 
 let rec pos_to_str (n : BinNums.positive) : Stdlib.String.t =
   match n with
@@ -316,10 +310,18 @@ let print_net_output (gcs : CrGeneralProgramState.coq_GeneralConcreteState) =
     | b :: rest ->
       let cur = (cur lsl 1) lor bit_val b in
       if n + 1 = 8 then pack (cur :: acc) 0 0 rest else pack acc cur (n + 1) rest in
-  let bytes = pack [] 0 0
-    (listify_coq_list gcs.CrGeneralProgramState.sh_write_tape) in
-  print_endline
+  let bits = listify_coq_list gcs.CrGeneralProgramState.sh_write_tape in
+  let bytes = pack [] 0 0 bits in
+  (* The bit count is printed because the bytes alone cannot tell an EMPTY
+     packet from one zero byte -- both render as no visible digits or as "0"
+     depending on how you squint -- and that is exactly the pair the
+     both-rejected trap produces.  A deparser is total, so a header holding no
+     integer emits its full width as zeros rather than emitting nothing; a
+     fixture that cannot see the difference would let a program that emits
+     nothing and a program that emits zeros agree. *)
+  Printf.printf "[%s] %db\n"
     (Stdlib.String.concat ", " (Stdlib.List.map string_of_int bytes))
+    (Stdlib.List.length bits)
 
 (* How many bits of the input packet the network consumed, summed over its
    parsers. *)
@@ -329,11 +331,81 @@ let net_bits_read (gcs : CrGeneralProgramState.coq_GeneralConcreteState) : int =
 let print_net_bits_read (gcs : CrGeneralProgramState.coq_GeneralConcreteState) =
   Printf.printf "bits_read=%d\n" (net_bits_read gcs)
 
+(* ------------------------------------------------------------------ *)
+(* Memory *)
+let mem_cell_key (off : int) : BinNums.positive = int_to_pos (off + 1)
+
+let get_net_mem_region (region : int)
+    (gcs : CrGeneralProgramState.coq_GeneralConcreteState)
+    : CrVal.coq_CrVal CrVal.coq_Array =
+  Maps.PMap.get (int_to_pos region) gcs.CrGeneralProgramState.sh_mem
+
+(* Seed a width-[ty] value at [off] of a declared region.  Goes through
+   [CrVal.st_val] rather than writing one cell, so a test seeds memory exactly
+   the way a [StoreOp] would: [it_bytes ty] little-endian byte cells.
+
+   The region must already be declared on the program --
+   [init_general_concrete_state] allocates it at its declared length -- since
+   writing into an unallocated region is exactly what the semantics refuses to
+   do.  (The name predates the widening to [ty]; it seeds a value, not a cell.) *)
+let set_net_mem_cell (region : int) (off : int) (ty : CrVal.coq_CrIntType) (v : int)
+    (gcs : CrGeneralProgramState.coq_GeneralConcreteState)
+    : CrGeneralProgramState.coq_GeneralConcreteState =
+  match get_net_mem_region region gcs with
+  | CrVal.Unallocated ->
+      failwith (Printf.sprintf "set_net_mem_cell: region %d is not declared" region)
+  | CrVal.Allocated _ as arr ->
+      let arr' = CrVal.st_val ty arr
+                   (CrVal.mk_int CrVal.u64 (int_to_coq_uint64 off))
+                   (typed_int_to_crval ty v) in
+      { gcs with CrGeneralProgramState.sh_mem =
+          Maps.PMap.set (int_to_pos region) arr' gcs.CrGeneralProgramState.sh_mem }
+
+(* Render a region's cells over its declared length: "-" for a cell that was
+   never written, "!" for one holding a non-integer (an ErrorVal a failed load
+   or a type-mismatched store left behind). *)
+let print_net_mem_region (region : int)
+    (gcs : CrGeneralProgramState.coq_GeneralConcreteState) =
+  match get_net_mem_region region gcs with
+  | CrVal.Unallocated -> Printf.printf "mem%d=<undeclared>\n" region
+  | CrVal.Allocated blk ->
+      let len = coq_Z_to_int blk.CrVal.arr_len in
+      let cell i =
+        match Maps.PMap.get (mem_cell_key i) blk.CrVal.arr_bytes with
+        | CrVal.Uninit -> "-"
+        | CrVal.Init (CrVal.IntVal (x, _)) -> string_of_int (coq_Z_to_int x)
+        | CrVal.Init _ -> "!" in
+      Printf.printf "mem%d=[%s]\n" region
+        (Stdlib.String.concat ", " (Stdlib.List.init len cell))
+
+(* How many bytes of [region] the run required -- one past the highest byte it
+   touched, in bounds or not, so it is a COUNT and not an offset.  The memory
+   analogue of [net_bits_read], and comparable for the same reason. *)
+let print_net_mem_extent (region : int)
+    (gcs : CrGeneralProgramState.coq_GeneralConcreteState) =
+  Printf.printf "extent%d=%d\n" region
+    (crval_to_int (Maps.PMap.get (int_to_pos region)
+                     gcs.CrGeneralProgramState.sh_mem_extent))
+
 (* Render the parsed headers ("h<k>=<v>", sorted), or "Reject" on parse failure. *)
 let print_parser_result (r : CrProgramState.coq_ConcreteParserState option) =
   match r with
   | None -> print_endline "Reject"
   | Some ps -> print_endline (header_map_to_string ps.CrProgramState.p_header_map)
+
+(* Read a whole network program from a file.  The sexp encoding is the one
+   [CrTypeIF] derives, with two departures that make it writable from outside
+   this tree (see the header comment there): numbers are decimal, and
+   [net_edges] is an explicit edge list rather than a closure.
+   [~/proj/ect/bpf_to_ir] emits exactly this. *)
+let load_general_program (f : Stdlib.String.t)
+    : CrModule.coq_GeneralCaracaraProgram =
+  let x = open_in f in
+  let len = in_channel_length x in
+  let str = really_input_string x len in
+  close_in x;
+  str |> Sexplib.Sexp.of_string
+      |> CrTypeIF.CrModule.coq_GeneralCaracaraProgram_of_sexp
 
 let find_modprog (name : Stdlib.String.t) =
   match TestModulePrograms.lookup_mod_test_program (str_to_coq_str name) with

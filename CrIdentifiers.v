@@ -11,6 +11,11 @@ Inductive State : Type := StateCtr (uid : positive).
 Inductive ModuleName : Type := ModuleNameCtr (uid : positive).
 Inductive FunctionName : Type := FunctionNameCtr (uid : positive).
 Inductive Ctrl : Type := CtrlCtr (uid : positive).
+(* A named region of memory (an [xdp_md], a map, a stack frame, ...).  Regions
+   are declared statically on the program and are what a load/store names; the
+   offset within a region is a runtime value.  This is the outer index of the
+   memory state, replacing the runtime pointer the memory IR used. *)
+Inductive MemRegion : Type := MemRegionCtr (uid : positive).
 
 Class Posesque (A : Type) := {
   wrap       : positive -> A;
@@ -77,6 +82,17 @@ Instance Posesque_Ctrl : Posesque Ctrl := {
     fun x y => match x, y with
                | CtrlCtr px, CtrlCtr py =>
                    fun H => f_equal CtrlCtr H
+               end;
+}.
+
+Instance Posesque_MemRegion : Posesque MemRegion := {
+  wrap := fun p => MemRegionCtr p;
+  unwrap := fun s => match s with MemRegionCtr p => p end;
+  incr := fun s => match s with MemRegionCtr p => MemRegionCtr (p + 1) end;
+  unwrap_inj :=
+    fun x y => match x, y with
+               | MemRegionCtr px, MemRegionCtr py =>
+                   fun H => f_equal MemRegionCtr H
                end;
 }.
 

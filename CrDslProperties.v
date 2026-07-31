@@ -55,6 +55,53 @@ Definition well_formed_program (p : CaracaraProgram) : Prop :=
 (* TODO: This would involve checking for duplicates and sorting the lists *)
 (* TODO: And then verifying the well_formed_program property holds *)
 
+(* The check that memory ops do not appear in parallel rules.  [ParRule]'s
+   subset type guarantees the actions write distinct targets, which is what
+   makes running them "in parallel" meaningful.  For two stores the
+   corresponding property is that they hit different offsets of a region -- a
+   runtime property, not a statically decidable one -- so there is nothing
+   [ParCtr] could carry that would make a parallel store well-defined.
+
+   This is a check, not a guarantee: it is reachable only through
+   [well_formed_general_programb], which no checker calls.  See the comment on
+   [CrTransformer.extract_targets] for what that means, and TODO.md 1.5. *)
+Definition rule_has_no_mem_ops (rule : MatchActionRule) : Prop :=
+  match rule with
+  | Seq _ => True
+  | Par (ParCtr _ ops) => List.Forall (fun op => is_mem_op op = false) (proj1_sig ops)
+  end.
+
+Definition rule_has_no_mem_opsb (rule : MatchActionRule) : bool :=
+  match rule with
+  | Seq _ => true
+  | Par (ParCtr _ ops) => List.forallb (fun op => negb (is_mem_op op)) (proj1_sig ops)
+  end.
+
+Definition no_mem_ops_in_par (t : Transformer) : Prop :=
+  List.Forall rule_has_no_mem_ops t.
+
+Definition no_mem_ops_in_parb (t : Transformer) : bool :=
+  List.forallb rule_has_no_mem_opsb t.
+
+Lemma rule_has_no_mem_ops_prop_bool_lemma :
+  forall r, rule_has_no_mem_ops r <-> rule_has_no_mem_opsb r = true.
+Proof.
+  intros r. destruct r as [s | [mp ops]]; simpl.
+  - split; intros; [reflexivity | exact I].
+  - rewrite List.forallb_forall, List.Forall_forall.
+    split; intros H x Hx.
+    + rewrite Bool.negb_true_iff. apply H. exact Hx.
+    + rewrite <- Bool.negb_true_iff. apply H. exact Hx.
+Qed.
+
+Lemma no_mem_ops_in_par_prop_bool_lemma :
+  forall t, no_mem_ops_in_par t <-> no_mem_ops_in_parb t = true.
+Proof.
+  intros t. unfold no_mem_ops_in_par, no_mem_ops_in_parb.
+  rewrite List.forallb_forall, List.Forall_forall.
+  split; intros H x Hx; apply rule_has_no_mem_ops_prop_bool_lemma; apply H; exact Hx.
+Qed.
+
 (* Per-module analogue of well_formed_program. *)
 (* TODO: Needs extension once parser semantics are fleshed out *)
 Definition well_formed_module (m : CrModule) : Prop :=
@@ -67,7 +114,7 @@ Definition well_formed_module (m : CrModule) : Prop :=
   | TransformerModule _ states ctrls t =>
       Coqlib.list_norepet states /\ Coqlib.list_norepet ctrls /\
       Sorted varlike_lt states /\ Sorted varlike_lt ctrls /\
-      transformer_has_default t
+      transformer_has_default t /\ no_mem_ops_in_par t
   end.
 
 Definition all_network_states (net : ModuleNetwork) : list State :=
@@ -238,7 +285,8 @@ Definition well_formed_moduleb (m : CrModule) : bool :=
       negb (has_duplicates varlike_equal ctrls) &&
       Sortedb varlike_ltb states &&
       Sortedb varlike_ltb ctrls &&
-      transformer_has_defaultb t
+      transformer_has_defaultb t &&
+      no_mem_ops_in_parb t
   end.
 
 Lemma well_formed_module_prop_bool_lemma :
@@ -253,15 +301,16 @@ Proof.
   pose proof (sorted_is_sorted_lemma Ctrl c varlike_lt varlike_ltb
     (fun x y => iff_sym (Pos.ltb_lt (get_key x) (get_key y)))) as SIFFc.
   split; intros.
-  - destruct H as (Hnrs & Hnrc & HSs & HSc & HTd).
+  - destruct H as (Hnrs & Hnrc & HSs & HSc & HTd & HNm).
     apply list_norepet_implies_no_duplicates in Hnrs.
     apply list_norepet_implies_no_duplicates in Hnrc.
     apply (proj1 SIFFs) in HSs.
     apply (proj1 SIFFc) in HSc.
     apply transformer_has_default_prop_bool_lemma in HTd.
-    rewrite Hnrs, Hnrc, HSs, HSc, HTd. reflexivity.
+    apply no_mem_ops_in_par_prop_bool_lemma in HNm.
+    rewrite Hnrs, Hnrc, HSs, HSc, HTd, HNm. reflexivity.
   - repeat rewrite Bool.andb_true_iff in H.
-    destruct H as ((((HnDs & HnDc) & HSs) & HSc) & HTd).
+    destruct H as (((((HnDs & HnDc) & HSs) & HSc) & HTd) & HNm).
     rewrite Bool.negb_true_iff in HnDs, HnDc.
     repeat split.
     + exact (has_duplicates_correct _ varlike_equal varlike_equal_refl
@@ -271,6 +320,7 @@ Proof.
     + exact (proj2 SIFFs HSs).
     + exact (proj2 SIFFc HSc).
     + apply transformer_has_default_prop_bool_lemma. exact HTd.
+    + apply no_mem_ops_in_par_prop_bool_lemma. exact HNm.
 Qed.
 
 Definition well_formed_general_programb (p : GeneralCaracaraProgram) : bool :=
@@ -283,7 +333,7 @@ Lemma well_formed_general_program_prop_bool_lemma :
     well_formed_general_program p <-> well_formed_general_programb p = true.
 Proof.
   intros p.
-  destruct p as [l net].
+  destruct p as [l rs net].
   unfold well_formed_general_program, well_formed_general_programb.
   simpl.
   rewrite Bool.andb_true_iff.

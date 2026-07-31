@@ -3,10 +3,15 @@ From MyProject Require Import CrVal.
 
 (* Note that these strings may or may not have a one-to-one correspondence with
   identifiers in the CrDsl program. *)
-(* Currently only need valuations from strings to integer values
-  because there are no primitive bool variables within the IR.
-  Expressions can still be bools though (for conditionals, equalities, etc.) *)
-Definition SmtValuation := string -> CrVal.
+(* A valuation has two components because the query has two sorts: scalars
+  (headers, state vars, ctrl config, packet bits -- all read through [sv_ints])
+  and memory regions ([sv_arrs]).  There are still no primitive bool variables
+  within the IR; a symbolic packet bit is an integer read as nonzero/zero.
+  Expressions can of course be bools (for conditionals, equalities, etc). *)
+Record SmtValuation := mkSmtValuation {
+  sv_ints : string -> CrVal;
+  sv_arrs : string -> @Array CrVal;
+}.
 
 Inductive SmtResult : Type :=
   | SmtSat (f : SmtValuation)  (* Satisfiable with valuation f *)
