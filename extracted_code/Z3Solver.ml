@@ -341,10 +341,12 @@ and z3_arr_from_coq_smt_arr_expr (expr : SmtExpr.coq_SmtArrExpr) (ctx : Z3.conte
         (Z3.Z3Array.mk_store ctx za zi (pack_cell ctx zv tv))
         za
   | SmtExpr.SmtArrIte (c, m1, m2) ->
-      Z3.Boolean.mk_ite ctx
-        (z3_expr_from_coq_smt_bool_expr c ctx vars)
-        (z3_arr_from_coq_smt_arr_expr m1 ctx vars)
-        (z3_arr_from_coq_smt_arr_expr m2 ctx vars)) in
+      let a1 = z3_arr_from_coq_smt_arr_expr m1 ctx vars in
+      let a2 = z3_arr_from_coq_smt_arr_expr m2 ctx vars in
+      if Z3.Expr.equal a1 a2 then a1
+      else
+        Z3.Boolean.mk_ite ctx
+          (z3_expr_from_coq_smt_bool_expr c ctx vars) a1 a2) in
   memo_add memo_arr expr z; z
 
 (* Reconstruct one scalar variable from the model. *)
