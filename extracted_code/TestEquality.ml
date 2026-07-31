@@ -36,7 +36,7 @@ let%expect_test "hdr_diff: different constants are NotEquivalent" =
      constant), so its width is unconstrained by the query and defaults to u64. *)
   [%expect {|
     ┌ SAT Valuation
-    | var( hdr_1 ) := uninit
+    | var( hdr_1 ) := error
     └
     NotEquivalent
     |}]
@@ -247,7 +247,7 @@ let%expect_test "mem: a different stored value is not equivalent" =
     | var( pkt_11 ) : u64 := 1
     | var( pkt_110 ) : u64 := 1
     | var( pkt_111 ) : u64 := 1
-    | mem( mem_1 ) : len=4 := [-, -, -, -]
+    | mem( mem_1 ) : len=4 := [err, err, err, err]
     └
     NotEquivalent
     |}]
@@ -269,7 +269,7 @@ let%expect_test "mem: reading one cell further is not equivalent" =
   check "mem_load1_load0" "mem_load0";
   [%expect {|
     ┌ SAT Valuation
-    | mem( mem_1 ) : len=4 := [-, -, -, -]
+    | mem( mem_1 ) : len=4 := [0:u64, 0:u64, 0:u64, 0:u64]
     └
     NotEquivalent
     |}]
@@ -288,7 +288,7 @@ let%expect_test "mem: in bounds, load-then-store differs from store-then-load" =
     | var( pkt_11 ) : u64 := 1
     | var( pkt_110 ) : u64 := 1
     | var( pkt_111 ) : u64 := 1
-    | mem( mem_1 ) : len=4 := [254:u8, 254:u8, 254:u8, 254:u8]
+    | mem( mem_1 ) : len=4 := [0:u64, 0:u64, 253:u8, 0:u64]
     └
     NotEquivalent
     |}]
@@ -329,3 +329,68 @@ let%expect_test "mem: a guard that cannot fail is the same as no guard" =
 let%expect_test "mem: a u16 store is the two u8 stores it coalesces from" =
   check "mem_two_u8_stores" "mem_one_u16_store";
   [%expect {| Equivalent |}]
+
+(* ===================================================================== *)
+(* Witness checking: [smt_query_sound_some] on hand-built queries.        *)
+(*                                                                       *)
+(* A verdict test cannot see this class of bug -- the verdict is right    *)
+(* and only the [SmtValuation] handed back with it is wrong.  This is the *)
+(* spot-check SOUNDNESS.md describes, run directly on [SmtBoolExpr]s so   *)
+(* no program plumbing is needed: solve, then re-evaluate the very same   *)
+(* expression under the model Z3 returned.  [eval_smt_bool] is the Coq    *)
+(* semantics, so a "REJECTED" line is Z3 and Rocq disagreeing.            *)
+(* ===================================================================== *)
+
+let u64 n = Shim.int_to_coq_uint64 n
+let konst n ty = SmtExpr.SmtArithConst (u64 n, ty)
+let svar s = SmtExpr.SmtArithVar (Shim.str_to_coq_str s)
+let avar s len = SmtExpr.SmtArrVar (Shim.str_to_coq_str s, u64 len)
+(* [cast] of a non-[IntVal] is [ErrorVal] (CrVal.v), so this is an error
+   literal -- the language has none, and [SmtUninit] is not one. *)
+let err_lit = SmtExpr.SmtCast (CrVal.W8, CrVal.W16, SmtExpr.SmtUninit)
+
+let witness name (e : SmtExpr.coq_SmtBoolExpr) =
+  match Z3Solver.solve e with
+  | SmtTypes.SmtSat v ->
+      (match SmtExpr.eval_smt_bool e v with
+       | Datatypes.Coq_true  -> Printf.printf "%s: SAT, witness verified\n" name
+       | Datatypes.Coq_false ->
+           Printf.printf "%s: SAT, WITNESS REJECTED by eval_smt_bool\n" name)
+  | SmtTypes.SmtUnsat   -> Printf.printf "%s: UNSAT\n" name
+  | SmtTypes.SmtUnknown -> Printf.printf "%s: unknown\n" name
+
+let%expect_test "witness: a scalar the model leaves non-integer" =
+  (* Companion to the next test, and it does NOT discriminate: a scalar is
+     safe by construction because [eval_smt_arith]'s [SmtArithVar] arm coerces
+     every non-[IntVal] to [ErrorVal], mirroring the lowering's
+     [ite (tag_is_int t) t tag_err].  [SmtArrSel] has no such arm, which is
+     exactly why the array version below is a real check. *)
+  witness "scalar-error" (SmtExpr.SmtBoolEq (svar "x", err_lit));
+  [%expect {|
+    ┌ SAT Valuation
+    | var( x ) := error
+    └
+    scalar-error: SAT, witness verified
+    |}]
+
+let%expect_test "witness: a memory cell the model leaves non-integer" =
+  witness "cell-error"
+    (SmtExpr.SmtBoolEq (SmtExpr.SmtArrSel (avar "a" 4, konst 0 CrVal.W64), err_lit));
+  [%expect {|
+    ┌ SAT Valuation
+    | mem( a ) : len=4 := [err, 0:u64, 0:u64, 0:u64]
+    └
+    cell-error: SAT, witness verified
+    |}]
+
+let%expect_test "witness: a cell read back is the cell that is there" =
+  (* Stores cell 0 back onto itself, then asks whether the region changed.
+     [SmtArrEq] lowers to [mk_eq] on whole arrays, which sees RAW cell tags,
+     while [SmtArrSel] sees normalised ones -- if those two disagree, Z3 finds
+     a difference that the reconstruction cannot represent. *)
+  let a = avar "a" 4 in
+  let sel0 = SmtExpr.SmtArrSel (a, konst 0 CrVal.W64) in
+  let stored = SmtExpr.SmtArrSt (a, konst 0 CrVal.W64, sel0) in
+  witness "noop-store"
+    (SmtExpr.SmtBoolNot (SmtExpr.SmtArrEq (Shim.int_to_coq_nat 4, a, stored)));
+  [%expect {| noop-store: UNSAT |}]

@@ -74,8 +74,12 @@ let memo_arith : (Z3.Expr.expr * Z3.Expr.expr) PhysTbl.t = PhysTbl.create 1024
 let memo_arr : Z3.Expr.expr PhysTbl.t = PhysTbl.create 1024
 let memo_find (t : 'a PhysTbl.t) (k : 'k) : 'a option = PhysTbl.find_opt t (Obj.repr k)
 let memo_add (t : 'a PhysTbl.t) (k : 'k) (v : 'a) : unit = PhysTbl.replace t (Obj.repr k) v
+(* Assumptions emitted while lowering, conjoined with the goal in [solve].
+   Context-bound like the memo tables, so reset alongside them. *)
+let side_constraints : Z3.Expr.expr list ref = ref []
 let reset_lowering_memo () =
-  PhysTbl.reset memo_bool; PhysTbl.reset memo_arith; PhysTbl.reset memo_arr
+  PhysTbl.reset memo_bool; PhysTbl.reset memo_arith; PhysTbl.reset memo_arr;
+  side_constraints := []
 
 let arr_lens : (string, int) Hashtbl.t = Hashtbl.create 16
 
@@ -288,7 +292,7 @@ and z3_arr_from_coq_smt_arr_expr (expr : SmtExpr.coq_SmtArrExpr) (ctx : Z3.conte
   match memo_find memo_arr expr with Some z -> z | None ->
   let z = (match expr with
   | SmtExpr.SmtArrInit -> Z3.Expr.mk_fresh_const ctx "arr_undeclared" (mem_sort ctx)
-  | SmtExpr.SmtArrVar (name, _len) -> (
+  | SmtExpr.SmtArrVar (name, len) -> (
       let name_str = Shim.coq_str_to_str name in
       match StringMap.find_opt name_str !vars with
       | Some z3_var -> z3_var
@@ -296,6 +300,24 @@ and z3_arr_from_coq_smt_arr_expr (expr : SmtExpr.coq_SmtArrExpr) (ctx : Z3.conte
           let z3_var = Z3.Z3Array.mk_const ctx (Z3.Symbol.mk_string ctx name_str)
                          (Z3.BitVector.mk_sort ctx 64)
                          (Z3.BitVector.mk_sort ctx cell_bits) in
+          (* A free array's cell tags are otherwise unconstrained, so a model
+             could pick 6 or 7 -- bit patterns no [CrVal] denotes and that
+             [to_amap] cannot reconstruct.  Pin them to 0..5 here rather than
+             normalising in [SmtArrSel]: [SmtArrEq] lowers to [mk_eq] on whole
+             arrays and so reads cells RAW, and a read-side fix would let it see
+             differences no valuation can express.  Only 0..[len) needs pinning
+             -- reads and stores are guarded to that range and [to_amap] reads no
+             further, while beyond it both sides of an [SmtArrEq] are the same
+             term.  Excluding these models loses nothing real: every [CrVal]
+             carries a tag in 0..5. *)
+          let n = Stdlib.int_of_string (Shim.coq_Z_to_str len) in
+          for i = 0 to n - 1 do
+            let cell = Z3.Z3Array.mk_select ctx z3_var
+                         (Z3.BitVector.mk_numeral ctx (string_of_int i) 64) in
+            side_constraints :=
+              Z3.BitVector.mk_ule ctx (cell_tag ctx cell)
+                (mk_tag ctx (ty_tag CrVal.W64)) :: !side_constraints
+          done;
           vars := StringMap.add name_str z3_var !vars;
           z3_var)
   | SmtExpr.SmtArrSt (m, idx, v) ->
@@ -339,9 +361,15 @@ let to_vmap (m : Z3.Model.model) (acc : Shim.coq_ValueMap)
          Shim.VMap (Shim.str_to_coq_str name,
                     CrVal.IntVal (Shim.str_to_coq_uint64 var_str, ty), acc)
        | None ->
-         (* The tag says this is not an IntVal at all. *)
-         Printf.printf "| var( %s ) := uninit\n" name;
-         Shim.VMap (Shim.str_to_coq_str name, CrVal.UninitVal, acc))
+         (* The tag says this is not an IntVal.  Cosmetic only, unlike the
+            [to_amap] case: [eval_smt_arith] coerces every non-[IntVal] the
+            valuation gives a variable to [ErrorVal] anyway, matching the
+            [ite (tag_is_int t) t tag_err] the lowering wraps a free tag in.
+            Printing "error" just says what the value will be read as.
+            ([SmtArrSel] has no such coercion -- it returns the cell verbatim
+            -- which is why a region's cells must reconstruct exactly.) *)
+         Printf.printf "| var( %s ) := error\n" name;
+         Shim.VMap (Shim.str_to_coq_str name, CrVal.ErrorVal, acc))
     else
       raise (Failure ("Expects uint but got non-numeral value for " ^ name))
   | None -> raise (Failure ("Z3 failed to return valuation for " ^ name))
@@ -364,7 +392,15 @@ let to_vmap (m : Z3.Model.model) (acc : Shim.coq_ValueMap)
           | Some ty ->
               cells := Printf.sprintf "%s:u%d" vs (ty_bits ty) :: !cells;
               CrVal.IntVal (Shim.str_to_coq_uint64 vs, ty)
-          | None -> cells := "-" :: !cells; CrVal.UninitVal in
+          (* Tag 1 is the only [UninitVal].  Tag 0 is [ErrorVal] -- which
+             cells hold routinely, since [byte_of_val] sends every non-[IntVal]
+             there -- and 6/7 are normalised to [tag_err] on read, above.
+             Collapsing all of them to [UninitVal] would report a valuation the
+             query does not satisfy ([eqb ErrorVal UninitVal = false]). *)
+          | None ->
+              if int_of_string ts = tag_uninit
+              then (cells := "-" :: !cells; CrVal.UninitVal)
+              else (cells := "err" :: !cells; CrVal.ErrorVal) in
         (* Inner keys are offsets shifted by one; see [CrVal.offset_to_key]. *)
         bytes := Maps.PMap.set (Shim.int_to_pos (i + 1)) (CrVal.Init cv) !bytes
     | _ -> cells := "?" :: !cells
@@ -416,6 +452,6 @@ let solve (expr : SmtExpr.coq_SmtBoolExpr) =
   reset_lowering_memo ();
   tag_vars := StringMap.empty;
   let z3_expr = z3_expr_from_coq_smt_bool_expr expr ctx tracked_vars in
-  Solver.add solver [z3_expr];
+  Solver.add solver (z3_expr :: !side_constraints);
 
   sat_check ctx solver tracked_vars
