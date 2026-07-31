@@ -239,13 +239,11 @@ Qed.
 Definition wf_module_network (net : ModuleNetwork) : Prop :=
   mod_names_unique net /\
   is_dag net /\
-  start_module_is_parser net /\
   end_modules_are_deparsers net.
 
 Definition wf_module_networkb (net : ModuleNetwork) : bool :=
   (mod_names_uniqueb net) &&
   (is_dagb net) &&
-  (start_module_is_parserb net) &&
   (end_modules_are_deparsersb net).
 
 Lemma wf_module_network_prop_bool_lemma :
@@ -253,17 +251,15 @@ Lemma wf_module_network_prop_bool_lemma :
 Proof.
   intros n. unfold wf_module_network, wf_module_networkb.
   split; intros H.
-  - destruct H as [H1 [H2 [H3 H4]]].
+  - destruct H as [H1 [H2 H3]].
     repeat rewrite andb_true_iff. repeat split.
     + apply mod_names_unique_prop_bool_lemma. exact H1.
     + apply is_dag_prop_bool_lemma. exact H2.
-    + apply start_module_is_parser_prop_bool_lemma. exact H3.
-    + apply end_modules_are_deparsers_prop_bool_lemma. exact H4.
-  - repeat rewrite andb_true_iff in H. destruct H as [[[H1 H2] H3] H4]. repeat split.
+    + apply end_modules_are_deparsers_prop_bool_lemma. exact H3.
+  - repeat rewrite andb_true_iff in H. destruct H as [[H1 H2] H3]. repeat split.
     + apply mod_names_unique_prop_bool_lemma. exact H1.
     + apply is_dag_prop_bool_lemma. exact H2.
-    + apply start_module_is_parser_prop_bool_lemma. exact H3.
-    + apply end_modules_are_deparsers_prop_bool_lemma. exact H4.
+    + apply end_modules_are_deparsers_prop_bool_lemma. exact H3.
 Qed.
 
 (* ------------------------------------------------------------------ *)
