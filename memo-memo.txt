@@ -428,3 +428,44 @@ TestEquality's "witness: two undeclared regions agree" is what actually fails
 if the sharing is lost -- it hand-builds an SmtArrEq over SmtArrInit, which the
 checker itself never emits, since check_sym_mem_equal folds over DECLARED
 regions and init_symbolic_mem seeds those with SmtArrVar.
+
+
+DEGENERATE ARRAY ITES: WORTH DROPPING, UNLIKE THE ARITH ONES
+============================================================
+
+An earlier note here records that eliminating "ite c x x" on ARITH nodes is not
+worth doing (~40% of merge nodes, no measurable gain).  That verdict does not
+carry over to arrays, and the reason is structural rather than incidental.
+
+merge_mem_ctx_smt rebuilds EVERY key on every rule merge, whether the rule
+touched that region or not, and eval_transformer_smt_mem wraps the results
+again in switch_case_arr.  So the redundancy scales with regions x rules rather
+than showing up by chance.  Measured on bpf_O0 vs bpf_O2:
+
+    136 array ites built, 66 of them with identical branches (49%)
+
+Z3's mk_ite does not fold ite c x x, and an array-sorted ite is not a
+bitvector-sorted one.  Z3Solver.ml's SmtArrIte case now compares the two
+lowered branches and returns the branch when they are equal.  ASTs are
+hash-consed, so Z3.Expr.equal is an id comparison -- the guard is O(1).
+
+Best of 7, bpf_O0 vs bpf_O2 with N declared regions (extra regions are declared
+but unused, which is exactly the case that generates degenerate ites):
+
+    regions      2      16      32      64     128
+    no guard   0.02    0.07    0.12    0.32    0.38
+    guard      0.02    0.06    0.08    0.25    0.29
+
+Nothing at the 2 regions the eBPF programs actually declare; ~1.3x once a
+program declares a lot of them.  Cheap and correct either way, so it is in.
+
+WHAT DID NOT PAY: deduplicating merge_mem_ctx_smt's key list.  It concatenates
+four pmap_keys results that overlap almost entirely, so most keys get PMap.set
+up to four times.  The sets are idempotent -- each writes a value computed from
+mc1/mc2, never from the accumulator -- so this is pure waste, but List.nodup is
+quadratic and measured no better at 64 and 128 regions and WORSE at 32 (0.12 vs
+0.08).  Left alone deliberately.
+
+Also do not try to prune the degenerate ites on the Coq side: deciding
+a1 = a2 on an SmtArrExpr is a structural walk of a DAG as a tree, which is the
+blowup this file opens with.  The lowering is the only place the test is cheap.
