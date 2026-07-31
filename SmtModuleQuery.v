@@ -567,23 +567,6 @@ Qed.
 
 (* [check_sym_region_equal] builds its indices with [repr]; the conclusion
    states them with [mk_int u64].  Both mask to the same 64-bit value. *)
-Lemma mask_width_W64_unsigned_repr : forall z : Z,
-  mask_width W64 (@unsigned 64%positive (@repr 64%positive z)) = mask_width W64 z.
-Proof.
-  intro z. unfold mask_width, width_bits.
-  assert (Hmod : @modulus 64%positive = (2 ^ 64)%Z) by (vm_compute; reflexivity).
-  rewrite !Z.land_ones by lia.
-  cbn [unsigned repr intval]. rewrite Z_mod_modulus_eq, Hmod.
-  rewrite Zmod_mod. reflexivity.
-Qed.
-
-Lemma mk_int_u64_unsigned_repr : forall z : Z,
-  mk_int u64 (@unsigned 64%positive (@repr 64%positive z)) = mk_int u64 z.
-Proof.
-  intro z. unfold mk_int, u64, it_width. f_equal.
-  apply mask_width_W64_unsigned_repr.
-Qed.
-
 Lemma eval_general_program_symbolic_mem_rooted : forall p pre s,
   eval_general_program_symbolic p (init_general_symbolic_state pre p) = Some s ->
   mem_rooted (init_symbolic_mem (get_mem_regions_from_general p)) (sh_mem s).
@@ -698,30 +681,6 @@ Proof.
     apply mem_region_decl_eqb_eq in Hxy. subst y. f_equal.
     apply IH. unfold mem_region_decls_eqb. apply Bool.andb_true_iff.
     split; [exact Hlen | exact Hrest].
-Qed.
-
-(* Equal loaded VALUES become an equal LOAD once both regions are known to have
-   the same shape -- otherwise [Legal ErrorVal] on one side and [Illegal] on
-   the other would agree on the value and differ here. *)
-Lemma ld_arr_eq_of_val_eq : forall (A1 A2 : @Array CrVal) idx,
-  (match A1, A2 with
-   | Unallocated, Unallocated => True
-   | Allocated b1, Allocated b2 => arr_len b1 = arr_len b2
-   | _, _ => False
-   end) ->
-  (match ld_arr A1 idx with Legal v => v | Illegal => ErrorVal end)
-    = (match ld_arr A2 idx with Legal v => v | Illegal => ErrorVal end) ->
-  ld_arr A1 idx = ld_arr A2 idx.
-Proof.
-  intros A1 A2 idx Hshape Hval.
-  destruct A1 as [b1 |]; destruct A2 as [b2 |]; try contradiction.
-  - cbn [ld_arr]. destruct idx as [i ti | |]; try reflexivity.
-    rewrite Hshape. destruct (Integers.ltu i (arr_len b2)) eqn:Hlt; [| reflexivity].
-    cbn [ld_arr] in Hval. rewrite Hshape, Hlt in Hval.
-    destruct ((arr_bytes b1) !! (offset_to_key i)) eqn:H1;
-      destruct ((arr_bytes b2) !! (offset_to_key i)) eqn:H2;
-      cbn in Hval |- *; congruence.
-  - cbn. reflexivity.
 Qed.
 
 (* ---------- the two memory conjuncts, concretized ---------- *)

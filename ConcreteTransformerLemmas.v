@@ -89,6 +89,11 @@ Proof.
     [apply Hc | apply Hh | reflexivity | apply Hs].
 Qed.
 
+(* The [*_preserves_eq] chain below comes in two mirrored halves.  The
+   memory-free one is live: it builds up to [eval_transformer_concrete_preserves_eq],
+   which [ctrl_plane_lookup_eq_transformer] at the end of this file uses.  The
+   [_mem] one has no consumer yet and is kept as the mirror the threading
+   evaluators will need when the two recursions are collapsed (TODO.md 1.4). *)
 Lemma eval_hdr_op_expr_concrete_eq :
   forall c1 c2 op,
   cs_lookup_eq c1 c2 ->

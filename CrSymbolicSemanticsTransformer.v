@@ -197,19 +197,6 @@ Definition eval_hdr_op_list_smt_mem (hol : list HdrOp)
 Definition eval_hdr_op_list_smt (hol : list HdrOp) (ps : SymbolicTransformerState) : SymbolicTransformerState :=
   List.fold_left (fun acc op => eval_hdr_op_assign_smt op acc) hol ps.
 
-(* Mirror of [eval_hdr_op_list_concrete_mem_cons]: expose one fold step, which
-   the pair accumulator otherwise hides. *)
-Lemma eval_hdr_op_list_smt_mem_cons :
-  forall a hol mc s,
-    eval_hdr_op_list_smt_mem (a :: hol) mc s =
-    eval_hdr_op_list_smt_mem hol
-      (fst (eval_hdr_op_assign_smt_mem a mc s))
-      (snd (eval_hdr_op_assign_smt_mem a mc s)).
-Proof.
-  intros. unfold eval_hdr_op_list_smt_mem. simpl.
-  destruct (eval_hdr_op_assign_smt_mem a mc s). reflexivity.
-Qed.
-
 Definition eval_cmp_smt (op : CmpOp) (e1 e2 : SmtArithExpr) : SmtBoolExpr :=
   match op with
   | CmpEq => SmtBoolEq e1 e2

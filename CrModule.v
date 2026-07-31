@@ -148,37 +148,6 @@ Proof.
     apply negb_true_iff in H. assumption.
 Qed.
 
-(* The designated start module exists in the network AND is a parser.  The
-   edge-closure condition that used to live alongside this is now folded into
-   [restricted_edges].
-
-   NOT part of [wf_module_network] (README.md says why), so nothing references
-   it.  Kept because it is still the right check for a frontend whose input
-   really is a packet -- a P4 one, say -- which can conjoin it with
-   [wf_module_networkb] itself.  Delete it if that never materialises. *)
-Definition start_module_is_parser (net : ModuleNetwork) : Prop :=
-  match lookup_module net (start_module net) with
-  | Some (ParserModule _ _) => True
-  | _ => False
-  end.
-Definition start_module_is_parserb (net : ModuleNetwork) : bool :=
-  match lookup_module net (start_module net) with
-  | Some (ParserModule _ _) => true
-  | _ => false
-  end.
-Lemma start_module_is_parser_prop_bool_lemma :
-  forall n,
-    start_module_is_parser n <-> start_module_is_parserb n = true.
-Proof.
-  intros n.
-  unfold start_module_is_parser, start_module_is_parserb.
-  destruct (lookup_module n (start_module n)); split; intros.
-  - destruct c eqn:Hc; try reflexivity; try exfalso; assumption. 
-  - destruct c eqn:Hc; try apply I; try congruence. 
-  - exfalso. assumption.
-  - congruence.
-Qed.
-
 Definition end_modules_are_deparsers (net : ModuleNetwork) : Prop :=
   List.Forall (fun m =>
     match m with
@@ -307,14 +276,6 @@ Definition get_mem_regions_from_general (p : GeneralCaracaraProgram) : list MemR
 
 Definition get_network_from_general (p : GeneralCaracaraProgram) : ModuleNetwork :=
   match p with GeneralCaracaraProgramDef _ _ net => net end.
-
-(* The declared length of [r], or 0 if [r] was never declared -- an undeclared
-   region has no addressable cells, so every access to it is out of bounds. *)
-Definition mem_region_len (rs : list MemRegionDecl) (r : MemRegion) : nat :=
-  match find (fun d => posesque_eqb (mr_id d) r) rs with
-  | Some d => mr_len d
-  | None => 0
-  end.
 
 Definition module_states (m : CrModule) : list State :=
   match m with
