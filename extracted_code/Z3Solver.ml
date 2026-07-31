@@ -77,9 +77,11 @@ let memo_add (t : 'a PhysTbl.t) (k : 'k) (v : 'a) : unit = PhysTbl.replace t (Ob
 (* Assumptions emitted while lowering, conjoined with the goal in [solve].
    Context-bound like the memo tables, so reset alongside them. *)
 let side_constraints : Z3.Expr.expr list ref = ref []
+(* The single Z3 term every [SmtArrInit] lowers to; see [get_undeclared_arr]. *)
+let undeclared_arr : Z3.Expr.expr option ref = ref None
 let reset_lowering_memo () =
   PhysTbl.reset memo_bool; PhysTbl.reset memo_arith; PhysTbl.reset memo_arr;
-  side_constraints := []
+  side_constraints := []; undeclared_arr := None
 
 let arr_lens : (string, int) Hashtbl.t = Hashtbl.create 16
 
@@ -129,6 +131,45 @@ let tag_vars : Z3.Expr.expr StringMap.t ref = ref StringMap.empty
 let mem_sort ctx =
   Z3.Z3Array.mk_sort ctx (Z3.BitVector.mk_sort ctx 64)
                          (Z3.BitVector.mk_sort ctx cell_bits)
+
+(* The invariant: every [SmtArrInit] must lower to ONE Z3 term, because
+   [eval_smt_mem] sends them all to [Unallocated], a single fixed value.  Two
+   distinct [mk_fresh_const]s are freely unequal under [mk_eq], whereas
+   [arr_agree_upto n Unallocated Unallocated] is [true] for every n ([ld_arr]
+   is [Illegal] both sides, [check_crval_eqb Illegal Illegal] is [true]).
+
+   THIS FUNCTION IS REDUNDANT TODAY and removing it changes nothing you can
+   observe: [memo_arr] already collapses the occurrences, because [SmtArrInit]
+   is a constant constructor and therefore an immediate, so its physical-
+   equality key collides.  It is here because that is a fact about OCaml's
+   value representation rather than about the encoding, and it fails silently:
+   give [SmtArrInit] an argument and each occurrence becomes a separately
+   allocated block, [==] stops holding, and the sharing evaporates.
+
+   The sharper hazard needs no Coq change at all.  Unlike every other node
+   here, [mk_fresh_const] is GENERATIVE, not idempotent -- calling it twice
+   yields two different constants -- so for this one constructor a memo miss
+   changes the answer instead of costing time.  A reasonable-looking "leaves
+   are cheap, don't cache them" tidy-up in this file would break correctness.
+   That inverts the usual rule in memo-memo.txt; keeping the sharing owned
+   here as well means such a change stays a performance change.
+
+   Kept [fresh] rather than named so it cannot collide with an [SmtArrVar];
+   context-bound like the memo tables, hence reset with them.
+
+   What actually guards the invariant is [TestEquality]'s "witness: two
+   undeclared regions agree" -- NOT this function, which that test passes with
+   or without.  The test hand-builds an [SmtArrEq] over [SmtArrInit], which the
+   checker itself never emits ([check_sym_mem_equal] folds over DECLARED
+   regions, and [init_symbolic_mem] seeds those with [SmtArrVar]), so it
+   detects lost sharing today rather than waiting for a checker that compares
+   touched regions instead of declared ones. *)
+let get_undeclared_arr ctx =
+  match !undeclared_arr with
+  | Some z -> z
+  | None ->
+      let z = Z3.Expr.mk_fresh_const ctx "arr_undeclared" (mem_sort ctx) in
+      undeclared_arr := Some z; z
 
 let rec z3_expr_from_coq_smt_bool_expr (expr : SmtExpr.coq_SmtBoolExpr) (ctx : Z3.context) (vars : var_tracker)
   : Z3.Expr.expr =
@@ -291,7 +332,7 @@ and z3_arr_from_coq_smt_arr_expr (expr : SmtExpr.coq_SmtArrExpr) (ctx : Z3.conte
   : Z3.Expr.expr =
   match memo_find memo_arr expr with Some z -> z | None ->
   let z = (match expr with
-  | SmtExpr.SmtArrInit -> Z3.Expr.mk_fresh_const ctx "arr_undeclared" (mem_sort ctx)
+  | SmtExpr.SmtArrInit -> get_undeclared_arr ctx
   | SmtExpr.SmtArrVar (name, len) -> (
       let name_str = Shim.coq_str_to_str name in
       match StringMap.find_opt name_str !vars with

@@ -394,3 +394,16 @@ let%expect_test "witness: a cell read back is the cell that is there" =
   witness "noop-store"
     (SmtExpr.SmtBoolNot (SmtExpr.SmtArrEq (Shim.int_to_coq_nat 4, a, stored)));
   [%expect {| noop-store: UNSAT |}]
+
+let%expect_test "witness: two undeclared regions agree" =
+  (* [SmtArrInit] denotes [Unallocated], and [arr_agree_upto n Unallocated
+     Unallocated] is [true] for every n -- [ld_arr] is [Illegal] on both sides.
+     So the negation must be UNSAT, which holds only if both occurrences lower
+     to ONE Z3 term.  If they ever lower to two fresh consts this comes back
+     SAT (and the witness is unreconstructable), which is what would happen if
+     [SmtArrInit] gained an argument and stopped being an immediate. *)
+  witness "undeclared-agree"
+    (SmtExpr.SmtBoolNot
+       (SmtExpr.SmtArrEq
+          (Shim.int_to_coq_nat 4, SmtExpr.SmtArrInit, SmtExpr.SmtArrInit)));
+  [%expect {| undeclared-agree: UNSAT |}]
