@@ -526,8 +526,9 @@ let%expect_test "ModProgs: registry contents" =
     mem_guard_tautology
     mem_two_u8_stores
     mem_one_u16_store
+    mem_store_poisoned
     mem_u16_readback
-    (29 programs)
+    (30 programs)
     |}]
 
 (* A u16 store lands in two byte cells, little-endian: 0x1234 -> [0x34, 0x12].
@@ -657,3 +658,56 @@ let%expect_test "ModProgs: unknown names are a clean failure" =
   (try ignore (Shim.find_modprog "no_such_program"); print_endline "no failure"
    with Failure m -> print_endline m);
   [%expect {| find_modprog: no module test program named no_such_program |}]
+
+(* A store whose offset is a *header* rather than a constant, aliasing a
+   constant-offset store to the same cell.  Equivalence against
+   [mem_store_load] is checked in [TestEquality]; this pins the concrete state
+   the two are supposed to share. *)
+let%expect_test "mem_store_load_alias: a computed offset hits the same cell" =
+  report (run "mem_store_load_alias" [0x2A]);
+  [%expect {|
+    [42] 8b
+    mem1=[-, -, 42, -]
+    extent1=3
+    |}]
+
+(* A guard that cannot fail should leave exactly the state of no guard at all.
+   [CrVal.eqb] is reflexive, so the rule fires; the second (empty) rule is the
+   default. Same state as [mem_store_load] above. *)
+let%expect_test "mem_guard_tautology: a guard that always holds is no guard" =
+  report (run "mem_guard_tautology" [0x2A]);
+  [%expect {|
+    [42] 8b
+    mem1=[-, -, 42, -]
+    extent1=3
+    |}]
+
+(* The coalescing pair, run as a pair.  [TestEquality] checks the CHECKER calls
+   these equivalent; this checks they actually agree cell for cell, which is
+   the property the byte-addressed memory model exists to give.  A model where
+   a u16 store occupied one address would show mem1=[4660, -, -, -] on the
+   right and diverge here while the checker still said Equivalent. *)
+let%expect_test "mem: a u16 store and the two u8 stores agree concretely" =
+  report (run "mem_two_u8_stores" [0x2A]);
+  report (run "mem_one_u16_store" [0x2A]);
+  [%expect {|
+    [52] 8b
+    mem1=[52, 18, -, -]
+    extent1=2
+    [52] 8b
+    mem1=[52, 18, -, -]
+    extent1=2
+    |}]
+
+(* Storing a header that was never written.  Every cell the store covers holds
+   [Init ErrorVal] -- printed [!], distinct from [-] for never-written -- and
+   the load reads one back, so the deparser emits a zero byte.  This is the
+   only program that puts a poisoned value in a region, and the concrete
+   counterpart of the tag-0 cells a SAT model reports as "err". *)
+let%expect_test "mem_store_poisoned: storing an unwritten header poisons cells" =
+  report (run "mem_store_poisoned" [0x2A]);
+  [%expect {|
+    [0] 8b
+    mem1=[!, !, -, -]
+    extent1=2
+    |}]

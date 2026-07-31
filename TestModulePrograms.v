@@ -553,6 +553,17 @@ Definition mod_prog_mem_one_u16_store : GeneralCaracaraProgram :=
     StoreOp u16 region_1 (OpConst (repr 0)) (OpConst (repr 4660));  (* 0x1234 *)
     LoadOp  u8  region_1 (OpConst (repr 0)) (HeaderCtr 2)].
 
+(* Storing a header that was never written.  [apply_cast ty ty] rejects a
+   non-integer, and [byte_of_val] sends the result to ErrorVal, so EVERY cell
+   the store covers ends up holding a poisoned value rather than a number --
+   [Init ErrorVal], which the region printer shows as [!] and which no other
+   program here produces.  The load then reads one back, so h2 is poisoned too
+   and the deparser emits a zero byte. *)
+Definition mod_prog_mem_store_poisoned : GeneralCaracaraProgram :=
+  mem_prog [
+    StoreOp u16 region_1 (OpConst (repr 0)) (OpHeader (HeaderCtr 9));
+    LoadOp  u8  region_1 (OpConst (repr 0)) (HeaderCtr 2)].
+
 (* And the other direction: two byte stores read back as one u16 reassemble
    little-endian.  The low byte reaches the deparser. *)
 Definition mod_prog_mem_u16_readback : GeneralCaracaraProgram :=
@@ -619,6 +630,7 @@ Definition mod_test_program_list
   ("mem_guard_tautology",    mod_prog_mem_guard_tautology);
   ("mem_two_u8_stores",      mod_prog_mem_two_u8_stores);
   ("mem_one_u16_store",      mod_prog_mem_one_u16_store);
+  ("mem_store_poisoned",     mod_prog_mem_store_poisoned);
   ("mem_u16_readback",       mod_prog_mem_u16_readback)
 ].
 
