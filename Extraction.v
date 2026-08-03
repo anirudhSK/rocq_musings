@@ -11,6 +11,7 @@ From MyProject Require Import PktClass.
 From MyProject Require Import CrConcreteSemanticsModule.
 From MyProject Require Import CrConcreteSemanticsParser.
 From MyProject Require Import CrDslProperties.
+From MyProject Require Import ParserHawkEval.
 
 (* Tell extraction to use your external OCaml implementation *)
 Extract Constant smt_query => "Z3Solver.solve".
@@ -36,4 +37,6 @@ Separate Extraction
   (* [Z3Solver] needs the declared length of a region to emit the same bounds
      guard the concrete [ld_arr] applies. *)
   SmtExpr.smt_arr_len
-  well_formed_programb well_formed_general_programb.
+  well_formed_programb well_formed_general_programb
+
+  dump_headers icmp_spec sai_spec.

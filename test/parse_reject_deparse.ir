@@ -1,0 +1,28 @@
+(GeneralCaracaraProgramDef 8 Coq_nil
+ ((net_modules
+   (Coq_cons
+    (ParserModule 1
+     ((parser_start 1)
+      (parser_states
+       (Coq_cons
+        ((psd_label 1) (psd_action (Some (ExtractOpConstructor 1 8 W64)))
+         (psd_trans
+          (Select
+           (Coq_cons
+            ((sc_header 1) (sc_start_index 0) (sc_end_index 8)
+             (sc_pattern
+              (Coq_cons Coq_true
+               (Coq_cons Coq_true
+                (Coq_cons Coq_true
+                 (Coq_cons Coq_true
+                  (Coq_cons Coq_true
+                   (Coq_cons Coq_true
+                    (Coq_cons Coq_true (Coq_cons Coq_true Coq_nil)))))))))
+             (sc_target Reject))
+            Coq_nil)
+           Accept)))
+        Coq_nil))))
+    (Coq_cons (DeparserModule 2 (Coq_cons (EmitOpConstructor 1 8) Coq_nil))
+     Coq_nil)))
+  (net_edges ((1 2))) (start_module 1)))
+

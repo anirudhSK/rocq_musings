@@ -11,27 +11,27 @@ let print_sexp s =
 let pkt_examples : CrTypeIF.CrModule.coq_GeneralCaracaraProgram list =
   [ PktClass.ex_lin_prog ; PktClass.ex_tss_prog ]
 
-let nth_pkt n =
-  match Stdlib.List.nth_opt pkt_examples n with
-  | None ->
-    prerr_endline "invalid idx";
-    exit 1
-  | Some p ->
-    print_sexp (CrTypeIF.CrModule.sexp_of_coq_GeneralCaracaraProgram p)
+(* --parser path: a sexp dump of the standalone CrParser.coq_Parser examples,
+   in the order [TestParserPrograms.parser_test_programs] declares them (which
+   is also the order TestParserSemantics indexes them by). *)
 
-let print_pkt_programs () =
-  Stdlib.List.iter
-    (fun p -> print_sexp (CrTypeIF.CrModule.sexp_of_coq_GeneralCaracaraProgram p))
-    pkt_examples
+let parser_examples : CrTypeIF.CrParser.coq_Parser list =
+  Shim.listify_coq_list TestParserPrograms.parser_test_programs
 
 let usage () =
-  prerr_endline "usage: dump_sexp --pkt [idx]";
+  prerr_endline
+    "usage: dump_sexp (--pkt | --parser) [idx]\n\
+    \       dump_sexp --modprog NAME";
   exit 1
 
-let dump_pkt rest_args =
+let dump sexp_of examples rest_args =
+  let print p = print_sexp (sexp_of p) in
   match rest_args with
-  | [] -> print_pkt_programs ()
-  | [s] -> nth_pkt (int_of_string s)
+  | [] -> Stdlib.List.iter print examples
+  | [s] ->
+    (match Stdlib.Option.bind (int_of_string_opt s) (Stdlib.List.nth_opt examples) with
+     | None -> prerr_endline "invalid idx"; exit 1
+     | Some p -> print p)
   | _ -> usage ()
 
 let () =
@@ -39,5 +39,11 @@ let () =
      Note: the extracted `List` module shadows Stdlib's; use Stdlib.List. *)
   let args = Stdlib.List.tl (Array.to_list Sys.argv) in
   match args with
-  | "--pkt" :: rest -> dump_pkt rest
+  | "--pkt" :: rest ->
+    dump CrTypeIF.CrModule.sexp_of_coq_GeneralCaracaraProgram pkt_examples rest
+  | "--parser" :: rest ->
+    dump CrTypeIF.CrParser.sexp_of_coq_Parser parser_examples rest
+  | ["--modprog"; name] ->
+    print_sexp
+      (CrTypeIF.CrModule.sexp_of_coq_GeneralCaracaraProgram (Shim.find_modprog name))
   | _ -> usage ()
