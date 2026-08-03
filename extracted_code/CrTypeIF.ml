@@ -1,3 +1,21 @@
+(* Destructure a sexp record into a field lookup.  Shared by the two
+   hand-written record converters below ([CrParser.coq_SelectCase] and
+   [CrModule.coq_ModuleNetwork]); [where] names the caller in the error. *)
+let sexp_record_field (where : string) (s : Sexplib.Sexp.t)
+  : string -> Sexplib.Sexp.t =
+  let fields =
+    match s with
+    | Sexplib.Sexp.List l ->
+      Stdlib.List.filter_map
+        (function Sexplib.Sexp.List [Sexplib.Sexp.Atom k; v] -> Some (k, v) | _ -> None)
+        l
+    | Sexplib.Sexp.Atom _ ->
+      Sexplib.Conv.of_sexp_error (where ^ ": expected a record") s in
+  fun name ->
+    match Stdlib.List.assoc_opt name fields with
+    | Some v -> v
+    | None -> Sexplib.Conv.of_sexp_error (where ^ ": missing field " ^ name) s
+
 module BinNums = struct
   include BinNums
   type positive = [%import: BinNums.positive]
@@ -146,8 +164,68 @@ module CrParser = struct
   [@@deriving sexp]
   type coq_ParserTarget = [%import: CrParser.coq_ParserTarget]
   [@@deriving sexp]
-  type coq_SelectCase = [%import: CrParser.coq_SelectCase]
-  [@@deriving sexp]
+
+  (* A [list bool] prints as the binary literal it denotes: [0b00000001] is
+     [[false;...;false;true]].  The list is MSB-first -- [CrParser.bits_to_Z]
+     folds the head in as the high bit -- so the digits read left to right in
+     list order.  Like [positive]/[nat]/[Z] above, this EMITS the sugar and
+     ACCEPTS either it or the derived [Coq_cons] chain, so an existing dump
+     still loads.
+
+     Leading zeros are kept, and the empty list prints as [0b].  A pattern's
+     width is not semantically load-bearing -- [select_case_matches_concrete]
+     compares [bits_to_Z] of it against the slice, so [0b0011] and [0b11] mean
+     the same thing -- but preserving the digit count is what makes the dump a
+     faithful round-trip rather than a normalising one. *)
+  let sexp_of_bits (bs : Datatypes.bool Datatypes.list) : Sexplib.Sexp.t =
+    let buf = Buffer.create 16 in
+    Buffer.add_string buf "0b";
+    let rec go = function
+      | Datatypes.Coq_nil -> ()
+      | Datatypes.Coq_cons (b, rest) ->
+        Buffer.add_char buf
+          (match b with Datatypes.Coq_true -> '1' | Datatypes.Coq_false -> '0');
+        go rest in
+    go bs;
+    Sexplib.Sexp.Atom (Buffer.contents buf)
+  let bits_of_sexp (s : Sexplib.Sexp.t) : Datatypes.bool Datatypes.list =
+    match s with
+    | Sexplib.Sexp.Atom a
+      when Stdlib.String.length a >= 2 && Stdlib.String.sub a 0 2 = "0b" ->
+      let rec go i acc =
+        if i < 2 then acc
+        else
+          let b =
+            match Stdlib.String.get a i with
+            | '0' -> Datatypes.Coq_false
+            | '1' -> Datatypes.Coq_true
+            | _ ->
+              Sexplib.Conv.of_sexp_error
+                "CrTypeIF.bits_of_sexp: a 0b literal takes only the digits 0 and 1" s in
+          go (i - 1) (Datatypes.Coq_cons (b, acc)) in
+      go (Stdlib.String.length a - 1) Datatypes.Coq_nil
+    | _ -> Datatypes.list_of_sexp Datatypes.bool_of_sexp s
+
+  (* Hand-written rather than derived, so that [sc_pattern] goes through the
+     [0b] sugar above.  The field names match what the derived record converter
+     would have produced. *)
+  type coq_SelectCase = CrParser.coq_SelectCase
+  let sexp_of_coq_SelectCase (c : coq_SelectCase) : Sexplib.Sexp.t =
+    let field name v = Sexplib.Sexp.List [Sexplib.Sexp.Atom name; v] in
+    Sexplib.Sexp.List [
+      field "sc_header" (CrIdentifiers.sexp_of_coq_Header c.CrParser.sc_header);
+      field "sc_start_index" (Datatypes.sexp_of_nat c.CrParser.sc_start_index);
+      field "sc_end_index" (Datatypes.sexp_of_nat c.CrParser.sc_end_index);
+      field "sc_pattern" (sexp_of_bits c.CrParser.sc_pattern);
+      field "sc_target" (sexp_of_coq_ParserTarget c.CrParser.sc_target);
+    ]
+  let coq_SelectCase_of_sexp (s : Sexplib.Sexp.t) : coq_SelectCase =
+    let field = sexp_record_field "CrTypeIF.coq_SelectCase_of_sexp" s in
+    { CrParser.sc_header = CrIdentifiers.coq_Header_of_sexp (field "sc_header");
+      CrParser.sc_start_index = Datatypes.nat_of_sexp (field "sc_start_index");
+      CrParser.sc_end_index = Datatypes.nat_of_sexp (field "sc_end_index");
+      CrParser.sc_pattern = bits_of_sexp (field "sc_pattern");
+      CrParser.sc_target = coq_ParserTarget_of_sexp (field "sc_target") }
   type coq_Transition = [%import: CrParser.coq_Transition]
   [@@deriving sexp]
   type coq_ParserStateDef = [%import: CrParser.coq_ParserStateDef]
@@ -228,21 +306,7 @@ module CrModule = struct
                          CrIdentifiers.sexp_of_coq_ModuleName n.CrModule.start_module];
     ]
   let coq_ModuleNetwork_of_sexp (s : Sexplib.Sexp.t) : coq_ModuleNetwork =
-    let fields =
-      match s with
-      | Sexplib.Sexp.List l ->
-        Stdlib.List.filter_map
-          (function Sexplib.Sexp.List [Sexplib.Sexp.Atom k; v] -> Some (k, v) | _ -> None)
-          l
-      | Sexplib.Sexp.Atom _ ->
-        Sexplib.Conv.of_sexp_error
-          "CrTypeIF.coq_ModuleNetwork_of_sexp: expected a record" s in
-    let field name =
-      match Stdlib.List.assoc_opt name fields with
-      | Some v -> v
-      | None ->
-        Sexplib.Conv.of_sexp_error
-          ("CrTypeIF.coq_ModuleNetwork_of_sexp: missing field " ^ name) s in
+    let field = sexp_record_field "CrTypeIF.coq_ModuleNetwork_of_sexp" s in
     { CrModule.net_modules =
         Datatypes.list_of_sexp CrDsl.coq_CrModule_of_sexp (field "net_modules");
       CrModule.net_edges =

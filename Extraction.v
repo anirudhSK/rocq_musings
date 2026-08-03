@@ -36,4 +36,6 @@ Separate Extraction
   (* [Z3Solver] needs the declared length of a region to emit the same bounds
      guard the concrete [ld_arr] applies. *)
   SmtExpr.smt_arr_len
-  well_formed_programb well_formed_general_programb.
+  well_formed_programb well_formed_general_programb
+
+   sai_dump_headers parserhawk_sai_spec.

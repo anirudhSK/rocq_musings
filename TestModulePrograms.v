@@ -589,6 +589,123 @@ Definition mod_prog_mem_guard_tautology : GeneralCaracaraProgram :=
       LoadOp  u8 region_1 (OpConst (repr 2)) (HeaderCtr 2)]);
     Seq (SeqCtr [] [])].
 
+(* Port of the spec that ParserHawk uses for sai *)
+Definition parserhawk_sai_spec_parser : Parser := {|
+  parser_start := ParserStateLabelCtr 1;
+  parser_states := [
+    mkParserStateDef (ParserStateLabelCtr 1)
+        (Some (ExtractOpConstructor (HeaderCtr 1) 1 u8))
+        (Unconditional (TargetState (ParserStateLabelCtr 2)));
+    mkParserStateDef (ParserStateLabelCtr 2)
+      (Some (ExtractOpConstructor (HeaderCtr 2) 16 u16))
+      (Select [
+        mkSelectCase (HeaderCtr 2) 0 16
+          [false; false; false; false;  true; false; false; false;
+            false; false; false; false; false; false; false; false] (* 0x0800 *)
+          (TargetState (ParserStateLabelCtr 3));
+        mkSelectCase (HeaderCtr 2) 0 16
+          [ true; false; false; false; false;  true;  true; false;
+            true;  true; false;  true;  true;  true; false;  true] (* 0x86dd *)
+          (TargetState (ParserStateLabelCtr 4));
+        mkSelectCase (HeaderCtr 2) 0 16
+          [false; false; false; false;  true; false; false; false;
+            false; false; false; false; false;  true;  true; false] (* 0x0806 *)
+          (TargetState (ParserStateLabelCtr 5))
+      ] Accept);
+    mkParserStateDef (ParserStateLabelCtr 3)
+      (Some (ExtractOpConstructor (HeaderCtr 3) 8 u8))
+      (Select [
+        mkSelectCase (HeaderCtr 3) 0 8
+          [false; false; false; false; false;  true; false; false] (* 0x04 *)
+          (TargetState (ParserStateLabelCtr 6));
+        mkSelectCase (HeaderCtr 3) 0 8
+          [false; false; false;  true; false; false; false;  true] (* 0x11 *)
+          (TargetState (ParserStateLabelCtr 7));
+        mkSelectCase (HeaderCtr 3) 0 8
+          [false; false; false; false; false;  true;  true; false] (* 0x06 *)
+          (TargetState (ParserStateLabelCtr 8));
+        mkSelectCase (HeaderCtr 3) 0 8
+          [false; false; false; false; false; false; false;  true] (* 0x01 *)
+          (TargetState (ParserStateLabelCtr 9))
+      ] Accept);
+    mkParserStateDef (ParserStateLabelCtr 4)
+      (Some (ExtractOpConstructor (HeaderCtr 4) 8 u8))
+      (Select [
+        mkSelectCase (HeaderCtr 4) 0 8
+          [false; false; false;  true; false; false; false;  true] (* 0x11 *)
+          (TargetState (ParserStateLabelCtr 7));
+        mkSelectCase (HeaderCtr 4) 0 8
+          [false; false; false; false; false;  true;  true; false] (* 0x06 *)
+          (TargetState (ParserStateLabelCtr 8));
+        mkSelectCase (HeaderCtr 4) 0 8
+          [false; false;  true;  true;  true; false;  true; false] (* 0x3a *)
+          (TargetState (ParserStateLabelCtr 9))
+      ] Accept);
+    mkParserStateDef (ParserStateLabelCtr 5)
+      (Some (ExtractOpConstructor (HeaderCtr 9) 1 u8))
+      (Unconditional Accept);
+    mkParserStateDef (ParserStateLabelCtr 6)
+      (Some (ExtractOpConstructor (HeaderCtr 5) 8 u8))
+      (Select [
+        mkSelectCase (HeaderCtr 5) 0 8
+          [false; false; false;  true; false; false; false;  true] (* 0x11 *)
+          (TargetState (ParserStateLabelCtr 7));
+        mkSelectCase (HeaderCtr 5) 0 8
+          [false; false; false; false; false;  true;  true; false] (* 0x06 *)
+          (TargetState (ParserStateLabelCtr 8));
+        mkSelectCase (HeaderCtr 5) 0 8
+          [false; false; false; false; false; false; false;  true] (* 0x01 *)
+          (TargetState (ParserStateLabelCtr 9))
+      ] Accept);
+    mkParserStateDef (ParserStateLabelCtr 7)
+      (Some (ExtractOpConstructor (HeaderCtr 6) 1 u8))
+      (Unconditional Accept);
+    mkParserStateDef (ParserStateLabelCtr 8)
+      (Some (ExtractOpConstructor (HeaderCtr 7) 1 u8))
+      (Unconditional Accept);
+    mkParserStateDef (ParserStateLabelCtr 9)
+      (Some (ExtractOpConstructor (HeaderCtr 8) 1 u8))
+      (Unconditional Accept)
+  ];
+|}.
+
+Record sai_headers := {
+  h1 : Header; h2 : Header; h3 : Header;
+  h4 : Header; h5 : Header; h6 : Header;
+  h7 : Header; h8 : Header; h9 : Header
+}.
+Definition sai_dump_headers (p : Parser) (ordering : sai_headers) : GeneralCaracaraProgram :=
+  GeneralCaracaraProgramDef 34 [] {|
+    net_modules := [
+      ParserModule (ModuleNameCtr 1) p;
+      DeparserModule (ModuleNameCtr 2) (mkDeparser [
+        EmitOpConstructor (h1 ordering) 1;
+        EmitOpConstructor (h2 ordering) 16;
+        EmitOpConstructor (h3 ordering) 8;
+        EmitOpConstructor (h4 ordering) 8;
+        EmitOpConstructor (h5 ordering) 8;
+        EmitOpConstructor (h6 ordering) 1;
+        EmitOpConstructor (h7 ordering) 1;
+        EmitOpConstructor (h8 ordering) 1;
+        EmitOpConstructor (h9 ordering) 1
+      ])
+    ];
+    net_edges := fun a b => 
+      match a, b with
+      | ModuleNameCtr 1, ModuleNameCtr 2 => true
+      | _, _ => false
+      end;
+    start_module := ModuleNameCtr 1;
+  |}.
+
+(* dumps 9 header fields next to one another *)
+Definition parserhawk_sai_spec :=
+  sai_dump_headers parserhawk_sai_spec_parser {|
+    h1 := HeaderCtr 1; h2 := HeaderCtr 2; h3 := HeaderCtr 3;
+    h4 := HeaderCtr 4; h5 := HeaderCtr 5; h6 := HeaderCtr 6;
+    h7 := HeaderCtr 7; h8 := HeaderCtr 8; h9 := HeaderCtr 9
+  |}.
+
 (* The single registry of module test programs, keyed by name.
 
    [Extraction.v] extracts this tree rather than each program individually, so

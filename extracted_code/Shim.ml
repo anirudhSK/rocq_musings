@@ -394,9 +394,11 @@ let print_parser_result (r : CrProgramState.coq_ConcreteParserState option) =
   | Some ps -> print_endline (header_map_to_string ps.CrProgramState.p_header_map)
 
 (* Read a whole network program from a file.  The sexp encoding is the one
-   [CrTypeIF] derives, with two departures that make it writable from outside
-   this tree (see the header comment there): numbers are decimal, and
-   [net_edges] is an explicit edge list rather than a closure.
+   [CrTypeIF] derives, with three departures that make it writable from outside
+   this tree (see the header comment there): numbers are decimal, a select
+   case's [sc_pattern] is a [0b] literal, and [net_edges] is an explicit edge
+   list rather than a closure.  Each of the first two also accepts the derived
+   constructor form, so an older dump still loads.
    [~/proj/ect/bpf_to_ir] emits exactly this. *)
 let load_general_program (f : Stdlib.String.t)
     : CrModule.coq_GeneralCaracaraProgram =
