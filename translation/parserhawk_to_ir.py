@@ -392,7 +392,10 @@ def parser_sexp(states, start):
             t[0], f"(TargetState {t[-1]})")
 
     def pat(v, w):
-        return "0b" + ("".join(str((v >> (w - 1 - i)) & 1) for i in range(w)) if w else "")
+        # sc_pattern is a `list bool`, MSB-first, rendered as the derived
+        # Coq_cons chain -- CrTypeIF has no sugar for it.
+        return coq_list(["Coq_true" if (v >> (w - 1 - i)) & 1 else "Coq_false"
+                         for i in range(w)])
 
     def case(c):
         h, lo, hi, v, g = c

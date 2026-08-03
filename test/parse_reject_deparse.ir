@@ -10,7 +10,15 @@
           (Select
            (Coq_cons
             ((sc_header 1) (sc_start_index 0) (sc_end_index 8)
-             (sc_pattern 0b11111111) (sc_target Reject))
+             (sc_pattern
+              (Coq_cons Coq_true
+               (Coq_cons Coq_true
+                (Coq_cons Coq_true
+                 (Coq_cons Coq_true
+                  (Coq_cons Coq_true
+                   (Coq_cons Coq_true
+                    (Coq_cons Coq_true (Coq_cons Coq_true Coq_nil)))))))))
+             (sc_target Reject))
             Coq_nil)
            Accept)))
         Coq_nil))))
