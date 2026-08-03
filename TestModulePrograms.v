@@ -589,7 +589,8 @@ Definition mod_prog_mem_guard_tautology : GeneralCaracaraProgram :=
       LoadOp  u8 region_1 (OpConst (repr 2)) (HeaderCtr 2)]);
     Seq (SeqCtr [] [])].
 
-(* Port of the spec that ParserHawk uses for sai *)
+(* Port of the spec that ParserHawk uses for sai:
+   https://github.com/ParserHawk/ParserHawk/blob/17be2c8a65a72dac59b2d33642a026d4ef9e90e3/z3/cegis_loop/one_short_revision/P4_examples/sai_v4_pkt_eth_v46_inv4_udp_tcp_icmp_arp/sai_v4_pkt_eth_v46_inv4_udp_tcp_icmp_arp_tofino_op.py#L165 *)
 Definition parserhawk_sai_spec_parser : Parser := {|
   parser_start := ParserStateLabelCtr 1;
   parser_states := [

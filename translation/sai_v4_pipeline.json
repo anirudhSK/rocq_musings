@@ -1,0 +1,169 @@
+[
+    {
+        "Extraction": "field_0",
+        "Tran_key": [],
+        "default_tran": 1,
+        "tran_logic": []
+    },
+    {
+        "Extraction": "field_1",
+        "Tran_key": [
+            "field1[9]",
+            "field1[8]",
+            "field1[7]",
+            "field1[6]",
+            "field1[5]",
+            "field1[4]",
+            "field1[3]",
+            "field1[2]",
+            "field1[15]",
+            "field1[14]",
+            "field1[13]",
+            "field1[12]",
+            "field1[11]",
+            "field1[10]",
+            "field1[1]",
+            "field1[0]"
+        ],
+        "default_tran": 53,
+        "tran_logic": [
+            [
+                "val:2054",
+                "mask:65535",
+                "nxt:2"
+            ],
+            [
+                "val:34525",
+                "mask:65535",
+                "nxt:3"
+            ],
+            [
+                "val:2048",
+                "mask:65535",
+                "nxt:4"
+            ]
+        ]
+    },
+    {
+        "Extraction": "field_8",
+        "Tran_key": [],
+        "default_tran": 54,
+        "tran_logic": []
+    },
+    {
+        "Extraction": "field_3",
+        "Tran_key": [
+            "field3[7]",
+            "field3[6]",
+            "field3[5]",
+            "field3[4]",
+            "field3[3]",
+            "field3[2]",
+            "field3[1]",
+            "field3[0]"
+        ],
+        "default_tran": 55,
+        "tran_logic": [
+            [
+                "val:6",
+                "mask:65535",
+                "nxt:6"
+            ],
+            [
+                "val:17",
+                "mask:65535",
+                "nxt:7"
+            ],
+            [
+                "val:58",
+                "mask:65535",
+                "nxt:8"
+            ]
+        ]
+    },
+    {
+        "Extraction": "field_2",
+        "Tran_key": [
+            "field2[7]",
+            "field2[6]",
+            "field2[5]",
+            "field2[4]",
+            "field2[3]",
+            "field2[2]",
+            "field2[1]",
+            "field2[0]"
+        ],
+        "default_tran": 58,
+        "tran_logic": [
+            [
+                "val:6",
+                "mask:65535",
+                "nxt:6"
+            ],
+            [
+                "val:4",
+                "mask:65535",
+                "nxt:5"
+            ],
+            [
+                "val:1",
+                "mask:65535",
+                "nxt:8"
+            ],
+            [
+                "val:17",
+                "mask:65535",
+                "nxt:7"
+            ]
+        ]
+    },
+    {
+        "Extraction": "field_4",
+        "Tran_key": [
+            "field4[7]",
+            "field4[6]",
+            "field4[5]",
+            "field4[4]",
+            "field4[3]",
+            "field4[2]",
+            "field4[1]",
+            "field4[0]"
+        ],
+        "default_tran": 56,
+        "tran_logic": [
+            [
+                "val:6",
+                "mask:65535",
+                "nxt:6"
+            ],
+            [
+                "val:17",
+                "mask:65535",
+                "nxt:7"
+            ],
+            [
+                "val:1",
+                "mask:65535",
+                "nxt:8"
+            ]
+        ]
+    },
+    {
+        "Extraction": "field_6",
+        "Tran_key": [],
+        "default_tran": 57,
+        "tran_logic": []
+    },
+    {
+        "Extraction": "field_5",
+        "Tran_key": [],
+        "default_tran": 59,
+        "tran_logic": []
+    },
+    {
+        "Extraction": "field_7",
+        "Tran_key": [],
+        "default_tran": null,
+        "tran_logic": []
+    }
+]
