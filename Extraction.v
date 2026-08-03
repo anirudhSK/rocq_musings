@@ -11,6 +11,7 @@ From MyProject Require Import PktClass.
 From MyProject Require Import CrConcreteSemanticsModule.
 From MyProject Require Import CrConcreteSemanticsParser.
 From MyProject Require Import CrDslProperties.
+From MyProject Require Import ParserHawkEval.
 
 (* Tell extraction to use your external OCaml implementation *)
 Extract Constant smt_query => "Z3Solver.solve".
@@ -38,4 +39,4 @@ Separate Extraction
   SmtExpr.smt_arr_len
   well_formed_programb well_formed_general_programb
 
-   sai_dump_headers parserhawk_sai_spec.
+  sai_dump_headers sai_spec.
