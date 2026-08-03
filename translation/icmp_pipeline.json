@@ -1,0 +1,44 @@
+[
+    {
+        "Extraction": "field_0",
+        "Tran_key": [
+            "field0[9]",
+            "field0[8]",
+            "field0[7]",
+            "field0[6]",
+            "field0[5]",
+            "field0[4]",
+            "field0[3]",
+            "field0[2]",
+            "field0[15]",
+            "field0[14]",
+            "field0[13]",
+            "field0[12]",
+            "field0[11]",
+            "field0[10]",
+            "field0[1]",
+            "field0[0]"
+        ],
+        "default_tran": 2,
+        "tran_logic": [
+            [
+                "val:32768",
+                "mask:60928",
+                "nxt:3"
+            ],
+            [
+                "val:32768",
+                "mask:61440",
+                "nxt:1"
+            ]
+        ]
+    },
+    {
+        "Extraction": "field_1",
+        "Tran_key": [
+            "field1[0]"
+        ],
+        "default_tran": null,
+        "tran_logic": []
+    }
+]

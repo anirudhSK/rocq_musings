@@ -8,6 +8,30 @@ From MyProject Require Import CrModule.
 From MyProject Require Import CrParser.
 From MyProject Require Import CrVal.
 
+(* Port of the spect that ParserHawk uses for icmp
+   https://github.com/ParserHawk/ParserHawk/blob/17be2c8a65a72dac59b2d33642a026d4ef9e90e3/z3/cegis_loop/one_short_revision/P4_examples/parse_icmp_accept/parse_icmp_accept_tofino_op.py#L69 *)
+Definition icmp_spec_parser : Parser := {|
+  parser_start := ParserStateLabelCtr 1;
+  parser_states := [
+    mkParserStateDef (ParserStateLabelCtr 1)
+      (Some (ExtractOpConstructor (HeaderCtr 1) 16 u16))
+      (Select [
+        mkSelectCase (HeaderCtr 1) 9 16
+          [true; false; false; false; false; false; true] (* 0x8200 &&& 0xfe00 *)
+          (TargetState (ParserStateLabelCtr 2));
+        mkSelectCase (HeaderCtr 1) 10 16
+          [true; false; false; false; false; true]        (* 0x8400 &&& 0xfc00 *)
+          (TargetState (ParserStateLabelCtr 2));
+        mkSelectCase (HeaderCtr 1) 11 16
+          [true; false; false; false; true]               (* 0x8800 &&& 0xf800 *)
+          (TargetState (ParserStateLabelCtr 2))
+      ] Accept);
+    mkParserStateDef (ParserStateLabelCtr 2)
+      (Some (ExtractOpConstructor (HeaderCtr 2) 1 u8))
+      (Unconditional Accept)
+  ];
+|}.
+
 (* Port of the spec that ParserHawk uses for sai:
    https://github.com/ParserHawk/ParserHawk/blob/17be2c8a65a72dac59b2d33642a026d4ef9e90e3/z3/cegis_loop/one_short_revision/P4_examples/sai_v4_pkt_eth_v46_inv4_udp_tcp_icmp_arp/sai_v4_pkt_eth_v46_inv4_udp_tcp_icmp_arp_tofino_op.py#L165 *)
 Definition sai_spec_parser : Parser := {|
@@ -90,12 +114,30 @@ Definition sai_spec_parser : Parser := {|
 |}.
 
 Inductive ParserHawkHdrs :=
+| ICMPHdr (h1 : Header) (h2 : Header)
 | SAIHdr
   (h1 : Header) (h2 : Header) (h3 : Header)
   (h4 : Header) (h5 : Header) (h6 : Header)
   (h7 : Header) (h8 : Header) (h9 : Header).
-Definition sai_dump_headers (p : Parser) (ordering : ParserHawkHdrs) : GeneralCaracaraProgram :=
+
+Definition dump_headers (p : Parser) (ordering : ParserHawkHdrs) : GeneralCaracaraProgram :=
   match ordering with
+  | ICMPHdr h1 h2 =>
+    GeneralCaracaraProgramDef 17 [] {|
+      net_modules := [
+        ParserModule (ModuleNameCtr 1) p;
+        DeparserModule (ModuleNameCtr 2) (mkDeparser [
+          EmitOpConstructor h1 16;
+          EmitOpConstructor h2 8
+        ])
+      ];
+      net_edges := fun a b => 
+        match a, b with
+        | ModuleNameCtr 1, ModuleNameCtr 2 => true
+        | _, _ => false
+        end;
+      start_module := ModuleNameCtr 1;
+    |}
   | SAIHdr h1 h2 h3 h4 h5 h6 h7 h8 h9 =>
     GeneralCaracaraProgramDef 34 [] {|
       net_modules := [
@@ -121,9 +163,11 @@ Definition sai_dump_headers (p : Parser) (ordering : ParserHawkHdrs) : GeneralCa
     |}
   end.
 
-(* dumps 9 header fields next to one another *)
+Definition icmp_spec :=
+  dump_headers icmp_spec_parser (ICMPHdr (HeaderCtr 1) (HeaderCtr 2)).
+
 Definition sai_spec :=
-  sai_dump_headers sai_spec_parser (SAIHdr
+  dump_headers sai_spec_parser (SAIHdr
     (HeaderCtr 1) (HeaderCtr 2) (HeaderCtr 3)
     (HeaderCtr 4) (HeaderCtr 5) (HeaderCtr 6)
     (HeaderCtr 7) (HeaderCtr 8) (HeaderCtr 9)).

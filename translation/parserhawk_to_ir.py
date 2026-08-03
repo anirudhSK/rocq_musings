@@ -159,37 +159,34 @@ class Builder:
             raise Unsupported("node has tran_logic but an empty Tran_key")
         total = len(bits)
 
-        cases, fallthrough, chained = [], default, False
-        for entry in reversed(logic):     # reversed: fall-through = next entry
+        decoded = []
+        for entry in logic:
             val, mask, nxt = parse_kv(entry)
             mask &= (1 << total) - 1
             if mask == 0:
                 raise Unsupported(f"entry {entry!r} masks out every key bit")
             val &= mask
             cared = [i for i in range(total) if (mask >> (total - 1 - i)) & 1]
-            runs = self.runs_of([bits[i] for i in cared], cared)
-            tgt = self.target(nxt)
+            decoded.append((self.runs_of([bits[i] for i in cared], cared),
+                            val, self.target(nxt)))
 
-            if len(runs) == 1 and not chained:
+        if all(len(runs) == 1 for (runs, _, _) in decoded):
+            cases = []
+            for (runs, val, tgt) in decoded:
                 h, lo, hi, pos = runs[0]
                 cases.append((h, lo, hi, run_value(val, total, pos), tgt))
-            else:
-                fallthrough = self.chain(runs, val, total, tgt, fallthrough)
-                chained = True
-        cases.reverse()
+            return ("select", cases, default)
 
-        if chained:
-            for (h, lo, hi, v, tgt) in reversed(cases):
-                fallthrough = self.chain([(h, lo, hi, None)], v, total,
-                                         tgt, fallthrough, literal=v)
-            return ("uncond", fallthrough)
-        return ("select", cases, default)
+        fallthrough = default
+        for (runs, val, tgt) in reversed(decoded):
+            fallthrough = self.chain(runs, val, total, tgt, fallthrough)
+        return ("uncond", fallthrough)
 
-    def chain(self, runs, val, total, target, fallthrough, literal=None):
+    def chain(self, runs, val, total, target, fallthrough):
         """One zero-width state per run; all must match to reach `target`."""
         labels = [self.fresh() for _ in runs]
         for i, (h, lo, hi, pos) in enumerate(runs):
-            v = literal if literal is not None else run_value(val, total, pos)
+            v = run_value(val, total, pos)
             # Intermediate links are ParserTargets, not bare labels.
             nxt = target if i == len(runs) - 1 else ("state", labels[i + 1])
             self.extra.append({

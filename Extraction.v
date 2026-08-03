@@ -39,4 +39,4 @@ Separate Extraction
   SmtExpr.smt_arr_len
   well_formed_programb well_formed_general_programb
 
-  sai_dump_headers sai_spec.
+  dump_headers icmp_spec sai_spec.
