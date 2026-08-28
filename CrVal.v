@@ -99,6 +99,58 @@ Definition mask_width (w : CrWidth) (z : Z) : uint64 :=
 Definition mk_int (ty : CrIntType) (z : Z) : CrVal :=
   IntVal (mask_width (it_width ty) z) ty.
 
+(* ------------------------------------------------------------------ *)
+(* A region cell is a BYTE.
+
+   [ld_val] reads a cell with [cast u8 _], which checks the source type, so a
+   cell that is [UninitVal], [ErrorVal], or an [IntVal] of any width other
+   than [u8] makes the whole multi-byte load [ErrorVal].  [st_val] only ever
+   writes [u8]s ([byte_of_val] ends in [cast u64 u8]), so [u8] is the only
+   width a load can hope to see.
+
+   That matters for what a region's contents on ENTRY are allowed to be.  They
+   are an input -- a solver model supplies them -- and a model that hands back
+   a non-byte cell describes a machine state that does not exist, while making
+   every comparison against the loaded value false in BOTH directions
+   ([CrVal.ltb] is false on [ErrorVal] either way round).  Two programs that
+   test [x > 100] and [x < 101] then disagree on an input no machine produces.
+   [to_byte] is what rules those models out: it is applied to a region
+   variable's denotation, so a free region denotes an array of bytes and
+   nothing else.
+
+   The VALUE is masked as well as the tag checked, and that is not tidiness.
+   [IntVal] pairs a raw [uint64] with a width, so [IntVal 69206016 u8] is a
+   well-formed [CrVal] that [mk_int u8] can never build -- a "byte" holding
+   more than a byte.  [cast u8 u64] does not truncate (it masks to the TARGET
+   width), so [ld_val]'s assembly
+   [or (cast u8 u64 cell_i * 2^(8i))] would overlap neighbouring cells and stop
+   being a byte decomposition at all: a [u64] load and eight [u8] loads
+   recombined would disagree, which is exactly the pair an -O0/-O2 comparison
+   puts side by side.  [st_val] already writes masked bytes
+   ([byte_of_val] ends in [slice_val] then [cast u64 u8]), so this only brings
+   the free variable into line with what a store produces.
+
+   Note where this does NOT apply.  A cell can still become [ErrorVal] during
+   a run -- [byte_of_val] sends every non-[IntVal] there, so storing an
+   unwritten header fills its cells with it -- and that is real behaviour, not
+   an artefact.  Only the initial contents are constrained. *)
+Definition to_byte (c : MemVal CrVal) : MemVal CrVal :=
+  match c with
+  | Init (IntVal b {| it_width := W8 |}) => Init (mk_int u8 (unsigned b))
+  | _ => Init (mk_int u8 0)
+  end.
+
+(* A region variable's denotation: the declared length, and byte contents. *)
+Definition region_of_bytes (len : uint64) (a : @Array CrVal) : @Array CrVal :=
+  Allocated {| arr_len := len; arr_bytes := PMap.map to_byte (region_bytes a) |}.
+
+(* A freshly declared region as a real machine would present it: [len] bytes,
+   zero.  The counterpart of [to_byte] on the concrete side -- [mk_region]
+   leaves every cell [Uninit], which loads as [ErrorVal] and so is not a state
+   [concrete_gp_state_is_valid] admits. *)
+Definition mk_region_zero (len : uint64) : @Array CrVal :=
+  Allocated {| arr_len := len; arr_bytes := PMap.init (Init (mk_int u8 0)) |}.
+
 (* Extract bits [lo, hi) of [v]'s value, LSB-indexed (bit 0 is least
    significant, so this is P4's [field[hi-1 : lo]]), returned right-aligned in a
    fresh [u64].  A non-integer operand yields ErrorVal. *)
@@ -251,6 +303,85 @@ Definition st_val (ty : CrIntType) (a : Array) (base v : CrVal) : Array :=
       end)
     (List.seq 0 (it_bytes ty)) a.
 
+(* ------------------------------------------------------------------ *)
+(* The (value, tag) view of a [CrVal].
+
+   A solver has no [CrVal]; it has bitvectors.  The encoding every lowering has
+   ever used is a 64-bit value beside a small tag, and these are that encoding
+   written down ONCE, in Rocq, so that [SmtCompile] can target it and the
+   extracted lowering can stay a structural transliteration.  It used to live
+   only in [Z3Solver.ml], where nothing checked it against the semantics below
+   -- and where getting it wrong made [smt_query_sound_some] false for the real
+   solver rather than merely imprecise.
+
+   Tag 0 is [ErrorVal] and 1 is [UninitVal]; 2..5 are the [IntVal] widths in
+   [CrWidth] order.  [val_of] is 0 on a non-[IntVal], which is not a free
+   choice: it is what makes the encoding INJECTIVE, so a model can be decoded
+   back to a [CrVal] without losing anything.  The solver side has to pin the
+   same thing (a non-int tag forces a zero value), or the round trip drops
+   information and the two disagree on a term no guard happens to discard. *)
+Definition tag_of (v : CrVal) : Z :=
+  match v with
+  | ErrorVal => 0
+  | UninitVal => 1
+  | IntVal _ ty => match it_width ty with W8 => 2 | W16 => 3 | W32 => 4 | W64 => 5 end
+  end.
+
+Definition val_of (v : CrVal) : Z :=
+  match v with IntVal a _ => unsigned a | _ => 0 end.
+
+(* The inverse.  Tags outside 0..5 decode to [ErrorVal]; the solver side pins
+   the tag into range so that case does not arise, and decoding it to the tag-0
+   value keeps [mk_cell] total without inventing a [CrVal]. *)
+Definition mk_cell (value tag : Z) : CrVal :=
+  if Z.eqb tag 2 then IntVal (repr value) u8
+  else if Z.eqb tag 3 then IntVal (repr value) u16
+  else if Z.eqb tag 4 then IntVal (repr value) u32
+  else if Z.eqb tag 5 then IntVal (repr value) u64
+  else if Z.eqb tag 1 then UninitVal
+  else ErrorVal.
+
+Lemma mk_cell_val_tag : forall v, mk_cell (val_of v) (tag_of v) = v.
+Proof.
+  intros [a [w]| |]; try reflexivity.
+  destruct w; unfold mk_cell, val_of, tag_of, it_width;
+    cbn [Z.eqb Pos.eqb]; f_equal; apply repr_unsigned.
+Qed.
+
+(* ------------------------------------------------------------------ *)
+(* Total array primitives.
+
+   [ld_arr] and [st_arr] are partial: out of bounds is [Illegal].  Z3's [select]
+   and [store] are total, and that mismatch is exactly what the extracted
+   lowering used to paper over with a hand-written guard.  These are the total
+   operations Z3 actually has, so [SmtCompile] can emit the guard as an
+   ordinary conditional and the lowering can stop reasoning. *)
+Definition arr_len_of {T : Type} (a : @Array T) : uint64 :=
+  match a with Allocated b => arr_len b | Unallocated => repr 0 end.
+
+Definition cell_at (a : @Array CrVal) (i : CrVal) : CrVal :=
+  match i with
+  | IntVal idx _ =>
+      match (region_bytes a) !! (offset_to_key idx) with
+      | Init v => v
+      | Uninit => UninitVal
+      end
+  | _ => ErrorVal
+  end.
+
+(* Total in the INDEX -- no bounds check, which is the whole point -- but still
+   refuses an undeclared region, exactly as [st_arr] does.  Z3's [store] would
+   happily produce an array there; keeping [Unallocated] is what preserves
+   [SmtModuleQuery.eval_smt_mem_rooted], and it costs nothing because every
+   access to an undeclared region is guarded off by [smt_arr_len] being 0. *)
+Definition st_cell (a : @Array CrVal) (i : CrVal) (v : CrVal) : @Array CrVal :=
+  match a, i with
+  | Allocated b, IntVal idx _ =>
+      Allocated {| arr_len := arr_len b;
+                   arr_bytes := PMap.set (offset_to_key idx) (Init v) (arr_bytes b) |}
+  | _, _ => a
+  end.
+
 Lemma crwidth_eqb_true : forall a b, crwidth_eqb a b = true -> a = b.
 Proof. intros a b H; destruct a, b; simpl in H; try discriminate; reflexivity. Qed.
 
@@ -321,4 +452,65 @@ Proof.
   - pose proof (unsigned_range a) as Hr.
     assert (Hmod : @modulus 64%positive = (2 ^ 64)%Z) by (vm_compute; reflexivity).
     lia.
+Qed.
+
+(* Masking a value that is already 64 bits wide is the identity.  This is what
+   makes the core fragment collapse onto plain bitvectors: [mk_int u64] of an
+   existing [uint64]'s bits is that [uint64]. *)
+Lemma mask_width_W64_id : forall (a : uint64), mask_width W64 (unsigned a) = a.
+Proof.
+  intros a. unfold mask_width, width_bits.
+  rewrite Z.land_ones by lia.
+  assert (Hmod : @modulus 64%positive = (2 ^ 64)%Z) by (vm_compute; reflexivity).
+  pose proof (unsigned_range a) as [Hlo Hhi]. rewrite Hmod in Hhi.
+  rewrite Zmod_small by lia. apply repr_unsigned.
+Qed.
+
+Lemma mask_width_W64_small : forall z, 0 <= z < 2 ^ 64 -> mask_width W64 z = repr z.
+Proof.
+  intros z Hz. unfold mask_width, width_bits.
+  rewrite Z.land_ones by lia. rewrite Zmod_small by lia. reflexivity.
+Qed.
+
+(* A [u8]-masked value fits in a byte -- the bound the solver side has to be
+   told about a free region's cells, and the reason it is true. *)
+Lemma mask_W8_lt_256 : forall z, unsigned (mask_width W8 z) < 256.
+Proof.
+  intros z. unfold mask_width, width_bits.
+  rewrite Z.land_ones by lia.
+  assert (Hb : 0 <= z mod 2 ^ 8 < 2 ^ 8) by (apply Z.mod_pos_bound; lia).
+  assert (Hmod : @modulus 64%positive = (2 ^ 64)%Z) by (vm_compute; reflexivity).
+  rewrite unsigned_repr_eq, Hmod, Zmod_small by lia. lia.
+Qed.
+
+(* The same round trip at any width, not just [W64].  Masking to 64 bits and
+   back loses nothing a narrower mask would have kept, because every
+   [CrWidth] divides 64. *)
+Lemma mask_width_unsigned_mask_W64 : forall w z,
+  mask_width w (unsigned (mask_width W64 z)) = mask_width w z.
+Proof.
+  intros w z.
+  assert (Hmod : @modulus 64%positive = (2 ^ 64)%Z) by (vm_compute; reflexivity).
+  assert (Hu : unsigned (mask_width W64 z) = (z mod 2 ^ 64)%Z).
+  { unfold mask_width, width_bits. rewrite unsigned_repr_eq, Hmod.
+    rewrite Z.land_ones by lia.
+    apply Z.mod_mod_divide. exists 1%Z; ring. }
+  rewrite Hu. unfold mask_width.
+  destruct w; unfold width_bits; f_equal;
+    rewrite !Z.land_ones by lia;
+    apply Z.mod_mod_divide;
+    [ exists (2 ^ 56)%Z | exists (2 ^ 48)%Z | exists (2 ^ 32)%Z | exists 1%Z ];
+    vm_compute; reflexivity.
+Qed.
+
+(* A [u64] value cast to [ty] is the same value built at [ty] directly.  This
+   is what makes the symbolic parser's [SmtCast u64 of (SmtBitsToInt ...)]
+   denote the concrete [mk_int of (bits_to_Z ...)] -- see the comment on
+   [CrSymbolicSemanticsParser.apply_extract_symbolic], which asserts exactly
+   this and until now had nothing backing it. *)
+Lemma cast_u64_mk_int : forall ty z, cast u64 ty (mk_int u64 z) = mk_int ty z.
+Proof.
+  intros ty z. unfold cast, mk_int.
+  cbn [u64 it_width crinttype_eqb crwidth_eqb].
+  f_equal. apply mask_width_unsigned_mask_W64.
 Qed.

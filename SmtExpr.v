@@ -60,6 +60,28 @@ with SmtArithExpr : Type :=
     (* Read offset [idx] of region [a].  Out of bounds is [ErrorVal], where the
        bound is the region's declared length -- see [smt_arr_len]. *)
     | SmtArrSel (a : SmtArrExpr) (idx : SmtArithExpr)
+    (* ---- the core fragment ---------------------------------------------
+       Five constructors that mirror what a bitvector solver actually has, so
+       that [SmtCompile] can rewrite a query into terms the extracted lowering
+       transliterates one-for-one instead of reconstructing [CrVal]'s type
+       discipline in OCaml.  Each denotes a plain 64-bit word ([IntVal _ u64]),
+       which is what makes the rest of the language collapse onto QF_BV: at
+       [u64], [add_at] is [bvadd], [eqb] is bitvector equality and [ltb] is
+       [bvult].
+
+       A scalar variable splits into its value and its RAW tag.  The tag is raw
+       -- [eval_smt_arith]'s [SmtArithVar] arm folds [UninitVal] into
+       [ErrorVal], and [SmtCompile] emits that coercion itself -- because a
+       primitive that already coerces is a primitive the lowering has to
+       reproduce. *)
+    | SmtVarVal (name : string)
+    | SmtVarTag (name : string)
+    (* A cell read with NO bounds check, the total [select] Z3 has.  The guard
+       [ld_arr] applies is emitted by [SmtCompile] as an ordinary conditional;
+       it used to be hand-written in [Z3Solver.ml], where nothing related it to
+       [ld_arr]. *)
+    | SmtCellVal (a : SmtArrExpr) (idx : SmtArithExpr)
+    | SmtCellTag (a : SmtArrExpr) (idx : SmtArithExpr)
 with SmtArrExpr : Type :=
     (* An undeclared region: reads are out of bounds, writes are dropped. *)
     | SmtArrInit
@@ -68,7 +90,12 @@ with SmtArrExpr : Type :=
     | SmtArrSt (a : SmtArrExpr) (idx : SmtArithExpr) (v : SmtArithExpr)
     (* Path merging.  [SmtConditional] only builds arith expressions, so
        merging two versions of a region needs its own conditional. *)
-    | SmtArrIte (cond : SmtBoolExpr) (a1 a2 : SmtArrExpr).
+    | SmtArrIte (cond : SmtBoolExpr) (a1 a2 : SmtArrExpr)
+    (* The total [store] Z3 has, writing an explicitly (value, tag)-encoded
+       cell.  Total for the same reason [SmtCellVal] is: [st_arr] drops an
+       out-of-bounds write and Z3's [store] does not, so the drop is compiled
+       into an [SmtArrIte] rather than assumed. *)
+    | SmtStCell (a : SmtArrExpr) (idx value tag : SmtArithExpr).
 
 (* Do two loads agree?  [ld_arr] is partial, and an out-of-bounds read on both
    sides counts as agreement -- the same convention the concrete semantics uses
@@ -149,12 +176,33 @@ with eval_smt_arith (e : SmtArithExpr) (v : SmtValuation) : CrVal :=
         | Legal v' => v'
         | Illegal => ErrorVal
         end
+    (* [val_of] is 0 on a non-[IntVal], so the value half of a variable agrees
+       with [SmtArithVar]'s [ErrorVal] coercion without repeating it; only the
+       tag half can tell [UninitVal] from [ErrorVal], and that is the half
+       [SmtCompile] coerces. *)
+    | SmtVarVal name => mk_int u64 (val_of (sv_ints v name))
+    | SmtVarTag name => mk_int u64 (tag_of (sv_ints v name))
+    | SmtCellVal a idx =>
+        mk_int u64 (val_of (cell_at (eval_smt_mem a v) (eval_smt_arith idx v)))
+    | SmtCellTag a idx =>
+        mk_int u64 (tag_of (cell_at (eval_smt_mem a v) (eval_smt_arith idx v)))
     end
 with eval_smt_mem (e : SmtArrExpr) (v : SmtValuation) : @Array CrVal :=
     match e with
     | SmtArrInit => Unallocated
-    (* The model supplies the bytes; the declaration supplies the length. *)
-    | SmtArrVar name len => region_with_len len (sv_arrs v name)
+    (* The model supplies the bytes; the declaration supplies the length.
+       [region_of_bytes], not [region_with_len]: a region's contents on entry
+       are an input, and a real one is BYTES.  A model that hands back a
+       non-[u8] cell makes the whole multi-byte load [ErrorVal], on which
+       [CrVal.ltb] is false in both directions -- so [x > 100] and [x < 101]
+       are both false and two programs that test opposite ways come back
+       [NotEquivalent] on a machine state that cannot occur.  See [to_byte].
+
+       [Z3Solver.ml] pins a free array's cells to the [u8] tag to match.  The
+       two have to move together: loosen the side constraint without loosening
+       this and [smt_query_sound_none] is false, tighten this without
+       tightening that and [smt_query_sound_some] is. *)
+    | SmtArrVar name len => region_of_bytes len (sv_arrs v name)
     (* An out-of-bounds write is dropped rather than invalidating the region,
        the store-side mirror of [SmtArrSel]'s [ErrorVal].  Z3's [store] is
        total, but a total store is observationally equal to this one: the only
@@ -168,6 +216,10 @@ with eval_smt_mem (e : SmtArrExpr) (v : SmtValuation) : @Array CrVal :=
         end
     | SmtArrIte cond a1 a2 =>
         if eval_smt_bool cond v then eval_smt_mem a1 v else eval_smt_mem a2 v
+    | SmtStCell a idx value tag =>
+        st_cell (eval_smt_mem a v) (eval_smt_arith idx v)
+                (mk_cell (val_of (eval_smt_arith value v))
+                         (val_of (eval_smt_arith tag v)))
     end.
 
 (* The declared length of the region an array expression denotes.  A store
@@ -181,6 +233,7 @@ Fixpoint smt_arr_len (a : SmtArrExpr) : uint64 :=
   | SmtArrVar _ len => len
   | SmtArrSt a' _ _ => smt_arr_len a'
   | SmtArrIte _ a1 _ => smt_arr_len a1
+  | SmtStCell a' _ _ _ => smt_arr_len a'
   end.
 
 Record ConditionalVal (T : Type) := {

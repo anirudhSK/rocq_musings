@@ -39,6 +39,72 @@ boundary: the axioms are stated over `eval_smt_bool`, so every place the Z3 enco
 `eval_smt_*` disagree is an unsoundness the Coq development cannot see. The known ones are
 listed under "Model debt" below.
 
+### The query compiler
+
+That boundary used to be 254 lines of OCaml. `Z3Solver.solve` reconstructed `CrVal`'s type
+discipline in bitvectors from scratch — masking to widths, the `(value, tag)` pair, the
+type tests behind `eqb`/`ltb`/`iv_binop_at`, the `CrVal.not` width chain, the bounds
+guards standing in for a partial `ld_arr`/`st_arr` — and nothing related any of it to the
+definitions in `CrVal.v` it was reproducing. Getting it wrong there made
+`smt_query_sound_some` **false** rather than merely imprecise; that happened once, with the
+untyped lowering.
+
+`SmtCompile.v` moves that work into Rocq. `solve` runs `compile_bool` before lowering, and
+the result is in the **core fragment**: every arith term denotes `IntVal _ u64`, where the
+rich operations *are* their bitvector counterparts (`mask_width W64` is the identity, so
+`add_at u64` is `bvadd`; `eqb` on two `u64`s is bitvector equality; `ltb` is `bvult`). The
+fragment is a subset of `SmtExpr`, not a new type, so there is one syntax, one evaluator,
+and the obligation has one shape:
+
+```coq
+Theorem compile_correct : forall e v, lcb e = true ->
+  eval_smt_bool (compile_bool e) v = eval_smt_bool e v.   (* plus arith/array components *)
+```
+
+Both sides are read by the same `eval_smt_bool` under the **same valuation** — there is no
+encoding relation between two valuations to get right, which a separate core datatype would
+have needed. `SmtVarVal`/`SmtVarTag` buy that by splitting a scalar in the syntax rather
+than in the valuation.
+
+**`compile_correct` is `Admitted`.** So this reduces and relocates the trust; it does not
+discharge it. What is gained is real but should be stated precisely:
+
+- the transformation is now written in a language with a semantics, against the definitions
+  it has to agree with, instead of from memory in OCaml;
+- the obligation is one statement instead of diffuse across 254 lines;
+- `Z3Solver.ml`'s lowering is structural — one Z3 constructor per node — with three
+  documented exceptions (`SmtArrEq`, `SmtBitDiv`, `SmtBitSlice`), each of which says why;
+- a non-core constructor reaching the lowering raises rather than being lowered on a guess.
+
+**The side constraints are gone**, and with them a real gap. `solve` used to assert the
+goal *alongside* assumptions about the model — a region's cells being bytes, a scalar's tag
+being in range — while `smt_query_sound_none` concludes about **every** valuation. An UNSAT
+of goal-and-assumptions only rules out the valuations satisfying the assumptions, so the
+axiom held only because those assumptions happened to be vacuous on the Rocq side, by a
+coincidence between definitions in two languages.
+
+Both are now inside the query. A scalar needs no constraint at all:
+`compile_arith`'s `SmtArithVar` case wraps *both* halves in `is_int_tag`, so the term reads
+zero exactly where `CrVal.val_of`/`tag_of` do, and a model is free to pick anything
+unobservable. A region cannot be handled that way — `eval_smt_mem`'s `SmtArrVar` arm maps
+`CrVal.to_byte` over an unbounded array, which is not a term — so it becomes the conjunct
+`SmtCompile.regions_wf`, stated over the declared length. `regions_wf_true` (**`Qed`**)
+proves it true under every `SmtValuation`, which is what makes conjoining it
+axiom-preserving; `compile_query_correct` puts the two halves together. `solve` now asserts
+precisely the formula the axioms are stated about.
+
+What remains outside: `compile_correct` itself, and the `SmtArrEq` extensionality argument
+(below, unchanged).
+
+`compile_correct` assumes `lcb`: every array merge joins regions of equal declared length,
+which is what makes the syntactic `smt_arr_len` agree with the denoted `arr_len`. It holds
+of everything the checker builds (`eval_general_program_symbolic_mem_rooted`), and `solve`
+checks it and refuses the query otherwise.
+
+The empirical guard is `TestEquality`'s `witness:` tests: they solve a hand-built
+`SmtBoolExpr` and re-check Z3's model against `eval_smt_bool` of the **original** term.
+Since `solve` compiles internally, that is `compile_bool_correct` tested end to end.
+
 ## What equivalence means
 
 Two runs of a network agree when either both rejected, or both accepted and
@@ -65,9 +131,27 @@ consequences are baked into the semantics:
 
 - `eval_deparser_concrete` is total rather than carrying an approximate validity condition
   (below);
-- loads and stores are total. An out-of-bounds access yields `ErrorVal` / is dropped and
-  does **not** clear `gps_valid`; what distinguishes a program that walks off the end is
-  `sh_mem_extent`, not a rejection.
+- loads and stores are total: an individual out-of-bounds access yields `ErrorVal` / is
+  dropped and clears nothing. The overrun is recorded in `sh_mem_extent` and turned into a
+  rejection **once, at the end of the network**, by the memory-safety conjunct
+  `eval_general_program_{concrete,symbolic}` fold into the final `gps_valid`
+  (`mem_extents_in_bounds_concrete` / `mem_extents_in_bounds_smt`, exact mirrors of each
+  other: same fold over `pmap_keys` of the extent map, `negb (CrVal.ltb …)` against
+  `SmtBoolNot (SmtBoolLt …)`, same u64 bound from `region_len_map`).
+
+  Doing it per-run rather than per-access is what keeps it expressible on both sides. A
+  store is not atomic — `SmtArrSt` is guarded cell by cell and "all of these cells are in
+  bounds" is not an `SmtBoolExpr` — so a rejecting *access* has no symbolic counterpart,
+  while a rejecting *run* is just one more conjunct on a flag that is already a formula.
+
+  Two consequences follow from the both-rejected disjunct and are worth stating plainly.
+  A pair of programs that **both** overrun now compares `Equivalent` whatever they emit;
+  and the verdict of a fixed out-of-bounds pair no longer exercises the `SmtArrSel` /
+  `SmtArrSt` bounds guards at all, which is why those moved to the `witness:` tests
+  ("an out-of-bounds read is ErrorVal", "an out-of-bounds write leaves the region alone")
+  rather than resting on `TestEquality`'s test 26. The guards remain load-bearing for a
+  *data-dependent* offset, where the run is invalid only on the valuations that actually
+  overrun and the region conjuncts still run on the rest.
 
 ### Why a deparser is total
 
@@ -109,10 +193,47 @@ Read the statements carefully before leaning on them. Both relate the checker's 
 checker itself reasoned about. Neither says anything about `eval_general_program_concrete`.
 So together they close the gap between *what the solver reported* and *what the two
 symbolic states do under a valuation*; they do not close the gap between the symbolic and
-concrete semantics. That second gap is what `ConcreteToSymbolicLemmas.v` addresses at the
-transformer level (`commute_sym_vs_conc_transfomer_hdr` / `_sv`), and its memory and
-network analogues are still missing. Anyone reading "the network checker is proven sound
-and complete" as "the symbolic semantics is faithful" is reading more than is there.
+concrete semantics. Anyone reading "the network checker is proven sound and complete" as
+"the symbolic semantics is faithful" is reading more than is there.
+
+That second gap is `ConcreteToSymbolicLemmas.v`'s subject at the transformer level
+(`commute_sym_vs_conc_transfomer_hdr` / `_sv`). Its analogues now exist for **memory**
+(`MemCommuteLemmas.v` — value, op, op list, match-action rule, transformer), for the
+**deparser** (`DeparserCommuteLemmas.v`) and for the **parser**
+(`ParserCommuteLemmas.v` — `run_parser_commute`, `eval_parser_commute`), all
+`Closed under the global context`. What is still missing is the **network** analogue:
+the induction over `eval_network_from_*` that assembles them, which is the single
+admitted lemma `eval_general_program_commute`. TODO.md 1.1 item 5 has the shape it has
+to take.
+
+Its conclusion is `gps_agree`, which is structural equality on every field of a
+`GeneralConcreteState` **except the two memory maps, compared pointwise**. That is not a
+convenience. An equality of records is false: `sh_mem_extent` starts as `PMap.init` and
+every access adds a key, so a symbolic merge binds keys for every branch's regions where
+a concrete run binds only the branch that ran, and `PMap.map` preserves trees. The two
+differ while `!!` agrees at every key, the surplus bindings all holding the map's own
+default. It costs nothing — this lemma's conclusion never compares maps, only
+`ld_arr ((sh_mem ...) !! ...)`, `(sh_mem_extent ...) !! ...`, the two tapes and the flag.
+
+**Relating the two evaluators is what finds bugs in the model.** Both of the divergences
+below were live in the semantics and invisible to every existing test and proof, because
+until the commutation lemmas existed nothing compared a concrete run to a symbolic one:
+
+- A zero-width `Peek` past the end of a chained parser's residual **accepted symbolically
+  and rejected concretely**. `select_bits_valid` conjoined the presence of the peeked
+  window, which is empty at width zero; it now measures from the cursor, which is what
+  `select_bits_available_concrete` actually demands.
+- `merge_header_maps` **dropped a header written only on the else branch of a `select`**,
+  taking its keys from the then-branch alone. Same failure mode as model-debt item 2
+  below, and contained only by the same seeding. It now folds over both key sets.
+- A transformer **dropped a write to a state variable not in its declared `states`
+  list**. Model-debt item 2 again, and the half of it that was never fixed: the header
+  map is seeded from `collect_write_headers` (what the program *writes*), the state map
+  from the module's declared states (what it *announces*), and nothing requires the
+  targets to be among them. `CrVarLike.force_keys` now puts every written target in the
+  domain without changing any value.
+
+The first two are described in full in TODO.md 1.1.2, the third in 1.1.3.
 
 Three things the proofs turned up that are worth knowing:
 
@@ -142,7 +263,7 @@ Three things the proofs turned up that are worth knowing:
     `_sound` turn an equality of *loaded values* into an equality of *loads*. Since
     `check_sym_region_equal` became a single `SmtArrEq`, whose semantics constrains the
     loads directly, neither lemma needs it — its remaining jobs are to justify the
-    `SmtArrEq` lowering (Model debt item 3) and to bound the Z3 guard (below). Do not
+    `SmtArrEq` lowering (Model debt item 4) and to bound the Z3 guard (below). Do not
     delete it on the grounds that no *checker* lemma cites it.
   - **`smt_arr_len` agrees with the length of the array a region denotes**
     (`eval_general_program_symbolic_arr_len_agrees`). This one is easy to overlook because
@@ -179,9 +300,31 @@ Three things the proofs turned up that are worth knowing:
    Fixed by seeding, not by widening the merge: `init_general_symbolic_state` and
    `init_general_concrete_state` now seed `sh_hdr_map` with the network's whole header
    interface (`CrVarLike.collect_write_headers` — transformer write targets, parser
-   extractions and select reads, deparser emits), each entry holding the map's own default.
-   Seeding is observationally a no-op — every lookup already returned that default — it
-   only makes the key present so the merge can see it.
+   extractions and select reads, deparser emits). That fixes the DOMAIN, which is all
+   this bug needed: it only makes the key present so the merge can see it.
+
+   What each entry *holds* is a separate question, and the answer now depends on the
+   header. A header some parser extracts is a **field register** and holds an arbitrary
+   value of its own width on entry — `seed_header_syms` gives it
+   `SmtCast u64 ty (SmtVarVal "hdr_<h>")`, unprefixed so both programs share it, and
+   `seed_header_concrete` starts it at `mk_int ty 0` as one inhabitant. A header only a
+   transformer writes is a temporary and still holds the map's default, for which the
+   seeding remains observationally a no-op.
+
+   This is a third instance of the three-sides-must-agree pattern, alongside memory
+   bytes. `SmtCast u64 ty (SmtVarVal _)` denotes *only* `ty`-wide integers whatever the
+   valuation, so the symbolic side **forces** `concrete_gp_state_is_valid`'s header
+   clause instead of the solver having to be constrained into it — which is what keeps
+   `smt_query_sound_none`, quantified over every valuation, true. The motivating case is
+   ParserHawk's IPU pipelines, whose transition keys name fields a later node extracts;
+   its model reads those as the register's initial contents
+   (`initial_field{i} : BitVec(width)`), and under the old uninit seeding every such
+   select was dead, silently pruning a transition. Regression test: `TestEquality`'s
+   "hdr init: a register read before its extraction is free", which is `Equivalent`
+   under uninit seeding and `NotEquivalent` under this one.
+
+   Still unpinned: `mod_states`, whose transformer entries carry free state and control
+   variables, and headers no parser extracts.
 
    Widening `update_all_varlike` was the alternative and is worse: the `CrVarLike` class
    gives that field the type `(A -> T) -> TransformerState T -> TransformerState T`, with
@@ -192,7 +335,48 @@ Three things the proofs turned up that are worth knowing:
    `is_varlike_in_ps s h <> None` hypotheses. Those are now satisfiable for a network's
    headers by construction, but they are still hypotheses.
 
-3. **Z3 encoding vs `eval_smt_*` — FIXED, by encoding the type tag.** `eval_smt_arith` is
+   **The same hole was open for STATE VARIABLES until now, and the seeding did not close
+   it.** A transformer's `t_state_map` is seeded from the module's *declared* `states`
+   list — what it announces — while the header map is seeded from what the program
+   *writes*. Nothing requires a rule's targets to be among the declared states
+   (`well_formed_module` asks for `list_norepet`, `Sorted`, `transformer_has_default` and
+   `no_mem_ops_in_par`, and says nothing about containment), so a write to an undeclared
+   state variable survived concretely and vanished symbolically — exactly the bug above,
+   one map over. `CrVarLike.force_keys` now forces every target of
+   `collect_module_state_targets` into the domain. It cannot set the default the way the
+   header seed does: a declared state variable's entry is a free `SmtArithVar` standing
+   for its value on entry, so each key is re-set to the value it already reads
+   (`PMap.gsident`), which is the identity extensionally and differs only in the domain —
+   which is the only thing `update_all_varlike` looks at.
+
+3. **A region's entry contents were any `CrVal`, not bytes — FIXED, on all three
+   sides.** A declared region's contents on entry are an input supplied by the model.
+   The cell tags were pinned only to `0..5` (every `CrVal` tag), so a model could hand
+   back a cell that was `ErrorVal` or `UninitVal`, and the value field was not bounded
+   at all, so a cell tagged `u8` could hold more than a byte.
+
+   Both are observable. `ld_val` casts every cell with `cast u8 _`, so one non-byte cell
+   makes an entire multi-byte load `ErrorVal`; `CrVal.ltb` is false on `ErrorVal` in
+   **both** directions, so `x > 100` and `x < 101` are both false and two programs that
+   test opposite ways were reported `NotEquivalent` on a machine state that cannot
+   occur. And `cast u8 u64` masks to the target width rather than truncating, so an
+   unbounded value would make the byte assembly overlap neighbouring cells — a `u64`
+   load and eight `u8` loads recombined would disagree. Both are exactly the shapes an
+   `-O0`/`-O2` comparison puts side by side, which is how this surfaced.
+
+   Fixed in lockstep, because the three sides have to agree or one of the
+   `smt_query_sound_*` axioms becomes false: `eval_smt_mem`'s `SmtArrVar` arm coerces
+   through `CrVal.to_byte`; `Z3Solver.ml` pins each cell of `0..len` to the `u8` tag
+   with value `<= 255`; `CrVarLike.init_concrete_mem` builds zero-byte regions
+   (`mk_region_zero`); and `concrete_gp_state_is_valid` requires it of the concrete
+   states the results are about. Only the ENTRY contents are constrained — a cell can
+   still become `ErrorVal` mid-run, which is real behaviour.
+
+   The cost, stated plainly: a run that reads a region no one wrote is no longer a
+   modelled input, so the results say nothing about it. That is the trade for having
+   the model mean "real memory".
+
+4. **Z3 encoding vs `eval_smt_*` — FIXED, by encoding the type tag.** `eval_smt_arith` is
    type-checked throughout: `eqb`/`ltb` require both operands to carry the same
    `CrIntType` and are false otherwise, `iv_binop_at ty` requires both to be typed `ty`
    and yields `ErrorVal` otherwise, `cast from to` checks `from`, and `UninitVal` and
@@ -310,7 +494,7 @@ Three things the proofs turned up that are worth knowing:
    `TestEquality`'s "out of bounds, the order stops mattering" test is the regression test
    for all three — it reports `Equivalent` only if every guard is present.
 
-4. **First-match, type-first matching.** `eval_transformer_concrete` runs the first rule
+5. **First-match, type-first matching.** `eval_transformer_concrete` runs the first rule
    whose pattern holds, so list order is priority; `CrVal.eqb`/`ltb` compare the
    `CrIntType` before the value, so a `u64` header never matches a `u8` constant and both
    are false on `UninitVal`. Deliberate, pinned by `TestModuleSemantics`, and — since

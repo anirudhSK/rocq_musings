@@ -18,7 +18,7 @@ Inductive Operand :=
   | OpCtrlPlane (c : Ctrl)
   | OpHeader (h : Header)
   | OpConst (n : uint64) (* the constant adopts the consuming operation's type *)
-  | OpStateful (s : State).
+  | OpState (s : State).
 
 Inductive CmpOp :=
   | CmpEq
@@ -64,6 +64,7 @@ Inductive HdrOp :=
      rejection.  Do not make these partial -- SOUNDNESS.md, on the
      both-rejected disjunct, says why. *)
   | LoadOp  (ty : CrIntType) (region : MemRegion) (off : Operand) (target : Header)
+  | StatefulLoadOp (ty : CrIntType) (region : MemRegion) (off : Operand) (target : State)
   | StoreOp (ty : CrIntType) (region : MemRegion) (off : Operand) (val : Operand).
 
 (* Define MatchPattern as a list of header, pattern pairs.  A [MatchConst]
@@ -96,12 +97,15 @@ Definition extract_targets (op : HdrOp) : (list State) * (list Header) :=
   | CastStateOp _ _ _ target => ([target], [])
   | CastHeaderOp _ _ _ target => ([], [target])
   | LoadOp _ _ _ target => ([], [target])
+  | StatefulLoadOp _ _ _ target => ([target], [])
   | StoreOp _ _ _ _ => ([], [])
   end.
 
 Definition is_mem_op (op : HdrOp) : bool :=
   match op with
-  | LoadOp _ _ _ _ | StoreOp _ _ _ _ => true
+  | LoadOp _ _ _ _
+  | StatefulLoadOp _ _ _ _
+  | StoreOp _ _ _ _ => true
   | _ => false
   end.
 

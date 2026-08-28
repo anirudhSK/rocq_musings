@@ -1,7 +1,15 @@
 From Stdlib Require Import ZArith.
+From Stdlib Require Import List.
 From MyProject Require Import SmtExpr.
 From MyProject Require Import Maps.
 From MyProject Require Import CrVal.
+
+(* The keys a [PMap] holds an explicit binding for -- everything else reads the
+   map's default.  Lives here rather than in one of the evaluators because both
+   of them need it: the symbolic merge folds over it, and both module-level
+   semantics use it to enumerate the regions a run actually touched. *)
+Definition pmap_keys {T : Type} (m : PMap.t T) : list positive :=
+  List.map fst (PTree.elements (snd m)).
 
 (* The TransformerState is a record containing three maps:,
    one each for mapping headers/statevars/ctrlplaneconfigs to their current values *)

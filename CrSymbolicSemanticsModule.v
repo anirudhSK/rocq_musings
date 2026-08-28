@@ -50,19 +50,23 @@ Definition module_update_gs_symbolic
           (set_gps_shared_headers gs f_hdrs') (mc_mem mc')) (mc_extent mc')) ms'
   | ParserModule m_id p, ParserMod ps =>
     let r := eval_parser_symbolic p ps in
-    let ls' := ParserMod {| p_header_map := spr_headers r;
-                            p_packet     := p_packet ps;
-                            p_cursor     := p_cursor ps |} in
+    (* Mirrors the concrete side: the module-local state holds the unconsumed
+       tail at cursor 0, not the entry packet at the entry cursor.  See the
+       comment in [module_update_gs_concrete] for why the cursor is 0 rather
+       than the amount consumed. *)
+    let ls' := ParserMod {| p_header_map := pr_headers r;
+                            p_packet     := pr_residual r;
+                            p_cursor     := 0 |} in
     let ms' := PMap.set (unwrap m_id) ls' (mod_states gs) in
-    let f_hdrs' := spr_headers r in
-    let rt' := spr_residual r in
+    let f_hdrs' := pr_headers r in
+    let rt' := pr_residual r in
     (* Fold the accept condition into the running validity, rather than
        fail-closing as the concrete [None] branch does. *)
     let v' := {| cvc := cvc (gps_valid gs);
-                 cvv := SmtBoolAnd (cvv (gps_valid gs)) (spr_accept r) |} in
+                 cvv := SmtBoolAnd (cvv (gps_valid gs)) (pr_accept r) |} in
     (* Mirrors the concrete [add_at u64]: the network-wide count is the running
        sum of what each parser in the chain consumed. *)
-    let n' := SmtBitAdd u64 (sh_bits_read gs) (spr_bits_read r) in
+    let n' := SmtBitAdd u64 (sh_bits_read gs) (pr_bits_read r) in
     set_gps_valid
       (set_gps_bits_read
         (set_gps_mod_states
@@ -107,6 +111,26 @@ Fixpoint eval_network_from_symbolic
   | _, _ => None
   end end.
 
+(* Mirror of [mem_extents_in_bounds_concrete], node for node: the same fold
+   over the same key set, with [SmtBoolNot (SmtBoolLt ...)] where the concrete
+   side has [negb (CrVal.ltb ...)] and the same u64 bound constant.  The two
+   agree under [eval_smt_bool] because [SmtBoolLt] evaluates to [CrVal.ltb] and
+   [SmtArithConst (mask_width W64 n) u64] to [mk_int u64 n].
+
+   The key set is the SYMBOLIC extent map's, which is the concrete one's:
+   [concretize_sym_modnet_state] maps [sh_mem_extent] pointwise, and [PMap.map]
+   preserves bindings. *)
+Definition mem_extents_in_bounds_smt
+  (rs : list MemRegionDecl) (ext : PMap.t SmtArithExpr) : SmtBoolExpr :=
+  let lens := region_len_map rs in
+  List.fold_right
+    (fun k acc =>
+      SmtBoolAnd acc
+        (SmtBoolNot
+          (SmtBoolLt (SmtArithConst (mask_width W64 (Z.of_nat (lens !! k))) u64)
+                     (ext !! k))))
+    SmtTrue (pmap_keys ext).
+
 Definition eval_general_program_symbolic
   (p  : GeneralCaracaraProgram)
   (gs : GeneralSymbolicState)
@@ -118,8 +142,21 @@ Definition eval_general_program_symbolic
   | None => None
   | Some start_state =>
     (* The input packet threads in from the shared read tape. *)
-    eval_network_from_symbolic
-      net start (sh_hdr_map gs) (sh_read_tape gs) gs fuel
+    match eval_network_from_symbolic
+            net start (sh_hdr_map gs) (sh_read_tape gs) gs fuel with
+    | None => None
+    | Some gs' =>
+      (* Mirrors the concrete side: the memory-safety condition is conjoined
+         into the final validity, in the same [SmtBoolAnd] shape every other
+         writer of [gps_valid] uses.  [cvc] is untouched -- it says whether the
+         flag is there, not what it is. *)
+      Some (set_gps_valid gs'
+              {| cvc := cvc (gps_valid gs');
+                 cvv := SmtBoolAnd (cvv (gps_valid gs'))
+                          (mem_extents_in_bounds_smt
+                             (get_mem_regions_from_general p)
+                             (sh_mem_extent gs')) |})
+    end
   end.
 
 (* ===================================================================== *)
@@ -138,13 +175,18 @@ Definition concretize_sym_module_state
   match m with
   | TransformerMod ts => TransformerMod (eval_sym_state ts f)
   | ParserMod ps =>
-      ParserMod {| p_header_map :=
-                     PMap.map (fun e => eval_smt_arith e f) (p_header_map ps);
-                   p_packet := List.map (fun b => eval_smt_bool (cvv b) f) (p_packet ps);
-                   p_cursor := p_cursor ps |}
+      (* A parser module's local packet is its residual (see
+         [module_update_gs_symbolic]), so it is a read tape and concretizes
+         like one -- through [present_bits], which is what
+         [eval_sym_parser_state] does. *)
+      ParserMod (eval_sym_parser_state ps f)
   | DeparserMod ps =>
       DeparserMod {| p_header_map :=
                        PMap.map (fun e => eval_smt_arith e f) (p_header_map ps);
+                     (* Positional, unlike the parser case: a deparser's local
+                        packet is what it EMITTED, and every emitted bit is
+                        present ([eval_deparser_symbolic] sets [cvc := SmtTrue]
+                        on all of them). *)
                      p_packet := List.map (fun b => eval_smt_bool (cvv b) f) (p_packet ps);
                      p_cursor := p_cursor ps |}
   end.
@@ -152,8 +194,11 @@ Definition concretize_sym_module_state
 Definition concretize_sym_modnet_state
   (s : GeneralSymbolicState) (f : SmtValuation) : GeneralConcreteState :=
   {| sh_hdr_map := PMap.map (fun e => eval_smt_arith e f) (sh_hdr_map s);
-     sh_read_tape := List.map (fun b => eval_smt_bool (cvv b) f) (sh_read_tape s);
+     (* Present positions only -- see [present_bits]. *)
+     sh_read_tape := present_bits (sh_read_tape s) f;
      sh_bits_read := eval_smt_arith (sh_bits_read s) f;
+     (* Positional, deliberately: every emitted bit is present by
+        [wt_unconditional], and [sym_out_equal_sound] compares them that way. *)
      sh_write_tape := List.map (fun b => eval_smt_bool (cvv b) f) (sh_write_tape s);
      sh_mem := PMap.map (fun a => eval_smt_mem a f) (sh_mem s);
      sh_mem_extent := PMap.map (fun e => eval_smt_arith e f) (sh_mem_extent s);

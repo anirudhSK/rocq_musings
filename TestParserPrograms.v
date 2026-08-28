@@ -1,6 +1,7 @@
 From Stdlib Require Import List.
 Import ListNotations.
 From MyProject Require Import CrParser.
+From MyProject Require Import CrGeneralProgramState.
 From MyProject Require Import CrIdentifiers.
 From MyProject Require Import CrVal.
 From MyProject Require Import CrProgramState.
@@ -38,7 +39,7 @@ Definition p_select_extract : Parser :=
   mkParser (ParserStateLabelCtr 1) [
     mkParserStateDef (ParserStateLabelCtr 1)
       (Some (ExtractOpConstructor (HeaderCtr 1) 8 u64))
-      (Select [mkSelectCase (HeaderCtr 1) 0 8 pat_1 (TargetState (ParserStateLabelCtr 2))]
+      (Select [mkSelectCase (SelHdr (HeaderCtr 1) 0 8) pat_1 (TargetState (ParserStateLabelCtr 2))]
               Accept);
     mkParserStateDef (ParserStateLabelCtr 2)
       (Some (ExtractOpConstructor (HeaderCtr 2) 8 u64))
@@ -52,7 +53,7 @@ Definition p_loop : Parser :=
   mkParser (ParserStateLabelCtr 1) [
     mkParserStateDef (ParserStateLabelCtr 1)
       (Some (ExtractOpConstructor (HeaderCtr 1) 8 u64))
-      (Select [mkSelectCase (HeaderCtr 1) 0 8 pat_0 (TargetState (ParserStateLabelCtr 2))]
+      (Select [mkSelectCase (SelHdr (HeaderCtr 1) 0 8) pat_0 (TargetState (ParserStateLabelCtr 2))]
               (TargetState (ParserStateLabelCtr 1)));
     mkParserStateDef (ParserStateLabelCtr 2)
       (Some (ExtractOpConstructor (HeaderCtr 2) 8 u64))
@@ -65,7 +66,7 @@ Definition p_reject : Parser :=
   mkParser (ParserStateLabelCtr 1) [
     mkParserStateDef (ParserStateLabelCtr 1)
       (Some (ExtractOpConstructor (HeaderCtr 1) 8 u64))
-      (Select [mkSelectCase (HeaderCtr 1) 0 8 pat_255 Reject]
+      (Select [mkSelectCase (SelHdr (HeaderCtr 1) 0 8) pat_255 Reject]
               Accept)
   ].
 
@@ -79,7 +80,7 @@ Definition p_select_nibble : Parser :=
   mkParser (ParserStateLabelCtr 1) [
     mkParserStateDef (ParserStateLabelCtr 1)
       (Some (ExtractOpConstructor (HeaderCtr 1) 8 u64))
-      (Select [mkSelectCase (HeaderCtr 1) 4 8 pat_nib3 (TargetState (ParserStateLabelCtr 2))]
+      (Select [mkSelectCase (SelHdr (HeaderCtr 1) 4 8) pat_nib3 (TargetState (ParserStateLabelCtr 2))]
               Accept);
     mkParserStateDef (ParserStateLabelCtr 2)
       (Some (ExtractOpConstructor (HeaderCtr 2) 8 u64))
@@ -98,8 +99,17 @@ Definition parser_test_programs : list Parser :=
 Definition mk_cps (bits : list bool) : ConcreteParserState :=
   {| p_header_map := PMap.init UninitVal; p_packet := bits; p_cursor := 0 |}.
 
+(* [Some n] iff the parse ACCEPTED after consuming [n] bits; [None] on a
+   reject or an incomplete run.  The cursor is recovered as the packet
+   length less the residual, since the residual is what the cursor left. *)
 Definition run_cursor (p : Parser) (bits : list bool) : option nat :=
-  option_map p_cursor (eval_parser_concrete p (mk_cps bits)).
+  match eval_parser_concrete p (mk_cps bits) with
+  | None => None
+  | Some r =>
+      if pr_accept r
+      then Some (List.length bits - List.length (pr_residual r))
+      else None
+  end.
 
 (* MSB-first bits of one byte. *)
 Definition byte (b7 b6 b5 b4 b3 b2 b1 b0 : bool) : list bool :=

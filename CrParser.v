@@ -34,15 +34,31 @@ Inductive ParserTarget : Type :=
 
 (* TODO: See how P4 pads fields into containers *)
 
-(* A single transition selection rule: if the most-recently-parsed     *)
-(* bits of header [h] (the slice [start_index, end_index)) match the    *)
-(* bit [pattern], jump to [target].                                     *)
+(* Where a [select] case reads the bits it matches on.                  *)
+(*                                                                      *)
+(* [SelHdr h start_idx end_idx] reads bits [start_idx, end_idx) of the   *)
+(* CURRENT VALUE of header [h] -- already-parsed data, so it can never   *)
+(* fail.                                                                *)
+(*                                                                      *)
+(* [Peek cursor_offset width] reads [width] bits from the packet itself, *)
+(* starting [cursor_offset] bits past the current cursor.  This is P4's  *)
+(* [lookahead]: it does NOT consume, so the cursor is the same after the *)
+(* transition as before it, and a state is free to peek at bits a later  *)
+(* state will go on to extract.  Unlike [SelHdr] it CAN run out of       *)
+(* packet, and when it does the parse rejects (P4's [PacketTooShort]) --  *)
+(* it does not fall through to the select's default.  So a [Peek]'s      *)
+(* range joins the accept condition exactly as an extract's does, even   *)
+(* though no cursor moves; see [select_bits_valid].                      *)
+Inductive SelBits : Type :=
+| SelHdr (h : Header) (start_idx : nat) (end_idx : nat)
+| Peek (cursor_offset : nat) (width: nat).
+
+(* A single transition selection rule: if the bits named by [sc_origin]  *)
+(* match the bit [pattern], jump to [target].                            *)
 Record SelectCase : Type := mkSelectCase {
-  sc_header      : Header;
-  sc_start_index : nat;
-  sc_end_index   : nat;
-  sc_pattern     : list bool;
-  sc_target      : ParserTarget;
+  sc_origin  : SelBits;
+  sc_pattern : list bool;
+  sc_target  : ParserTarget;
 }.
 
 (* A transition is either an unconditional jump, or a P4-style          *)
@@ -84,7 +100,10 @@ Definition parser_headers (p : Parser) : list Header :=
     | Unconditional _ => acc'
     | Select cases _ =>
       List.fold_left
-        (fun acc'' c => sc_header c :: acc'')
+        (fun acc'' c => match sc_origin c with
+          | SelHdr h _ _ => h :: acc''
+          | Peek _ _ => acc''
+          end)
         cases acc'
     end) (parser_states p) [].
 

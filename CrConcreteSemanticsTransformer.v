@@ -34,7 +34,7 @@ Definition lookup_concrete (ty : CrIntType) (arg : Operand) (ps : ConcreteTransf
   | OpCtrlPlane c => lookup_varlike_map (@map_from_ps Ctrl _ _ ps) c
   | OpHeader h    => lookup_varlike_map (@map_from_ps Header _ _ ps) h
   | OpConst n     => mk_int ty (unsigned n)
-  | OpStateful s  => lookup_varlike_map (@map_from_ps State _ _ ps) s
+  | OpState s  => lookup_varlike_map (@map_from_ps State _ _ ps) s
   end.
 
 Definition eval_hdr_op_expr_concrete (op : HdrOp) (ps : ConcreteTransformerState) : CrVal :=
@@ -47,7 +47,9 @@ Definition eval_hdr_op_expr_concrete (op : HdrOp) (ps : ConcreteTransformerState
      just the state, and a store produces no value at all.  They are handled in
      [eval_hdr_op_assign_concrete_mem] below.  Returning ErrorVal here keeps
      this function total for the memory-free entry points. *)
-  | LoadOp _ _ _ _ | StoreOp _ _ _ _ => ErrorVal
+  | LoadOp _ _ _ _
+  | StatefulLoadOp _ _ _ _
+  | StoreOp _ _ _ _ => ErrorVal
   end.
 
 (* ------------------------------------------------------------------ *)
@@ -97,6 +99,10 @@ Definition eval_hdr_op_assign_concrete_mem
          mirror, which gets it from [SmtArrSel] and [SmtCast]. *)
       (bump_extent_span_concrete mc r o (it_bytes ty),
        update_varlike ps target (ld_val ty ((mc_mem mc) !! (unwrap r)) o))
+  | StatefulLoadOp ty r off target =>
+      let o := as_offset (lookup_concrete u64 off ps) in
+      (bump_extent_span_concrete mc r o (it_bytes ty),
+       update_varlike ps target (ld_val ty ((mc_mem mc) !! (unwrap r)) o))
   | StoreOp ty r off val =>
       let o := as_offset (lookup_concrete u64 off ps) in
       let v := apply_cast ty ty (lookup_concrete ty val ps) in
@@ -127,6 +133,7 @@ Definition eval_hdr_op_assign_concrete (op : HdrOp) (ps: ConcreteTransformerStat
   | CastHeaderOp _ _ _ target =>
         let op_output := eval_hdr_op_expr_concrete op ps in update_varlike ps target op_output
   | LoadOp _ _ _ target => update_varlike ps target ErrorVal
+  | StatefulLoadOp _ _ _ target => update_varlike ps target ErrorVal
   | StoreOp _ _ _ _ => ps
   end.
 

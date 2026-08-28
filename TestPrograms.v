@@ -194,14 +194,14 @@ Definition prog_mod_h1 : CaracaraProgram :=
     ])
   ].
 
-(* OpStateful as operand: read from state variable as an input.
+(* OpState as operand: read from state variable as an input.
  * h1 := h1 + s1. With h1 = 3 and s1 = 4: h1 = 7. *)
 Definition prog_stateful_arg_input : CaracaraProgram :=
   CaracaraProgramDef [HeaderCtr 1] [StateCtr 1] [] [
     Seq (SeqCtr [] [
       StatelessOp AddOp u8
         (OpHeader (HeaderCtr 1))
-        (OpStateful (StateCtr 1))
+        (OpState (StateCtr 1))
         (HeaderCtr 1)
     ])
   ].

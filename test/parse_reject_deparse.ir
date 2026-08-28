@@ -9,7 +9,7 @@
          (psd_trans
           (Select
            (Coq_cons
-            ((sc_header 1) (sc_start_index 0) (sc_end_index 8)
+            ((sc_origin (SelHdr 1 0 8))
              (sc_pattern
               (Coq_cons Coq_true
                (Coq_cons Coq_true

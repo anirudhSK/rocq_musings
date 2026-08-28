@@ -42,12 +42,7 @@ let%expect_test "hdr_diff: different constants are NotEquivalent" =
   print_equiv (SmtQuery.equivalence_checker_cr_dsl p1 p2);
   (* hdr_1 is never read arithmetically here (both programs overwrite it with a
      constant), so its width is unconstrained by the query and defaults to u64. *)
-  [%expect {|
-    ┌ SAT Valuation
-    | var( hdr_1 ) := error
-    └
-    NotEquivalent
-    |}]
+  [%expect {| NotEquivalent |}]
 
 (* Test 3: -2 and +254 agree under 8-bit 2s complement.
  * p1: x-2, p2: x+254 *)
@@ -72,12 +67,7 @@ let%expect_test "complex_add_sub: dropping an op breaks equivalence" =
   let p2 = get_program "../test/subtract1.out" in
   print_equiv (SmtQuery.equivalence_checker_cr_dsl p1 p2);
   (* hdr_1 is read at u8 (x - 1), so the threaded width is recovered as u8. *)
-  [%expect {|
-    ┌ SAT Valuation
-    | var( hdr_1 ) : u8 := 0
-    └
-    NotEquivalent
-    |}]
+  [%expect {| NotEquivalent |}]
 
 (* Test 6: -O0 vs -O2 of one eBPF program -- the point of the whole memory
    merge.  ../test/bpf_O{0,2}.ir are `~/proj/ect/bpf_to_ir` output for the -O0
@@ -91,6 +81,37 @@ let%expect_test "e2e bpf test: O0 ≡ O2" =
   let p2 = get_general_program "../test/bpf_O2.ir" in
   print_equiv (SmtModuleQuery.modnet_equivalence_checker p1 p2);
   [%expect {| Equivalent |}]
+
+(* The same pipeline over a program that calls bpf_map_lookup_elem, from
+   ~/proj/ect/ex/map_*.c (regenerate with `make` there, then
+   `./bpf_to_ir ex/<name>.o > <ir>/test/bpf_<name>.ir`).  A map is a declared
+   region whose first [nslots] bytes are presence flags and whose remainder is
+   the values, so both a hit and a miss are ordinary symbolic input.
+
+   The verdicts have to come in both directions to mean anything.  map_spill is
+   map_ref with the looked-up value round-tripped through a volatile stack
+   slot: different bytecode, same meaning.  The other two are map_ref with one
+   arm of the lookup changed, and they are what pin the arms as REACHABLE -- if
+   the miss arm were pruned, map_miss_differs would come back Equivalent, and if
+   the hit arm never read the map region, map_hit_differs would. *)
+let%expect_test "e2e bpf map test: a lookup and a stack spill agree" =
+  let p1 = get_general_program "../test/bpf_map_ref.ir" in
+  let p2 = get_general_program "../test/bpf_map_spill.ir" in
+  print_equiv (SmtModuleQuery.modnet_equivalence_checker p1 p2);
+  [%expect {| Equivalent |}]
+
+let%expect_test "e2e bpf map test: the miss arm of a lookup is reachable" =
+  let p1 = get_general_program "../test/bpf_map_ref.ir" in
+  let p2 = get_general_program "../test/bpf_map_miss_differs.ir" in
+  print_equiv (SmtModuleQuery.modnet_equivalence_checker p1 p2);
+  [%expect {| NotEquivalent |}]
+
+let%expect_test "e2e bpf map test: the hit arm reads the map region" =
+  let p1 = get_general_program "../test/bpf_map_ref.ir" in
+  let p2 = get_general_program "../test/bpf_map_hit_differs.ir" in
+  print_equiv (SmtModuleQuery.modnet_equivalence_checker p1 p2);
+  [%expect {| NotEquivalent |}]
+
 
 (* Test 13: linear scan vs tss for simple filter database.  Both are full
    parser -> table chain -> deparser networks over a 192-bit input packet (what
@@ -120,27 +141,7 @@ let%expect_test "bitstream non-equivalence: emit order swapped" =
   let p1 = Shim.find_modprog "parse_deparse" in
   let p2 = Shim.find_modprog "parse_deparse_swapped" in
   print_equiv (SmtModuleQuery.modnet_equivalence_checker p1 p2);
-  [%expect {|
-    ┌ SAT Valuation
-    | var( pkt_1 ) : u64 := 0
-    | var( pkt_10 ) : u64 := 1
-    | var( pkt_100 ) : u64 := 1
-    | var( pkt_1000 ) : u64 := 0
-    | var( pkt_10000 ) : u64 := 0
-    | var( pkt_1001 ) : u64 := 0
-    | var( pkt_101 ) : u64 := 1
-    | var( pkt_1010 ) : u64 := 1
-    | var( pkt_1011 ) : u64 := 0
-    | var( pkt_11 ) : u64 := 0
-    | var( pkt_110 ) : u64 := 1
-    | var( pkt_1100 ) : u64 := 1
-    | var( pkt_1101 ) : u64 := 0
-    | var( pkt_111 ) : u64 := 0
-    | var( pkt_1110 ) : u64 := 1
-    | var( pkt_1111 ) : u64 := 0
-    └
-    NotEquivalent
-    |}]
+  [%expect {| NotEquivalent |}]
 
 (* Test 16: bitstream accept/reject.  Two one-byte parse->deparse pipelines whose
    parsers agree on every packet except 0xFF, where one Rejects and the other
@@ -151,19 +152,7 @@ let%expect_test "bitstream accept differs: reject-on-0xFF vs always-accept" =
   let p1 = Shim.find_modprog "parse_reject_deparse" in
   let p2 = Shim.find_modprog "parse_accept_deparse" in
   print_equiv (SmtModuleQuery.modnet_equivalence_checker p1 p2);
-  [%expect {|
-    ┌ SAT Valuation
-    | var( pkt_1 ) : u64 := 1
-    | var( pkt_10 ) : u64 := 1
-    | var( pkt_100 ) : u64 := 1
-    | var( pkt_1000 ) : u64 := 1
-    | var( pkt_101 ) : u64 := 1
-    | var( pkt_11 ) : u64 := 1
-    | var( pkt_110 ) : u64 := 1
-    | var( pkt_111 ) : u64 := 1
-    └
-    NotEquivalent
-    |}]
+  [%expect {| NotEquivalent |}]
 
 (* Test 17: the rejecting pipeline is equivalent to itself — the accept
    conditions coincide, so no packet distinguishes it from itself. *)
@@ -184,19 +173,7 @@ let%expect_test "bitstream residual: consume1 vs consume2 (emit h1)" =
   let p1 = Shim.find_modprog "consume1_emit1" in
   let p2 = Shim.find_modprog "consume2_emit1" in
   print_equiv (SmtModuleQuery.modnet_equivalence_checker p1 p2);
-  [%expect {|
-    ┌ SAT Valuation
-    | var( pkt_1 ) : u64 := 0
-    | var( pkt_10 ) : u64 := 0
-    | var( pkt_100 ) : u64 := 0
-    | var( pkt_1000 ) : u64 := 0
-    | var( pkt_101 ) : u64 := 0
-    | var( pkt_11 ) : u64 := 0
-    | var( pkt_110 ) : u64 := 0
-    | var( pkt_111 ) : u64 := 0
-    └
-    NotEquivalent
-    |}]
+  [%expect {| NotEquivalent |}]
 
 (* Test 19: data-dependent consumption (consume one or two bytes depending on
    whether byte 0 is zero) is equivalent to itself — the variable-length residual
@@ -241,24 +218,25 @@ let%expect_test "mem: a computed offset aliases a literal one" =
   check "mem_store_load" "mem_store_load_alias";
   [%expect {| Equivalent |}]
 
+(* The positive control for the region model, and the reason it exists.  Two
+   programs that branch on a byte loaded from a region, one testing [b > 100]
+   and the other [b < 101] -- the same test for any byte, so Equivalent.
+
+   Before a region's cells were pinned to bytes this came back NotEquivalent:
+   a model could leave cell 0 non-integer, [ld_val]'s [cast u8 _] then made the
+   loaded header ErrorVal, and [CrVal.ltb] is false on ErrorVal in BOTH
+   directions -- so neither match fired, both defaults ran, and the two emitted
+   different bytes on an input no machine produces.  It is the whole family of
+   opposite-direction comparisons, which is what an -O0/-O2 pair is full of. *)
+let%expect_test "mem: comparing a loaded byte either way round agrees" =
+  check "mem_cmp_gt" "mem_cmp_lt";
+  [%expect {| Equivalent |}]
+
 (* Test 22: same shape, same extent, different value stored.  Caught by the
    region-contents conjunct and by the output packet. *)
 let%expect_test "mem: a different stored value is not equivalent" =
   check "mem_store_load" "mem_store_load_differs";
-  [%expect {|
-    ┌ SAT Valuation
-    | var( pkt_1 ) : u64 := 1
-    | var( pkt_10 ) : u64 := 1
-    | var( pkt_100 ) : u64 := 1
-    | var( pkt_1000 ) : u64 := 1
-    | var( pkt_101 ) : u64 := 1
-    | var( pkt_11 ) : u64 := 1
-    | var( pkt_110 ) : u64 := 1
-    | var( pkt_111 ) : u64 := 1
-    | mem( mem_1 ) : len=4 := [err, err, err, err]
-    └
-    NotEquivalent
-    |}]
+  [%expect {| NotEquivalent |}]
 
 (* Test 23: two programs whose only difference is which scratch header a dead
    load lands in.  Headers are internal, so this is unobservable. *)
@@ -275,46 +253,30 @@ let%expect_test "mem: the scratch header a dead load targets is internal" =
    not reaching the query.  (Compare test 18, its bitstream analogue.) *)
 let%expect_test "mem: reading one cell further is not equivalent" =
   check "mem_load1_load0" "mem_load0";
-  [%expect {|
-    ┌ SAT Valuation
-    | mem( mem_1 ) : len=4 := [0:u64, 0:u64, 0:u64, 0:u64]
-    └
-    NotEquivalent
-    |}]
+  [%expect {| NotEquivalent |}]
 
 (* Test 25: in bounds, the order of a load and a store to one cell matters --
    the second program reads back what it just wrote, the first does not. *)
 let%expect_test "mem: in bounds, load-then-store differs from store-then-load" =
   check "mem_ib_load_store" "mem_store_load";
-  [%expect {|
-    ┌ SAT Valuation
-    | var( pkt_1 ) : u64 := 1
-    | var( pkt_10 ) : u64 := 1
-    | var( pkt_100 ) : u64 := 1
-    | var( pkt_1000 ) : u64 := 1
-    | var( pkt_101 ) : u64 := 1
-    | var( pkt_11 ) : u64 := 1
-    | var( pkt_110 ) : u64 := 1
-    | var( pkt_111 ) : u64 := 1
-    | mem( mem_1 ) : len=4 := [0:u64, 0:u64, 253:u8, 0:u64]
-    └
-    NotEquivalent
-    |}]
+  [%expect {| NotEquivalent |}]
 
-(* Test 26: the same pair at an out-of-bounds offset, where order stops
-   mattering: the store is dropped and the load yields ErrorVal either way.
-   This is the test that the Z3 lowering guards BOTH memory operations with the
-   region's declared length -- Z3's array theory is total, so:
+(* Test 26: the same pair at an out-of-bounds offset.  READ WHAT THIS STILL
+   CHECKS AND WHAT IT NO LONGER DOES.
 
-     - an unguarded [select] would let the store-then-load program read its own
-       out-of-bounds write back;
-     - an unguarded [store] would leave the two regions differing at offset 4,
-       which the [SmtArrEq] encoding *does* see (extensional array equality
-       looks at every index, unlike the old per-cell conjunction over 0..3).
+   It used to pin the Z3 lowering's bounds guards on [SmtArrSel] and
+   [SmtArrSt]: order stops mattering out of bounds only if the store is really
+   dropped and the load really yields ErrorVal, so an unguarded select or store
+   turned this into NotEquivalent.  That is gone.  Both runs overrun a
+   four-byte region, so [mem_extents_in_bounds_smt] makes both invalid and
+   [check_sym_pkt_out]'s both-reject disjunct answers Equivalent without ever
+   looking at the memory conjuncts.  The verdict below is now insensitive to
+   the guards.
 
-   Either way the checker would report NotEquivalent on a difference the
-   concrete semantics cannot produce.  With test 25 this pins the bound from
-   both sides. *)
+   The guards are pinned by the "witness: an out-of-bounds read/write" pair at
+   the bottom of this file instead, which builds the expressions directly and
+   so does not go through [gps_valid].  What test 26 still checks is that an
+   out-of-bounds run rejects rather than diverging or faulting the checker. *)
 let%expect_test "mem: out of bounds, the order stops mattering" =
   check "mem_oob_load_store" "mem_oob_store_load";
   [%expect {| Equivalent |}]
@@ -340,7 +302,7 @@ let%expect_test "mem: a u16 store is the two u8 stores it coalesces from" =
    the ParserHawk-generated pipeline. *)
 let%expect_test "parserhawk: ICMP" =
   let spec_program = ParserHawkEval.icmp_spec in
-  let synth_parser = get_parser "../test/parserhawk_icmp_solution.ir" in
+  let synth_parser = get_parser "../test/parserhawk/icmp_ipu.ir" in
   let synth_program = ParserHawkEval.dump_headers synth_parser
     (ParserHawkEval.ICMPHdr (Shim.int_to_pos 1, Shim.int_to_pos 2)) in
   print_equiv (SmtModuleQuery.modnet_equivalence_checker spec_program synth_program);
@@ -348,7 +310,7 @@ let%expect_test "parserhawk: ICMP" =
 
 let%expect_test "parserhawk: SAI" =
   let spec_program = ParserHawkEval.sai_spec in
-  let synth_parser = get_parser "../test/parserhawk_sai_solution.ir" in
+  let synth_parser = get_parser "../test/parserhawk/sai_tofino.ir" in
   let synth_program = ParserHawkEval.dump_headers synth_parser
     (ParserHawkEval.SAIHdr
        (Shim.int_to_pos 1, Shim.int_to_pos 2, Shim.int_to_pos 3,
@@ -356,6 +318,63 @@ let%expect_test "parserhawk: SAI" =
         Shim.int_to_pos 7, Shim.int_to_pos 8, Shim.int_to_pos 9)) in
   print_equiv (SmtModuleQuery.modnet_equivalence_checker spec_program synth_program);
   [%expect {| Equivalent |}]
+
+(* Compares ParserHawk's synthesized tofino and IPU pipelines *)
+let%expect_test "parserhawk: ethernet tofino vs ipu" =
+  let tofino_parser = get_parser "../test/parserhawk/ethernet_tofino.ir" in
+  let tofino_program = ParserHawkEval.dump_headers tofino_parser
+    (ParserHawkEval.EthHdr (Shim.int_to_pos 1, Shim.int_to_pos 2)) in
+  let ipu_parser = get_parser "../test/parserhawk/ethernet_ipu.ir" in
+  let ipu_program = ParserHawkEval.dump_headers ipu_parser
+    (ParserHawkEval.EthHdr (Shim.int_to_pos 1, Shim.int_to_pos 2)) in
+  print_equiv (SmtModuleQuery.modnet_equivalence_checker tofino_program ipu_program);
+  [%expect {| Equivalent |}]
+
+(* ParserHawk multiple field key *)
+let%expect_test "parserhawk: multifield tofino vs spec" =
+  let tof = get_parser "../test/parserhawk/multifield_tofino.ir" in
+  let spec = ParserHawkEval.mfk_spec in
+  print_equiv (SmtModuleQuery.modnet_equivalence_checker (ParserHawkEval.dump_headers tof
+    (ParserHawkEval.MultiFieldHdr
+       (Shim.int_to_pos 1, Shim.int_to_pos 2, Shim.int_to_pos 3))) spec);
+  [%expect {| Equivalent |}]
+
+let%expect_test "parserhawk: multifield ipu vs spec" =
+  let ipu = get_parser "../test/parserhawk/multifield_ipu.ir" in
+  let spec = ParserHawkEval.mfk_spec in
+  print_equiv (SmtModuleQuery.modnet_equivalence_checker (ParserHawkEval.dump_headers ipu
+    (ParserHawkEval.MultiFieldHdr
+       (Shim.int_to_pos 1, Shim.int_to_pos 2, Shim.int_to_pos 3))) spec);
+  [%expect {| NotEquivalent |}]
+
+let%expect_test "parserhawk: multifield tofino vs ipu" =
+  let tof = get_parser "../test/parserhawk/multifield_tofino.ir" in
+  let ipu = get_parser "../test/parserhawk/multifield_ipu.ir" in
+  let mk p = ParserHawkEval.dump_headers p
+    (ParserHawkEval.MultiFieldHdr
+       (Shim.int_to_pos 1, Shim.int_to_pos 2, Shim.int_to_pos 3)) in
+  Shim.print_malformed_gprog (mk tof) "multifield_tofino";
+  Shim.print_malformed_gprog (mk ipu) "multifield_ipu";
+  print_equiv (SmtModuleQuery.modnet_equivalence_checker (mk tof) (mk ipu));
+  [%expect {| NotEquivalent |}]
+
+(* A header some parser extracts is a FIELD REGISTER: it holds an arbitrary
+   value of its own width on entry, not [UninitVal].  These two parsers differ
+   only in a select that reads h1 BEFORE the state that extracts it, so they
+   agree on every packet and differ only on the register's initial contents --
+   the counterexample is [hdr_1 := 255], the value whose low byte makes one
+   reject and the other accept.
+
+   Seed the register uninit instead and this pair comes back Equivalent:
+   [slice_val] of [UninitVal] is [ErrorVal], [CrVal.eqb] is false against every
+   pattern, so the case can never fire and the two collapse into one program.
+   Verified both ways round.  This is the shape ParserHawk's IPU pipelines
+   emit -- a transition key naming a field a later node extracts. *)
+let%expect_test "hdr init: a register read before its extraction is free" =
+  let p1 = Shim.find_modprog "hdr_init_sel" in
+  let p2 = Shim.find_modprog "hdr_init_nosel" in
+  print_equiv (SmtModuleQuery.modnet_equivalence_checker p1 p2);
+  [%expect {| NotEquivalent |}]
 
 (* ===================================================================== *)
 (* Witness checking: solve an [SmtBoolExpr], then re-evaluate that same   *)
@@ -385,28 +404,35 @@ let witness name (e : SmtExpr.coq_SmtBoolExpr) =
   | SmtTypes.SmtUnknown -> Printf.printf "%s: unknown\n" name
 
 let%expect_test "witness: a scalar the model leaves non-integer" =
-  (* Companion to the next test, and it does NOT discriminate: a scalar is
-     safe by construction because [eval_smt_arith]'s [SmtArithVar] arm coerces
-     every non-[IntVal] to [ErrorVal], mirroring the lowering's
-     [ite (tag_is_int t) t tag_err].  [SmtArrSel] has no such arm, which is
-     exactly why the array version below is a real check. *)
+  (* A scalar still CAN be ErrorVal: [eval_smt_arith]'s [SmtArithVar] arm
+     coerces every non-[IntVal] to it, mirroring the lowering's
+     [ite (tag_is_int t) t tag_err].  Left as is deliberately -- at network
+     level the free scalars are per-program state and ctrl variables, which
+     [check_sym_pkt_out] never compares, while the free inputs the two
+     programs SHARE are the packet bits and the memory regions.  The regions
+     are the ones that had to be pinned; see the next test. *)
   witness "scalar-error" (SmtExpr.SmtBoolEq (svar "x", err_lit));
   [%expect {|
-    ┌ SAT Valuation
-    | var( x ) := error
-    └
     scalar-error: SAT, witness verified
     |}]
 
-let%expect_test "witness: a memory cell the model leaves non-integer" =
+let%expect_test "witness: a memory cell cannot be left non-integer" =
+  (* UNSAT, and it is the regression test for the region model.  A region's
+     contents on entry are an INPUT, and a real one is bytes, so
+     [eval_smt_mem]'s [SmtArrVar] arm sends them through [CrVal.to_byte] and
+     [Z3Solver] pins each cell of 0..[len) to the [u8] tag with its value
+     bounded by 255.  Those two have to move together: loosen one and a
+     [smt_query_sound_*] axiom is false.
+
+     This used to be SAT with cell 0 [err], and that was a live source of false
+     [NotEquivalent]s.  [ld_val] casts every cell with [cast u8 _], so ONE bad
+     cell makes the whole multi-byte load ErrorVal, and [CrVal.ltb] is false on
+     ErrorVal in both directions -- so [x > 100] and [x < 101] are both false,
+     and two programs testing opposite ways were reported different on a
+     machine state that cannot occur. *)
   witness "cell-error"
     (SmtExpr.SmtBoolEq (SmtExpr.SmtArrSel (avar "a" 4, konst 0 CrVal.W64), err_lit));
-  [%expect {|
-    ┌ SAT Valuation
-    | mem( a ) : len=4 := [err, 0:u64, 0:u64, 0:u64]
-    └
-    cell-error: SAT, witness verified
-    |}]
+  [%expect {| cell-error: UNSAT |}]
 
 let%expect_test "witness: a cell read back is the cell that is there" =
   (* Stores cell 0 back onto itself, then asks whether the region changed.
@@ -420,6 +446,36 @@ let%expect_test "witness: a cell read back is the cell that is there" =
     (SmtExpr.SmtBoolNot (SmtExpr.SmtArrEq (Shim.int_to_coq_nat 4, a, stored)));
   [%expect {| noop-store: UNSAT |}]
 
+(* The two guards that "mem: out of bounds, the order stops mattering" used to
+   pin from the verdict side.  It cannot any more: an out-of-bounds run is now
+   invalid ([mem_extents_in_bounds_smt]), so that pair is Equivalent by the
+   both-reject disjunct whatever the lowering does with the offending access.
+   Stated here instead, where [gps_valid] is not in the picture at all.
+
+   They still matter because an offset can be data-dependent: a run is invalid
+   only on the valuations that actually overrun, and on the rest the checker
+   compares regions as before. *)
+let%expect_test "witness: an out-of-bounds read is ErrorVal, not a cell" =
+  (* Z3's [select] is total and [ld_arr] is not.  Drop the [ite] guard in
+     [Z3Solver.lower_arith] and Z3 finds a model giving cell 4 of a 4-cell
+     region some integer, which [eval_smt_bool] then rejects. *)
+  witness "oob-select"
+    (SmtExpr.SmtBoolNot
+       (SmtExpr.SmtBoolEq
+          (SmtExpr.SmtArrSel (avar "a" 4, konst 4 CrVal.W64), err_lit)));
+  [%expect {| oob-select: UNSAT |}]
+
+let%expect_test "witness: an out-of-bounds write leaves the region alone" =
+  (* The store-side mirror.  [st_arr] refuses and returns the region
+     unchanged; Z3's [store] is total, so without the guard the two arrays
+     differ at index 4 -- which [SmtArrEq]'s [mk_eq] lowering DOES see, unlike
+     the old per-cell conjunction over 0..3. *)
+  let a = avar "a" 4 in
+  let stored = SmtExpr.SmtArrSt (a, konst 4 CrVal.W64, konst 7 CrVal.W8) in
+  witness "oob-store"
+    (SmtExpr.SmtBoolNot (SmtExpr.SmtArrEq (Shim.int_to_coq_nat 4, a, stored)));
+  [%expect {| oob-store: UNSAT |}]
+
 let%expect_test "witness: two undeclared regions agree" =
   (* [SmtArrInit] denotes [Unallocated], and [arr_agree_upto n Unallocated
      Unallocated] is [true] for every n -- [ld_arr] is [Illegal] on both sides.
@@ -432,3 +488,51 @@ let%expect_test "witness: two undeclared regions agree" =
        (SmtExpr.SmtArrEq
           (Shim.int_to_coq_nat 4, SmtExpr.SmtArrInit, SmtExpr.SmtArrInit)));
   [%expect {| undeclared-agree: UNSAT |}]
+
+(* Suricata's ebpf/vlan_filter.c (~/proj/ect/ex/vlan_filter.c), a real
+   production socket filter, against the same filter accepting VLAN 3 and 5
+   instead of 2 and 4.
+
+   This is a regression test for the CONTEXT LAYOUT as much as for the filter.
+   An __sk_buff program reaches vlan_tci at ctx offset 24 and data/data_end at
+   76/80; while bpf_to_ir modelled every ctx as struct xdp_md's 20 bytes, all
+   of those overran the region, an overrun rejects the run at the sink, and the
+   both-rejected disjunct then reported these two Equivalent -- with the
+   translator exiting 0.  So Equivalent here does not mean "no change", it
+   means the filter stopped running. *)
+let%expect_test "e2e bpf: suricata vlan_filter distinguishes its VLAN set" =
+  let p1 = get_general_program "../test/bpf_vlan_filter.ir" in
+  let p2 = get_general_program "../test/bpf_vlan_filter_alt.ir" in
+  print_equiv (SmtModuleQuery.modnet_equivalence_checker p1 p2);
+  [%expect {| NotEquivalent |}]
+
+let%expect_test "e2e bpf: suricata vlan_filter is equivalent to itself" =
+  let p = get_general_program "../test/bpf_vlan_filter.ir" in
+  print_equiv (SmtModuleQuery.modnet_equivalence_checker p p);
+  [%expect {| Equivalent |}]
+
+let%expect_test "u16 load == two u8 loads" =
+  let p1 = get_general_program "../test/basic_load.ir" in
+  let p2 = get_general_program "../test/basic_load_split.ir" in
+  print_equiv (SmtModuleQuery.modnet_equivalence_checker p1 p2);
+  [%expect {| Equivalent |}]
+(* Suricata's ebpf/filter.c (~/proj/ect/ex/sur_filter.c) against itself with
+   the DADDR branch returning 7 instead of 0.  It is the widest single test of
+   the translator: two map lookups, a store through a returned value pointer,
+   LD_ABS and LD_IND packet reads, and a ctx store.
+
+   NotEquivalent here is specifically evidence that the SECOND lookup is
+   reached.  It was not while the packet region was 32 bytes: the daddr read
+   at packet offset 30..33 overran it, the run rejected, and these two came
+   back Equivalent with the translator exiting 0. *)
+let%expect_test "e2e bpf: suricata filter.c reaches its second map lookup" =
+  let p1 = get_general_program "../test/bpf_sur_filter.ir" in
+  let p2 = get_general_program "../test/bpf_sur_filter_alt.ir" in
+  print_equiv (SmtModuleQuery.modnet_equivalence_checker p1 p2);
+  [%expect {| NotEquivalent |}]
+
+let%expect_test "e2e bpf: suricata filter.c is equivalent to itself" =
+  let p = get_general_program "../test/bpf_sur_filter.ir" in
+  print_equiv (SmtModuleQuery.modnet_equivalence_checker p p);
+  [%expect {| Equivalent |}]
+

@@ -22,23 +22,26 @@
         "default_tran": 2,
         "tran_logic": [
             [
-                "val:32768",
-                "mask:60928",
-                "nxt:3"
+                "val:33792",
+                "mask:64512",
+                "nxt:1"
             ],
             [
-                "val:32768",
-                "mask:61440",
+                "val:34816",
+                "mask:65280",
+                "nxt:1"
+            ],
+            [
+                "val:33280",
+                "mask:65024",
                 "nxt:1"
             ]
         ]
     },
     {
         "Extraction": "field_1",
-        "Tran_key": [
-            "field1[0]"
-        ],
-        "default_tran": null,
+        "Tran_key": [],
+        "default_tran": 2,
         "tran_logic": []
     }
 ]

@@ -17,7 +17,7 @@ Definition lookup_smt (ty : CrIntType) (arg : Operand) (ps : SymbolicTransformer
   | OpCtrlPlane c => lookup_varlike_map (@map_from_ps Ctrl _ _ ps) c
   | OpHeader h    => lookup_varlike_map (@map_from_ps Header _ _ ps) h
   | OpConst n     => SmtArithConst n ty
-  | OpStateful s  => lookup_varlike_map (@map_from_ps State _ _ ps) s
+  | OpState s  => lookup_varlike_map (@map_from_ps State _ _ ps) s
   end.
 
 (* Symbolic mirror of [apply_bin_op_of]: the typed SMT op at [ty]; operands are
@@ -53,7 +53,9 @@ Definition eval_hdr_op_expr_smt (h : HdrOp) (ps : SymbolicTransformerState) : Sm
     | CastHeaderOp from to arg _ => smt_cast from to (lookup_smt from arg ps)
     (* Mirrors [eval_hdr_op_expr_concrete]: memory ops are not expressions of
        the state alone. *)
-    | LoadOp _ _ _ _ | StoreOp _ _ _ _ => smt_error
+    | LoadOp _ _ _ _
+    | StatefulLoadOp _ _ _ _
+    | StoreOp _ _ _ _ => smt_error
     end.
 
 (* ------------------------------------------------------------------ *)
@@ -127,6 +129,11 @@ Definition eval_hdr_op_assign_smt_mem
         (bump_extent_span_smt mc r o (it_bytes ty),
          update_varlike ps target
            (smt_ld_val ty ((mc_mem mc) !! (unwrap r)) o))
+    | StatefulLoadOp ty r off target =>
+        let o := smt_as_offset (lookup_smt u64 off ps) in
+        (bump_extent_span_smt mc r o (it_bytes ty),
+         update_varlike ps target
+           (smt_ld_val ty ((mc_mem mc) !! (unwrap r)) o))
     | StoreOp ty r off val =>
         let o := smt_as_offset (lookup_smt u64 off ps) in
         let v := smt_cast ty ty (lookup_smt ty val ps) in
@@ -139,10 +146,8 @@ Definition eval_hdr_op_assign_smt_mem
    [SmtConditional] merge [eval_seq_rule_smt] applies to headers and state
    vars.  Regions merge with [SmtArrIte] because [SmtConditional] only builds
    arith expressions.  Both maps carry the same default on either side (an
-   undeclared region, extent zero), so only the keys present need merging. *)
-Definition pmap_keys {T : Type} (m : PMap.t T) : list positive :=
-  List.map fst (PTree.elements (snd m)).
-
+   undeclared region, extent zero), so only the keys present need merging
+   ([pmap_keys], in [CrProgramState]). *)
 Definition merge_mem_ctx_smt (c : SmtBoolExpr) (mc1 mc2 : SymbolicMemCtx)
     : SymbolicMemCtx :=
   let ks := pmap_keys (mc_mem mc1) ++ pmap_keys (mc_mem mc2)
@@ -183,6 +188,7 @@ Definition eval_hdr_op_assign_smt (ho : HdrOp) (ps: SymbolicTransformerState) : 
     | CastHeaderOp _ _ _ target =>
         let op_output := eval_hdr_op_expr_smt ho ps in update_varlike ps target op_output
     | LoadOp _ _ _ target => update_varlike ps target smt_error
+    | StatefulLoadOp _ _ _ target => update_varlike ps target smt_error
     | StoreOp _ _ _ _ => ps
     end.
 

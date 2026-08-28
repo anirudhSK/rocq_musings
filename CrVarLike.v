@@ -555,10 +555,82 @@ Definition collect_module_headers (m : CrModule) : list Header :=
 Definition collect_write_headers (mods : list CrModule) : list Header :=
   List.flat_map collect_module_headers mods.
 
-(* A header map whose domain is [hs] and whose every entry is the default, so
-   that seeding is observationally a no-op. *)
-Definition seed_header_map {T : Type} (dflt : T) (hs : list Header) : PMap.t T :=
-  List.fold_left (fun acc h => PMap.set (unwrap h) dflt acc) hs (PMap.init dflt).
+Definition collect_module_header_types (m : CrModule) : list (Header * CrIntType) :=
+  match m with
+  | ParserModule _ p =>
+      List.fold_left (fun acc d =>
+        match psd_action d with
+        | Some (ExtractOpConstructor h _ ty) => (h, ty) :: acc
+        | _ => acc
+        end) (parser_states p) []
+  | _ => []
+  end.
+
+Definition collect_header_types (mods : list CrModule) : list (Header * CrIntType) :=
+  List.flat_map collect_module_header_types mods.
+
+Fixpoint lookup_header_type (hts : list (Header * CrIntType)) (h : Header)
+    : option CrIntType :=
+  match hts with
+  | [] => None
+  | (h', ty) :: rest =>
+      if posesque_eqb h h' then Some ty else lookup_header_type rest h
+  end.
+
+Definition seed_header_syms (hts : list (Header * CrIntType)) (hs : list Header)
+    : PMap.t SmtArithExpr :=
+  List.fold_left
+    (fun acc h =>
+       PMap.set (unwrap h)
+         (match lookup_header_type hts h with
+          | Some ty => SmtCast u64 ty (SmtVarVal ("hdr_" ++ pos_to_string (unwrap h)))
+          | None => SmtUninit
+          end) acc)
+    hs (PMap.init SmtUninit).
+
+Definition seed_header_concrete (hts : list (Header * CrIntType)) (hs : list Header)
+    : PMap.t CrVal :=
+  List.fold_left
+    (fun acc h =>
+       PMap.set (unwrap h)
+         (match lookup_header_type hts h with
+          | Some ty => mk_int ty 0
+          | None => UninitVal
+          end) acc)
+    hs (PMap.init UninitVal).
+
+(* Put [ks] in the map's domain without changing what it says anywhere.  Each
+   key is re-set to the value it already reads ([PMap.gsident]), so this is the
+   identity extensionally and differs only in which keys have an explicit
+   binding.
+
+   That distinction is exactly what matters to [update_all_varlike], which
+   rebuilds a map from the keys already in it and so CANNOT introduce one.  A
+   value written to a key that was not there is dropped by the symbolic
+   evaluator and kept by the concrete one, which is SOUNDNESS.md model-debt
+   item 2 -- fixed for headers by seeding [sh_hdr_map] with
+   [collect_write_headers], and fixed for a transformer's STATE variables
+   here.  Its state map is seeded from the module's DECLARED states, and
+   nothing requires a rule's targets to be among them, so a write to an
+   undeclared state variable used to survive concretely and vanish
+   symbolically.  Unlike the header seed this cannot just set the default:
+   a declared state variable's entry is a free [SmtArithVar] standing for its
+   value on entry, and overwriting that would erase an input. *)
+Definition force_keys {T : Type} (ks : list positive) (m : PMap.t T) : PMap.t T :=
+  List.fold_left (fun acc k => PMap.set k (acc !! k) acc) ks m.
+
+(* The state variables a module can write, as [collect_module_headers] is for
+   headers.  Only a transformer writes any. *)
+Definition collect_module_state_targets (m : CrModule) : list State :=
+  match m with
+  | TransformerModule _ _ _ t =>
+    List.flat_map (fun rule =>
+      match rule with
+      | Seq (SeqCtr _ ops) => fst (extract_all_targets ops)
+      | Par (ParCtr _ ops) => fst (extract_all_targets (proj1_sig ops))
+      end) t
+  | _ => []
+  end.
 
 Definition symbolic_input_bits (n : nat) : list (ConditionalVal SmtBoolExpr) :=
   List.map (fun i => {|
@@ -588,10 +660,17 @@ Definition init_symbolic_mem (rs : list MemRegionDecl) : PMap.t SmtArrExpr :=
                             (repr (Z.of_nat (mr_len d)))) acc)
     rs (PMap.init SmtArrInit).
 
+(* Declared regions start as [len] ZERO BYTES, not as [mk_region]'s
+   uninitialized cells.  An uninitialized cell loads as [ErrorVal] (via
+   [byte_into_val]'s [cast u8 _]), and a state that does that is not one
+   [SmtModuleQuery.concrete_gp_state_is_valid] admits -- the symbolic side
+   models a region's entry contents as a free array of BYTES ([CrVal.to_byte]),
+   so the concrete default has to be a state of that shape or the two sides
+   disagree about what an input is. *)
 Definition init_concrete_mem (rs : list MemRegionDecl) : PMap.t (@Array CrVal) :=
   List.fold_left
     (fun acc d =>
-      PMap.set (unwrap (mr_id d)) (mk_region (repr (Z.of_nat (mr_len d)))) acc)
+      PMap.set (unwrap (mr_id d)) (mk_region_zero (repr (Z.of_nat (mr_len d)))) acc)
     rs (PMap.init (@Unallocated CrVal)).
 
 Definition empty_transformer_mod : SymbolicModuleState :=
@@ -606,8 +685,9 @@ Definition init_general_symbolic_state
        [collect_write_headers].  This map is what flows down the edges as
        [f_hdrs] and becomes each module's [t_header_map], so seeding it here is
        enough to stabilise the domain for every module. *)
-    sh_hdr_map := seed_header_map SmtUninit
-                    (collect_write_headers (net_modules (get_network_from_general p)));
+    sh_hdr_map :=
+      let mods := net_modules (get_network_from_general p) in
+      seed_header_syms (collect_header_types mods) (collect_write_headers mods);
     sh_read_tape := symbolic_input_bits (get_inp_len_from_general p);
     sh_bits_read := SmtArithConst (mask_width W64 0) u64;
     sh_write_tape := @nil (ConditionalVal SmtBoolExpr);
@@ -626,7 +706,14 @@ Definition init_general_symbolic_state
           PMap.set m_key (TransformerMod {|
             t_ctrl_map := (SmtUninit, PTree_Properties.of_list (List.map (fun x => let x' := unwrap x in (x', SmtArithVar (prefix ++ "ctrl_" ++ pos_to_string x'))) c));
             t_header_map := PMap.init SmtUninit;
-            t_state_map := (SmtUninit, PTree_Properties.of_list (List.map (fun x => let x' := unwrap x in (x', SmtArithVar (prefix ++ "state_" ++ pos_to_string x'))) s));
+            (* [force_keys] over the rules' targets: seeded from the DECLARED
+               states, and then every state variable the transformer writes is
+               forced into the domain so [update_all_varlike] can see it.  See
+               the comment on [force_keys]; without it a write to an undeclared
+               state variable is dropped symbolically and kept concretely. *)
+            t_state_map := force_keys
+              (List.map unwrap (collect_module_state_targets m))
+              (SmtUninit, PTree_Properties.of_list (List.map (fun x => let x' := unwrap x in (x', SmtArithVar (prefix ++ "state_" ++ pos_to_string x'))) s));
           |}) acc
         end)
       (net_modules (get_network_from_general p))
@@ -655,7 +742,8 @@ Definition init_general_concrete_state (p : GeneralCaracaraProgram)
      keeping the two domains equal is the point: the asymmetry between a
      concrete map that grows and a symbolic one that cannot is what produced the
      dropped-header bug in the first place. *)
-  {| sh_hdr_map := seed_header_map UninitVal (collect_write_headers (net_modules net));
+  {| sh_hdr_map := seed_header_concrete (collect_header_types (net_modules net))
+                                        (collect_write_headers (net_modules net));
      sh_read_tape := @nil bool;
      sh_bits_read := mk_int u64 0;
      sh_write_tape := @nil bool;

@@ -143,3 +143,40 @@ Definition GeneralConcreteState : Type :=
   GeneralProgramState CrVal bool (@Array CrVal).
 Definition GeneralSymbolicState : Type :=
   GeneralProgramState SmtArithExpr (ConditionalVal SmtBoolExpr) SmtArrExpr.
+
+(* -------------------------------------------------------------------- *)
+(* What running a parser produces, shared by the two evaluators.        *)
+(*                                                                      *)
+(* [Th] is the header/count type, [Tb] the accept condition, and [Tbit] *)
+(* a residual packet bit.  The last two are NOT the same type on the    *)
+(* symbolic side: an accept condition is a bare [SmtBoolExpr], while a  *)
+(* residual bit carries its presence flag as a [ConditionalVal].        *)
+(*                                                                      *)
+(* [pr_accept] is what makes a rejection a RESULT rather than an        *)
+(* absence, which is the whole point of the record.  The concrete       *)
+(* evaluator returns [option ConcParserResult], and with the verdict    *)
+(* living in the payload the [option] is free to mean something much    *)
+(* narrower: [None] iff the run did not complete -- fuel exhausted, or  *)
+(* a transition named a state with no definition.  A parse that rejects *)
+(* the packet, including one that runs off its end, is [Some] with      *)
+(* [pr_accept := false].  Well-formedness rules out both [None] cases   *)
+(* (see [CrDslProperties.well_formed_parser]), which is what lets       *)
+(* [eval_parser_no_fuel_starvation] conclude the concrete evaluator is  *)
+(* total on well-formed parsers.                                        *)
+Record ParserResult (Th Tb Tbit : Type) : Type := mkParserResult {
+  pr_accept    : Tb;              (* accepts iff this holds *)
+  pr_headers   : PMap.t Th;       (* final header values *)
+  pr_residual  : list Tbit;       (* unconsumed tail *)
+  pr_bits_read : Th;              (* bits consumed *)
+}.
+
+Arguments pr_accept {Th Tb Tbit} _.
+Arguments pr_headers {Th Tb Tbit} _.
+Arguments pr_residual {Th Tb Tbit} _.
+Arguments pr_bits_read {Th Tb Tbit} _.
+Arguments mkParserResult {Th Tb Tbit} _ _ _ _.
+
+Definition ConcParserResult : Type :=
+  ParserResult CrVal bool bool.
+Definition SymParserResult : Type :=
+  ParserResult SmtArithExpr SmtBoolExpr (ConditionalVal SmtBoolExpr).

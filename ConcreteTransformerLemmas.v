@@ -144,7 +144,8 @@ Proof.
   unfold mem_and_state_eq.
   destruct op as [f ty arg1 arg2 target | f ty arg1 arg2 target
                  | from to arg target | from to arg target
-                 | ty r off target | ty r off val];
+                 | ty r off target | ty r off target
+                 | ty r off val];
     cbn [eval_hdr_op_assign_concrete_mem fst snd].
   - rewrite Hexp. split; [reflexivity | apply cs_lookup_eq_update_state; assumption].
   - rewrite Hexp. split; [reflexivity | apply cs_lookup_eq_update_header; assumption].
@@ -152,6 +153,8 @@ Proof.
   - rewrite Hexp. split; [reflexivity | apply cs_lookup_eq_update_header; assumption].
   - rewrite !(lookup_concrete_eq _ _ _ _ Hcs).
     split; [reflexivity | apply cs_lookup_eq_update_header; assumption].
+  - rewrite !(lookup_concrete_eq _ _ _ _ Hcs).
+    split; [reflexivity | apply cs_lookup_eq_update_state; assumption].
   - rewrite !(lookup_concrete_eq _ _ _ _ Hcs). split; [reflexivity | assumption].
 Qed.
 
@@ -216,13 +219,15 @@ Proof.
   unfold eval_hdr_op_assign_concrete.
   destruct op as [f ty arg1 arg2 target | f ty arg1 arg2 target
                  | from to arg target | from to arg target
-                 | ty r off target | ty r off val];
+                 | ty r off target | ty r off target
+                 | ty r off val];
     try rewrite Hexp.
   - apply cs_lookup_eq_update_state. assumption.
   - apply cs_lookup_eq_update_header. assumption.
   - apply cs_lookup_eq_update_state. assumption.
   - apply cs_lookup_eq_update_header. assumption.
   - apply cs_lookup_eq_update_header. assumption.
+  - apply cs_lookup_eq_update_state. assumption.
   - assumption.
 Qed.
 

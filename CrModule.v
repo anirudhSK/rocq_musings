@@ -261,6 +261,14 @@ Definition mem_region_decls_eqb (a b : list MemRegionDecl) : bool :=
   (Nat.eqb (List.length a) (List.length b)) &&
   List.forallb (fun '(x, y) => mem_region_decl_eqb x y) (List.combine a b).
 
+(* How many bytes each region key is DECLARED to hold, as a total map.  The
+   default is 0, which is exactly right for a region the program never
+   declared: no offset into it is in bounds, so any access at all overruns it.
+   Both module-level semantics compare [sh_mem_extent] against this. *)
+Definition region_len_map (rs : list MemRegionDecl) : PMap.t nat :=
+  List.fold_left (fun acc d => PMap.set (unwrap (mr_id d)) (mr_len d) acc)
+    rs (PMap.init 0%nat).
+
 Inductive GeneralCaracaraProgram : Type :=
   | GeneralCaracaraProgramDef :
       nat -> (* input packet length *)
