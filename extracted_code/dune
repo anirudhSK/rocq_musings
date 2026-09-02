@@ -10,6 +10,12 @@
   (modules DumpSexp)
   (libraries extracted_code_lib))
 
+(executable
+  (public_name run_parser)
+  (name RunParser)
+  (modules RunParser)
+  (libraries extracted_code_lib))
+
 (library
  (name semantics_tests)
  (modules TestEquality TestModuleSemantics TestParserSemantics TestProgramSemantics)

@@ -30,7 +30,13 @@ smt_query
 !/extracted_code/TestProgramSemantics.ml
 !/extracted_code/TestParserSemantics.ml
 !/extracted_code/EqCheck.ml
+!/extracted_code/RunParser.ml
 /.vscode/
 /.idea/
 /.claude/
 /.mcp.json
+**/.venv/
+**/.venv/
+**/.hypothesis/
+**/__pycache__/
+**/.pytest_cache/

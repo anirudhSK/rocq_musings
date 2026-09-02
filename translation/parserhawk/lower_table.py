@@ -562,8 +562,8 @@ def main():
                 "terminates; the IR rejects this too (ParserWellFormed's "
                 "progress condition)")
         if args.input_bits is not None:
-            if args.input_bits <= 0:
-                raise Unsupported("--input-bits must be positive")
+            if args.input_bits < 0:
+                raise Unsupported("--input-bits cannot be negative")
             states = b.unroll_by_cursor(states, 1, args.input_bits)
             if b.overruns:
                 print(f"warning: {len(b.overruns)} extraction(s) run past the "

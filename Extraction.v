@@ -3,6 +3,7 @@ Extraction Language OCaml.
 
 From MyProject Require Import SmtQuery.
 From MyProject Require Import SmtCompile.
+From MyProject Require Import ParserWellFormed.
 From MyProject Require Import SmtModuleQuery.
 
 From MyProject Require Import TestPrograms.
@@ -50,5 +51,7 @@ Separate Extraction
   SmtCompile.lcstep_bool SmtCompile.lcstep_arith SmtCompile.lcstep_arr
   SmtCompile.compile_query SmtCompile.regions_wf
   well_formed_programb well_formed_general_programb
+  (* [run_parser] checks a lowered parser against the IR's own conditions. *)
+  ParserWellFormed.well_formed_parserb
 
   dump_headers icmp_spec mfk_spec sai_spec.

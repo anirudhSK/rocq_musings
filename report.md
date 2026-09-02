@@ -1,14 +1,20 @@
-# Two soundness bugs in the memory model
+# Soundness bugs in the memory model, and in the shims around the checker
 
-Both come from the same gap: the solver was free to choose arbitrary `(tag, value)`
-pairs for a region's contents on entry, while the IR assumes a region is a byte
-array. Neither is a mistake in the soundness or completeness statements — those
-are still true. What was wrong is the set of initial states we were exploring: it
-included states no machine can be in, and a difference witnessed only by such a
-state is not a real difference.
+Four bugs, in two groups.
 
-Both were found through loads, and only through loads. That is not a coincidence
-— see [Why only loads](#why-only-loads).
+**Bugs 1 and 2** are defects in the checker's own semantics. Both come from the
+same gap: the solver was free to choose arbitrary `(tag, value)` pairs for a
+region's contents on entry, while the IR assumes a region is a byte array. Neither
+is a mistake in the soundness or completeness statements — those are still true.
+What was wrong is the set of initial states we were exploring: it included states
+no machine can be in, and a difference witnessed only by such a state is not a real
+difference. Both were found through loads, and only through loads — see
+[Why only loads](#why-only-loads).
+
+**Bugs 3 and 4** are the other direction: defects in untrusted translation code
+*around* a verified core, found because the checker gave something independent to
+disagree with. Bug 3 is in ParserHawk's exporter, bug 4 in our own JSON-to-IR
+shim.
 
 ---
 
@@ -228,10 +234,156 @@ sound — it constrains the solver without changing what the query means.
 
 ### What is still open
 
-`concrete_gp_state_is_valid` pins down regions, the tapes, the access extents and
-the validity flag. It does **not** yet pin down `mod_states` — whose transformer
-entries carry free state and control variables — or `sh_hdr_map`. Those are free
-`SmtArithVar`s on the symbolic side with no stated concrete counterpart, so the
-same class of bug is still possible there. It is much harder to trigger, because
-comparison and arithmetic collapse `UninitVal` and `ErrorVal` to the same
-behaviour, but the gap is real and `reachable_if_valid` remains admitted.
+`concrete_gp_state_is_valid` pins down regions, **field registers**, the tapes, the
+access extents and the validity flag. The header clause was added later: a header
+some parser extracts holds an arbitrary value of its own width on entry, which the
+symbolic seed `CrVarLike.seed_header_syms` *forces* rather than merely permits, so
+it needs no solver-side constraint.
+
+It does **not** yet pin down `mod_states` — whose transformer entries carry free
+state and control variables — nor headers that no parser extracts. Those are free
+on the symbolic side with no stated concrete counterpart, so the same class of bug
+is still possible there. It is harder to trigger, because comparison and
+arithmetic collapse `UninitVal` and `ErrorVal` to the same behaviour, but the gap
+is real and `reachable_if_valid` remains admitted.
+
+---
+
+# Bugs found *with* the checker, in the shims around it
+
+The two above were defects in our own semantics, found by reasoning about it. The
+two below are a different kind: defects in **untrusted translation code sitting
+next to a verified core**, found because something independent was able to
+disagree with it. Neither was detectable from inside the shim that contained it —
+both shims produced well-formed, self-consistent output that was wrong only
+relative to a semantics living somewhere else.
+
+## Bug 3 — ParserHawk exports a transition rule its synthesizer never verified
+
+### What is the bug
+
+ParserHawk's IPU and Tofino pipelines for the multi-field-key workload are
+synthesized against the same specification, so they should agree. Lowered into the
+IR and compared, they came back `NotEquivalent`.
+
+### How does it happen
+
+Synthesis emits four variables per pipeline stage `S` and TCAM slot `T`:
+`assign_stage_S_tcamT`, `key_val_…`, `key_mask_…`, `tran_idx_…`. (The names are
+transposed — the outer loop is the stage but it is written into the `tcam` field —
+which is confusing but not itself the bug.) The final model for this workload:
+
+| stage | assign | val | mask | tran_idx |
+| --- | --- | --- | --- | --- |
+| 0 | **4** | 0 | 65535 | 2 |
+| 1 | 1 | 0 | 65535 | 2 |
+| 2 | **0** | 0 | 65535 | **3** |
+
+`implementation()` has node `i` consult only **stage `i`**'s slots, and a slot
+fires only when `assignments[i][T] == node_id`. So stage 0's slot is dead
+(`4 ≠ 0`), stage 2's slot is dead (`0 ≠ 2`), and node 0 always takes its default.
+Tracing `idx` through the verified model confirms it: `[1, 2, 3]`.
+
+`code_gen_IPU.py` instead reads `assign` as an owner pointer and files the rule
+under `node_list[assign]`, guarded only by `assign < num_parser_nodes`. So stage
+2's dead slot is emitted as a **live rule on node 0**, and stage 0's real
+parameters vanish from the JSON entirely.
+
+The divergence is observable: on packet `0…01` with field1's register starting at
+191, the exported pipeline accepts after extracting only `field_0`, emitting two
+registers it never wrote. Running ParserHawk's own verification query pinned to
+that same input gives `spec = impl = [0, 0, 1]` — the verified pipeline never goes
+there.
+
+### Why does it happen
+
+`assign` means two different things to its two consumers: an **enable predicate**
+in `implementation()` (fire iff `assign` names the node reading this stage) and an
+**owner pointer** in the exporter. They coincide only when `assign` names a node
+inside that entry's own stage, and nothing enforces it — the synthesis constraint
+bounds `assign` only from above:
+
+```python
+s.add(Or(assignments[i][j] < sum_l[i], assignments[i][j] > num_parser_nodes))
+```
+
+`sum_l[i]` is the correct upper end of stage `i`'s node range, but there is no
+lower bound, so naming a node in an *earlier* stage is permitted — always dead in
+the model, always emitted by the exporter.
+
+### How to fix it
+
+Membership in the entry's own stage, not just an upper bound. Stage `S` owns nodes
+`[sum_l[S] - parser_node_pipe[S], sum_l[S])`:
+
+```python
+lo = sum(parser_node_pipe[:S]); hi = lo + parser_node_pipe[S]
+if lo <= nodeID < hi: ...
+```
+
+Better still, add the same lower bound to the synthesis constraint, so `assign`
+can only ever be "a node in this stage" or "unused" and there is nothing to
+misfile. Note this leaves a second, latent gap: the TCAM slot index carries match
+priority (lower dominates) and the JSON drops it, so a node with several entries
+loses their order.
+
+This does not affect ParserHawk's synthesis or verification, both of which operate
+on the Z3 model. It affects only the untrusted step that lowers that model to a
+pipeline description — precisely the step an independent equivalence checker is
+positioned to validate.
+
+## Bug 4 — an overrunning lookahead rejects or not depending on bit adjacency
+
+### What is the bug
+
+Two pipelines that differ only in an extra key bit disagree about whether a
+lookahead running off the end of the packet rejects. Reduced:
+
+| `Tran_key` | lowered as | 8-bit packet, peek at cursor 9 |
+| --- | --- | --- |
+| `["lookahead 1"]` | one `Select` case | **Reject** |
+| `["lookahead 1", "field1[8]"]` | a chain of one-case states | **accepts** |
+
+Found by `translation/parserhawk/test_lower_table.py`, not by hand.
+
+### How does it happen
+
+`eval_transition_concrete` checks `select_bits_available_concrete` over **every**
+case of a select before matching any of them, so one overrunning `Peek` rejects
+the parse even when an earlier case would have matched.
+
+`lower_table.py` emits a single `Select` only when every rule's cared bits form
+one contiguous run. A key spanning two runs goes through `chain()`, which emits
+one zero-width state per run with the next rule as its fallthrough. Each of those
+states carries a single case, so its availability check covers only its own
+origin — and a `Peek` sitting in a later link is never reached once an earlier
+link falls through.
+
+### Why does it happen
+
+Two lowering paths with different observable semantics, selected by a property of
+the *input encoding* rather than of the pipeline: whether the key's bits happen to
+be adjacent. Bit adjacency is not supposed to be semantically load-bearing.
+
+### How to fix it
+
+Emit a leading guard state whose select carries every `Peek` origin from that
+node's rules, with all case targets equal to the chain head. Matching is then
+irrelevant and only the availability check survives, restoring the all-cases-first
+semantics regardless of how the key splits.
+
+## What the two have in common
+
+Both sit in a shim on the boundary of a verified artifact — one after ParserHawk's
+solver, one before our IR — and both were invisible from inside that shim. A
+property test over the exporter alone would have passed Bug 3: the JSON was well
+formed and internally consistent, and wrong only against `implementation()`. What
+found each was an **independent implementation of the same semantics** to disagree
+with: our equivalence checker for Bug 3, and for Bug 4 a reference interpreter
+plus the IR's own evaluator, reached through the `run_parser` executable.
+
+That is also the limit of the harness as it stands. It can show that our
+s-expression means what `lower_table.py` intends; it cannot show that we have read
+ParserHawk's JSON correctly in the first place. Only a differential against
+`implementation()` would close that, and it is the natural next step — it is the
+check ParserHawk itself does not have.
