@@ -1,0 +1,16 @@
+# Table entries for basic_tunnel.p4, switch s1 of the tutorials' own
+# basic_tunnel topology (exercises/basic_tunnel/.../s1-runtime.json).
+#
+# The ipv4_lpm half is the same triangle as ipv4_lpm.entries; myTunnel_exact
+# maps a tunnel id straight to the port of the same number.  See the header of
+# ipv4_lpm.entries for why these are supplied rather than left to a control
+# plane.
+#
+#   <table> <key>... -> <action> [<arg>...]
+ipv4_lpm 0x0a000101/32 -> ipv4_forward 0x080000000111 1
+ipv4_lpm 0x0a000202/32 -> ipv4_forward 0x080000000200 2
+ipv4_lpm 0x0a000303/32 -> ipv4_forward 0x080000000300 3
+
+myTunnel_exact 1 -> myTunnel_forward 1
+myTunnel_exact 2 -> myTunnel_forward 2
+myTunnel_exact 3 -> myTunnel_forward 3

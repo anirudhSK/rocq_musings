@@ -252,7 +252,38 @@ class Builder:
         fallthrough = default
         for (runs, val, tgt) in reversed(decoded):
             fallthrough = self.chain(runs, val, total, tgt, fallthrough)
+        # Every Peek this node's rules read has to be CHECKED FOR AVAILABILITY
+        # before any of them is matched, because that is what the one-Select
+        # path above does: [eval_transition_concrete] tests
+        # [select_bits_available_concrete] over the whole select, so one
+        # overrunning Peek rejects even when an earlier case would have matched.
+        # Chaining scopes that check per state, and a Peek in a later link is
+        # never reached once an earlier link falls through -- so without this
+        # guard, whether an overrun rejects depends on whether the key's bits
+        # happen to be ADJACENT, which is a property of the encoding and not of
+        # the pipeline.
+        peeks, seen = [], set()
+        for (runs, _, _) in decoded:
+            for r in runs:
+                if r[0] == "p" and (r[1], r[2]) not in seen:
+                    seen.add((r[1], r[2]))
+                    peeks.append(r)
+        if peeks:
+            fallthrough = self.peek_guard(peeks, fallthrough)
         return ("uncond", fallthrough)
+
+    def peek_guard(self, peeks, head):
+        """A state that reads every Peek and goes to [head] regardless.
+
+        Both the cases and the default target [head], so the match itself is
+        irrelevant and only the availability check survives.  Zero-width, so the
+        cursor the offsets are measured from is unchanged.
+        """
+        lbl = self.fresh()
+        self.extra.append({
+            "label": lbl, "action": None,
+            "trans": ("select", [(r, 0, head) for r in peeks], head)})
+        return ("state", lbl)
 
     def chain(self, runs, val, total, target, fallthrough):
         """One zero-width state per run; all must match to reach `target`.

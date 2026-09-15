@@ -1,0 +1,1 @@
+-O1 -D__TARGET_TOFINO__=1 -I@ROOT@/translation/p4c/backends/tofino/bf-p4c/p4include

@@ -31,6 +31,14 @@ smt_query
 !/extracted_code/TestParserSemantics.ml
 !/extracted_code/EqCheck.ml
 !/extracted_code/RunParser.ml
+!/extracted_code/RunNet.ml
+!/extracted_code/FuzzTss.ml
+!/extracted_code/PktClassFuzz.ml
+!/extracted_code/IrSize.ml
+!/extracted_code/SmtSize.ml
+!/extracted_code/SolveTime.ml
+!/extracted_code/BenchEq.ml
+/bench/**/*.ir
 /.vscode/
 /.idea/
 /.claude/

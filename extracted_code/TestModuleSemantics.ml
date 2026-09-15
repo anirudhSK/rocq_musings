@@ -822,11 +822,30 @@ let%expect_test "mem_store_poisoned: storing an unwritten header poisons cells" 
     |}]
 
 (* -------------------------------------------------------------------- *)
-(* bpf_map_ref.ir: a bpf_map_lookup_elem program (~/proj/ect/ex/map_ref.c) *)
+(* bpf_map_ref.ir: a bpf_map_lookup_elem program                        *)
+(* (translation/ect/ex/map/map_ref.c)                                   *)
 (*                                                                      *)
-(* Region 10 is the map: 4 presence bytes, then four 8-byte values, so   *)
-(* slot i's presence is at offset i and its value at 4 + 8*i.  The slot  *)
-(* is key % 4, the key is ctx->ingress_ifindex (u32 at ctx offset 12).   *)
+(* Region 10 is a HASH map, and a hash map STORES EACH SLOT'S KEY in the *)
+(* region rather than deriving the slot from the key.  With key 4,       *)
+(* value 8 and four modelled slots it is 53 bytes:                      *)
+(*                                                                      *)
+(*   [0, 4)    presence bytes, 1 = the slot is filled                   *)
+(*   [4, 20)   the key each slot holds, 4 bytes apiece                  *)
+(*   [20, 52)  the values, 8 bytes apiece                               *)
+(*   [52]      1 = the real map is at capacity                          *)
+(*                                                                      *)
+(* The stored key is the point, and it is why these tests read the way   *)
+(* they do.  Deriving the slot as `key % nslots` -- which the model did  *)
+(* until the translator was fixed -- forces distinct keys that collide   *)
+(* modulo nslots to SHARE one entry, so the state "k1 present, k2        *)
+(* absent" has no representative at all.  A state the model cannot       *)
+(* express is a difference the checker cannot find, which is a wrong     *)
+(* Equivalent rather than a loud failure.  See MapInfo's docstring in    *)
+(* translation/ect's pybpf/translate.py.                                *)
+(*                                                                      *)
+(* So a SLOT is no longer a function of the key: the lookup scans slots  *)
+(* in order and takes the first whose presence byte is 1 and whose       *)
+(* stored key matches.  [seed_map] therefore says which slot to fill.    *)
 (*                                                                      *)
 (* The checker verdicts in TestEquality say the two arms of a lookup are *)
 (* distinguishable; these say what each arm actually does, on cells that *)
@@ -836,24 +855,36 @@ let%expect_test "mem_store_poisoned: storing an unwritten header poisons cells" 
 
 let map_prog = "../test/bpf_map_ref.ir"
 
-(* key -> ctx, then the slot's presence byte and (if present) its value. *)
-let seed_map key present value gcs =
-  let slot = key mod 4 in
-  let gcs = Shim.set_net_mem_cell 1 12 CrVal.W32 key gcs in
-  let gcs = Shim.set_net_mem_cell 10 slot CrVal.W8 present gcs in
-  Shim.set_net_mem_cell 10 (4 + 8 * slot) CrVal.W64 value gcs
+let map_presence slot = slot
+let map_tag slot = 4 + 4 * slot
+let map_value slot = 20 + 8 * slot
 
-let run_map key present value =
+(* key -> ctx, then one slot's presence byte, stored key and value.  The
+   stored key is [tag], which defaults to the looked-up key so that
+   [present = 1] means a genuine hit; a test that wants a filled slot
+   holding a DIFFERENT key passes [tag] itself. *)
+let seed_map ?(slot = 0) ?tag key present value gcs =
+  let tag = match tag with Some t -> t | None -> key in
+  gcs
+  |> Shim.set_net_mem_cell 1 12 CrVal.W32 key
+  |> Shim.set_net_mem_cell 10 (map_presence slot) CrVal.W8 present
+  |> Shim.set_net_mem_cell 10 (map_tag slot) CrVal.W32 tag
+  |> Shim.set_net_mem_cell 10 (map_value slot) CrVal.W64 value
+
+let run_map ?slot ?tag key present value =
   let gcs = run_named_prog "bpf_map_ref" (bpf_prog map_prog)
-              (seed_map key present value) in
+              (seed_map ?slot ?tag key present value) in
   Shim.print_net_output gcs;
   Shim.print_net_mem_extent 10 gcs
 
+(* A miss reads every presence byte and every stored key -- it has to, to
+   conclude the key is in none of them -- and no value, so the extent stops
+   at 20, where the values begin. *)
 let%expect_test "bpf map: a miss returns 1 and never reads the value" =
   run_map 2 0 999;
   [%expect {|
     [0, 0, 0, 1] 32b
-    extent10=3
+    extent10=20
     |}]
 
 let%expect_test "bpf map: a hit over the threshold returns 2" =
@@ -870,14 +901,25 @@ let%expect_test "bpf map: a hit under the threshold returns 0" =
     extent10=28
     |}]
 
-(* nslots is 4 where the map declares 64 entries, so keys 2 and 6 share a
-   slot.  That conflation is the map model's one real abstraction; this test
-   is what makes it visible rather than a claim in a comment. *)
-let%expect_test "bpf map: key 6 lands in the same slot as key 2" =
-  run_map 6 1 200;
+(* A filled slot holding a DIFFERENT key is a miss, not a hit.  This is the
+   regression test for the stored key: under the old `key % nslots` model
+   the slot alone decided presence, so seeding slot 0 as filled made EVERY
+   key that hashes there a hit and this could not be written at all. *)
+let%expect_test "bpf map: a filled slot holding another key is still a miss" =
+  run_map ~slot:0 ~tag:6 2 1 200;
+  [%expect {|
+    [0, 0, 0, 1] 32b
+    extent10=20
+    |}]
+
+(* ... and the two keys that the old model conflated -- 2 and 6 collide
+   modulo the four modelled slots -- now occupy separate entries, so one can
+   be present while the other is absent. *)
+let%expect_test "bpf map: keys 2 and 6 no longer share an entry" =
+  run_map ~slot:1 ~tag:6 6 1 200;
   [%expect {|
     [0, 0, 0, 2] 32b
-    extent10=28
+    extent10=36
     |}]
 
 (* -------------------------------------------------------------------- *)
@@ -992,3 +1034,127 @@ let%expect_test "sur_filter: a dropped source address returns 0" =
 let%expect_test "sur_filter: a dropped destination address returns 0" =
   run_sur_filter ~saddr:0 ~daddr:1 ~drop_saddr:false ~drop_daddr:true;
   [%expect {| [0, 0, 0, 0] 32b |}]
+
+(* -------------------------------------------------------------------- *)
+(* ex/map/map_update.c: look the key up and, on a miss, write 7 back.    *)
+(*                                                                      *)
+(* Same 53-byte hash-map region as bpf_map_ref above, so the slot to     *)
+(* seed is given rather than derived from the key; see that comment for  *)
+(* the layout and for why the stored key matters.  The checker verdicts  *)
+(* say these programs are distinguishable; these say what the update     *)
+(* actually does to the region.                                         *)
+(* -------------------------------------------------------------------- *)
+
+let run_map_update ?(slot = 0) ?tag ~key ~present ~value () =
+  let seed = seed_map ~slot ?tag key present value in
+  let gcs = run_named_prog "map_update" (bpf_prog "../test/bpf_map_update.ir") seed in
+  Shim.print_net_output gcs;
+  Shim.print_net_mem_region 10 gcs
+
+(* A miss: the first free slot is filled with the key and the value 7 and
+   marked present.  Slot 0 is scanned first, so that is where it lands --
+   presence byte 0 becomes 1, the stored key at 4..7 becomes 2, and the
+   value at 20..27 becomes 7. *)
+let%expect_test "map update: a miss writes the value and marks the slot" =
+  run_map_update ~key:2 ~present:0 ~value:0 ();
+  [%expect {|
+    [0, 0, 0, 0] 32b
+    mem10=[1, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    |}]
+
+(* A hit: the program returns early, so the slot keeps the value it had. *)
+let%expect_test "map update: a hit leaves the slot alone" =
+  run_map_update ~key:2 ~present:1 ~value:41 ();
+  [%expect {|
+    [0, 0, 0, 0] 32b
+    mem10=[1, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 41, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    |}]
+
+(* A presence byte that is neither 0 nor 1 is neither OCCUPIED nor FREE, and
+   the two scans ask different questions: a hit needs `presence == 1` and an
+   insert needs `presence == 0`.  So seeding slot 0 with 7 makes the lookup
+   miss AND leaves slot 0 unusable, and the insert lands in slot 1 -- slot 0
+   keeps its 7 and its seeded value.  Such a state cannot arise in a real
+   map; it is reachable here because the presence byte is a free region cell,
+   and it is harmless because BOTH compared programs see the same cell. *)
+let%expect_test "map update: a presence byte that is not 1 counts as a miss" =
+  run_map_update ~key:2 ~present:7 ~value:99 ();
+  [%expect {|
+    [0, 0, 0, 0] 32b
+    mem10=[7, 1, 0, 0, 2, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 99, 0, 0, 0, 0, 0, 0, 0, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    |}]
+
+(* -------------------------------------------------------------------- *)
+(* ex/ebpf-se/xdp_pktcntr.c: katran's XDP packet counter.               *)
+(*                                                                      *)
+(* Two maps, named in sorted order: region 10 is cntrs_array (key 4,     *)
+(* value 8, 4 slots -- presence at 0..3, values from 4) and region 11 is *)
+(* ctl_array (key 4, value 4, 2 slots -- presence at 0..1, values from   *)
+(* 2).  Both lookups use key 0, so both land in slot 0.                  *)
+(*                                                                      *)
+(* The program returns XDP_PASS (2) whatever happens, so the counter in  *)
+(* the region is the only thing that records what it did.               *)
+(* -------------------------------------------------------------------- *)
+
+let run_pktcntr ~flag_present ~flag ~cntr_present ~cntr =
+  let seed gcs =
+    gcs
+    |> Shim.set_net_mem_cell 11 0 CrVal.W8  (if flag_present then 1 else 0)
+    |> Shim.set_net_mem_cell 11 2 CrVal.W32 flag
+    |> Shim.set_net_mem_cell 10 0 CrVal.W8  (if cntr_present then 1 else 0)
+    |> Shim.set_net_mem_cell 10 4 CrVal.W64 cntr
+  in
+  let gcs = run_named_prog "xdp_pktcntr"
+              (bpf_prog "../test/bpf_xdp_pktcntr.ir") seed in
+  Shim.print_net_output gcs;
+  Shim.print_net_mem_region 10 gcs;
+  Shim.print_net_mem_extent 10 gcs
+
+(* The control flag is set, so the counter is found and incremented. *)
+let%expect_test "katran pktcntr: an enabled counter is incremented" =
+  run_pktcntr ~flag_present:true ~flag:1 ~cntr_present:true ~cntr:41;
+  [%expect {|
+    [0, 0, 0, 2] 32b
+    mem10=[1, 0, 0, 0, 42, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    extent10=12
+    |}]
+
+(* The flag reads 0, so the program returns before touching cntrs_array at
+   all -- the counter keeps its value and the extent stays 0. *)
+let%expect_test "katran pktcntr: a cleared flag returns before the counter" =
+  run_pktcntr ~flag_present:true ~flag:0 ~cntr_present:true ~cntr:41;
+  [%expect {|
+    [0, 0, 0, 2] 32b
+    mem10=[1, 0, 0, 0, 41, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    extent10=0
+    |}]
+
+(* The control slot's presence byte is 0 -- and it makes no difference.
+   ctl_array is BPF_MAP_TYPE_ARRAY, which is pre-allocated and zero-filled when
+   it is created, so a lookup with an in-range key CANNOT return NULL.  The
+   model reads no presence byte for an array map; the key alone decides, and
+   key 0 is in range.  So the flag is found, its value 1 is non-zero, and the
+   counter is reached.
+
+   These two tests used to assert the opposite, because the model gave every
+   map a free presence byte and so invented a miss path that no array map
+   has. *)
+let%expect_test "katran pktcntr: an array lookup cannot miss" =
+  run_pktcntr ~flag_present:false ~flag:1 ~cntr_present:true ~cntr:41;
+  [%expect {|
+    [0, 0, 0, 2] 32b
+    mem10=[1, 0, 0, 0, 42, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    extent10=12
+    |}]
+
+(* Likewise for the counter itself: cntrs_array is a PERCPU_ARRAY, so slot 0
+   exists whatever its presence byte says, and the increment happens.  The
+   extent reaches 12 -- one past the 8-byte value at offset 4 -- because the
+   value was read and written, not because a presence byte was consulted. *)
+let%expect_test "katran pktcntr: an array counter slot always exists" =
+  run_pktcntr ~flag_present:true ~flag:1 ~cntr_present:false ~cntr:41;
+  [%expect {|
+    [0, 0, 0, 2] 32b
+    mem10=[0, 0, 0, 0, 42, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    extent10=12
+    |}]

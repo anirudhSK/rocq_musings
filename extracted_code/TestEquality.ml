@@ -125,6 +125,71 @@ let%expect_test "tss basic" =
   print_equiv (SmtModuleQuery.modnet_equivalence_checker p1 p2);
   [%expect {| Equivalent |}]
 
+(* Test 13b: the same claim over RANDOM filter databases.  PktClass.v's header
+   comment says what this is for: linear_db and tss_db are supposed to classify
+   identically for EVERY database, and the checker can only ever speak about
+   two specific programs, so the general statement is approached by sampling.
+   Each verdict is still universally quantified over the 192-bit input packet,
+   so a database that comes back Equivalent has been checked against every
+   packet -- the sampling is over databases only.
+
+   [PktClassFuzz] generates each filter around a witness packet, so the filters
+   are matchable and the verdicts are not the vacuous kind (see the negative
+   control below).  It prints nothing per database, so this expected output
+   does not depend on the generator's sequence; a failure prints the offending
+   database and the seed that reproduces it.
+
+   Bigger campaigns are the `fuzz_tss` executable, same generator:
+     dune exec fuzz_tss -- --seed 1 --count 500 --size 1,2,4,8 *)
+let%expect_test "tss fuzz: random filter databases" =
+  (* Size 0 is in the cycle deliberately: an empty database gives tss_db no
+     tables and no mergers, and linear_db no rules, which is the degenerate
+     shape most likely to fall over rather than disagree. *)
+  let failures =
+    PktClassFuzz.run_campaign ~seed:1 ~count:24 ~sizes:[| 0; 1; 2; 3; 4; 5 |] () in
+  Printf.printf "24 random databases, %d not Equivalent\n" failures;
+  [%expect {| 24 random databases, 0 not Equivalent |}]
+
+(* Test 13c: the control for the test above, and it is not optional.  A suite
+   of Equivalent verdicts is exactly what two programs that both reject -- or
+   that both emit nothing but zeros -- also produce, which is the trap
+   CLAUDE.md describes and which an earlier version of this generator fell into
+   wholesale: independently drawn match conditions contradict each other, the
+   database classifies nothing, and every verdict was vacuous.
+
+   So: relabel the tss side.  Every filter is matchable by construction, so
+   some packet is classified, so the two must now DISAGREE.  If this test ever
+   comes back "0 differed", the fuzzer above is testing nothing. *)
+let%expect_test "tss fuzz: the random databases classify something" =
+  let failures =
+    PktClassFuzz.run_campaign ~mutate:true ~seed:1 ~count:12
+      ~sizes:[| 1; 2; 3; 4 |] () in
+  Printf.printf "12 relabelled databases, %d not NotEquivalent\n" failures;
+  [%expect {| 12 relabelled databases, 0 not NotEquivalent |}]
+
+(* Test 13d: the second control, and the one that says the campaign is
+   comparing the two ARBITRATION schemes and not just two ways of matching a
+   single filter.  Precedence is the whole difference between the two
+   constructions -- linear_db takes the first match in priority order, tss_db
+   takes each table's best and then merges on strictly-lower-wins -- and a
+   database whose filters never overlap exercises none of it.
+
+   So: invert the priorities on the tss side.  A database notices exactly when
+   some packet matches two filters with different labels.  Unlike the relabel
+   control this is a COVERAGE NUMBER rather than a pass/fail -- a database
+   whose filters happen not to overlap legitimately does not notice -- which is
+   why it is pinned as a count.  It is 10 here because [random_db] builds about
+   half of each database's filters around one shared witness packet; drop that
+   and it falls towards zero while every other test in this file still
+   passes. *)
+let%expect_test "tss fuzz: precedence is what is being compared" =
+  let flipped =
+    PktClassFuzz.run_precedence_probe ~seed:1 ~count:24
+      ~sizes:[| 0; 1; 2; 3; 4; 5 |] () in
+  Printf.printf "%d of 24 databases exercise precedence\n" flipped;
+  (* 8 of the 24 hold 0 or 1 filter and cannot, so this is 10 of 16. *)
+  [%expect {| 10 of 24 databases exercise precedence |}]
+
 (* Test 14: bitstream-I/O equivalence.  A parse->deparse pipeline is equivalent
    to itself over any 16-bit input packet: the deparser re-emits exactly the
    bits the parser consumed.  Exercises the new bitstream [modnet_equivalence_checker]
@@ -244,16 +309,33 @@ let%expect_test "mem: the scratch header a dead load targets is internal" =
   check "mem_load1_load0" "mem_load1_load0_alt";
   [%expect {| Equivalent |}]
 
-(* Test 24: THE extent test, and the reason [sh_mem_extent] exists.  Both
-   programs read only cells that were never written, so both emit the same
-   zero byte and leave the region untouched -- output equality and contents
-   equality cannot tell them apart.  They differ solely in that one reaches
-   cell 1 and the other stops at cell 0, which is a real difference: one can
-   fault where the other cannot.  If this reports Equivalent, the extent is
-   not reaching the query.  (Compare test 18, its bitstream analogue.) *)
-let%expect_test "mem: reading one cell further is not equivalent" =
+(* Test 24: A DEAD LOAD IS NOT OBSERVABLE, and this test used to say the
+   opposite.
+
+   [mem_load1_load0] is [mem_load0] plus a load of cell 1 into a scratch header
+   nothing emits.  The two agree on everything the semantics can see: same
+   emitted byte, same region contents, same bits read (TestModuleSemantics
+   prints both as `[0] 8b` over `mem1=[0,0,0,0]`).  They differ only in
+   [sh_mem_extent] -- 2 against 1.
+
+   This expected NotEquivalent while the extent was an equivalence conjunct,
+   justified in a comment here as "one can fault where the other cannot".  That
+   was wrong twice over.  The region is declared FOUR bytes, so cells 0 and 1
+   are both in bounds and neither program can fault; and an out-of-bounds run
+   is caught by [mem_extents_in_bounds_smt] in [gps_valid], which is a
+   different mechanism entirely.  What the conjunct actually did was reject
+   dead-load elimination -- a transformation every optimiser performs, on the
+   -O0/-O2 pairs that are this checker's main workload.
+
+   So the conjunct is gone and this pair is Equivalent, which is the right
+   answer.  It stays as a regression test in the other direction: if it ever
+   reports NotEquivalent again, an unobservable difference has been made
+   observable.  See the note on [SmtModuleQuery.check_sym_pkt_out].  (Test 18
+   is the bitstream analogue and is NOT affected -- [sh_bits_read] is part of
+   the output, since the residual is what a downstream module sees.) *)
+let%expect_test "mem: a dead load is not observable" =
   check "mem_load1_load0" "mem_load0";
-  [%expect {| NotEquivalent |}]
+  [%expect {| Equivalent |}]
 
 (* Test 25: in bounds, the order of a load and a store to one cell matters --
    the second program reads back what it just wrote, the first does not. *)
@@ -536,3 +618,139 @@ let%expect_test "e2e bpf: suricata filter.c is equivalent to itself" =
   print_equiv (SmtModuleQuery.modnet_equivalence_checker p p);
   [%expect {| Equivalent |}]
 
+
+(* ── Bytecode-mutation pairs ────────────────────────────────────────────
+
+   The pairs above are all SOURCE-level variants, so they exercise the checker
+   only on differences clang happens to emit.  These four are single in-place
+   instruction edits to suricata's vlan_filter and to bpf_ref, generated by
+   ~/proj/ect/tests/make_mutation_fixtures.py (regenerate with
+   `.venv/bin/python tests/make_mutation_fixtures.py`, or `--check` to confirm
+   they are current).
+
+   Each expectation is established independently of the checker, which is the
+   point of having them:
+
+   - the NotEquivalent pairs come with a concrete input on which the two
+     lowered programs demonstrably behave differently, replayed through a
+     concrete interpreter for the IR.  A separating input is a PROOF of
+     inequivalence, so Equivalent here would be a soundness bug -- not merely
+     an unexpected verdict.
+   - the Equivalent pairs are ones no input separates.
+
+   K2, the eBPF superoptimizer, works the same way round: its proposal
+   distribution is deliberately blind (replace an operand, nop an instruction
+   out) and its equivalence checker is the filter.  There is no catalogue of
+   semantics-preserving BPF rewrites to borrow, so the labels here come from
+   execution instead. *)
+
+(* ALU64 -> ALU32 on the mask of vlan_tci.  vlan_tci is a u32 and the mask
+   keeps 12 bits, so nothing reaches the upper half and the narrower operation
+   computes the same thing.  This is the shape an optimiser produces and a
+   source variant cannot. *)
+let%expect_test "bpf mutation: narrowing a mask to 32 bits preserves it" =
+  let p1 = get_general_program "../test/bpf_vlan_filter.ir" in
+  let p2 = get_general_program "../test/bpf_vlan_filter_narrowed.ir" in
+  print_equiv (SmtModuleQuery.modnet_equivalence_checker p1 p2);
+  [%expect {| Equivalent |}]
+
+(* A dead instruction NOPped out of bpf_ref: the value it computes is
+   overwritten before any use. *)
+let%expect_test "bpf mutation: deleting a dead instruction preserves it" =
+  let p1 = get_general_program "../test/bpf_O2.ir" in
+  let p2 = get_general_program "../test/bpf_ref_nop.ir" in
+  print_equiv (SmtModuleQuery.modnet_equivalence_checker p1 p2);
+  [%expect {| Equivalent |}]
+
+(* The VLAN id mask changed from 0x0fff to 0x1000, so the filter selects on a
+   different bit entirely.  Random inputs almost never separate these -- it
+   takes vlan_tci & 0xfff in {2,4}, about one in 2048 -- so the separating
+   input used to justify this expectation is the checker's own counterexample,
+   replayed concretely. *)
+let%expect_test "bpf mutation: changing the VLAN mask is observable" =
+  let p1 = get_general_program "../test/bpf_vlan_filter.ir" in
+  let p2 = get_general_program "../test/bpf_vlan_filter_mask.ir" in
+  print_equiv (SmtModuleQuery.modnet_equivalence_checker p1 p2);
+  [%expect {| NotEquivalent |}]
+
+(* The accept test inverted, JEQ to JNE: the filter now accepts exactly the
+   VLAN ids it used to drop. *)
+let%expect_test "bpf mutation: inverting the accept test is observable" =
+  let p1 = get_general_program "../test/bpf_vlan_filter.ir" in
+  let p2 = get_general_program "../test/bpf_vlan_filter_cmp.ir" in
+  print_equiv (SmtModuleQuery.modnet_equivalence_checker p1 p2);
+  [%expect {| NotEquivalent |}]
+
+(* ── bpf_map_update_elem ────────────────────────────────────────────────
+
+   ~/proj/ect/ex/map/map_update.c does a lookup and, on a miss, writes a value
+   back with bpf_map_update_elem.  All three programs RETURN 0 on every path,
+   so the deparser emits the same bits whatever happens -- the only thing that
+   can separate them is the final contents of the map region.  That makes this
+   pair a direct test that the checker compares regions and not just output. *)
+
+(* The stored value computed through a volatile temporary: different bytecode,
+   the same 7 written to the same slot. *)
+let%expect_test "bpf map update: a spilled computation of the same value agrees" =
+  let p1 = get_general_program "../test/bpf_map_update.ir" in
+  let p2 = get_general_program "../test/bpf_map_update_spill.ir" in
+  print_equiv (SmtModuleQuery.modnet_equivalence_checker p1 p2);
+  [%expect {| Equivalent |}]
+
+(* 7 against 9.  Identical return value on every path, so a checker that only
+   compared the emitted packet would call these equivalent. *)
+let%expect_test "bpf map update: the stored value is observable" =
+  let p1 = get_general_program "../test/bpf_map_update.ir" in
+  let p2 = get_general_program "../test/bpf_map_update_differs.ir" in
+  print_equiv (SmtModuleQuery.modnet_equivalence_checker p1 p2);
+  [%expect {| NotEquivalent |}]
+
+(* And against the program that looks up but never writes. *)
+let%expect_test "bpf map update: updating differs from not updating" =
+  let p1 = get_general_program "../test/bpf_map_update.ir" in
+  let p2 = get_general_program "../test/bpf_map_ref.ir" in
+  print_equiv (SmtModuleQuery.modnet_equivalence_checker p1 p2);
+  [%expect {| NotEquivalent |}]
+
+(* ── ebpf-se: katran and the fw example ─────────────────────────────────
+
+   Three production programs carried verbatim from
+   https://github.com/dslab-epfl/ebpf-se, in ~/proj/ect/ex/ebpf-se/.  Each is
+   paired with a variant differing in exactly one way, because a verdict in
+   only one direction says nothing.
+
+   What makes these worth having is that all three return a CONSTANT on every
+   path, so a checker that compared only the emitted packet would call two of
+   the three pairs equivalent.  What separates them is the map region. *)
+
+(* Katran's XDP packet counter, incrementing by 1 against by 2.  Same verdict
+   on every path, same cells touched, so the emitted packet and every access
+   extent agree -- only the counter left in the region differs. *)
+let%expect_test "ebpf-se katran xdp_pktcntr: the counter value is observable" =
+  let p1 = get_general_program "../test/bpf_xdp_pktcntr.ir" in
+  let p2 = get_general_program "../test/bpf_xdp_pktcntr_alt.ir" in
+  print_equiv (SmtModuleQuery.modnet_equivalence_checker p1 p2);
+  [%expect {| NotEquivalent |}]
+
+let%expect_test "ebpf-se katran xdp_pktcntr: equivalent to itself" =
+  let p = get_general_program "../test/bpf_xdp_pktcntr.ir" in
+  print_equiv (SmtModuleQuery.modnet_equivalence_checker p p);
+  [%expect {| Equivalent |}]
+
+(* The same counter over struct __sk_buff.  Its lookup body is empty upstream,
+   so it never writes; the variant returns TC_ACT_SHOT where the control flag
+   is unset, which is what shows the ctl_array lookup reaches the output. *)
+let%expect_test "ebpf-se katran cls_pktcntr: the control flag reaches the output" =
+  let p1 = get_general_program "../test/bpf_cls_pktcntr.ir" in
+  let p2 = get_general_program "../test/bpf_cls_pktcntr_alt.ir" in
+  print_equiv (SmtModuleQuery.modnet_equivalence_checker p1 p2);
+  [%expect {| NotEquivalent |}]
+
+(* ex/ebpf-se/map_access.c is deliberately NOT here.  It uses the constant map
+   key 23, and the model can only represent a key below --map-slots without
+   folding it onto some other key's entry, so at the default of 4 the
+   translator refuses it rather than aliasing silently.  --map-slots=32 does
+   translate it, but the resulting 288-cell region makes the comparison take
+   minutes.  Both halves of that -- the refusal and the cost -- are TODO.md
+   1.6, which is about replacing the slot mapping with an uninterpreted
+   function. *)

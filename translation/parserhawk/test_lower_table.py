@@ -67,38 +67,22 @@ def window(draw, sizes):
 
 
 @st.composite
-def key_entries(draw, sizes, mixed=True):
+def key_entries(draw, sizes):
     """A Tran_key.
 
-    Deliberately biased towards CONTIGUOUS windows.  Scattered bits give runs of
-    length one, where MSB-first and LSB-first patterns coincide and a bit-order
-    bug is invisible; runs_of only has something to merge when the bits are
-    adjacent.  A planted "pattern LSB-first" mutation survives a generator that
-    only scatters.
-    """
-    if not mixed:
-        # Either all lookaheads or all field bits, never both.  A key that mixes
-        # them always spans more than one run and so takes lower_table's chained
-        # path, where the known peek-availability defect lives -- see
-        # test_known_peek_availability.  Excluding the shape up front beats
-        # filtering it out afterwards, which discards most of what is generated.
-        #
-        # COVERAGE GAP: no property test therefore exercises a chained key that
-        # contains a Peek.  Close this when the guard-state fix lands.
-        if draw(st.booleans()):
-            n = draw(st.sampled_from([1, 2]))
-            return [f"lookahead {j} " for j in range(n)]
-        # One window is a single run; two are usually two, which is the only way
-        # to reach lower_table's `chain` path without mixing in a lookahead.
-        # Without this, `chain` is barely exercised and two planted mutations --
-        # "runs never merged" and "rule priority reversed", both of which only
-        # affect chaining -- survive.
-        ks = window(draw, sizes)
-        if draw(st.booleans()):
-            ks = ks + [e for e in window(draw, sizes) if e not in ks]
-        return draw(st.permutations(ks))
+    Two things are deliberate.  Bits come in CONTIGUOUS windows, because
+    scattered bits give runs of length one, where MSB-first and LSB-first
+    patterns coincide and `runs_of` has nothing to merge.  And there can be TWO
+    windows, because a key spanning more than one run is the only way to reach
+    `chain()` -- three of the planted mutations only affect chaining.
 
-    key = list(window(draw, sizes)) if draw(st.booleans()) else []
+    Lookaheads mix in freely.  They used to be excluded, to keep the
+    peek-availability defect from masking everything else; the guard state fixed
+    that, so the exclusion is gone.
+    """
+    key = list(window(draw, sizes))
+    if draw(st.booleans()):
+        key += [e for e in window(draw, sizes) if e not in key]
     extra = draw(st.lists(
         st.one_of(
             st.builds(lambda j: f"lookahead {j} ", st.integers(0, 1)),
@@ -154,7 +138,7 @@ def rules(draw, width, n, tgt):
 
 
 @st.composite
-def pipelines(draw, forward=False, mixed_peek=True, must_extract=False):
+def pipelines(draw, forward=False, must_extract=False):
     """A pipeline in ParserHawk's emitted shape, plus its field widths.
 
     Widths stay <= 64 so each field gets exactly one header and header ids line
@@ -177,7 +161,7 @@ def pipelines(draw, forward=False, mixed_peek=True, must_extract=False):
         # otherwise the --input-bits tests discard most of what they draw.
         extract = draw(st.integers(0, len(sizes) - 1) if must_extract
                        else st.one_of(st.none(), st.integers(0, len(sizes) - 1)))
-        key = draw(key_entries(sizes, mixed=mixed_peek))
+        key = draw(key_entries(sizes))
         nodes.append({
             "Extraction": None if extract is None else f"field_{extract}",
             "Tran_key": key,
@@ -346,22 +330,12 @@ def body(text):
     return [l for l in text.splitlines() if not l.startswith(";")]
 
 
-def has_chained_peek(nodes):
-    """Does some node's key mix a lookahead with anything else?
-
-    Such a key always spans more than one run -- a Peek run can never merge with
-    a header run -- so lower_table takes its chained path, where the known
-    peek-availability defect lives.  See test_known_peek_availability.
-    """
-    return any(any(e.strip().startswith("lookahead") for e in nd["Tran_key"])
-               and len(parse_key_ref(nd["Tran_key"])) > 1
-               for nd in nodes if nd["tran_logic"])
 
 
 # ---------------------------------------------------------------- properties
 
 @SETTINGS
-@given(pipelines(mixed_peek=False), st.lists(packets(), min_size=1, max_size=3))
+@given(pipelines(), st.lists(packets(), min_size=1, max_size=3))
 def test_differential(pipeline, pkts):
     """(1) The lowered parser agrees with the reference on every packet."""
     nodes, sizes = pipeline
@@ -389,7 +363,7 @@ def test_deterministic(pipeline):
 
 
 @SETTINGS
-@given(pipelines(forward=True, mixed_peek=False), st.lists(packets(), min_size=1, max_size=2))
+@given(pipelines(forward=True), st.lists(packets(), min_size=1, max_size=2))
 def test_unroll_is_noop_above_longest_path(pipeline, pkts):
     """(3) --input-bits N changes nothing once N covers the longest path.
 
@@ -410,7 +384,7 @@ def test_unroll_is_noop_above_longest_path(pipeline, pkts):
 
 
 @SETTINGS
-@given(pipelines(forward=True, mixed_peek=False, must_extract=True), st.data())
+@given(pipelines(forward=True, must_extract=True), st.data())
 def test_overrun_accepts_instead_of_rejecting(pipeline, data):
     """(6) Below the longest path, an extraction that would run off the end
     accepts rather than rejects -- ParserHawk treats it as a no-op that freezes
@@ -430,7 +404,7 @@ def test_overrun_accepts_instead_of_rejecting(pipeline, data):
 
 
 @SETTINGS
-@given(pipelines(mixed_peek=False), st.lists(packets(), min_size=1, max_size=2))
+@given(pipelines(), st.lists(packets(), min_size=1, max_size=2))
 def test_shadowed_rule_changes_nothing(pipeline, pkts):
     """(5) Rules are first-match, so a duplicate of an earlier rule can never be
     reached.  (An "unmatchable" rule is not expressible: lower_table masks val to
@@ -447,19 +421,18 @@ def test_shadowed_rule_changes_nothing(pipeline, pkts):
         assert run_ir(ir, pkt) == run_ir(r.stdout, pkt)
 
 
-# ---------------------------------------------------------------- known defect
+# ---------------------------------------------------------------- regression
 
-def test_known_peek_availability():
-    """CHARACTERISATION, not a specification.  DELETE THIS when the guard-state
-    fix lands -- it asserts behaviour we believe is WRONG.
+def test_peek_availability_agrees_across_paths():
+    """Whether an overrunning Peek rejects must not depend on bit ADJACENCY.
 
-    The IR reads every case of a select before matching any
-    (select_bits_available_concrete), so an overrunning Peek rejects.  But
-    lower_table only emits a single select when the cared bits form one run; a
-    key spanning two runs becomes a chain of one-case states, and a Peek in a
-    later link is never entered once an earlier link falls through.  Whether an
-    overrun rejects therefore depends on whether the key's bits happen to be
-    adjacent, which should not be semantically load-bearing.
+    lower_table emits one Select when every rule's cared bits form a single run,
+    and a chain of one-case states otherwise.  The IR checks availability over a
+    whole select (`select_bits_available_concrete`), so the one-Select form
+    rejects on an overrunning Peek -- while a chain scopes the check per state
+    and a Peek in a later link is never reached.  These two keys differ only by
+    an unrelated bit, which forces the chained path; `peek_guard` is what makes
+    them agree.
     """
     one = [{"Extraction": "field_0", "Tran_key": ["lookahead 1 "],
             "default_tran": 1, "tran_logic": [["val:1", "mask:1", "nxt:0"]]}]
@@ -467,4 +440,4 @@ def test_known_peek_availability():
             "default_tran": 1, "tran_logic": [["val:1", "mask:3", "nxt:0"]]}]
     pkt = [0, 0, 1, 1, 1, 0, 1, 1]          # 8 bits; the peek wants bit 9
     assert ir_to_result(run_ir(lowered(one, [8, 16]), pkt)) == "reject"
-    assert ir_to_result(run_ir(lowered(two, [8, 16]), pkt)) == ("accept", {0: 59})
+    assert ir_to_result(run_ir(lowered(two, [8, 16]), pkt)) == "reject"

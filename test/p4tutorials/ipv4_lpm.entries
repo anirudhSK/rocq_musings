@@ -1,0 +1,23 @@
+# Table entries for the ipv4_lpm programs -- basic.p4, ecn.p4, qos.p4.
+#
+# This is switch s1 of the tutorials' own triangle topology, transcribed from
+# exercises/basic/triangle-topo/s1-runtime.json rather than invented, so the
+# lowered programs correspond to a configuration the upstream tests use:
+#
+#   10.0.1.1/32 -> port 1, next hop 08:00:00:00:01:11   (the host on this switch)
+#   10.0.2.2/32 -> port 2, next hop 08:00:00:00:02:00   (via s2)
+#   10.0.3.3/32 -> port 3, next hop 08:00:00:00:03:00   (via s3)
+#
+# A runtime-populated table has no entries in its source and they cannot be
+# left to the control plane: a Ctrl variable is seeded per program, so two
+# programs being compared would get unrelated configurations and the solver
+# would satisfy "the outputs differ" by handing them different tables.  See
+# TODO.md 1.7.  Supplying them here makes both sides run the same switch.
+#
+# Order does not matter: entries are sorted by prefix length, since P4 resolves
+# an lpm table by longest prefix and a rule list resolves by order.
+#
+#   <table> <key>... -> <action> [<arg>...]
+ipv4_lpm 0x0a000101/32 -> ipv4_forward 0x080000000111 1
+ipv4_lpm 0x0a000202/32 -> ipv4_forward 0x080000000200 2
+ipv4_lpm 0x0a000303/32 -> ipv4_forward 0x080000000300 3

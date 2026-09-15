@@ -1,0 +1,7 @@
+# Entries for table_supplied.p4, saying what `const entries` says in
+# table_const.p4 -- the two have to lower to the same program.
+#
+#   <table> <key>... -> <action> [<arg>...]
+calc 1 -> do_add
+calc 2 -> do_sub
+calc 3 -> set 0xdeadbeef

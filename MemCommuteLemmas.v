@@ -21,8 +21,9 @@
       TODO 1.4 step 2 names.  It is self-contained: nothing about header maps,
       hence no side conditions.
 
-   2. A single op, [eval_hdr_op_assign_mem_commute], covering all six [HdrOp]
-      constructors including [LoadOp] and [StoreOp].
+   2. A single op, [eval_hdr_op_assign_mem_commute], covering all seven
+      [HdrOp] constructors including [LoadOp], [StatefulLoadOp] and
+      [StoreOp].
 
    3. An op list, [eval_hdr_op_list_mem_commute], by induction.
 
@@ -42,7 +43,8 @@
    It is also the granularity [ConcreteToSymbolicLemmas] already uses for
    headers and state variables, where the same merge shape forces the same
    choice.  Lifting either to whole-state equality is one job, at the module
-   level, not four; see TODO 1.1 item 5.
+   level, not four: [NetworkCommuteLemmas.pmap_ext] plus the shape lemmas
+   beside it do it once, for the transformer's module state.
 
    Level 2 was expected to need a whole-state header-map commutation, which
    today exists only per-key and behind an [is_varlike_in_ps] hypothesis.  It
@@ -337,8 +339,8 @@ Qed.
 (* ====================================================================== *)
 (* The op level: a single memory-threading assignment.                    *)
 (*                                                                        *)
-(* This is the lift the file header said was missing, and it turned out    *)
-(* to need nothing new about header maps after all: the two facts it       *)
+(* Level 2 of the five the header lists.  It needs nothing new about       *)
+(* header maps, contrary to what was expected: the two facts it            *)
 (* wants -- [HelperLemmas.commute_lookup_eval] for operands and            *)
 (* [ConcreteToSymbolicLemmas.commute_update_eval_varlike] for the write    *)
 (* back -- are both UNCONDITIONAL.  The [is_varlike_in_ps] side conditions *)

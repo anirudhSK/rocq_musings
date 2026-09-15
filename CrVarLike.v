@@ -513,8 +513,46 @@ Definition init_symbolic_parser_state_n (h : list Header) (n : nat) : SymbolicPa
       |}) (List.seq 0 n);
      p_cursor := 0 |}.
 
+(* A module-local name starts with a marker that no INPUT name starts with, so
+   the two namespaces are disjoint for every program prefix rather than only
+   for the ones this checker happens to pass.  See [SeedVar] below. *)
+Definition mod_mark : string := "$".
+
 Definition get_mod_prefix (prog_prefix : string) (m_id : ModuleName) : string :=
-  prog_prefix ++ "_m" ++ pos_to_string (unwrap m_id) ++ "_".
+  mod_mark ++ prog_prefix ++ "_m" ++ pos_to_string (unwrap m_id) ++ "_".
+
+(* --------------------------------------------------------------------- *)
+(* The free inputs of an initial network state, and their variable names.
+
+   Every free variable [init_general_symbolic_state] seeds is one of these
+   four, and this is the one place their names are built.  Collecting them
+   here is what makes the scheme auditable, because the names have to be
+   pairwise DISTINCT: two inputs the theorems treat as independent would
+   otherwise be one solver constant, and no valuation could give them
+   different values.  [InitReachable.v] proves distinctness by exhibiting an
+   inverse, and that is what [valid_is_reachable] rests on.
+
+   [SVHdr] and [SVPkt] are UNPREFIXED, deliberately: a header register and a
+   packet bit are shared INPUTS, and two programs being compared have to run
+   against the same ones or the query is vacuous.  [SVCtrl] and [SVState] are
+   each program's own internals and carry the program prefix.  A region's
+   contents are an input too, but they live in [sv_arrs], a namespace of its
+   own, so [region_name] needs only to be injective in itself. *)
+Inductive SeedVar : Type :=
+  | SVHdr   (h : positive)
+  | SVPkt   (i : positive)
+  | SVCtrl  (m v : positive)
+  | SVState (m v : positive).
+
+Definition seed_name (pf : string) (x : SeedVar) : string :=
+  match x with
+  | SVHdr h    => "hdr_" ++ pos_to_string h
+  | SVPkt i    => "pkt_" ++ pos_to_string i
+  | SVCtrl m v => get_mod_prefix pf (ModuleNameCtr m) ++ "ctrl_" ++ pos_to_string v
+  | SVState m v => get_mod_prefix pf (ModuleNameCtr m) ++ "state_" ++ pos_to_string v
+  end.
+
+Definition region_name (k : positive) : string := "mem_" ++ pos_to_string k.
 
 Definition init_sym_t_state (prog_prefix : string) (m_id : ModuleName) (p : CaracaraProgram)
   : SymbolicTransformerState :=
@@ -583,7 +621,7 @@ Definition seed_header_syms (hts : list (Header * CrIntType)) (hs : list Header)
     (fun acc h =>
        PMap.set (unwrap h)
          (match lookup_header_type hts h with
-          | Some ty => SmtCast u64 ty (SmtVarVal ("hdr_" ++ pos_to_string (unwrap h)))
+          | Some ty => SmtCast u64 ty (SmtVarVal (seed_name "" (SVHdr (unwrap h))))
           | None => SmtUninit
           end) acc)
     hs (PMap.init SmtUninit).
@@ -635,7 +673,7 @@ Definition collect_module_state_targets (m : CrModule) : list State :=
 Definition symbolic_input_bits (n : nat) : list (ConditionalVal SmtBoolExpr) :=
   List.map (fun i => {|
     cvc := SmtTrue;
-    cvv := SmtBoolVar ("pkt_" ++ pos_to_string (Pos.of_succ_nat i))
+    cvv := SmtBoolVar (seed_name "" (SVPkt (Pos.of_succ_nat i)))
   |}) (List.seq 0 n).
 
 (* Seed each declared region with a free array variable, and everything else
@@ -656,7 +694,7 @@ Definition init_symbolic_mem (rs : list MemRegionDecl) : PMap.t SmtArrExpr :=
   List.fold_left
     (fun acc d =>
       let k := unwrap (mr_id d) in
-      PMap.set k (SmtArrVar ("mem_" ++ pos_to_string k)
+      PMap.set k (SmtArrVar (region_name k)
                             (repr (Z.of_nat (mr_len d)))) acc)
     rs (PMap.init SmtArrInit).
 
@@ -676,6 +714,30 @@ Definition init_concrete_mem (rs : list MemRegionDecl) : PMap.t (@Array CrVal) :
 Definition empty_transformer_mod : SymbolicModuleState :=
   TransformerMod {| t_ctrl_map := PMap.init SmtUninit; t_header_map := PMap.init SmtUninit; t_state_map := PMap.init SmtUninit; |}.
   
+(* One module's state at the start of a run.  Lifted out of the fold in
+   [init_general_symbolic_state] so that the fold has the shape
+   [PMap.set (key m) (val m)], which is what lets [InitReachable] push
+   concretization through it in one step. *)
+Definition init_sym_mod_state (prog_prefix : string) (m : CrModule) : SymbolicModuleState :=
+  let prefix := get_mod_prefix prog_prefix (get_mod_name m) in
+  match m with
+  | ParserModule _ _ => ParserMod (init_symbolic_parser_state prefix)
+  | DeparserModule _ _ => DeparserMod (init_symbolic_parser_state prefix)
+  | TransformerModule _ s c _ =>
+      TransformerMod {|
+        t_ctrl_map := (SmtUninit, PTree_Properties.of_list (List.map (fun x => let x' := unwrap x in (x', SmtArithVar (seed_name prog_prefix (SVCtrl (unwrap (get_mod_name m)) x')))) c));
+        t_header_map := PMap.init SmtUninit;
+        (* [force_keys] over the rules' targets: seeded from the DECLARED
+           states, and then every state variable the transformer writes is
+           forced into the domain so [update_all_varlike] can see it.  See
+           the comment on [force_keys]; without it a write to an undeclared
+           state variable is dropped symbolically and kept concretely. *)
+        t_state_map := force_keys
+          (List.map unwrap (collect_module_state_targets m))
+          (SmtUninit, PTree_Properties.of_list (List.map (fun x => let x' := unwrap x in (x', SmtArithVar (seed_name prog_prefix (SVState (unwrap (get_mod_name m)) x')))) s));
+      |}
+  end.
+
 Definition init_general_symbolic_state
   (prog_prefix : string)
   (p : GeneralCaracaraProgram)
@@ -694,28 +756,7 @@ Definition init_general_symbolic_state
     sh_mem := init_symbolic_mem (get_mem_regions_from_general p);
     sh_mem_extent := PMap.init (SmtArithConst (mask_width W64 0) u64);
     mod_states := List.fold_left
-      (fun acc m =>
-        let m_key := unwrap (get_mod_name m) in
-        let prefix := get_mod_prefix prog_prefix (get_mod_name m) in
-        match m with
-        | ParserModule _ _ =>
-          PMap.set m_key (ParserMod (init_symbolic_parser_state prefix)) acc
-        | DeparserModule _ _ =>
-          PMap.set m_key (DeparserMod (init_symbolic_parser_state prefix)) acc
-        | TransformerModule _ s c _ =>
-          PMap.set m_key (TransformerMod {|
-            t_ctrl_map := (SmtUninit, PTree_Properties.of_list (List.map (fun x => let x' := unwrap x in (x', SmtArithVar (prefix ++ "ctrl_" ++ pos_to_string x'))) c));
-            t_header_map := PMap.init SmtUninit;
-            (* [force_keys] over the rules' targets: seeded from the DECLARED
-               states, and then every state variable the transformer writes is
-               forced into the domain so [update_all_varlike] can see it.  See
-               the comment on [force_keys]; without it a write to an undeclared
-               state variable is dropped symbolically and kept concretely. *)
-            t_state_map := force_keys
-              (List.map unwrap (collect_module_state_targets m))
-              (SmtUninit, PTree_Properties.of_list (List.map (fun x => let x' := unwrap x in (x', SmtArithVar (prefix ++ "state_" ++ pos_to_string x'))) s));
-          |}) acc
-        end)
+      (fun acc m => PMap.set (unwrap (get_mod_name m)) (init_sym_mod_state prog_prefix m) acc)
       (net_modules (get_network_from_general p))
       (PMap.init empty_transformer_mod);
     gps_valid := {| cvc := SmtTrue; cvv := SmtTrue |};

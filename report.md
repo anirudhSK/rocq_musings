@@ -367,10 +367,24 @@ be adjacent. Bit adjacency is not supposed to be semantically load-bearing.
 
 ### How to fix it
 
-Emit a leading guard state whose select carries every `Peek` origin from that
-node's rules, with all case targets equal to the chain head. Matching is then
-irrelevant and only the availability check survives, restoring the all-cases-first
-semantics regardless of how the key splits.
+**Fixed.** `lower_table.peek_guard` emits a leading state whose select carries
+every `Peek` origin from that node's rules, with the cases *and* the default all
+targeting the chain head. The match is therefore irrelevant and only the
+availability check survives, restoring all-cases-first semantics however the key
+splits. It is zero-width, so the cursor its offsets are measured from is
+unchanged. Both sides of the reduced case above now reject, and the property
+tests exercise chained keys containing a `Peek` without the exclusion they
+previously needed.
+
+This makes the lowering **self-consistent**; it does not make it faithful to
+ParserHawk, whose lookahead loop drops an out-of-range bit from the key rather
+than rejecting. The IR cannot express that with `Peek` as it stands — availability
+is baked into `eval_transition_concrete`. Matching it would mean eliding the bit
+statically inside `unroll_by_cursor`, which knows the cursor and so knows which
+lookaheads overrun; dropping an entry shifts every other bit's position, so
+`val`/`mask` would have to be re-derived per configuration. That remains open, and
+it is the last place where our lowering differs from ParserHawk by construction
+rather than by accident.
 
 ## What the two have in common
 

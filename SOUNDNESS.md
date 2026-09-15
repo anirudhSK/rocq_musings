@@ -11,11 +11,16 @@ There are two checkers.
 | Checker | Where | Compares | Status |
 |---|---|---|---|
 | `equivalence_checker_cr_dsl` (one transformer) | `SmtQuery.v` | final headers + state vars | **PROVEN (Qed)** — `equivalence_checker_cr_sound`, `equivalence_checker_cr_complete` |
-| `modnet_equivalence_checker` (a network) | `SmtModuleQuery.v` | accept flag, output packet, bits read, memory contents, memory access extents | **PROVEN (Qed)** — `_sound` and `_complete` |
+| `modnet_equivalence_checker` (a network) | `SmtModuleQuery.v` | accept flag, output packet, bits read, memory contents | **PROVEN (Qed)** — `_sound` and `_complete` |
 
-**There are no admits left in the project** (`grep -c Admitted *.v`). That is a statement
-about proof debt only; the model debt below is untouched by it, and so is the gap between
-the symbolic and concrete semantics described next.
+**There are no admits left in the project** (`grep -c Admitted *.v`). `Print Assumptions`
+on `modnet_equivalence_checker_sound` reports exactly `smt_query` and
+`smt_query_sound_none`, and on `_complete` exactly `smt_query` and `smt_query_sound_some` —
+one solver axiom per direction and nothing else.
+
+That is a statement about proof debt only. The model debt below is untouched by it: the
+semantics still assumes a linear chain, `Par` still has no parallel semantics, and the
+front end that produces these programs is outside this tree and unverified.
 
 ## Trust assumptions
 
@@ -66,15 +71,39 @@ encoding relation between two valuations to get right, which a separate core dat
 have needed. `SmtVarVal`/`SmtVarTag` buy that by splitting a scalar in the syntax rather
 than in the valuation.
 
-**`compile_correct` is `Admitted`.** So this reduces and relocates the trust; it does not
-discharge it. What is gained is real but should be stated precisely:
+**`compile_correct` is `Qed`**, and `Print Assumptions` on it reports *Closed under the
+global context* — it depends on no axiom, not even the solver parameters, since it is a
+statement about two `eval_smt_*` runs and nothing else. So the trust that used to sit in
+254 lines of OCaml is now discharged, not merely relocated. What is left on that boundary
+is `Z3Solver.ml`'s transliteration of the core fragment into Z3 — structural, one Z3
+constructor per node, with three documented exceptions (`SmtArrEq`, `SmtBitDiv`,
+`SmtBitSlice`) each of which says why, and a raise rather than a guess when a non-core
+constructor reaches it.
 
-- the transformation is now written in a language with a semantics, against the definitions
-  it has to agree with, instead of from memory in OCaml;
-- the obligation is one statement instead of diffuse across 254 lines;
-- `Z3Solver.ml`'s lowering is structural — one Z3 constructor per node — with three
-  documented exceptions (`SmtArrEq`, `SmtBitDiv`, `SmtBitSlice`), each of which says why;
-- a non-core constructor reaching the lowering raises rather than being lowered on a guess.
+Two things about the proof are worth knowing, because they are what a change to
+`SmtCompile.v` has to keep true.
+
+**The induction carries more than the statement says.** `compile_correct` concludes that
+the two halves are words; the induction (`reps`) concludes that the TAG half is one of the
+six tags, `0..5`. That is load-bearing rather than tidy: `mk_cell` sends every tag outside
+`1..5` to `ErrorVal`, so without the bound two *different* tags could stand for the same
+`CrVal` — and the compiled `SmtBoolEq`, which decides `CrVal.eqb` by comparing tags, would
+answer `false` where `eqb` answers `true`. Every case that builds a tag has to land in
+range; the ones that pass a tag through (`SmtBitNot`) or read one (`SmtArrSel`, via
+`CrVal.tag_of`) get it from the invariant.
+
+**Three compiler cases had to be guarded to make the statement true**, and it was the proof
+that found them. `SmtCellVal`, `SmtCellTag` and `SmtStCell` are core in their value but not
+in their INDEX, and the old compilation dropped the index's tag. `CrVal.cell_at` is
+`ErrorVal` on an index that does not denote an integer — the source term reads no cell —
+while the compiled index is a word and reads cell 0. On a region whose cell 0 is a byte,
+`SmtCellTag a SmtUninit` denotes tag 0 and its old compilation denotes tag 2 (checked by
+computation). `st_cell` has the same shape, on the index and on both of the operands it
+reads through `val_of`. Each now carries the `is_int_tag` guard `SmtArrSel` always had.
+This is dead code in practice and the fixtures are unchanged: those three constructors are
+`SmtCompile`'s own output and appear in no source query, where the index is always core and
+the guard always true. The theorem quantifies over every expression, so the branch still
+has to be right.
 
 **The side constraints are gone**, and with them a real gap. `solve` used to assert the
 goal *alongside* assumptions about the model — a region's cells being bytes, a scalar's tag
@@ -93,17 +122,17 @@ proves it true under every `SmtValuation`, which is what makes conjoining it
 axiom-preserving; `compile_query_correct` puts the two halves together. `solve` now asserts
 precisely the formula the axioms are stated about.
 
-What remains outside: `compile_correct` itself, and the `SmtArrEq` extensionality argument
-(below, unchanged).
+What remains outside: the `SmtArrEq` extensionality argument (below, unchanged).
 
 `compile_correct` assumes `lcb`: every array merge joins regions of equal declared length,
 which is what makes the syntactic `smt_arr_len` agree with the denoted `arr_len`. It holds
 of everything the checker builds (`eval_general_program_symbolic_mem_rooted`), and `solve`
 checks it and refuses the query otherwise.
 
-The empirical guard is `TestEquality`'s `witness:` tests: they solve a hand-built
-`SmtBoolExpr` and re-check Z3's model against `eval_smt_bool` of the **original** term.
-Since `solve` compiles internally, that is `compile_bool_correct` tested end to end.
+`TestEquality`'s `witness:` tests — solve a hand-built `SmtBoolExpr` and re-check Z3's
+model against `eval_smt_bool` of the **original** term — are no longer the guard on
+`compile_bool` itself, which is proved. They now test what is left: the lowering, and
+`solve`'s own plumbing around it. Keep them for that.
 
 ## What equivalence means
 
@@ -113,15 +142,45 @@ Two runs of a network agree when either both rejected, or both accepted and
   bit values, so differing output *lengths* count as differing);
 - they read the same number of input bits (`check_sym_bits_read`);
 - every declared memory region holds the same contents over its declared length
-  (`check_sym_mem_equal`, one `SmtArrEq` per region);
-- they required the same number of bytes of every declared region
-  (`check_sym_mem_extent`, one past the highest offset touched).
+  (`check_sym_mem_equal`, one `SmtArrEq` per region).
 
-The last two arrived with the memory merge. Contents are compared because a region is an
-observable side effect — it is how a program talks to a map or to its caller's buffer —
-unlike a header, which is internal scratch. Extents are compared for the same reason
-`sh_bits_read` is: a program that reaches further into a region needs more of it to be
-there, so it can fault where the other does not, even when everything else matches.
+Contents are compared because a region is an observable side effect — it is how a program
+talks to a map or to its caller's buffer — unlike a header, which is internal scratch.
+
+**Access extents are deliberately NOT compared**, and this list used to have a fourth
+entry that compared them (`check_sym_mem_extent`, one past the highest offset touched per
+region). The rationale was the one `sh_bits_read` has: a program reaching further into a
+region needs more of it to be there, so it could fault where the other does not. That does
+not survive the region model, and the conjunct cost real precision.
+
+*It cannot separate a fault.* Region lengths are declared and static, and a run that
+reaches past one is rejected by `mem_extents_in_bounds_smt`, conjoined into `gps_valid`.
+Every conjunct in the list above sits inside `check_sym_pkt_out`'s **both-valid** branch,
+so by the time any of them is consulted both runs are already known to have stayed inside
+every declared region. Neither can fault. The fault story is `gps_valid`'s entirely.
+
+*It is not otherwise observable.* Contents are already compared cell by cell over the
+whole declared length, and the tapes beside them. Two both-valid runs agreeing on all of
+that but differing in extent differ in nothing this semantics can see: no timing channel,
+and within a declared region no fault.
+
+*It cost the primary workload.* A dead load, a load hoisted out of a branch, a speculated
+load — all behaviour-preserving, all change the extent. With the conjunct in place the
+checker reported `NotEquivalent` for dead-load elimination; `TestEquality`'s "mem: a dead
+load is not observable" is that exact pair. For a map region it was worse: the extent is
+measured in the transpiler's chosen layout (presence bytes, then values), so the verdict
+depended on a modelling artefact rather than on either source program.
+
+*When it would earn its place back.* If a region's length ever becomes **dynamic** — which
+for XDP it morally is, `data_end` being a runtime value — then how far a run read is
+observable again, as a fault condition. What that wants is each extent compared against
+the symbolic length, not the two extents compared against each other. `sh_mem_extent`
+stays in the state for that reason as well as for `mem_extents_in_bounds`: the bookkeeping
+was right, only the criterion was wrong.
+
+Note the direction of this change: dropping a conjunct makes the checker **more
+permissive**, normally the dangerous direction. It is safe here precisely because the
+models it ruled out differ in nothing observable, and because fault detection is untouched.
 
 **"Both rejected" is an accepting case.** That makes the checker only as good as its notion
 of validity: any imprecision in `gps_valid`, in *either* direction, is unsound.
@@ -181,6 +240,76 @@ equivalent to any other that does. It is easy to write two "equivalent" programs
 both simply broken. `TestModuleSemantics` therefore checks concrete outputs, contents and
 extents, not only checker verdicts.
 
+## Which concrete initial states the results are about
+
+Both network lemmas quantify over `c_i = concretize_sym_modnet_state s_i f` — the
+concretization of the initial symbolic state under a valuation. That invites the question
+of whether those are a thin slice of the concrete initial states or all of the sensible
+ones. `InitReachable.v` answers it: **they are exactly the sensible ones**, and
+`valid_iff_reachable` (**`Qed`**, `Closed under the global context`) says so.
+
+The shape of that statement took two tries, and the first one is instructive. Validity used
+to be a predicate listing sanity facts about a concrete state — regions hold bytes, nothing
+has run yet — with `reachable_if_valid` asserting that every such state is a concretization,
+admitted. **That shape was not provable, and no amount of tightening the list would have
+fixed it.**
+A predicate of that shape can only speak pointwise about the maps in a state, while the
+conclusion is an equality of records, and `PMap` is not extensional: `PMap.set k v m` and
+`m` read the same at every key when `v` is what `k` already held, and differ as trees. Every
+concretization of an initial state has the *empty* tree in `sh_mem_extent` (the seed is
+`PMap.init`, and `PMap.map` is `PTree.map1`, which preserves `Empty`), so a valid state with
+any other tree there sat outside the image whatever the predicate said.
+
+So validity is now **defined rather than described**. `InitInputs` is the five families of
+free input — header registers, packet bits, region contents, and each module's ctrl and
+state variables — each held *raw*, with the initializer applying the same normalizer the
+symbolic side does (`mk_int ty ∘ val_of` for a header, `region_of_bytes` for a region,
+`as_int` for a variable, `as_bit` for a packet bit). `init_general_concrete_state_with p ii`
+is the concrete initial state those inputs determine, and a state is valid when it is one of
+those. Two theorems make that the right definition:
+
+```coq
+Theorem init_concretize_eq : forall p pf f,       (* every concretization is a builder state *)
+  concretize_sym_modnet_state (init_general_symbolic_state pf p) f
+  = init_general_concrete_state_with p (inputs_of pf f).
+
+Theorem valid_is_reachable : forall p pf ci,      (* and every builder state a concretization *)
+  concrete_gp_state_valid p ci ->
+  exists f, ci = concretize_sym_modnet_state (init_general_symbolic_state pf p) f.
+```
+
+Three things about it are worth knowing.
+
+**The conclusion is an equation, not a pointwise agreement**, and that is what makes it
+usable: it rewrites straight into `modnet_equivalence_checker_sound`, which is already
+stated over `c_i = concretize_sym_modnet_state s_i f`, with no congruence lemma for
+`eval_general_program_concrete` needed. It survives because concretization commutes with
+every fold the initializer is built from (`pmap_map_set`, `pmap_map_fold`, `pmap_map_force`,
+`ptree_map1_of_list`), and those hold because `PTree` is the canonical CompCert tree with
+`PTree.extensionality`.
+
+**Realizability is where the naming scheme is audited.** Building a valuation that realizes
+an arbitrary choice of inputs means answering at every name at once, and answering correctly
+at a header without disturbing a packet bit or a module's ctrl entry is precisely the claim
+that the four families of seeded names are pairwise distinct. `seed_parse_name` — an inverse
+for `CrVarLike.seed_name` — is that claim, and it gives injectivity and disjointness in one.
+Every seeded name is now built in one place (`CrVarLike.SeedVar`/`seed_name`), and a
+module-local name starts with `mod_mark` (`$`), which no input name does, so the shared and
+module-local namespaces separate for *every* program prefix rather than only for the ones
+this checker happens to pass.
+
+**The pair version is the one that plugs into the checker.**
+`modnet_equivalence_checker_sound` quantifies over one valuation and both programs' initial
+states — that is the formal content of "the two programs are compared on the same input" —
+so `valid_is_reachable_pair` gives one valuation realizing a choice of inputs for each,
+given that the two agree on the shared inputs (headers, packet, regions) and that the two
+prefixes name different module-local variables (`prefixes_disjoint`, which holds by
+computation for the `"p1"`/`"p2"` the checker uses).
+
+The facts the old predicate asserted are now consequences rather than hypotheses:
+`valid_regions_hold_bytes`, `valid_bits_read`, `valid_extent_zero`, `valid_write_tape`,
+`valid_read_tape_len`, `valid_gps_valid`.
+
 ## Proof debt
 
 Both network lemmas are proved. What remains is not a missing lemma but a missing
@@ -205,6 +334,49 @@ That second gap is `ConcreteToSymbolicLemmas.v`'s subject at the transformer lev
 the induction over `eval_network_from_*` that assembles them, which is the single
 admitted lemma `eval_general_program_commute`. TODO.md 1.1 item 5 has the shape it has
 to take.
+
+**The bridge is proved** — `NetworkCommuteLemmas` (`program_commute_full`, then
+`program_commute_init`), and `SmtModuleQuery.eval_general_program_commute` is `Qed` and
+axiom-free. So the symbolic-to-concrete gap is closed for the states the checker passes,
+and `modnet_equivalence_checker_sound` now relates its verdict to **concrete execution**.
+
+**Its statement had to change, and the change is forced rather than convenient.** The
+lemma used to quantify over an arbitrary symbolic state `s`, and over an arbitrary `s` it
+is **false**. Give `s` a read tape whose first position is absent under `f` and whose
+second is present, and hand it to a parser that extracts one bit: the concrete run sees
+`present_bits` of that tape — one bit — reads it and *accepts*, while the symbolic run
+conjoins the presence of position 0 into its guard and *rejects*. The two `gps_valid`s
+then differ, which is exactly the conjunct the lemma asserts. It is now stated for
+`s = init_general_symbolic_state pf p`, and carries `well_formed_general_program p` and
+`is_linear_chain p` — both of which `modnet_equivalence_checker_sound` already had, so
+its proof only passes them through. **This finally gives those two hypotheses a use**;
+earlier revisions of this document recorded that neither direction needed them.
+
+Three things in the development are worth knowing, because each is a place a plausible
+statement would have been false.
+
+Three things in that development are worth knowing, because each is a place a plausible
+statement would have been false.
+
+**Rejection is absorbing, and that is what makes the invariant inductive.** After a
+rejection the two runs genuinely diverge and `eval_parser_commute` no longer applies,
+so the accept flags cannot be shown to *agree* there — only to be jointly false. Every
+writer of the flag conjoins, on both sides, which is exactly enough to carry the verdict
+half of the bridge through the modules that run after a rejection.
+
+**Module-state DOMAIN agreement is not a strong enough invariant; KIND agreement is.**
+Both `module_update_gs_*` dispatch on the module kind and the stored state's kind
+together, and take a fallback branch that writes nothing when they disagree — so two
+sides holding different kinds at one key would have one store its result and the other
+not, after which the domains come apart and the two runs can disagree about whether the
+network completes at all. `ms_kind_agree` is what is actually preserved, and its
+preservation is where `well_formed_parser` earns its place: on a rejecting run the
+concrete parser must still return `Some`.
+
+**A deparser is handed a packet the two sides disagree about.** The read tape
+concretizes through `present_bits`, a filter, while `concretize_sym_module_state`'s
+`DeparserMod` branch maps positionally. The case goes through only because a deparser
+reads nothing but its header map.
 
 Its conclusion is `gps_agree`, which is structural equality on every field of a
 `GeneralConcreteState` **except the two memory maps, compared pointwise**. That is not a

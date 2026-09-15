@@ -43,10 +43,29 @@ let mask_to ctx (bits : int) (ze : Z3.Expr.expr) : Z3.Expr.expr =
 let mk_tag ctx (n : int) = Z3.BitVector.mk_numeral ctx (string_of_int n) tag_bits
 let tag_eq ctx t n = Z3.Boolean.mk_eq ctx t (mk_tag ctx n)
 
-let cell_bits = tag_bits + 64
-let pack_cell ctx v t = Z3.BitVector.mk_concat ctx t v
-let cell_value ctx c = Z3.BitVector.mk_extract ctx 63 0 c
-let cell_tag ctx c = Z3.BitVector.mk_extract ctx (cell_bits - 1) 64 c
+(* A region cell holds a BYTE, so its value field is eight bits wide, not
+   sixty-four.  [CrVal.st_arr] and [CrVal.st_cell] put every stored value
+   through [CrVal.to_cell] -- an integer of any width is masked into a byte and
+   the two non-integers pass through -- so this encoding is exact rather than
+   an abstraction, and [CrVal.to_cell_byte_of_val] is the proof that no
+   reachable store is affected.
+
+   [pack_cell] mirrors [to_cell] on the tag as well as the value: [to_cell]
+   sends an [IntVal] of ANY width to a [u8], so a tag of 2..5 becomes 2, while
+   [UninitVal] (1) and [ErrorVal] (0) pass through.  Getting that wrong would
+   leave the lowering claiming a cell is a [u64] whose value had been truncated
+   to eight bits, which is not a [CrVal] the semantics can produce. *)
+let val_bits = 8
+let cell_bits = tag_bits + val_bits
+let pack_cell ctx v t =
+  let is_int = Z3.BitVector.mk_uge ctx t (mk_tag ctx 2) in
+  let t' = Z3.Boolean.mk_ite ctx is_int (mk_tag ctx (ty_tag CrVal.W8)) t in
+  Z3.BitVector.mk_concat ctx t' (Z3.BitVector.mk_extract ctx (val_bits - 1) 0 v)
+let cell_value ctx c =
+  Z3.BitVector.mk_zero_ext ctx (64 - val_bits)
+    (Z3.BitVector.mk_extract ctx (val_bits - 1) 0 c)
+let cell_tag ctx c =
+  Z3.BitVector.mk_extract ctx (cell_bits - 1) val_bits c
 
 module PhysTbl = Hashtbl.Make (struct
   type t = Obj.t
@@ -445,12 +464,19 @@ let sat_check ctx solver tracked_vars =
       SmtTypes.SmtSat (Shim.mk_valuation valuations arrays))
     | None -> raise (Failure "Z3 returned SAT, but no valuation."))
 
+(* The phase marks are [SolveTime]'s; see that module for why the build and the
+   solve are worth separating.  They cost a [gettimeofday] apiece. *)
 let solve (expr : SmtExpr.coq_SmtBoolExpr) =
+  let clk = ref (SolveTime.now ()) in
   if Stdlib.not (length_consistent expr) then
     raise (Failure "Z3Solver.solve: query is not length-consistent (an array \
                     merge joins regions of different declared lengths); \
                     SmtCompile.compile_bool is not sound on it");
+  SolveTime.add_lcb clk;
+
   let core = compile_core expr in
+  SolveTime.add_compile clk;
+
   let ctx = mk_context [] in
   let solver = Solver.mk_solver ctx None in
   let tracked_vars = ref StringMap.empty in
@@ -458,9 +484,18 @@ let solve (expr : SmtExpr.coq_SmtBoolExpr) =
   let core =
     SmtExpr.SmtBoolAnd
       (SmtCompile.regions_wf (Shim.coq_list_of_list !arr_decls), core) in
+  (* Measure the term that is about to be lowered.  No-op unless
+     [SmtSize.enabled]; see the header comment there for why it is off by
+     default on the timed path. *)
+  SmtSize.record core;
+  SolveTime.add_collect clk;
+
   reset_lowering_memo ();
   tag_vars := StringMap.empty;
   let z3_expr = lower_bool core ctx tracked_vars in
   Solver.add solver [z3_expr];
+  SolveTime.add_lower clk;
 
-  sat_check ctx solver tracked_vars
+  let r = sat_check ctx solver tracked_vars in
+  SolveTime.add_solve clk;
+  r

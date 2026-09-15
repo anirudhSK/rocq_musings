@@ -140,6 +140,34 @@ Definition to_byte (c : MemVal CrVal) : MemVal CrVal :=
   | _ => Init (mk_int u8 0)
   end.
 
+(* What a STORE puts in a cell.
+
+   A region is an array of bytes, and every reachable store already respects
+   that: [st_val] writes [byte_of_val], which ends in [cast u64 u8] and so
+   yields an [IntVal] of width [u8] with its bits already masked, or
+   [ErrorVal].  [st_arr] and [st_cell] below nonetheless took an arbitrary
+   [CrVal], so the invariant held by reachability rather than by construction
+   -- nothing in the type ruled out a [u64] sitting in one cell.
+
+   [to_cell] makes it hold by construction: an integer of any width is masked
+   into a byte, and the two non-integers pass through (a cell may be [ErrorVal]
+   from a poisoned store, and an unwritten cell reads as [UninitVal]).  It is
+   the IDENTITY on everything a reachable store can produce, so no program's
+   behaviour changes -- see [to_cell_byte_of_val] below.
+
+   What it buys is in the solver.  A cell's value field only ever needs eight
+   bits, so [Z3Solver] can encode a cell in [tag_bits + 8] rather than
+   [tag_bits + 64], and the "value < 256" half of [SmtCompile.cell_is_byte]
+   becomes true by construction at every index instead of being asserted at
+   each one.  That conjunct was 99.8% of the solve time on a memory-heavy
+   program. *)
+Definition to_cell (v : CrVal) : CrVal :=
+  match v with
+  | IntVal b _ => mk_int u8 (unsigned b)
+  | UninitVal => UninitVal
+  | ErrorVal => ErrorVal
+  end.
+
 (* A region variable's denotation: the declared length, and byte contents. *)
 Definition region_of_bytes (len : uint64) (a : @Array CrVal) : @Array CrVal :=
   Allocated {| arr_len := len; arr_bytes := PMap.map to_byte (region_bytes a) |}.
@@ -237,7 +265,7 @@ Definition st_arr (a : Array) (i : CrVal) (v : CrVal) : Check_T Array :=
     if (Integers.ltu idx (arr_len array)) then
       Legal (Allocated {|
         arr_len := arr_len array;
-        arr_bytes := PMap.set (offset_to_key idx) (Init v) (arr_bytes array);
+        arr_bytes := PMap.set (offset_to_key idx) (Init (to_cell v)) (arr_bytes array);
       |})
     else
       Illegal
@@ -378,7 +406,7 @@ Definition st_cell (a : @Array CrVal) (i : CrVal) (v : CrVal) : @Array CrVal :=
   match a, i with
   | Allocated b, IntVal idx _ =>
       Allocated {| arr_len := arr_len b;
-                   arr_bytes := PMap.set (offset_to_key idx) (Init v) (arr_bytes b) |}
+                   arr_bytes := PMap.set (offset_to_key idx) (Init (to_cell v)) (arr_bytes b) |}
   | _, _ => a
   end.
 
@@ -501,6 +529,47 @@ Proof.
     apply Z.mod_mod_divide;
     [ exists (2 ^ 56)%Z | exists (2 ^ 48)%Z | exists (2 ^ 32)%Z | exists 1%Z ];
     vm_compute; reflexivity.
+Qed.
+
+(* Masking at a width, reading the bits back out, and masking again at the same
+   width is the identity.  [mask_width_W64_unsigned_idem] is the [W64] case;
+   the cell normalisation below needs it at [W8]. *)
+Lemma mask_width_unsigned_idem : forall w z,
+  mask_width w (unsigned (mask_width w z)) = mask_width w z.
+Proof.
+  intros w z.
+  assert (Hmod : @modulus 64%positive = (2 ^ 64)%Z) by (vm_compute; reflexivity).
+  unfold mask_width, width_bits in *.
+  destruct w; f_equal;
+    rewrite !Z.land_ones by lia;
+    rewrite unsigned_repr_eq, Hmod;
+    (rewrite (Zmod_small (z mod _) (2 ^ 64));
+     [ apply Z.mod_mod_divide; exists 1%Z; ring
+     | split;
+       [ apply Z.mod_pos_bound; lia
+       | eapply Z.lt_le_trans; [ apply Z.mod_pos_bound; lia | ];
+         apply Z.pow_le_mono_r; lia ] ]).
+Qed.
+
+(* [to_cell] is the identity on a value that is already a byte. *)
+Lemma to_cell_mk_int_u8 : forall z, to_cell (mk_int u8 z) = mk_int u8 z.
+Proof.
+  intro z. unfold to_cell, mk_int, u8. simpl.
+  f_equal. apply mask_width_unsigned_idem.
+Qed.
+
+(* The statement that makes the cell normalisation free: [to_cell] is the
+   IDENTITY on everything [byte_of_val] produces, and [st_val] -- the only way
+   the IR reaches [st_arr] -- passes it nothing else.  So no reachable store
+   stores anything different than it did before [to_cell] was introduced, and
+   no program's behaviour changes. *)
+Lemma to_cell_byte_of_val : forall v i,
+  to_cell (byte_of_val v i) = byte_of_val v i.
+Proof.
+  intros v i. unfold byte_of_val, cast.
+  destruct (slice_val (8 * i) (8 * i + 8) v) eqn:Hs; try reflexivity.
+  destruct (crinttype_eqb ity u64) eqn:Hty; try reflexivity.
+  apply to_cell_mk_int_u8.
 Qed.
 
 (* A [u64] value cast to [ty] is the same value built at [ty] directly.  This

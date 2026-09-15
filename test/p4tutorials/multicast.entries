@@ -1,0 +1,14 @@
+# Table entries for multicast.p4, switch s1 of the tutorials' own sig-topo
+# (exercises/multicast/sig-topo/s1-runtime.json): four hosts, each reached by
+# its MAC on the port of the same number.  A destination not listed here falls
+# through to the table's default action, which is `multicast`.
+#
+# Note what the lowering does NOT model: `multicast` sets mcast_grp, and the IR
+# has one packet in and one packet out, so the field is written and nothing is
+# replicated.  See the rocq README's refusal list.
+#
+#   <table> <key>... -> <action> [<arg>...]
+mac_lookup 0x080000000111 -> mac_forward 1
+mac_lookup 0x080000000222 -> mac_forward 2
+mac_lookup 0x080000000333 -> mac_forward 3
+mac_lookup 0x080000000444 -> mac_forward 4
