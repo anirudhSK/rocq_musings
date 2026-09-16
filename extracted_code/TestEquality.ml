@@ -178,8 +178,10 @@ let%expect_test "tss fuzz: the random databases classify something" =
    some packet matches two filters with different labels.  Unlike the relabel
    control this is a COVERAGE NUMBER rather than a pass/fail -- a database
    whose filters happen not to overlap legitimately does not notice -- which is
-   why it is pinned as a count.  It is 10 here because [random_db] builds about
-   half of each database's filters around one shared witness packet; drop that
+   why it is pinned as a count.  Two things in [random_db] hold it up: about
+   half of each database's filters are built around one shared witness packet,
+   and the tuple shapes come from a pool of at most [ceil (sqrt nfilters)] so
+   several filters share a table while others do not.  Drop the shared witness
    and it falls towards zero while every other test in this file still
    passes. *)
 let%expect_test "tss fuzz: precedence is what is being compared" =
@@ -187,8 +189,8 @@ let%expect_test "tss fuzz: precedence is what is being compared" =
     PktClassFuzz.run_precedence_probe ~seed:1 ~count:24
       ~sizes:[| 0; 1; 2; 3; 4; 5 |] () in
   Printf.printf "%d of 24 databases exercise precedence\n" flipped;
-  (* 8 of the 24 hold 0 or 1 filter and cannot, so this is 10 of 16. *)
-  [%expect {| 10 of 24 databases exercise precedence |}]
+  (* 8 of the 24 hold 0 or 1 filter and cannot, so this is 11 of 16. *)
+  [%expect {| 11 of 24 databases exercise precedence |}]
 
 (* Test 14: bitstream-I/O equivalence.  A parse->deparse pipeline is equivalent
    to itself over any 16-bit input packet: the deparser re-emits exactly the

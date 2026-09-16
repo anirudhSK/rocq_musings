@@ -37,7 +37,14 @@
    and see the Generation section), and about half of each database's filters
    share one witness so that precedence is exercised ([reprioritise]).  Neither
    probe is decoration -- the first version of this generator satisfied neither
-   and every one of its Equivalent verdicts was vacuous. *)
+   and every one of its Equivalent verdicts was vacuous.
+
+   One thing here is a COST control rather than a property of the databases: a
+   filter's tuple shape is drawn from a pool of at most [ceil (sqrt nfilters)],
+   so a database of n filters occupies at most that many tables rather than n.
+   The query grows quadratically in the TABLE count and only linearly in the
+   filter count, so without the bound a campaign pays for the table count and
+   measures the filter count.  See [shape_pool]. *)
 
 open BinNums
 open Datatypes
@@ -111,12 +118,9 @@ let f_protocol = {
   fs_consts = [| 0; 1; 6; 17; 255 |];
 }
 
-(* How many conditions one field gets.  A field's LENGTH is what [GetTuple]
-   hashes on, so this distribution decides how often two filters land in the
-   same tuple-space table (where precedence is intra-table first-match) and how
-   often they land in different ones (where the merger has to arbitrate).
-   Weighted towards 1 so collisions are common; 0 and 2 keep the shapes
-   varied. *)
+(* How many conditions one field gets.  Weighted towards 1, with 0 and 2 to
+   keep the shapes varied.  This is drawn per SHAPE, not per filter -- see
+   [shape_pool]. *)
 let field_lengths = [| 0; 1; 1; 1; 2; 2 |]
 
 (* Mostly CmpEq -- exact match is what a tuple-space classifier is for -- with
@@ -192,9 +196,12 @@ let gen_cond (r : rng) (w : int array) (ix : int)
   (Coq_pair (Coq_pair (fs.fs_hdr, cmp), mv),
    { cd_cmp = cmp_str cmp; cd_rhs = rhs })
 
-let gen_field (r : rng) (w : int array) (ix : int) : coq_MatchPattern * string =
+(* [n] conditions on field [ix], all satisfied by [w].  The COUNT is supplied
+   by the caller rather than drawn here: it is what [GetTuple] hashes on, so it
+   belongs to the filter's shape and not to this field. *)
+let gen_field (r : rng) (w : int array) (ix : int) (n : int)
+  : coq_MatchPattern * string =
   let fs = fields.(ix) in
-  let n = rng_pick r field_lengths in
   let conds = mk_list n (fun _ -> gen_cond r w ix) in
   let doc =
     Stdlib.String.concat ";"
@@ -202,14 +209,15 @@ let gen_field (r : rng) (w : int array) (ix : int) : coq_MatchPattern * string =
   (Shim.coq_list_of_list (Stdlib.List.map (fun (c, _) -> c) conds),
    "[" ^ doc ^ "]")
 
-(* One filter, at an already-chosen (distinct) priority, around witness [w]. *)
-let gen_filter (r : rng) (prio : int) (w : int array)
+(* One filter, at an already-chosen (distinct) priority, around witness [w] and
+   in tuple shape [sh]. *)
+let gen_filter (r : rng) (prio : int) (w : int array) (sh : int array)
   : PktClass.coq_PacketFilter * int * string =
-  let si, si_d = gen_field r w 0 in
-  let di, di_d = gen_field r w 1 in
-  let sp, sp_d = gen_field r w 2 in
-  let dp, dp_d = gen_field r w 3 in
-  let pr, pr_d = gen_field r w 4 in
+  let si, si_d = gen_field r w 0 sh.(0) in
+  let di, di_d = gen_field r w 1 sh.(1) in
+  let sp, sp_d = gen_field r w 2 sh.(2) in
+  let dp, dp_d = gen_field r w 3 sh.(3) in
+  let pr, pr_d = gen_field r w 4 sh.(4) in
   let lbl = rng_int r 256 in
   let f = { PktClass.src_ip = si; dst_ip = di; src_port = sp; dst_port = dp;
             protocol = pr;
@@ -218,9 +226,54 @@ let gen_filter (r : rng) (prio : int) (w : int array)
             key = Coq_xH;
             priority = Shim.int_to_pos prio } in
   let doc =
-    Printf.sprintf "prio=%-3d label=%-3d %s %s %s %s %s  (witness %d/%d/%d/%d/%d)"
-      prio lbl si_d di_d sp_d dp_d pr_d w.(0) w.(1) w.(2) w.(3) w.(4) in
+    Printf.sprintf
+      "prio=%-3d label=%-3d %s %s %s %s %s  (witness %d/%d/%d/%d/%d, \
+       shape %d/%d/%d/%d/%d)"
+      prio lbl si_d di_d sp_d dp_d pr_d w.(0) w.(1) w.(2) w.(3) w.(4)
+      sh.(0) sh.(1) sh.(2) sh.(3) sh.(4) in
   (f, lbl, doc)
+
+(* ------------------------------------------------------------------ *)
+(* Tuple shapes, and why there are few of them.
+
+   [GetTuple] hashes a filter on the LENGTHS of its five match patterns, so the
+   shape is what decides which tuple-space table [tss_db] puts it in.  Drawing
+   the five lengths independently per filter -- which is what this generator
+   used to do -- gives 6^5 possible shapes, so n filters land in n DISTINCT
+   tables essentially always.  That is the worst case for [tss_db] and not what
+   a tuple-space classifier looks like: the query grows quadratically in the
+   table count (n tables means n table modules, n mergers and a merger chain n
+   deep) while it grows only linearly in the filter count at a fixed table
+   count.  A campaign of small databases was paying for the table count and
+   measuring the filter count.
+
+   So the shapes come from a POOL of at most [ceil (sqrt nfilters)], and every
+   filter draws from it.  The bound is deliberate rather than a constant: it
+   keeps both quantities growing, so a bigger database exercises more tables AND
+   more filters per table, while the query stays near-linear in the database
+   size.  At 16 filters that is at most 4 tables rather than 16.
+
+   It is an UPPER bound.  Two pool entries may coincide, and filters may not
+   cover every entry, so the realised table count can be lower -- which is fine,
+   fewer tables is the cheap direction.  What matters for coverage is that it is
+   at least two whenever the database has two filters, since one table alone
+   never exercises the merger; [ceil (sqrt n)] is >= 2 for every n >= 2. *)
+
+(* Smallest [k] with [k*k >= n].  Integer-only: [sqrt] on a float and then
+   [ceil] is off by one on perfect squares for some n. *)
+let ceil_sqrt (n : int) : int =
+  let rec go k = if k * k >= n then k else go (k + 1) in
+  go 0
+
+let gen_shape (r : rng) : int array =
+  let sh = Array.make 5 0 in
+  for i = 0 to 4 do sh.(i) <- rng_pick r field_lengths done;
+  sh
+
+(* [k] shapes, drawn left to right -- [Array.init] does not promise an order
+   and this consumes the generator. *)
+let shape_pool (r : rng) (k : int) : int array array =
+  Stdlib.Array.of_list (mk_list k (fun _ -> gen_shape r))
 
 (* [n] distinct priorities drawn from 1..254 -- see the header comment. *)
 let distinct_priorities (r : rng) (n : int) : int Stdlib.List.t =
@@ -242,19 +295,25 @@ let distinct_priorities (r : rng) (n : int) : int Stdlib.List.t =
    in both.  Sharing a witness guarantees the database has packets several
    filters match at once, which is where linear_db's first-match-on-sorted-list
    and tss_db's per-table best plus strictly-lower-wins merger have to agree
-   the hard way -- and, since the shared filters usually differ in tuple shape,
-   agree ACROSS tables.  "tss fuzz: precedence is what is being compared"
-   measures that this is really happening. *)
+   the hard way -- and, since two filters sharing a witness usually draw
+   different shapes from the pool, agree ACROSS tables.  "tss fuzz: precedence
+   is what is being compared" measures that this is really happening.
+
+   Shapes come from a pool of at most [ceil (sqrt nfilters)] -- see
+   [shape_pool] for why that bound and not one shape per filter. *)
 let random_db (r : rng) (nfilters : int) : PktClass.coq_FilterDatabase * string =
   let prios = distinct_priorities r nfilters in
   let shared = gen_witness r in
+  let pool = shape_pool r (ceil_sqrt nfilters) in
+  let ntab = Stdlib.Array.length pool in
   (* Explicitly left to right: [List.map] does not promise an order, and this
      function consumes the generator. *)
   let rec build = function
     | [] -> []
     | p :: rest ->
       let w = if rng_int r 2 = 0 then shared else gen_witness r in
-      let f, lbl, doc = gen_filter r p w in
+      let sh = pool.(rng_int r ntab) in
+      let f, lbl, doc = gen_filter r p w sh in
       let e = (Coq_pair (f, Shim.int_to_coq_uint8 lbl), doc) in
       e :: build rest in
   let entries = build prios in

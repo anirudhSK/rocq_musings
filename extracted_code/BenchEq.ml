@@ -154,15 +154,25 @@ let cases : case list = [
                    fun () -> PktClass.ex_lin_prog, PktClass.ex_tss_prog);
     want = Eq };
 
-  { family = "TSS"; name = "gen-2";
-    what = "spec vs tuple space search, generated database of 2 filters (seed 1)";
-    pair = GenNet ("PktClassFuzz.random_db 2",
-                   fun () -> tss_gen 1 2); want = Eq };
+  { family = "TSS"; name = "gen-4";
+    what = "spec vs tuple space search, generated database of 4 filters (seed 1)";
+    pair = GenNet ("PktClassFuzz.random_db 4",
+                   fun () -> tss_gen 1 4); want = Eq };
 
   { family = "TSS"; name = "gen-8";
     what = "spec vs tuple space search, generated database of 8 filters (seed 1)";
     pair = GenNet ("PktClassFuzz.random_db 8",
                    fun () -> tss_gen 1 8); want = Eq };
+
+  { family = "TSS"; name = "gen-16";
+    what = "spec vs tuple space search, generated database of 16 filters (seed 1)";
+    pair = GenNet ("PktClassFuzz.random_db 16",
+                   fun () -> tss_gen 1 16); want = Eq };
+
+  { family = "TSS"; name = "gen-32";
+    what = "spec vs tuple space search, generated database of 32 filters (seed 1)";
+    pair = GenNet ("PktClassFuzz.random_db 32",
+                   fun () -> tss_gen 1 32); want = Eq };
 
   (* The control for the three above, and it is not decoration.  Every TSS row
      is Equivalent, and a suite of those alone is also what a checker that had
@@ -170,10 +180,10 @@ let cases : case list = [
      classify NOTHING would produce, which is the failure mode the fuzz
      generator's witness packets exist to avoid (see CLAUDE.md).  Two tss
      pipelines over DIFFERENT databases must be separated. *)
-  { family = "TSS"; name = "cross-8";
-    what = "two tuple-space pipelines over different 8-filter databases (control)";
-    pair = GenNet ("PktClassFuzz.random_db 8, seeds 1 and 2",
-                   fun () -> snd (tss_gen 1 8), snd (tss_gen 2 8));
+  { family = "TSS"; name = "cross-32";
+    what = "two tuple-space pipelines over different 32-filter databases (control)";
+    pair = GenNet ("PktClassFuzz.random_db 32, seeds 1 and 2",
+                   fun () -> snd (tss_gen 1 32), snd (tss_gen 2 32));
     want = NotEq };
 
   (* ---------------- P4: one program, before and after p4c's midend ---- *)
@@ -458,25 +468,33 @@ let run_case reps (c : case) : result =
 
 let print_header () =
   Stdlib.Printf.printf
-    "%-11s %-21s %-13s %8s %6s %9s %9s %9s %9s  %-13s\n"
+    "%-11s %-21s %-13s %8s %6s %9s %9s %9s %9s %9s  %-13s\n"
     "family" "case" "ir size" "smt" "depth" "load/ms" "query/ms" "z3/ms"
-    "med/ms" "verdict";
-  Stdlib.print_endline (Stdlib.String.make 124 '-')
+    "med/ms" "total/ms" "verdict";
+  Stdlib.print_endline (Stdlib.String.make 134 '-')
+
+(* What one case costs end to end: building the two programs plus one check.
+   [med] alone understates it -- the build is deliberately outside the timed
+   region, so that a repetition measures the CHECK -- and [load/ms] is not a
+   share of [med] but a cost beside it.  [query/ms] and [z3/ms] ARE shares of
+   [med], so the row does not otherwise add up to anything. *)
+let total_ms r = r.build_ms +. median r.times_ms
 
 let print_result r =
   let med = median r.times_ms in
   let ok = r.got = r.c.want in
   Stdlib.Printf.printf
-    "%-11s %-21s %-13s %8d %6d %9.1f %9.1f %9.1f %9.1f  %-13s %s\n"
+    "%-11s %-21s %-13s %8d %6d %9.1f %9.1f %9.1f %9.1f %9.1f  %-13s %s\n"
     r.c.family r.c.name (IrSize.to_short r.size_a)
     r.smt.SmtSize.dag r.smt.SmtSize.depth
     r.build_ms
     (SolveTime.build_ms r.phases) r.phases.SolveTime.solve_ms
-    med (verdict_str r.got)
+    med (total_ms r) (verdict_str r.got)
     (if ok then "" else "BAD want " ^ verdict_str r.c.want)
 
 let csv_header =
-  "family,case,what,verdict,expected,ok,build_ms,median_ms,min_ms,max_ms,reps,"
+  "family,case,what,verdict,expected,ok,build_ms,median_ms,total_ms,\
+   min_ms,max_ms,reps,"
   ^ Stdlib.String.concat ","
       (Stdlib.List.map (fun s -> "a_" ^ s)
          (Stdlib.String.split_on_char ',' IrSize.header))
@@ -497,6 +515,7 @@ let csv_row r =
       (if r.got = r.c.want then "1" else "0");
       Stdlib.Printf.sprintf "%.3f" r.build_ms;
       Stdlib.Printf.sprintf "%.3f" med;
+      Stdlib.Printf.sprintf "%.3f" (total_ms r);
       Stdlib.Printf.sprintf "%.3f" mn;
       Stdlib.Printf.sprintf "%.3f" mx;
       Stdlib.string_of_int (Stdlib.List.length r.times_ms);
@@ -578,6 +597,13 @@ let () =
   if selected = [] then begin
     prerr_endline "bench_eq: no cases matched"; exit 2 end;
 
+  (* Wall clock for the whole sweep.  Deliberately not the sum of the rows: it
+     includes the untimed size-measuring run, the reps the median discards, and
+     under [--isolate] the process spawns -- i.e. what running bench_eq
+     actually costs, which is the number you want when deciding whether a
+     campaign fits in a coffee break. *)
+  let t_run = now () in
+
   (* Cases share a process, and Z3's internal state does not fully reset
      between queries: a case's time depends on what ran before it.  Measured
      in one batch, [map-update-probe] came out at 237 ms and 1859 ms on either
@@ -630,8 +656,8 @@ let () =
       close_out oc;
       Stdlib.Printf.printf "\nwrote %s\n" !csv
     end;
-    Stdlib.Printf.printf "\n%d case(s), %d with the expected verdict.\n"
-      !n (!n - !bad);
+    Stdlib.Printf.printf "\n%d case(s), %d with the expected verdict, %.1f s total.\n"
+      !n (!n - !bad) (now () -. t_run);
     exit (if !bad > 0 then 1 else 0)
   end;
 
@@ -668,12 +694,13 @@ let () =
     Stdlib.Printf.printf "\nwrote %s\n" !csv
   end;
 
-  Stdlib.Printf.printf "\n%d case(s), %d with the expected verdict%s.\n"
+  Stdlib.Printf.printf "\n%d case(s), %d with the expected verdict%s, %.1f s total.\n"
     (Stdlib.List.length results)
     (Stdlib.List.length results - Stdlib.List.length bad)
     (if !skipped = [] then ""
      else Stdlib.Printf.sprintf ", %d skipped (missing input)"
-            (Stdlib.List.length !skipped));
+            (Stdlib.List.length !skipped))
+    (now () -. t_run);
   if bad <> [] then begin
     Stdlib.List.iter
       (fun r ->
