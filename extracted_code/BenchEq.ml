@@ -301,6 +301,34 @@ let cases : case list = [
      regenerating a .json means re-running ParserHawk's CEGIS loop, which is a
      synthesis search, so the JSON is an input artifact here. *)
 
+  (* start_ethernet, all three ways round.  Its spec selects on a mask whose
+     bits are NOT contiguous (0xfa00 is bits 15..11 and bit 9), which a
+     SelectCase cannot express in one arm -- so the two pipelines each chain
+     two select states to say it, while eth_spec says it as the two values the
+     one contiguous slice can take.  Three different spellings of one
+     condition, which is what makes the cross pair worth having on top of the
+     two spec pairs. *)
+  { family = "ParserHawk"; name = "ph-ethernet-tofino";
+    what = "start_ethernet: the synthesized Tofino pipeline vs its spec";
+    pair = GenNet ("ethernet_tofino.ir / eth_spec",
+                   fun () -> ph "bench/parserhawk/ir/ethernet_tofino.ir" eth_hdrs,
+                             ParserHawkEval.eth_spec);
+    want = Eq };
+
+  { family = "ParserHawk"; name = "ph-ethernet-ipu";
+    what = "start_ethernet: the synthesized IPU pipeline vs its spec";
+    pair = GenNet ("ethernet_ipu.ir / eth_spec",
+                   fun () -> ph "bench/parserhawk/ir/ethernet_ipu.ir" eth_hdrs,
+                             ParserHawkEval.eth_spec);
+    want = Eq };
+
+  { family = "ParserHawk"; name = "ph-ethernet-cross";
+    what = "start_ethernet: the Tofino pipeline against the IPU one";
+    pair = GenNet ("ethernet_tofino.ir / ethernet_ipu.ir",
+                   fun () -> ph "bench/parserhawk/ir/ethernet_tofino.ir" eth_hdrs,
+                             ph "bench/parserhawk/ir/ethernet_ipu.ir" eth_hdrs);
+    want = Eq };
+
   { family = "ParserHawk"; name = "ph-icmp-ipu";
     what = "Parse icmp: the synthesized IPU pipeline vs its spec";
     pair = GenNet ("icmp_ipu.ir / icmp_spec",

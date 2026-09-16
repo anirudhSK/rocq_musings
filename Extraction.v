@@ -54,4 +54,4 @@ Separate Extraction
   (* [run_parser] checks a lowered parser against the IR's own conditions. *)
   ParserWellFormed.well_formed_parserb
 
-  dump_headers icmp_spec mfk_spec sai_spec.
+  dump_headers icmp_spec eth_spec mfk_spec sai_spec.

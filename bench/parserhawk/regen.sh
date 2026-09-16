@@ -26,6 +26,8 @@ gen () { # <out-name> <json> <field sizes> [extra lower_table.py args...]
   echo "ok    $n.ir"
 }
 
+gen ethernet_tofino   ethernet_tofino.json   16,1
+gen ethernet_ipu      ethernet_ipu.json      16,1
 gen icmp_ipu          icmp_ipu.json          16,1
 # The Tofino pipeline for Multi-keys LOOPS.  --input-bits unrolls it on
 # (node, cursor) against a packet of that length, which is what makes it
@@ -37,7 +39,7 @@ gen multifield_tofino multifield_tofino.json 8,8,1 --input-bits 17
 gen multifield_ipu    multifield_ipu.json    8,8,1
 gen sai_tofino        sai_v4_tofino.json     1,16,8,8,8,1,1,1,1
 
-# test/parserhawk holds the same four files, because TestEquality's expect
+# test/parserhawk holds the same files, because TestEquality's expect
 # tests read them from there; keep the two copies identical rather than
 # letting them drift.
 for f in "$out"/*.ir; do

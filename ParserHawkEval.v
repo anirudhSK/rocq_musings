@@ -44,6 +44,28 @@ Definition icmp_spec_parser : Parser := {|
   ];
 |}.
 
+(* Port of the spec ParserHawk uses for start_ethernet:
+   https://github.com/ParserHawk/ParserHawk/blob/17be2c8a65a72dac59b2d33642a026d4ef9e90e3/z3/cegis_loop/one_short_revision/P4_examples/start_ethernet/start_ethernet_tofino_op.py#L68*)
+Definition eth_spec_parser : Parser := {|
+  parser_start := ParserStateLabelCtr 1;
+  parser_states := [
+    mkParserStateDef (ParserStateLabelCtr 1)
+      (Some (ExtractOpConstructor (HeaderCtr 1) 16 u16))
+      (Select [
+        (* bits 15..9, MSB first; bit 10 free *)
+        mkSelectCase (SelHdr (HeaderCtr 1) 9 16)
+          [false; false; false; false; false; false; false]
+          (TargetState (ParserStateLabelCtr 2));
+        mkSelectCase (SelHdr (HeaderCtr 1) 9 16)
+          [false; false; false; false; false; true; false]
+          (TargetState (ParserStateLabelCtr 2))
+      ] Accept);
+    mkParserStateDef (ParserStateLabelCtr 2)
+      (Some (ExtractOpConstructor (HeaderCtr 2) 1 u8))
+      (Unconditional Accept)
+  ];
+|}.
+
 (* https://github.com/ParserHawk/ParserHawk/blob/17be2c8a65a72dac59b2d33642a026d4ef9e90e3/z3/cegis_loop/one_short_revision/P4_examples/artifact_multiple_field_key/artifact_multiple_field_key_op.py#L77 *)
 Definition mfk_spec_parser : Parser := {|
   parser_start := ParserStateLabelCtr 1;
@@ -240,6 +262,9 @@ Definition dump_headers (p : Parser) (ordering : ParserHawkHdrs) : GeneralCaraca
 
 Definition icmp_spec :=
   dump_headers icmp_spec_parser (ICMPHdr (HeaderCtr 1) (HeaderCtr 2)).
+
+Definition eth_spec :=
+  dump_headers eth_spec_parser (EthHdr (HeaderCtr 1) (HeaderCtr 2)).
 
 Definition mfk_spec :=
   dump_headers mfk_spec_parser (MultiFieldHdr (HeaderCtr 1) (HeaderCtr 2) (HeaderCtr 3)).

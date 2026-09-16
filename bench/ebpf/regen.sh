@@ -51,6 +51,19 @@ take () {
 # cannot drift: bench/ is meant to hold the programs the benchmark checks in
 # one place, and a stale copy would mean the .ir beside it came from something
 # else.  translation/ect is the authority.
+#
+# Each keeps ect's filename, which is NOT always its upstream one:
+#
+#   xdp_pktcntr.c    dslab-epfl/ebpf-se, katran/xdp_pktcntr.c
+#   cls_pktcntr.c    ... katran/adapter_integration_test_kern.c
+#   map_access.c     ... fw/xdp_map_access_kern.c
+#   filter.c         OISF/suricata ebpf/filter.c          **GPL-2.0-only**
+#   vlan_filter.c    OISF/suricata ebpf/vlan_filter.c     **GPL-2.0-only**
+#
+# All five are verbatim apart from their #includes, which a per-directory shim
+# header replaces so they build without a kernel tree; each file's own header
+# comment says exactly what was changed.  This repository has no LICENSE file
+# -- see TODO.md.
 for f in ebpf-se/xdp_pktcntr.c ebpf-se/cls_pktcntr.c ebpf-se/map_access.c \
          ebpf-se/ebpf_se_common.h suricata/filter.c suricata/vlan_filter.c \
          suricata/sur_common.h; do
@@ -61,7 +74,8 @@ done
 # declares each helper as a function POINTER initialized to its number, and
 # only -O1 and up fold that to an immediate -- at -O0 clang emits an indirect
 # `call rN`, which bpf_to_ir does not model, and every map access downstream
-# then loses its provenance.  See README.md.
+# then loses its provenance.  translation/ect/Makefile says the same thing
+# where it picks the two levels.
 take xdp_pktcntr ebpf-se/xdp_pktcntr O1
 take xdp_pktcntr ebpf-se/xdp_pktcntr O2
 take cls_pktcntr ebpf-se/cls_pktcntr O1

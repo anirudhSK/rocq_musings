@@ -1,3 +1,10 @@
+/*
+ * Princeton-Cabernet/p4-projects, ConQuest-tofino/p4src/baseline.p4, used
+ * UNMODIFIED as an evaluation case: a Tofino-native program with a sub-parser,
+ * intrinsic metadata, and an ingress that routes on the top byte of the IPv4
+ * destination.  The two variants beside it rewrite only that routing decision;
+ * see translation/tests/README.md.
+ */
 // vim: syntax=P4
 /*
     ConQuest: Fine-Grained Queue Measurement in the Data Plane

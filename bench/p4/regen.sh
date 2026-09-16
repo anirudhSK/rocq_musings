@@ -25,6 +25,20 @@ src="$here/src"; out="$here/ir"; mkdir -p "$out" "$src"
 # here so the two cannot drift: bench/ is meant to hold the programs the
 # benchmark checks in one place, and a stale copy would mean the .ir beside it
 # came from something else.  The originals are the authority.
+#
+# Where they came from before that:
+#
+#   basic qos basic_tunnel multicast   p4lang/tutorials, via test/p4tutorials
+#   conquest_baseline.p4               Princeton-Cabernet/p4-projects,
+#                                      ConQuest-tofino/p4src/baseline.p4,
+#                                      used UNMODIFIED.  **AGPL-3.0**, and this
+#                                      repository has no LICENSE file -- see
+#                                      TODO.md.
+#   issue5765.p4                       written here, a reducer for
+#                                      p4lang/p4c issue #5765
+#
+# The *.entries files are table configurations: a table the source does not
+# populate itself takes its entries from one, passed to rocq --table-entries.
 for f in test/p4tutorials/basic.p4 test/p4tutorials/qos.p4 \
          test/p4tutorials/basic_tunnel.p4 test/p4tutorials/multicast.p4 \
          test/p4tutorials/ipv4_lpm.entries test/p4tutorials/basic_tunnel.entries \
@@ -84,11 +98,21 @@ for n in basic qos basic_tunnel multicast; do
 done
 
 # --- Princeton-Cabernet ConQuest -------------------------------------------
-# Two passes are excluded and each for its own reason, both recorded in
-# README.md: HandleNoMatch puts `verify(false, error.NoMatch)` into the parser,
-# which the parser lowering does not accept, and EliminateTuples declares a
-# `tuple_0` struct AHEAD of the header struct, which shifts every later header
-# uid and so misaligns the free registers the two compared programs SHARE.
+# Two passes are excluded, and both are limitations of THIS LOWERING rather
+# than of p4c:
+#
+#   HandleNoMatch   puts `verify(false, error.NoMatch)` into the parser, and
+#                   the parser lowering accepts only extract and advance.
+#   EliminateTuples rewrites the checksum's tuple literal into a `tuple_0`
+#                   struct declared AHEAD of the header struct.  Header uids
+#                   are assigned in declaration order and the checker gives
+#                   the two compared programs ONE shared free register per
+#                   uid, so sixteen extra declarations shift every later field
+#                   and force ConQuest's ethernet.dst_addr to equal the other
+#                   program's tuple_0.f0.  With the pass in, the pair reports
+#                   NotEquivalent on that misalignment rather than on any
+#                   behaviour.  The fix is a name-to-uid sidecar shared by both
+#                   lowerings; excluding the pass is the workaround.
 # shellcheck disable=SC2086
 lower  conquest_src    "$src/conquest_baseline.p4" $TNA --stub-checksum --table-entries "$work/empty.entries"
 # shellcheck disable=SC2086
