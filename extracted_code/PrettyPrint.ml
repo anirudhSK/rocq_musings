@@ -180,7 +180,7 @@ let print_general_program (p : CrModule.coq_GeneralCaracaraProgram) : unit =
   match p with
   | CrModule.GeneralCaracaraProgramDef (inp_len, regions, net) ->
     Printf.printf "GeneralCaracaraProgram\n";
-    Printf.printf "  input_len: %d bytes\n" (nat_int inp_len);
+    Printf.printf "  input_len: %d bits\n" (nat_int inp_len);
     (match Shim.listify_coq_list regions with
      | [] -> Printf.printf "  regions: (none)\n"
      | rs ->

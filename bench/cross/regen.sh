@@ -14,14 +14,17 @@
 # two .ir files; wiring a pair into bench_eq is separate follow-up work.
 #
 # Needs a clang and an `llc` WITH THE BPF TARGET for the eBPF side -- see
-# bench/ebpf/regen.sh for the macOS toolchain note -- and a built p4c
-# (`cd translation/p4c/build && make rocq p4test`) for the P4 side.
+# bench/ebpf/regen.sh for the macOS toolchain note -- a built p4c
+# (`cd translation/p4c/build && make rocq p4test`) for the P4 side, and this
+# repository built (`make -j && dune build --profile release`) for pretty_print.
 #
 # Alongside ir/, this writes a gitignored build/ holding the INPUT each front
 # end actually saw, so a surprising .ir can be read against it:
 #
 #   build/basic_bpf.o             the BPF object handed to ect
+#   build/basic_bpf.out           that object disassembled, `llvm-objdump -d`
 #   build/basic_p4.frontend.p4    basic.p4 as the rocq extension receives it
+#   build/basic_{bpf,p4}.pretty   each .ir as `pretty_print` renders it
 #
 # The .p4 comes from `p4test --top4 FrontEndLast`, which writes the program
 # after p4c's last frontend pass as ordinary P4 source.  That is the same
@@ -50,6 +53,15 @@ for t in "$ROCQ" "$P4TEST"; do
     exit 2
   }
 done
+[ -x "$root/_build/default/extracted_code/PrettyPrint.exe" ] || {
+  echo "no pretty_print -- (cd $root && make -j && dune build --profile release)" >&2
+  exit 2
+}
+
+pretty () {
+  (cd "$root" && dune exec --profile release pretty_print -- "$out/$1.ir") \
+    >"$build/$1.pretty" || { echo "FAIL  pretty_print $1.ir" >&2; exit 1; }
+}
 
 if [ -z "${CLANG:-}" ]; then
   mularch=$(clang -print-multiarch 2>/dev/null || true)
@@ -63,6 +75,17 @@ fi
 CLANG=${CLANG:-clang}
 LLC=${LLC:-llc}
 
+if [ -z "${OBJDUMP:-}" ]; then
+  case $LLC in
+    */*) OBJDUMP=$(dirname "$LLC")/llvm-objdump ;;
+    *)   OBJDUMP=llvm-objdump ;;
+  esac
+fi
+command -v "$OBJDUMP" >/dev/null 2>&1 || {
+  echo "missing $OBJDUMP -- set OBJDUMP, as with LLC (see the note above)" >&2
+  exit 2
+}
+
 work=$(mktemp -d); trap 'rm -rf "$work"' EXIT
 
 # --- eBPF: src/basic.c -> ir/basic_bpf.ir ----------------------------------
@@ -73,6 +96,9 @@ $CLANG -target bpf -O2 -g -I"$src" -emit-llvm -c "$src/basic.c" -o "$work/basic.
   echo "FAIL  llc basic.c" >&2; exit 1; }
 "$ECT/bpf_to_ir" "$build/basic_bpf.o" >"$out/basic_bpf.ir" || {
   echo "FAIL  bpf_to_ir basic.c" >&2; exit 1; }
+(cd "$build" && "$OBJDUMP" -d basic_bpf.o) >"$build/basic_bpf.out" || {
+  echo "FAIL  llvm-objdump basic_bpf.o" >&2; exit 1; }
+pretty basic_bpf
 echo "ok    basic_bpf.ir"
 
 # --- P4: src/basic.p4 -> ir/basic_p4.ir ------------------------------------
@@ -97,4 +123,5 @@ if grep -q 'error:' "$work/basic_p4.log"; then
   grep -oE 'error: .*' "$work/basic_p4.log" | head -3 | sed 's/^/      /' >&2
   exit 1
 fi
+pretty basic_p4
 echo "ok    basic_p4.ir"
