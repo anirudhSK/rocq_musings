@@ -107,12 +107,18 @@ def rules(draw, width, n, tgt):
     match order is unobservable, and a planted "rule priority reversed" mutation
     survives.
     """
+    # Masks may read PAST the key.  ParserHawk writes `mask:65535` whatever the
+    # key's real width, and the positions above it are structural zeros (see
+    # padded_rules), so drawing only masks that fit leaves the whole padding
+    # path in Builder.transition dead -- including the rule it drops outright.
+    # `pad` is 0 a quarter of the time, so the fitting case stays well covered.
+    pad = draw(st.integers(0, 3))
+    top = (1 << (width + pad)) - 1
+
     # min_size=1: `lists` is biased towards empty, and a node with no rule can
     # never show a priority bug.
     out = draw(st.lists(
-        st.tuples(st.integers(0, (1 << width) - 1),
-                  st.integers(1, (1 << width) - 1),
-                  tgt),
+        st.tuples(st.integers(0, top), st.integers(1, top), tgt),
         min_size=1, max_size=3))
     logic = [[f"val:{v & m}", f"mask:{m}", f"nxt:{t}"] for (v, m, t) in out]
 
@@ -194,6 +200,31 @@ def parse_key_ref(tran_key):
             + sorted(set(peek), key=lambda x: x[1]))
 
 
+def padded_rules(logic, total):
+    """tran_logic as (mask, val, nxt) over a key 0-PADDED to `total` bits.
+
+    Independent restatement of ParserHawk's `generate_tran_key`, which packs a
+    node's selected bits into the LOW end of a fixed `size_of_key`-bit register
+    and concatenates a zero (`dummy`, constrained to 0) for every position the
+    node does not select -- so positions at and above `total` are structural
+    zeros that the rule's mask may still cover.  A rule wanting a 1 among them
+    compares 0 to 1 and can never fire; a rule wanting 0 there is satisfied
+    vacuously and constrains only the key's own bits; one whose every cared bit
+    is such padding matches EVERY key, so nothing after it is reachable.
+    """
+    out = []
+    for e in logic:
+        kv = {k.split(":")[0]: int(k.split(":")[1]) for k in e}
+        val, mask = kv["val"] & kv["mask"], kv["mask"]
+        if val >> total:                 # wants a set bit the key cannot supply
+            continue
+        keep = mask & ((1 << total) - 1)
+        out.append((keep, val & keep, kv["nxt"]))
+        if keep == 0:                    # matches any key; nothing after it runs
+            break
+    return out
+
+
 def reference_run(nodes, sizes, packet, input_bits=None):
     """What the lowered parser is SUPPOSED to do, per the IR's semantics.
 
@@ -232,10 +263,9 @@ def reference_run(nodes, sizes, packet, input_bits=None):
 
         # Every case's bits are read before any is matched, so a Peek that runs
         # off the end rejects even if an earlier case would have matched
-        # (eval_transition_concrete's select_bits_available_concrete).
-        for e in logic:
-            kv = {k.split(":")[0]: int(k.split(":")[1]) for k in e}
-            mask = kv["mask"] & ((1 << total) - 1)
+        # (eval_transition_concrete's select_bits_available_concrete).  A rule
+        # the padding kills contributes no case, so its Peeks are never read.
+        for (mask, _, _) in padded_rules(logic, total):
             for i, ent in enumerate(entries):
                 if ((mask >> (total - 1 - i)) & 1 and ent[0] == "p"
                         and cur + ent[1] + 1 > len(packet)):
@@ -248,9 +278,7 @@ def reference_run(nodes, sizes, packet, input_bits=None):
             return None if f not in fields else (fields[f] >> b) & 1
 
         nxt = nd["default_tran"]
-        for e in logic:
-            kv = {k.split(":")[0]: int(k.split(":")[1]) for k in e}
-            mask = kv["mask"] & ((1 << total) - 1)
+        for (mask, want, tgt) in padded_rules(logic, total):
             got, ok = 0, True
             for i, ent in enumerate(entries):
                 if not (mask >> (total - 1 - i)) & 1:
@@ -260,8 +288,8 @@ def reference_run(nodes, sizes, packet, input_bits=None):
                     ok = False
                     break
                 got |= b << (total - 1 - i)
-            if ok and got == (kv["val"] & mask):
-                nxt = kv["nxt"]
+            if ok and got == want:
+                nxt = tgt
                 break
         node = nxt
 
@@ -378,7 +406,10 @@ def test_unroll_is_noop_above_longest_path(pipeline, pkts):
     assume(need is not None)
     r = lower(nodes, sizes, ("--input-bits", str(need)))
     assert r.returncode == 0, "refused a pipeline the default path accepted"
-    assert "warning:" not in r.stderr, f"--input-bits {need} reported an overrun"
+    # The OVERRUN warning specifically -- a pipeline whose key is narrower than
+    # its rules warns too, and that is about the JSON, not about --input-bits.
+    assert "run past the" not in r.stderr, \
+        f"--input-bits {need} reported an overrun"
     for pkt in pkts:
         assert run_ir(ir, pkt) == run_ir(r.stdout, pkt)
 
@@ -407,8 +438,9 @@ def test_overrun_accepts_instead_of_rejecting(pipeline, data):
 @given(pipelines(), st.lists(packets(), min_size=1, max_size=2))
 def test_shadowed_rule_changes_nothing(pipeline, pkts):
     """(5) Rules are first-match, so a duplicate of an earlier rule can never be
-    reached.  (An "unmatchable" rule is not expressible: lower_table masks val to
-    the key width, so under a full mask every value is reachable.)"""
+    reached.  (A rule can also be unreachable for the other reason -- wanting a
+    set bit in the key's zero padding, which `rules` draws -- and lower_table
+    drops that one outright; either way the parser must not change.)"""
     nodes, sizes = pipeline
     i = next((k for k, nd in enumerate(nodes) if nd["tran_logic"]), None)
     assume(i is not None)
@@ -441,3 +473,40 @@ def test_peek_availability_agrees_across_paths():
     pkt = [0, 0, 1, 1, 1, 0, 1, 1]          # 8 bits; the peek wants bit 9
     assert ir_to_result(run_ir(lowered(one, [8, 16]), pkt)) == "reject"
     assert ir_to_result(run_ir(lowered(two, [8, 16]), pkt)) == "reject"
+
+
+def test_mask_past_the_key_is_zero_padded_not_truncated():
+    """A rule may read past its Tran_key, and the missing bits read as ZERO.
+
+    This is the shape sai_v4_ipu.json has: ParserHawk's `generate_tran_key`
+    writes the node's selected bits into the low end of a 16-bit register and
+    concatenates a zero for every position it does not select, so `mask:65535`
+    beside a one-entry key is a comparison against 15 structural zeros.  Both
+    nodes below select ONE bit and then demand `val:2` -- bit 1, which the key
+    does not supply -- so neither rule can fire and both must take the default.
+
+    Truncating the mask to the key's width instead (what this used to do) drops
+    the constraint rather than failing it: `val:2` becomes `val:0`, and the rule
+    fires on key bit 0 == 0, taking a transition ParserHawk cannot take.  The
+    packets below set the key bit to 0, which is exactly where the two disagree.
+    """
+    unmatchable = [
+        {"Extraction": "field_0", "Tran_key": ["field1[0]"], "default_tran": 1,
+         "tran_logic": [["val:2", "mask:65535", "nxt:0"]]},
+        {"Extraction": "field_1", "Tran_key": [], "default_tran": 2,
+         "tran_logic": []}]
+    # The same pipeline with the dead rule simply deleted.
+    plain = json.loads(json.dumps(unmatchable))
+    plain[0]["tran_logic"] = []
+
+    # An empty Tran_key is a 0-bit key, so every rule over it reads only
+    # padding -- `val:4` wants a set bit there and can never fire either.
+    empty_key = json.loads(json.dumps(plain))
+    empty_key[0]["Tran_key"] = []
+    empty_key[0]["tran_logic"] = [["val:4", "mask:65535", "nxt:0"]]
+
+    for pkt in ([0] * 24, [1, 0, 1, 0] + [0] * 20):
+        want = ir_to_result(run_ir(lowered(plain, [8, 16]), pkt))
+        assert ir_to_result(run_ir(lowered(unmatchable, [8, 16]), pkt)) == want
+        assert ir_to_result(run_ir(lowered(empty_key, [8, 16]), pkt)) == want
+        assert reference_run(unmatchable, [8, 16], pkt) == want

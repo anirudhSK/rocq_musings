@@ -148,18 +148,18 @@ let cases : case list = [
      because PktClassFuzz has its own splitmix64 rather than using [Random]
      and so reproduces exactly on any machine. *)
 
-  { family = "TSS"; name = "tss-simple";
+  { family = "TSS"; name = "simple";
     what = "spec vs tuple space search, SimpleDB (3 hand-written filters)";
     pair = GenNet ("PktClass.ex_lin_prog / ex_tss_prog",
                    fun () -> PktClass.ex_lin_prog, PktClass.ex_tss_prog);
     want = Eq };
 
-  { family = "TSS"; name = "tss-gen-2";
+  { family = "TSS"; name = "gen-2";
     what = "spec vs tuple space search, generated database of 2 filters (seed 1)";
     pair = GenNet ("PktClassFuzz.random_db 2",
                    fun () -> tss_gen 1 2); want = Eq };
 
-  { family = "TSS"; name = "tss-gen-8";
+  { family = "TSS"; name = "gen-8";
     what = "spec vs tuple space search, generated database of 8 filters (seed 1)";
     pair = GenNet ("PktClassFuzz.random_db 8",
                    fun () -> tss_gen 1 8); want = Eq };
@@ -170,7 +170,7 @@ let cases : case list = [
      classify NOTHING would produce, which is the failure mode the fuzz
      generator's witness packets exist to avoid (see CLAUDE.md).  Two tss
      pipelines over DIFFERENT databases must be separated. *)
-  { family = "TSS"; name = "tss-cross-8";
+  { family = "TSS"; name = "cross-8";
     what = "two tuple-space pipelines over different 8-filter databases (control)";
     pair = GenNet ("PktClassFuzz.random_db 8, seeds 1 and 2",
                    fun () -> snd (tss_gen 1 8), snd (tss_gen 2 8));
@@ -188,12 +188,12 @@ let cases : case list = [
      flags; bench/p4/README.md says what each pair is and why two passes are
      excluded from ConQuest. *)
 
-  { family = "P4"; name = "p4-basic";
+  { family = "P4"; name = "basic";
     what = "p4lang/tutorials basic.p4, frontend vs the whole midend";
     pair = Net ("bench/p4/ir/basic_src.ir", "bench/p4/ir/basic_midend.ir");
     want = Eq };
 
-  { family = "P4"; name = "p4-basic-tunnel";
+  { family = "P4"; name = "basic-tunnel";
     what = "p4lang/tutorials basic_tunnel.p4, frontend vs the whole midend";
     pair = Net ("bench/p4/ir/basic_tunnel_src.ir",
                 "bench/p4/ir/basic_tunnel_midend.ir");
@@ -206,14 +206,14 @@ let cases : case list = [
      nothing the lowering can see.  The row is kept because it still solves a
      universally quantified query, and because "the whole midend changes
      nothing here" is the finding. *)
-  { family = "P4"; name = "p4-multicast";
+  { family = "P4"; name = "multicast";
     what = "p4lang/tutorials multicast.p4, frontend vs the whole midend \
             (the lowered IR is byte-identical; no midend pass changes it)";
     pair = Net ("bench/p4/ir/multicast_src.ir",
                 "bench/p4/ir/multicast_midend.ir");
     want = Eq };
 
-  { family = "P4"; name = "p4-qos";
+  { family = "P4"; name = "qos";
     what = "p4lang/tutorials qos.p4, frontend vs the whole midend";
     pair = Net ("bench/p4/ir/qos_src.ir", "bench/p4/ir/qos_midend.ir");
     want = Eq };
@@ -228,7 +228,7 @@ let cases : case list = [
      excluded because it puts `verify(false, error.NoMatch)` into the parser,
      which the parser lowering does not accept.  Both are recorded in
      bench/p4/README.md. *)
-  { family = "P4"; name = "p4-conquest";
+  { family = "P4"; name = "conquest";
     what = "Princeton-Cabernet ConQuest baseline, frontend vs the midend \
             with EliminateTuples excluded";
     pair = Net ("bench/p4/ir/conquest_src.ir", "bench/p4/ir/conquest_midend.ir");
@@ -244,7 +244,7 @@ let cases : case list = [
      control: if it ever reports Equivalent, the p4c in translation/p4c has
      been updated with the fix.  Confirm against the issue and retire the row
      rather than "fixing" it. *)
-  { family = "P4"; name = "p4-issue5765";
+  { family = "P4"; name = "issue5765";
     what = "p4c #5765: one source with and without GlobalCopyPropagation";
     pair = Net ("bench/p4/ir/issue5765_gcp.ir", "bench/p4/ir/issue5765_nogcp.ir");
     want = NotEq };
@@ -254,36 +254,33 @@ let cases : case list = [
      program against the SAME program after LLVM's optimizer has had at it,
      which is a statement about the optimizer rather than about two things
      somebody wrote.  bench/ebpf/regen.sh builds them; bench/ebpf/README.md
-     says why four of the five are -O1 against -O2 rather than -O0 against
-     -O2 (at -O0 the eBPF-SE shim's helper pointers are not folded, so clang
-     emits an indirect `call rN` that the translator does not model). *)
+     says why four of the five are -O1 against -O2. *)
 
-  { family = "eBPF"; name = "bpf-xdp-pktcntr";
+  { family = "eBPF"; name = "xdp-pktcntr";
     what = "dslab-epfl/ebpf-se katran/xdp_pktcntr.c, -O1 vs -O2";
     pair = Net ("bench/ebpf/ir/xdp_pktcntr_O1.ir",
                 "bench/ebpf/ir/xdp_pktcntr_O2.ir");
     want = Eq };
 
-  { family = "eBPF"; name = "bpf-cls-pktcntr";
+  { family = "eBPF"; name = "cls-pktcntr";
     what = "dslab-epfl/ebpf-se katran/adapter_integration_test_kern.c, -O1 vs -O2";
     pair = Net ("bench/ebpf/ir/cls_pktcntr_O1.ir",
                 "bench/ebpf/ir/cls_pktcntr_O2.ir");
     want = Eq };
 
-  { family = "eBPF"; name = "bpf-map-access";
+  { family = "eBPF"; name = "map-access";
     what = "dslab-epfl/ebpf-se fw/xdp_map_access_kern.c, -O1 vs -O2";
     pair = Net ("bench/ebpf/ir/map_access_O1.ir",
                 "bench/ebpf/ir/map_access_O2.ir");
     want = Eq };
 
-  { family = "eBPF"; name = "bpf-suricata-filter";
+  { family = "eBPF"; name = "suricata-filter";
     what = "OISF/suricata filter.c, -O1 vs -O2";
     pair = Net ("bench/ebpf/ir/filter_O1.ir", "bench/ebpf/ir/filter_O2.ir");
     want = Eq };
 
-  (* The one true -O0 against -O2 pair: vlan_filter.c calls no helper, so the
-     -O0 limitation above does not apply to it. *)
-  { family = "eBPF"; name = "bpf-suricata-vlan";
+  (* A -O0 against -O2 pair. *)
+  { family = "eBPF"; name = "suricata-vlan";
     what = "OISF/suricata vlan_filter.c, -O0 vs -O2";
     pair = Net ("bench/ebpf/ir/vlan_filter_O0.ir",
                 "bench/ebpf/ir/vlan_filter_O2.ir");
@@ -308,35 +305,35 @@ let cases : case list = [
      one contiguous slice can take.  Three different spellings of one
      condition, which is what makes the cross pair worth having on top of the
      two spec pairs. *)
-  { family = "ParserHawk"; name = "ph-ethernet-tofino";
+  { family = "ParserHawk"; name = "ethernet-tofino";
     what = "start_ethernet: the synthesized Tofino pipeline vs its spec";
     pair = GenNet ("ethernet_tofino.ir / eth_spec",
                    fun () -> ph "bench/parserhawk/ir/ethernet_tofino.ir" eth_hdrs,
                              ParserHawkEval.eth_spec);
     want = Eq };
 
-  { family = "ParserHawk"; name = "ph-ethernet-ipu";
+  { family = "ParserHawk"; name = "ethernet-ipu";
     what = "start_ethernet: the synthesized IPU pipeline vs its spec";
     pair = GenNet ("ethernet_ipu.ir / eth_spec",
                    fun () -> ph "bench/parserhawk/ir/ethernet_ipu.ir" eth_hdrs,
                              ParserHawkEval.eth_spec);
     want = Eq };
 
-  { family = "ParserHawk"; name = "ph-ethernet-cross";
+  { family = "ParserHawk"; name = "ethernet-cross";
     what = "start_ethernet: the Tofino pipeline against the IPU one";
     pair = GenNet ("ethernet_tofino.ir / ethernet_ipu.ir",
                    fun () -> ph "bench/parserhawk/ir/ethernet_tofino.ir" eth_hdrs,
                              ph "bench/parserhawk/ir/ethernet_ipu.ir" eth_hdrs);
     want = Eq };
 
-  { family = "ParserHawk"; name = "ph-icmp-ipu";
+  { family = "ParserHawk"; name = "icmp-ipu";
     what = "Parse icmp: the synthesized IPU pipeline vs its spec";
     pair = GenNet ("icmp_ipu.ir / icmp_spec",
                    fun () -> ph "bench/parserhawk/ir/icmp_ipu.ir" icmp_hdrs,
                              ParserHawkEval.icmp_spec);
     want = Eq };
 
-  { family = "ParserHawk"; name = "ph-multifield-tofino";
+  { family = "ParserHawk"; name = "multifield-tofino";
     what = "Multi-keys: the synthesized Tofino pipeline vs its spec";
     pair = GenNet ("multifield_tofino.ir / mfk_spec",
                    fun () -> ph "bench/parserhawk/ir/multifield_tofino.ir" mfk_hdrs,
@@ -349,7 +346,7 @@ let cases : case list = [
      node's transition rules, so the emitted pipeline carries transition edges
      the model never had.  A run where this comes back Equivalent means the
      artifact has been regenerated. *)
-  { family = "ParserHawk"; name = "ph-multifield-ipu";
+  { family = "ParserHawk"; name = "multifield-ipu";
     what = "Multi-keys: the synthesized IPU pipeline vs its spec (the ParserHawk bug)";
     pair = GenNet ("multifield_ipu.ir / mfk_spec",
                    fun () -> ph "bench/parserhawk/ir/multifield_ipu.ir" mfk_hdrs,
@@ -359,11 +356,25 @@ let cases : case list = [
   (* SAI v4, not v2: both the spec in ParserHawkEval.v and the pipeline JSON
      come from ParserHawk's sai_v4_pkt_eth_v46_inv4_udp_tcp_icmp_arp example.
      The largest pipeline here, nine extracted fields. *)
-  { family = "ParserHawk"; name = "ph-sai-tofino";
+  { family = "ParserHawk"; name = "sai-tofino";
     what = "SAI v4: the synthesized Tofino pipeline vs its spec";
     pair = GenNet ("sai_tofino.ir / sai_spec",
                    fun () -> ph "bench/parserhawk/ir/sai_tofino.ir" sai_hdrs,
                              ParserHawkEval.sai_spec);
+    want = Eq };
+
+  { family = "ParserHawk"; name = "sai-ipu";
+    what = "SAI v4: the synthesized IPU pipeline vs its spec";
+    pair = GenNet ("sai_ipu.ir / sai_spec",
+                   fun () -> ph "bench/parserhawk/ir/sai_ipu.ir" sai_hdrs,
+                             ParserHawkEval.sai_spec);
+    want = Eq };
+
+  { family = "ParserHawk"; name = "sai-cross";
+    what = "SAI v4: the Tofino pipeline against the IPU one";
+    pair = GenNet ("sai_tofino.ir / sai_ipu.ir",
+                   fun () -> ph "bench/parserhawk/ir/sai_tofino.ir" sai_hdrs,
+                             ph "bench/parserhawk/ir/sai_ipu.ir" sai_hdrs);
     want = Eq };
 ]
 

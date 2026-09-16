@@ -16,6 +16,12 @@ every cycle CONSUMES, and `eval_parser_concrete`'s fuel of
 is a (state, cursor) pair which a terminating parse never repeats.  Only a cycle
 that moves no cursor is refused here, which is the same thing the IR refuses.
 
+A Tran_key narrower than the rules written against it is 0-PADDED rather than
+refused.  ParserHawk writes `mask:65535` whatever the key's real width, so a
+rule can care about bits the key does not select -- including a node whose key
+is empty.  Those bits read as 0, which makes a rule wanting a 1 among them
+unmatchable; it is dropped, with a warning naming it.  See `Builder.transition`.
+
 `--input-bits N` unrolls the parser on (node, cursor) against an N-bit packet
 and emits `Accept` wherever an extraction would run past the end, with a warning
 naming each one.  That is ParserHawk's behaviour, not the IR's: its
@@ -125,6 +131,8 @@ class Builder:
         self.n = len(pipeline)
         self.next_label = self.n + 1
         self.extra = []
+        # Rules whose mask reads past the Tran_key; see transition().
+        self.narrow_keys = []
 
         # (field, chunk) -> header id; chunk 0 holds the most significant bits.
         self.chunks = {}
@@ -220,27 +228,66 @@ class Builder:
         return [(c["header"], c["width"]) for c in self.chunks[field]]
 
     # -- transitions -------------------------------------------------------
-    def transition(self, node):
+    def transition(self, node, idx=None):
+        """This node's transition, with the Tran_key 0-padded to the rules.
+
+        A rule may read bits the Tran_key does not supply -- ParserHawk writes
+        `mask:65535` whatever the key's real width -- so the key is 0-padded on
+        the MSB side to whatever the widest mask reads.  Per rule that means:
+
+        * a cared padding bit the rule wants SET can never match, so the rule is
+          dropped (it is an impossible transition, which is fine -- warn);
+        * a cared padding bit the rule wants CLEAR is satisfied by the padding,
+          so only its constraint on the key's own bits survives;
+        * a rule all of whose cared bits are satisfied padding matches EVERY
+          key, so it becomes this node's transition and no later rule (nor the
+          declared default) is reachable -- first-match.
+
+        Truncating the mask to the key's width instead is unsound: it drops the
+        rule's constraint on the missing bits rather than failing it, turning an
+        impossible transition into one that fires whenever those bits are 0.
+        """
         logic = node.get("tran_logic") or []
         default = self.target(node.get("default_tran"))
         if not logic:
             return ("uncond", default)
 
         entries = parse_key(node.get("Tran_key") or [])
-        if not entries:
-            raise Unsupported("node has tran_logic but an empty Tran_key")
         total = len(entries)
 
         decoded = []
         for entry in logic:
             val, mask, nxt = parse_kv(entry)
-            mask &= (1 << total) - 1
             if mask == 0:
                 raise Unsupported(f"entry {entry!r} masks out every key bit")
             val &= mask
-            cared = [i for i in range(total) if (mask >> (total - 1 - i)) & 1]
+            keep = mask & ((1 << total) - 1)   # cared bits the key supplies
+            impossible = bool(val >> total)    # wants a 1 where the key pads 0
+            unconditional = not impossible and keep == 0
+            # Only a rule the padding CHANGES is worth a warning.  A rule whose
+            # padded bits are all cared-for zeros still matches exactly when it
+            # did, on the key's own bits, and every pipeline here has some.
+            if impossible:
+                why = "wants a set bit the key cannot supply; dropped"
+            elif unconditional:
+                why = "every cared bit is padding it agrees with; matches any key"
+            else:
+                why = None
+            if why is not None:
+                self.narrow_keys.append((idx, total, mask.bit_length(), entry, why))
+            if impossible:
+                continue
+            if unconditional:
+                # It matches every key, so it IS this node's transition from here
+                # on and no later rule is reachable -- first-match.
+                default = self.target(nxt)
+                break
+            cared = [i for i in range(total) if (keep >> (total - 1 - i)) & 1]
             decoded.append((self.runs_of([entries[i] for i in cared], cared),
-                            val, self.target(nxt)))
+                            val & keep, self.target(nxt)))
+
+        if not decoded:
+            return ("uncond", default)
 
         if all(len(runs) == 1 for (runs, _, _) in decoded):
             cases = []
@@ -307,7 +354,7 @@ class Builder:
         states = []
         for i, node in enumerate(self.pipe):
             ch = self.extraction_chunks(node)
-            trans = self.transition(node)
+            trans = self.transition(node, i)
             if len(ch) <= 1:
                 states.append({
                     "label": i + 1,
@@ -584,6 +631,14 @@ def main():
         sizes = [int(x) for x in args.field_sizes.split(",")]
         b = Builder(pipeline, sizes)
         states = b.build()
+        if b.narrow_keys:
+            print(f"warning: {args.pipeline}: {len(b.narrow_keys)} transition "
+                  f"rule(s) read past their Tran_key; the key is 0-padded:",
+                  file=sys.stderr)
+            for (idx, total, want, entry, why) in b.narrow_keys:
+                where = "node ?" if idx is None else f"node {idx}"
+                print(f"  {where}: key is {total} bit(s), rule reads {want} -- "
+                      f"{entry} -- {why}", file=sys.stderr)
         # The IR's own progress condition: a loop is only a real loop if nothing
         # on it moves the cursor.  Anything else terminates by running out of
         # packet, so it is emitted as-is rather than unrolled.

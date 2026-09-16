@@ -52,6 +52,19 @@ mut "header slice hi+1" \
     'out.append(("h", r[0][1], r[-1][2], r[0][2] + 2, pos))'
 mut "select default -> Accept" \
     'return ("select", cases, default)' 'return ("select", cases, ("accept",))'
+# The key is 0-padded to whatever the rule's mask reads.  Not dropping the rule
+# that wants a 1 in the padding is the OLD truncating behaviour: it drops the
+# constraint instead of failing it, so a transition ParserHawk can never take
+# fires whenever those key bits are 0.
+mut "mask truncated, not padded" \
+    'impossible = bool(val >> total)' 'impossible = False'
+# A rule all of whose cared bits are padding it agrees with matches every key,
+# so no later rule is reachable.  Carrying on lets a later rule outrank it.
+mut "padding match not first-match" \
+    'default = self.target(nxt)
+                break' \
+    'default = self.target(nxt)
+                continue'
 
 # BORDERLINE, reported separately: this one is very nearly an EQUIVALENT
 # mutation, so "SURVIVED" here is not a gap in the tests.  Comparing a

@@ -38,6 +38,7 @@ gen icmp_ipu          icmp_ipu.json          16,1
 gen multifield_tofino multifield_tofino.json 8,8,1 --input-bits 17
 gen multifield_ipu    multifield_ipu.json    8,8,1
 gen sai_tofino        sai_v4_tofino.json     1,16,8,8,8,1,1,1,1
+gen sai_ipu           sai_v4_ipu.json        1,16,8,8,8,1,1,1,1
 
 # test/parserhawk holds the same files, because TestEquality's expect
 # tests read them from there; keep the two copies identical rather than
