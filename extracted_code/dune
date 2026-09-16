@@ -34,6 +34,12 @@
   (modules BenchEq)
   (libraries extracted_code_lib unix))
 
+(executable
+  (public_name pretty_print)
+  (name PrettyPrint)
+  (modules PrettyPrint)
+  (libraries extracted_code_lib))
+
 (library
  (name semantics_tests)
  (modules TestEquality TestModuleSemantics TestParserSemantics TestProgramSemantics)
