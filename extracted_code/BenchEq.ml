@@ -625,13 +625,24 @@ let () =
   end;
 
   print_header ();
+  (* A case's .ir (or, for ParserHawk, its pipeline JSON) is a checked-in
+     artifact produced by bench/<family>/regen.sh out of band; one that
+     hasn't been regenerated yet -- or regenerated for a different family --
+     shouldn't take the whole sweep down.  [run_case] reaches [open_in] before
+     the timed region starts, so a missing file surfaces as [Sys_error] out of
+     [run_case] itself; catch exactly that and skip the case instead. *)
+  let skipped = ref [] in
   let results =
-    Stdlib.List.map
+    Stdlib.List.filter_map
       (fun c ->
-         let r = run_case !reps c in
-         print_result r;
-         Stdlib.flush Stdlib.stdout;
-         r)
+         match run_case !reps c with
+         | r -> print_result r; Stdlib.flush Stdlib.stdout; Some r
+         | exception Sys_error msg ->
+           Stdlib.Printf.printf "%-11s %-21s SKIP (missing input: %s)\n"
+             c.family c.name msg;
+           Stdlib.flush Stdlib.stdout;
+           skipped := c :: !skipped;
+           None)
       selected
   in
   let bad =
@@ -646,9 +657,12 @@ let () =
     Stdlib.Printf.printf "\nwrote %s\n" !csv
   end;
 
-  Stdlib.Printf.printf "\n%d case(s), %d with the expected verdict.\n"
+  Stdlib.Printf.printf "\n%d case(s), %d with the expected verdict%s.\n"
     (Stdlib.List.length results)
-    (Stdlib.List.length results - Stdlib.List.length bad);
+    (Stdlib.List.length results - Stdlib.List.length bad)
+    (if !skipped = [] then ""
+     else Stdlib.Printf.sprintf ", %d skipped (missing input)"
+            (Stdlib.List.length !skipped));
   if bad <> [] then begin
     Stdlib.List.iter
       (fun r ->

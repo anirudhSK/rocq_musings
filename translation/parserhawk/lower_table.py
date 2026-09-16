@@ -597,17 +597,17 @@ def main():
                 raise Unsupported("--input-bits cannot be negative")
             states = b.unroll_by_cursor(states, 1, args.input_bits)
             if b.overruns:
-                print(f"warning: {len(b.overruns)} extraction(s) run past the "
-                      f"{args.input_bits}-bit packet and are emitted as Accept:",
-                      file=sys.stderr)
+                print(f"warning: {args.pipeline}: {len(b.overruns)} extraction(s) "
+                      f"run past the {args.input_bits}-bit packet and are "
+                      f"emitted as Accept:", file=sys.stderr)
                 for lbl, cur, w in b.overruns:
                     print(f"  state {lbl} at cursor {cur} wants {w} bits "
                           f"({cur + w} > {args.input_bits})", file=sys.stderr)
-                print("ParserHawk treats an over-long extraction as a NO-OP that freezes "
-                      "the fields\nand leaves the cursor put, so every later extraction "
-                      "is a no-op too; the IR\nwould REJECT instead.  Accepting matches "
-                      "the field values.  A pipeline that\nrelies on this is depending on "
-                      "running off the end of the packet.", file=sys.stderr)
+                # print("ParserHawk treats an over-long extraction as a NO-OP that freezes "
+                #       "the fields\nand leaves the cursor put, so every later extraction "
+                #       "is a no-op too; the IR\nwould REJECT instead.  Accepting matches "
+                #       "the field values.  A pipeline that\nrelies on this is depending on "
+                #       "running off the end of the packet.", file=sys.stderr)
         out = render(b, states, 1, args.input_bits)
     except Unsupported as e:
         sys.exit(f"cannot lower: {e}")

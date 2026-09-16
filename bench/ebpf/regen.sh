@@ -29,6 +29,16 @@ src="$here/src"; out="$here/ir"; mkdir -p "$out" "$src"
   exit 2
 }
 
+if [ -z "${CLANG:-}" ]; then
+  mularch=$(clang -print-multiarch 2>/dev/null || true)
+  if [ -n "$mularch" ] && [ -d "/usr/include/$mularch" ]; then
+    CLANG="clang -isystem /usr/include/$mularch"
+    case "$mularch" in
+      x86_64-linux-gnu) CLANG="$CLANG -D__x86_64__" ;;
+    esac
+  fi
+fi
+
 # One make, everything.  CLANG/LLC pass straight through if they are set.
 make -C "$ECT" -j8 ${CLANG:+CLANG="$CLANG"} ${LLC:+LLC="$LLC"} all >/dev/null || {
   echo "FAIL  make in $ECT" >&2
