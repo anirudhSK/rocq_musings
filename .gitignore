@@ -38,6 +38,7 @@ smt_query
 !/extracted_code/SmtSize.ml
 !/extracted_code/SolveTime.ml
 !/extracted_code/BenchEq.ml
+!/extracted_code/PrettyPrint.ml
 /bench/**/*.ir
 /.vscode/
 /.idea/
