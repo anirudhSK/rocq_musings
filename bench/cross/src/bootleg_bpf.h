@@ -5,6 +5,13 @@ typedef unsigned short __u16;
 typedef unsigned int __u32;
 typedef unsigned long long __u64;
 
+#define SEC(NAME) __attribute__((section(NAME), used))
+
+static void *(*bpf_map_lookup_elem)(void *map, const void *key) = (void *) 1;
+static long (*bpf_map_update_elem)(void *map, const void *key,
+                                   const void *value, __u64 flags) = (void *) 2;
+#define BPF_ANY 0
+
 enum xdp_action {
 	XDP_ABORTED = 0,
 	XDP_DROP,

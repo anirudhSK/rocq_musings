@@ -125,3 +125,15 @@ if grep -q 'error:' "$work/basic_p4.log"; then
 fi
 pretty basic_p4
 echo "ok    basic_p4.ir"
+
+# --- eBPF: src/map_write.c -> ir/map_write_bpf.ir ----------------------------------
+$CLANG -target bpf -O2 -g -I"$src" -emit-llvm -c "$src/map_write.c" -o "$work/map_write.o.bc" || {
+  echo "FAIL  clang map_write.c" >&2; exit 1; }
+"$LLC" -mtriple=bpf -mcpu=probe -filetype=obj -o "$build/map_write_bpf.o" "$work/map_write.o.bc" || {
+  echo "FAIL  llc map_write.c" >&2; exit 1; }
+"$ECT/bpf_to_ir" "$build/map_write_bpf.o" >"$out/map_write_bpf.ir" || {
+  echo "FAIL  bpf_to_ir map_write.c" >&2; exit 1; }
+(cd "$build" && "$OBJDUMP" -d map_write_bpf.o) >"$build/map_write_bpf.out" || {
+  echo "FAIL  llvm-objdump map_write_bpf.o" >&2; exit 1; }
+pretty map_write_bpf
+echo "ok    map_write_bpf.ir"
