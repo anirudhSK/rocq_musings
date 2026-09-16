@@ -40,6 +40,7 @@ smt_query
 !/extracted_code/BenchEq.ml
 !/extracted_code/PrettyPrint.ml
 /bench/**/*.ir
+/bench/cross/build/
 /.vscode/
 /.idea/
 /.claude/
