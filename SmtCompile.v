@@ -75,24 +75,286 @@ Definition cw (z : Z) : SmtArithExpr := SmtArithConst (repr z) u64.
 Definition tag_z (ty : CrIntType) : Z :=
   match it_width ty with W8 => 2 | W16 => 3 | W32 => 4 | W64 => 5 end.
 
+(* ------------------------------------------------------------------ *)
+(* Sharing the fixed literals.
+
+   [cw] BUILDS a node, so every occurrence of [cw 2] in this file is a distinct
+   [SmtArithConst] once extracted -- and the lowering memo compares by physical
+   identity, so each one became its own Z3 numeral.  On a fuzzed tuple-space
+   query that was 23k constant nodes standing for about twenty values, a third
+   of the whole term.
+
+   Naming them makes extraction emit ONE value per literal, shared by every
+   use.  Each is convertible with the [cw] application it replaces, so nothing
+   downstream has to change -- the proofs below [unfold] them exactly as they
+   unfolded [cw]. *)
+Definition c_two  : SmtArithExpr := cw 2.
+Definition c_six  : SmtArithExpr := cw 6.
+Definition c_tag8 : SmtArithExpr := cw 2.
+Definition c_tag16 : SmtArithExpr := cw 3.
+Definition c_tag32 : SmtArithExpr := cw 4.
+Definition c_tag64 : SmtArithExpr := cw 5.
+
+(* [cw (tag_z ty)] with the four results shared. *)
+Definition ctag (ty : CrIntType) : SmtArithExpr :=
+  match it_width ty with
+  | W8 => c_tag8 | W16 => c_tag16 | W32 => c_tag32 | W64 => c_tag64
+  end.
+
+Lemma ctag_cw : forall ty, ctag ty = cw (tag_z ty).
+Proof. intro ty. unfold ctag, tag_z, c_tag8, c_tag16, c_tag32, c_tag64.
+       destruct (it_width ty); reflexivity. Qed.
+
 (* Mask a word into [ty]'s width.  [W64] is the identity rather than an
    [and] with all-ones so the compiled term does not grow for the common case. *)
+Definition c_ones8  : SmtArithExpr := cw (Z.ones (width_bits W8)).
+Definition c_ones16 : SmtArithExpr := cw (Z.ones (width_bits W16)).
+Definition c_ones32 : SmtArithExpr := cw (Z.ones (width_bits W32)).
+
 Definition cmask (ty : CrIntType) (e : SmtArithExpr) : SmtArithExpr :=
   match it_width ty with
   | W64 => e
-  | w => SmtBitAnd u64 e (cw (Z.ones (width_bits w)))
+  | W8  => SmtBitAnd u64 e c_ones8
+  | W16 => SmtBitAnd u64 e c_ones16
+  | W32 => SmtBitAnd u64 e c_ones32
   end.
 
 (* [2 <= t <= 5]: the tag says [IntVal].  Written with [<] alone because that
    is the one comparison the fragment has. *)
 Definition is_int_tag (t : SmtArithExpr) : SmtBoolExpr :=
-  SmtBoolAnd (SmtBoolNot (SmtBoolLt t (cw 2))) (SmtBoolLt t (cw 6)).
+  SmtBoolAnd (SmtBoolNot (SmtBoolLt t c_two)) (SmtBoolLt t c_six).
 
 Definition tag_is (t : SmtArithExpr) (ty : CrIntType) : SmtBoolExpr :=
-  SmtBoolEq t (cw (tag_z ty)).
+  SmtBoolEq t (ctag ty).
+
+(* ------------------------------------------------------------------ *)
+(* Folding smart constructors.
+
+   Every case of the compiler below builds its node through one of these
+   instead of through the raw constructor.  Each is EXTENSIONALLY the raw
+   constructor -- the [_eval] lemma beside it says exactly that -- so the
+   correctness proof rewrites them away and then proceeds as before; what they
+   change is only how big the term is.
+
+   Why this is worth a smart constructor at all: a compiled comparison is
+   [and (eq t1 t2) (or (not (is_int_tag t1)) (eq v1 v2))], and in a well-typed
+   program both tags are the SAME LITERAL.  Folding turns that eleven-node term
+   into [eq v1 v2].  Nothing here inspects a term deeply -- every test is on a
+   constructor or on two [SmtArithConst] leaves -- so none of it walks the DAG,
+   which is what makes it safe to do here at all. *)
+
+Definition bool_lit (b : bool) : SmtBoolExpr := if b then SmtTrue else SmtFalse.
+
+(* What [SmtArithConst] denotes.  It is [mk_int], not [IntVal]: the constant is
+   masked into its own width first, so a fold that compared the raw words would
+   be wrong on an out-of-range literal. *)
+Definition lit_val (x : uint64) (ty : CrIntType) : CrVal := mk_int ty (unsigned x).
+
+Lemma lit_val_eval : forall x ty v,
+  eval_smt_arith (SmtArithConst x ty) v = lit_val x ty.
+Proof. reflexivity. Qed.
+
+Lemma bool_lit_eval : forall b v, eval_smt_bool (bool_lit b) v = b.
+Proof. destruct b; reflexivity. Qed.
+
+Definition mk_not (e : SmtBoolExpr) : SmtBoolExpr :=
+  match e with
+  | SmtTrue => SmtFalse
+  | SmtFalse => SmtTrue
+  | SmtBoolNot e1 => e1
+  | _ => SmtBoolNot e
+  end.
+
+Lemma mk_not_eval : forall e v,
+  eval_smt_bool (mk_not e) v = negb (eval_smt_bool e v).
+Proof.
+  intros e v. destruct e; try reflexivity.
+  cbn [mk_not eval_smt_bool]. rewrite negb_involutive. reflexivity.
+Qed.
+
+Definition mk_and (a b : SmtBoolExpr) : SmtBoolExpr :=
+  match a with
+  | SmtFalse => SmtFalse
+  | SmtTrue => b
+  | _ => match b with
+         | SmtFalse => SmtFalse
+         | SmtTrue => a
+         | _ => SmtBoolAnd a b
+         end
+  end.
+
+Lemma mk_and_eval : forall a b v,
+  eval_smt_bool (mk_and a b) v = (eval_smt_bool a v && eval_smt_bool b v)%bool.
+Proof.
+  intros a b v. destruct a; cbn [mk_and];
+    try (rewrite andb_true_l; reflexivity);
+    try (rewrite andb_false_l; reflexivity);
+    destruct b; cbn [eval_smt_bool];
+    try (rewrite andb_true_r; reflexivity);
+    try (rewrite andb_false_r; reflexivity);
+    reflexivity.
+Qed.
+
+Definition mk_or (a b : SmtBoolExpr) : SmtBoolExpr :=
+  match a with
+  | SmtTrue => SmtTrue
+  | SmtFalse => b
+  | _ => match b with
+         | SmtTrue => SmtTrue
+         | SmtFalse => a
+         | _ => SmtBoolOr a b
+         end
+  end.
+
+Lemma mk_or_eval : forall a b v,
+  eval_smt_bool (mk_or a b) v = (eval_smt_bool a v || eval_smt_bool b v)%bool.
+Proof.
+  intros a b v. destruct a; cbn [mk_or];
+    try (rewrite orb_true_l; reflexivity);
+    try (rewrite orb_false_l; reflexivity);
+    destruct b; cbn [eval_smt_bool];
+    try (rewrite orb_true_r; reflexivity);
+    try (rewrite orb_false_r; reflexivity);
+    reflexivity.
+Qed.
+
+(* Are these the SAME literal?  Only two [SmtArithConst] leaves are compared,
+   so this is O(1) and never descends -- a structural equality on arbitrary
+   [SmtArithExpr] would walk a DAG as a tree, which is the blow-up the
+   [cstep]/[compile] split exists to avoid. *)
+Definition lit_eqb (a b : SmtArithExpr) : bool :=
+  match a, b with
+  | SmtArithConst x tx, SmtArithConst y ty =>
+      (crinttype_eqb tx ty && Integers.eq x y)%bool
+  | _, _ => false
+  end.
+
+Lemma lit_eqb_eval : forall a b v,
+  lit_eqb a b = true -> eval_smt_arith a v = eval_smt_arith b v.
+Proof.
+  intros a b v H. destruct a; try discriminate. destruct b; try discriminate.
+  cbn [lit_eqb] in H. apply andb_prop in H as [Hty Hv].
+  apply crinttype_eqb_true in Hty. apply int_eq_true in Hv. subst.
+  reflexivity.
+Qed.
+
+(* [ite c k k] denotes [k] whichever way [c] goes.  Restricted to a literal [k]
+   for the reason on [lit_eqb]: that is the case that actually fires, because
+   the two branches of a merged TAG are usually the same shared literal. *)
+Definition mk_ite (c : SmtBoolExpr) (t f : SmtArithExpr) : SmtArithExpr :=
+  match c with
+  | SmtTrue => t
+  | SmtFalse => f
+  | _ => if lit_eqb t f then t else SmtConditional c t f
+  end.
+
+Lemma mk_ite_eval : forall c t f v,
+  eval_smt_arith (mk_ite c t f) v =
+    (if eval_smt_bool c v then eval_smt_arith t v else eval_smt_arith f v).
+Proof.
+  intros c t f v.
+  destruct c; try reflexivity;
+    (cbn [mk_ite]; destruct (lit_eqb t f) eqn:Hl;
+     [ rewrite (lit_eqb_eval t f v Hl); destruct (eval_smt_bool _ v); reflexivity
+     | reflexivity ]).
+Qed.
+
+(* ------------------------------------------------------------------ *)
+(* Deciding [is_int_tag] on a tag the compiler built itself.
+
+   A tag half is a literal, or a merge of tag halves.  [tag_decide] answers
+   "every leaf of this tag is in 2..5" / "none is", and [None] as soon as the
+   leaves disagree or a leaf is not a literal.  When it answers, the guard --
+   and with it the whole comparison wrapped around it -- collapses.
+
+   It recurses only through [SmtConditional], and a tag spine is built by the
+   compiler rather than by the program, so it is short.  The [None] answer
+   short-circuits, so a spine that cannot fold is abandoned at its first
+   non-literal leaf. *)
+(* [is_int_tag] reads its argument only through its VALUE, which is what lets
+   [tag_decide] push through a merge. *)
+Definition itv (x : CrVal) : bool :=
+  (negb (CrVal.ltb x (IntVal (repr 2) u64)) && CrVal.ltb x (IntVal (repr 6) u64))%bool.
+
+(* FUEL, and it is not a formality.  A tag is a DAG -- the merge at every rule
+   shares its branches -- and a structural walk visits a shared subterm once
+   per PATH, which is the blow-up the [cstep]/[compile] split exists to avoid.
+   Rather than memoise a second traversal, this one is simply not allowed to be
+   deep: running out returns [None], the answer that folds nothing, so the
+   bound costs precision and never soundness.
+
+   Depth 8 is enough in practice because [mk_ite] has already collapsed
+   [ite c k k] to [k], so a spine only survives where the branches genuinely
+   differ. *)
+Fixpoint tag_decide (fuel : nat) (t : SmtArithExpr) : option bool :=
+  match fuel with
+  | O => None
+  | S fuel' =>
+      match t with
+      | SmtArithConst x ty => Some (itv (lit_val x ty))
+      | SmtConditional _ a b =>
+          match tag_decide fuel' a with
+          | None => None
+          | Some xa =>
+              match tag_decide fuel' b with
+              | None => None
+              | Some xb =>
+                  (* agreeing leaves only; written out rather than with
+                     [Bool.eqb] so extraction pulls in no extra module *)
+                  match xa, xb with
+                  | true, true => Some true
+                  | false, false => Some false
+                  | _, _ => None
+                  end
+              end
+          end
+      | _ => None
+      end
+  end.
+
+Definition tag_fuel : nat := 8.
+
+Definition mk_int_tag (t : SmtArithExpr) : SmtBoolExpr :=
+  match tag_decide tag_fuel t with
+  | Some b => bool_lit b
+  | None => is_int_tag t
+  end.
+
+(* Comparisons between two literals decide.  Same O(1) restriction as
+   [lit_eqb]: only [SmtArithConst] leaves are looked at. *)
+Definition mk_beq (a b : SmtArithExpr) : SmtBoolExpr :=
+  match a, b with
+  | SmtArithConst x tx, SmtArithConst y ty =>
+      bool_lit (CrVal.eqb (lit_val x tx) (lit_val y ty))
+  | _, _ => SmtBoolEq a b
+  end.
+
+Lemma mk_beq_eval : forall a b v,
+  eval_smt_bool (mk_beq a b) v = eval_smt_bool (SmtBoolEq a b) v.
+Proof.
+  intros a b v. destruct a; try reflexivity. destruct b; try reflexivity.
+  cbn [mk_beq]. rewrite bool_lit_eval.
+  cbn [eval_smt_bool]. rewrite !lit_val_eval.
+  match goal with |- _ = (if ?g then _ else _) => destruct g end; reflexivity.
+Qed.
+
+Definition mk_blt (a b : SmtArithExpr) : SmtBoolExpr :=
+  match a, b with
+  | SmtArithConst x tx, SmtArithConst y ty =>
+      bool_lit (CrVal.ltb (lit_val x tx) (lit_val y ty))
+  | _, _ => SmtBoolLt a b
+  end.
+
+Lemma mk_blt_eval : forall a b v,
+  eval_smt_bool (mk_blt a b) v = eval_smt_bool (SmtBoolLt a b) v.
+Proof.
+  intros a b v. destruct a; try reflexivity. destruct b; try reflexivity.
+  cbn [mk_blt]. rewrite bool_lit_eval.
+  cbn [eval_smt_bool]. rewrite !lit_val_eval. reflexivity.
+Qed.
 
 Definition err_tag : SmtArithExpr := cw 0.
-Definition zero_w : SmtArithExpr := cw 0.
+Definition zero_w : SmtArithExpr := err_tag.
 
 (* A compiled arith term is the PAIR (value, tag); [mk_cell] of the two is the
    [CrVal] the original denoted.  Note the value half is only constrained where
@@ -115,8 +377,7 @@ Definition mk_binop (ty : CrIntType)
   let (v1, t1) := p1 in
   let (v2, t2) := p2 in
   (cmask ty (op u64 v1 v2),
-   SmtConditional (SmtBoolAnd (tag_is t1 ty) (tag_is t2 ty))
-     (cw (tag_z ty)) err_tag).
+   mk_ite (mk_and (tag_is t1 ty) (tag_is t2 ty)) (ctag ty) err_tag).
 
 (* The value half of a compiled pair, forced to zero where the tag says the
    term is not an integer.  [CrVal.val_of] is 0 on [UninitVal] and [ErrorVal],
@@ -124,7 +385,7 @@ Definition mk_binop (ty : CrIntType)
    [mk_cell], which discards it under a non-integer tag -- has to reproduce
    that.  Only [SmtStCell] below needs it. *)
 Definition vguard (p : carith) : SmtArithExpr :=
-  let (v, t) := p in SmtConditional (is_int_tag t) v zero_w.
+  let (v, t) := p in mk_ite (mk_int_tag t) v zero_w.
 
 (* ------------------------------------------------------------------ *)
 (* The compiler.                                                        *)
@@ -153,9 +414,9 @@ Definition cstep_bool (e : SmtBoolExpr) : SmtBoolExpr :=
   match e with
   | SmtTrue => SmtTrue
   | SmtFalse => SmtFalse
-  | SmtBoolNot e1 => SmtBoolNot (rb e1)
-  | SmtBoolAnd e1 e2 => SmtBoolAnd (rb e1) (rb e2)
-  | SmtBoolOr e1 e2 => SmtBoolOr (rb e1) (rb e2)
+  | SmtBoolNot e1 => mk_not (rb e1)
+  | SmtBoolAnd e1 e2 => mk_and (rb e1) (rb e2)
+  | SmtBoolOr e1 e2 => mk_or (rb e1) (rb e2)
   (* [eqb] compares the type first and the bits second, and calls two
      non-integers equal when they are the same non-integer.  Comparing tags
      says both of those at once; the value comparison is then only reached
@@ -163,14 +424,14 @@ Definition cstep_bool (e : SmtBoolExpr) : SmtBoolExpr :=
   | SmtBoolEq e1 e2 =>
       let (v1, t1) := ra e1 in
       let (v2, t2) := ra e2 in
-      SmtBoolAnd (SmtBoolEq t1 t2)
-        (SmtBoolOr (SmtBoolNot (is_int_tag t1)) (SmtBoolEq v1 v2))
+      mk_and (mk_beq t1 t2)
+        (mk_or (mk_not (mk_int_tag t1)) (mk_beq v1 v2))
   (* [ltb] is false on every non-integer, in both directions. *)
   | SmtBoolLt e1 e2 =>
       let (v1, t1) := ra e1 in
       let (v2, t2) := ra e2 in
-      SmtBoolAnd (SmtBoolEq t1 t2)
-        (SmtBoolAnd (is_int_tag t1) (SmtBoolLt v1 v2))
+      mk_and (mk_beq t1 t2)
+        (mk_and (mk_int_tag t1) (mk_blt v1 v2))
   | SmtBoolVar name => SmtBoolVar name
   | SmtArrEq n a1 a2 => SmtArrEq n (rm a1) (rm a2)
   end
@@ -191,25 +452,26 @@ Definition cstep_arith (e : SmtArithExpr) : carith :=
      two agree structurally, where the lowering used to make them agree by
      asserting a constraint about the model. *)
   | SmtArithVar name =>
-      let ok := is_int_tag (SmtVarTag name) in
-      (SmtConditional ok (SmtVarVal name) zero_w,
-       SmtConditional ok (SmtVarTag name) err_tag)
+      let ok := mk_int_tag (SmtVarTag name) in
+      (mk_ite ok (SmtVarVal name) zero_w,
+       mk_ite ok (SmtVarTag name) err_tag)
   | SmtBitsToInt bits =>
       (SmtBitsToInt (List.map rb bits),
        cw (tag_z u64))
   | SmtBitSlice lo hi e1 =>
       let (v1, t1) := ra e1 in
-      (SmtConditional (is_int_tag t1) (SmtBitSlice lo hi v1) zero_w,
-       SmtConditional (is_int_tag t1) (cw (tag_z u64)) err_tag)
+      let ok := mk_int_tag t1 in
+      (mk_ite ok (SmtBitSlice lo hi v1) zero_w,
+       mk_ite ok (ctag u64) err_tag)
   | SmtConditional c e1 e2 =>
       let cb := rb c in
       let (v1, t1) := ra e1 in
       let (v2, t2) := ra e2 in
-      (SmtConditional cb v1 v2, SmtConditional cb t1 t2)
+      (mk_ite cb v1 v2, mk_ite cb t1 t2)
   | SmtCast from to e1 =>
       let (v1, t1) := ra e1 in
       (cmask to v1,
-       SmtConditional (tag_is t1 from) (cw (tag_z to)) err_tag)
+       mk_ite (tag_is t1 from) (ctag to) err_tag)
   | SmtBitAdd ty e1 e2 => mk_binop ty SmtBitAdd (ra e1) (ra e2)
   | SmtBitSub ty e1 e2 => mk_binop ty SmtBitSub (ra e1) (ra e2)
   | SmtBitAnd ty e1 e2 => mk_binop ty SmtBitAnd (ra e1) (ra e2)
@@ -224,11 +486,11 @@ Definition cstep_arith (e : SmtArithExpr) : carith :=
   | SmtBitNot e1 =>
       let (v1, t1) := ra e1 in
       let nv := SmtBitNot v1 in
-      (SmtConditional (tag_is t1 u8) (cmask u8 nv)
-        (SmtConditional (tag_is t1 u16) (cmask u16 nv)
-          (SmtConditional (tag_is t1 u32) (cmask u32 nv)
-            (SmtConditional (tag_is t1 u64) (cmask u64 nv) zero_w))),
-       SmtConditional (is_int_tag t1) t1 err_tag)
+      (mk_ite (tag_is t1 u8) (cmask u8 nv)
+        (mk_ite (tag_is t1 u16) (cmask u16 nv)
+          (mk_ite (tag_is t1 u32) (cmask u32 nv)
+            (mk_ite (tag_is t1 u64) (cmask u64 nv) zero_w))),
+       mk_ite (mk_int_tag t1) t1 err_tag)
   (* The bounds guard [ld_arr] applies, made explicit.  [smt_arr_len] is the
      declared length of the region the expression is rooted at; it agrees with
      the denoted [arr_len] exactly when the merges are length-consistent, which
@@ -236,13 +498,13 @@ Definition cstep_arith (e : SmtArithExpr) : carith :=
   | SmtArrSel a idx =>
       let ca := rm a in
       let (vi, ti) := ra idx in
-      let ok := SmtBoolAnd (is_int_tag ti)
-                  (SmtBoolLt vi (cw (unsigned (smt_arr_len a)))) in
-      (SmtConditional ok (SmtCellVal ca vi) zero_w,
-       SmtConditional ok (SmtCellTag ca vi) err_tag)
+      let ok := mk_and (mk_int_tag ti)
+                  (mk_blt vi (cw (unsigned (smt_arr_len a)))) in
+      (mk_ite ok (SmtCellVal ca vi) zero_w,
+       mk_ite ok (SmtCellTag ca vi) err_tag)
   (* Already core: a word, hence tag [u64]. *)
-  | SmtVarVal name => (SmtVarVal name, cw (tag_z u64))
-  | SmtVarTag name => (SmtVarTag name, cw (tag_z u64))
+  | SmtVarVal name => (SmtVarVal name, ctag u64)
+  | SmtVarTag name => (SmtVarTag name, ctag u64)
   (* The cell reads are core in their VALUE but not in their INDEX, and the
      index is why these two carry a guard.  [cell_at] is [ErrorVal] on an
      index that does not denote an integer, so the source term reads NO cell
@@ -256,11 +518,11 @@ Definition cstep_arith (e : SmtArithExpr) : carith :=
   | SmtCellVal a idx =>
       let ca := rm a in
       let (vi, ti) := ra idx in
-      (SmtConditional (is_int_tag ti) (SmtCellVal ca vi) zero_w, cw (tag_z u64))
+      (mk_ite (mk_int_tag ti) (SmtCellVal ca vi) zero_w, ctag u64)
   | SmtCellTag a idx =>
       let ca := rm a in
       let (vi, ti) := ra idx in
-      (SmtConditional (is_int_tag ti) (SmtCellTag ca vi) zero_w, cw (tag_z u64))
+      (mk_ite (mk_int_tag ti) (SmtCellTag ca vi) zero_w, ctag u64)
   end
 .
 
@@ -275,8 +537,8 @@ Definition cstep_arr (a : SmtArrExpr) : SmtArrExpr :=
       let ca := rm a1 in
       let (vi, ti) := ra idx in
       let (vv, tv) := ra val in
-      let ok := SmtBoolAnd (is_int_tag ti)
-                  (SmtBoolLt vi (cw (unsigned (smt_arr_len a1)))) in
+      let ok := mk_and (mk_int_tag ti)
+                  (mk_blt vi (cw (unsigned (smt_arr_len a1)))) in
       SmtArrIte ok (SmtStCell ca vi vv tv) ca
   (* The same guard, on all three operands: [st_cell] drops a write whose
      index is not an integer, and reads its value and tag through [val_of],
@@ -285,7 +547,7 @@ Definition cstep_arr (a : SmtArrExpr) : SmtArrExpr :=
   | SmtStCell a1 idx value tag =>
       let ca := rm a1 in
       let (vi, ti) := ra idx in
-      SmtArrIte (is_int_tag ti)
+      SmtArrIte (mk_int_tag ti)
         (SmtStCell ca vi (vguard (ra value)) (vguard (ra tag))) ca
   end.
 
@@ -742,11 +1004,56 @@ Qed.
 (* ------------------------------------------------------------------ *)
 (* Evaluating the compiled guards. *)
 
+Lemma is_int_tag_val : forall t v,
+  eval_smt_bool (is_int_tag t) v = itv (eval_smt_arith t v).
+Proof.
+  intros t v. unfold is_int_tag, itv, c_two, c_six.
+  cbn [eval_smt_bool]. rewrite !cw_eval. reflexivity.
+Qed.
+
+Lemma tag_decide_sound : forall fuel t r v,
+  tag_decide fuel t = Some r -> eval_smt_bool (is_int_tag t) v = r.
+Proof.
+  induction fuel as [| fuel IH]; intros t r v Hd; [discriminate |].
+  destruct t as [ x ty | | nm | bits | lo hi e | c a1 a2 | fr to e
+                | ty e1 e2 | ty e1 e2 | ty e1 e2 | ty e1 e2 | ty e1 e2 | e
+                | ty e1 e2 | ty e1 e2 | ty e1 e2
+                | ar ix | nm | nm | ar ix | ar ix ];
+    cbn [tag_decide] in Hd; try discriminate.
+  - (* SmtArithConst: the literal decides outright. *)
+    injection Hd as <-. rewrite is_int_tag_val, lit_val_eval. reflexivity.
+  - (* SmtConditional: both branches decided within the fuel, and agreed. *)
+    destruct (tag_decide fuel a1) as [xa|] eqn:Ha; [| discriminate].
+    destruct (tag_decide fuel a2) as [xb|] eqn:Hb; [| discriminate].
+    rewrite is_int_tag_val. cbn [eval_smt_arith].
+    destruct xa, xb; cbn in Hd; try discriminate; injection Hd as <-;
+      destruct (eval_smt_bool c v); rewrite <- is_int_tag_val;
+      solve [ apply (IH _ _ v Ha) | apply (IH _ _ v Hb) ].
+Qed.
+
+Lemma mk_int_tag_eval : forall t v,
+  eval_smt_bool (mk_int_tag t) v = eval_smt_bool (is_int_tag t) v.
+Proof.
+  intros t v. unfold mk_int_tag. destruct (tag_decide tag_fuel t) as [b|] eqn:Hd;
+    [| reflexivity].
+  rewrite bool_lit_eval. symmetry. apply (tag_decide_sound tag_fuel t b v Hd).
+Qed.
+
+(* Rewrite every fold back to the raw node it stands for.  Each smart
+   constructor is extensionally its raw counterpart, so a proof that used to
+   [cbn] straight through [SmtBoolAnd] now runs [unfold_mk] first and is
+   otherwise unchanged -- the folding is invisible to everything below. *)
+Ltac unfold_mk :=
+  repeat progress
+    (rewrite ?ctag_cw, ?mk_not_eval, ?mk_and_eval, ?mk_or_eval,
+             ?mk_beq_eval, ?mk_blt_eval, ?mk_ite_eval, ?mk_int_tag_eval).
+
+
 Lemma eval_is_int_tag : forall t v (tv : uint64),
   eval_smt_arith t v = IntVal tv u64 ->
   eval_smt_bool (is_int_tag t) v = ((2 <=? unsigned tv) && (unsigned tv <? 6))%bool.
 Proof.
-  intros t v tv Ht. unfold is_int_tag. cbn [eval_smt_bool].
+  intros t v tv Ht. unfold is_int_tag, c_two, c_six. cbn [eval_smt_bool].
   rewrite Ht, !cw_eval. unfold CrVal.ltb, u64. cbn [crinttype_eqb crwidth_eqb it_width].
   rewrite !andb_true_l, !ltu64_spec.
   rewrite (unsigned_repr64 2) by (split; [lia | vm_compute; reflexivity]).
@@ -774,7 +1081,7 @@ Lemma eval_tag_is : forall t v (tv : uint64) ty,
   eval_smt_arith t v = IntVal tv u64 ->
   eval_smt_bool (tag_is t ty) v = (unsigned tv =? tag_z ty).
 Proof.
-  intros t v tv ty Ht. unfold tag_is. cbn [eval_smt_bool].
+  intros t v tv ty Ht. unfold tag_is. rewrite ctag_cw. cbn [eval_smt_bool].
   rewrite Ht, cw_eval. unfold CrVal.eqb, u64. cbn [crinttype_eqb crwidth_eqb it_width].
   rewrite andb_true_l, eq64_spec, unsigned_repr_tag.
   destruct (unsigned tv =? tag_z ty); reflexivity.
@@ -786,6 +1093,7 @@ Lemma eval_cmask : forall ty e v (a : uint64),
 Proof.
   intros [w] e v a He. destruct w; cbn [cmask it_width];
     [ | | | rewrite He; f_equal; symmetry; apply mask_width_W64_id ];
+    unfold c_ones8, c_ones16, c_ones32;
     cbn [eval_smt_arith]; rewrite He, cw_eval;
     unfold and_at, iv_binop_at, u64; cbn [crinttype_eqb crwidth_eqb it_width];
     rewrite and_ones_mask; unfold mk_int; cbn [it_width];
@@ -836,10 +1144,9 @@ Proof.
     - rewrite mask_width_unsigned_mask_W64. reflexivity.
     - rewrite Hop, HV1, HV2. unfold iv_binop_at, u64.
       cbn [crinttype_eqb crwidth_eqb it_width]. unfold mk_int. cbn [it_width]. reflexivity. }
-  assert (Hcond : eval_smt_bool (SmtBoolAnd (tag_is T1 ty) (tag_is T2 ty)) v
+  assert (Hcond : (eval_smt_bool (tag_is T1 ty) v && eval_smt_bool (tag_is T2 ty) v)%bool
                   = ((unsigned tv1 =? tag_z ty) && (unsigned tv2 =? tag_z ty))%bool).
-  { cbn [eval_smt_bool].
-    rewrite (eval_tag_is T1 v tv1 ty) by assumption.
+  { rewrite (eval_tag_is T1 v tv1 ty) by assumption.
     rewrite (eval_tag_is T2 v tv2 ty) by assumption. reflexivity. }
   destruct (unsigned tv1 =? tag_z ty) eqn:E1b.
   - assert (E1 : unsigned tv1 = tag_z ty) by (apply Z.eqb_eq; exact E1b).
@@ -851,17 +1158,17 @@ Proof.
       assert (Hyi : y = IntVal av2 ty) by (rewrite Hy, E2; apply mk_cell_tag_z).
       rewrite Hxi, Hyi. unfold iv_binop_at. rewrite !crinttype_eqb_refl. cbn [andb].
       apply (reps_mask _ _ _ ty _ Hv).
-      cbn [eval_smt_arith]. rewrite Hcond. apply cw_eval.
+      unfold_mk. rewrite Hcond. apply cw_eval.
     + assert (E2 : unsigned tv2 <> tag_z ty) by (apply Z.eqb_neq; exact E2b).
       cbn [andb] in Hcond.
       rewrite (iv_binop_ne2 f ty x y (unsigned av2) (unsigned tv2)) by assumption.
       apply (reps_err _ _ _ _ Hv).
-      cbn [eval_smt_arith]. rewrite Hcond. unfold err_tag. apply cw_eval.
+      unfold_mk. rewrite Hcond. unfold err_tag. apply cw_eval.
   - assert (E1 : unsigned tv1 <> tag_z ty) by (apply Z.eqb_neq; exact E1b).
     cbn [andb] in Hcond.
     rewrite (iv_binop_ne1 f ty x y (unsigned av1) (unsigned tv1)) by assumption.
     apply (reps_err _ _ _ _ Hv).
-    cbn [eval_smt_arith]. rewrite Hcond. unfold err_tag. apply cw_eval.
+    unfold_mk. rewrite Hcond. unfold err_tag. apply cw_eval.
 Qed.
 
 (* ------------------------------------------------------------------ *)
@@ -1065,7 +1372,7 @@ Lemma val_of_vguard : forall p v x,
 Proof.
   intros [V T] v x Hr. unfold vguard.
   destruct (reps_dec _ _ _ Hr) as [[av [ty [HV [HT [Hg Hx]]]]] | [av [tv [HV [_ [_ [Hg Hx]]]]]]];
-    cbn [fst snd] in *; cbn [eval_smt_arith]; rewrite Hg.
+    cbn [fst snd] in *; unfold_mk; rewrite Hg.
   - rewrite HV, Hx. reflexivity.
   - rewrite eval_zero_w. destruct Hx as [-> | ->]; reflexivity.
 Qed.
@@ -1143,7 +1450,7 @@ Lemma cc_not : forall e, CPb e -> CPb (SmtBoolNot e).
 Proof.
   unfold CPb in *. intros e IH v H.
   rewrite lcb_step in H. cbn [lcstep_bool] in H.
-  rewrite compile_bool_step. cbn [cstep_bool]. cbn [eval_smt_bool].
+  rewrite compile_bool_step. cbn [cstep_bool]. unfold_mk. cbn [eval_smt_bool].
   rewrite (IH v H). reflexivity.
 Qed.
 
@@ -1151,7 +1458,7 @@ Lemma cc_and : forall e1 e2, CPb e1 -> CPb e2 -> CPb (SmtBoolAnd e1 e2).
 Proof.
   unfold CPb in *. intros e1 e2 IH1 IH2 v H.
   rewrite lcb_step in H. cbn [lcstep_bool] in H. apply andb_prop in H as [H1 H2].
-  rewrite compile_bool_step. cbn [cstep_bool]. cbn [eval_smt_bool].
+  rewrite compile_bool_step. cbn [cstep_bool]. unfold_mk. cbn [eval_smt_bool].
   rewrite (IH1 v H1), (IH2 v H2). reflexivity.
 Qed.
 
@@ -1159,7 +1466,7 @@ Lemma cc_or : forall e1 e2, CPb e1 -> CPb e2 -> CPb (SmtBoolOr e1 e2).
 Proof.
   unfold CPb in *. intros e1 e2 IH1 IH2 v H.
   rewrite lcb_step in H. cbn [lcstep_bool] in H. apply andb_prop in H as [H1 H2].
-  rewrite compile_bool_step. cbn [cstep_bool]. cbn [eval_smt_bool].
+  rewrite compile_bool_step. cbn [cstep_bool]. unfold_mk. cbn [eval_smt_bool].
   rewrite (IH1 v H1), (IH2 v H2). reflexivity.
 Qed.
 
@@ -1167,7 +1474,7 @@ Lemma cc_arreq : forall n a1 a2, CPm a1 -> CPm a2 -> CPb (SmtArrEq n a1 a2).
 Proof.
   unfold CPb, CPm in *. intros n a1 a2 IH1 IH2 v H.
   rewrite lcb_step in H. cbn [lcstep_bool] in H. apply andb_prop in H as [H1 H2].
-  rewrite compile_bool_step. cbn [cstep_bool]. cbn [eval_smt_bool].
+  rewrite compile_bool_step. cbn [cstep_bool]. unfold_mk. cbn [eval_smt_bool].
   rewrite (IH1 v H1), (IH2 v H2). reflexivity.
 Qed.
 
@@ -1184,9 +1491,9 @@ Proof.
   destruct IH1 as [av1 [tv1 [HV1 [HT1 [Hle1 Hx1]]]]].
   destruct IH2 as [av2 [tv2 [HV2 [HT2 [Hle2 Hx2]]]]].
   cbn [fst snd] in HV1, HT1, HV2, HT2.
-  rewrite compile_bool_step. cbn [cstep_bool]. rewrite C1, C2.
-  cbn [eval_smt_bool]. rewrite HV1, HV2, HT1, HT2, Hx1, Hx2.
+  rewrite compile_bool_step. cbn [cstep_bool]. rewrite C1, C2. unfold_mk.
   rewrite (eval_is_int_tag T1 v tv1 HT1).
+  cbn [eval_smt_bool]. rewrite HV1, HV2, HT1, HT2, Hx1, Hx2.
   rewrite !eqb_words, !if_id.
   symmetry. apply mk_cell_eqb; assumption.
 Qed.
@@ -1202,9 +1509,9 @@ Proof.
   destruct IH1 as [av1 [tv1 [HV1 [HT1 [Hle1 Hx1]]]]].
   destruct IH2 as [av2 [tv2 [HV2 [HT2 [Hle2 Hx2]]]]].
   cbn [fst snd] in HV1, HT1, HV2, HT2.
-  rewrite compile_bool_step. cbn [cstep_bool]. rewrite C1, C2.
-  cbn [eval_smt_bool]. rewrite HV1, HV2, HT1, HT2, Hx1, Hx2.
+  rewrite compile_bool_step. cbn [cstep_bool]. rewrite C1, C2. unfold_mk.
   rewrite (eval_is_int_tag T1 v tv1 HT1).
+  cbn [eval_smt_bool]. rewrite HV1, HV2, HT1, HT2, Hx1, Hx2.
   rewrite eqb_words, ltb_words, !if_id.
   symmetry. apply mk_cell_ltb; assumption.
 Qed.
@@ -1245,7 +1552,7 @@ Proof.
   rewrite compile_arr_step. cbn [cstep_arr].
   destruct (compile_arith i) as [vi ti] eqn:Ci.
   destruct (compile_arith sv) as [vv tv] eqn:Cv. cbn [fst snd] in Hval.
-  cbn [eval_smt_mem eval_smt_bool eval_smt_arith].
+  cbn [eval_smt_mem]. unfold_mk. cbn [eval_smt_bool eval_smt_arith].
   rewrite IHa, Hval.
   destruct (reps_dec _ _ _ IHi) as [[avi [ty [HVi [_ [Hg Hi']]]]] | [avi [tvi [HVi [_ [_ [Hg Hi']]]]]]];
     cbn [fst snd] in HVi, Hg; rewrite Hg, HVi.
@@ -1277,7 +1584,7 @@ Proof.
   specialize (IHs v Hs). specialize (IHt v Ht).
   rewrite compile_arr_step. cbn [cstep_arr].
   destruct (compile_arith i) as [vi ti] eqn:Ci.
-  cbn [eval_smt_mem].
+  cbn [eval_smt_mem]. unfold_mk.
   rewrite (val_of_vguard _ _ _ IHs), (val_of_vguard _ _ _ IHt), IHa.
   destruct (reps_dec _ _ _ IHi) as [[avi [ty [HVi [_ [Hg Hi']]]]] | [avi [tvi [HVi [_ [_ [Hg Hi']]]]]]];
     cbn [fst snd] in HVi, Hg; rewrite Hg.
@@ -1319,7 +1626,7 @@ Proof.
       by (apply unsigned_mask_W64, small64; pose proof (tag_z_range ty); lia).
     assert (Hg : eval_smt_bool (is_int_tag (SmtVarTag n)) v = true)
       by (eapply eval_is_int_tag_true; [exact HT | rewrite HTu; apply tag_z_range]).
-    apply reps_cell; cbn [eval_smt_arith]; rewrite Hg; cbn [eval_smt_arith];
+    apply reps_cell; unfold_mk; cbn [eval_smt_arith]; rewrite Hg; cbn [eval_smt_arith];
       rewrite Es; reflexivity.
   - assert (HT : eval_smt_arith (SmtVarTag n) v = IntVal (mask_width W64 1) u64)
       by (cbn [eval_smt_arith]; rewrite Es; reflexivity).
@@ -1327,14 +1634,14 @@ Proof.
     { eapply eval_is_int_tag_false; [exact HT |].
       rewrite unsigned_mask_W64 by (split; [lia | vm_compute; reflexivity]). lia. }
     apply (reps_err _ _ _ (repr 0));
-      cbn [eval_smt_arith]; rewrite Hg; [unfold zero_w | unfold err_tag]; apply cw_eval.
+      unfold_mk; cbn [eval_smt_arith]; rewrite Hg; [unfold zero_w | unfold err_tag]; apply cw_eval.
   - assert (HT : eval_smt_arith (SmtVarTag n) v = IntVal (mask_width W64 0) u64)
       by (cbn [eval_smt_arith]; rewrite Es; reflexivity).
     assert (Hg : eval_smt_bool (is_int_tag (SmtVarTag n)) v = false).
     { eapply eval_is_int_tag_false; [exact HT |].
       rewrite unsigned_mask_W64 by (split; [lia | vm_compute; reflexivity]). lia. }
     apply (reps_err _ _ _ (repr 0));
-      cbn [eval_smt_arith]; rewrite Hg; [unfold zero_w | unfold err_tag]; apply cw_eval.
+      unfold_mk; cbn [eval_smt_arith]; rewrite Hg; [unfold zero_w | unfold err_tag]; apply cw_eval.
 Qed.
 
 Lemma cc_bits : forall bits, Forall CPb bits -> CPa (SmtBitsToInt bits).
@@ -1380,10 +1687,10 @@ Proof.
     as [[av [ty [HV [HT [Hg Hx]]]]] | [av [tv [HV [HT [Hle [Hg Hx]]]]]]];
     cbn [fst snd] in HV, HT, Hg.
   - rewrite Hx. cbn [slice_val]. apply reps_mask.
-    + cbn [eval_smt_arith]. rewrite Hg, HV. reflexivity.
-    + cbn [eval_smt_arith]. rewrite Hg. apply cw_eval.
+    + unfold_mk. cbn [eval_smt_arith]. rewrite Hg, HV. reflexivity.
+    + unfold_mk. cbn [eval_smt_arith]. rewrite Hg. apply cw_eval.
   - destruct Hx as [-> | ->]; cbn [slice_val]; apply (reps_err _ _ _ (repr 0));
-      cbn [eval_smt_arith]; rewrite Hg; [unfold zero_w | unfold err_tag
+      unfold_mk; cbn [eval_smt_arith]; rewrite Hg; [unfold zero_w | unfold err_tag
                                         | unfold zero_w | unfold err_tag]; apply cw_eval.
 Qed.
 
@@ -1400,6 +1707,20 @@ Proof.
     cbn [eval_smt_arith]. rewrite Ec. exact (conj HV (conj HT (conj Hle Hx))).
 Qed.
 
+(* The same, for the folding [mk_ite] the compiler actually emits. *)
+Lemma reps_mk_ite : forall c V1 T1 V2 T2 v x1 x2,
+  reps (V1, T1) v x1 -> reps (V2, T2) v x2 ->
+  reps (mk_ite c V1 V2, mk_ite c T1 T2) v
+       (if eval_smt_bool c v then x1 else x2).
+Proof.
+  intros c V1 T1 V2 T2 v x1 x2 H1 H2. unfold reps in *. cbn [fst snd] in *.
+  destruct (eval_smt_bool c v) eqn:Ec.
+  - destruct H1 as [av [tv [HV [HT [Hle Hx]]]]]. exists av, tv.
+    rewrite !mk_ite_eval, Ec. exact (conj HV (conj HT (conj Hle Hx))).
+  - destruct H2 as [av [tv [HV [HT [Hle Hx]]]]]. exists av, tv.
+    rewrite !mk_ite_eval, Ec. exact (conj HV (conj HT (conj Hle Hx))).
+Qed.
+
 Lemma cc_cond : forall c e1 e2, CPb c -> CPa e1 -> CPa e2 -> CPa (SmtConditional c e1 e2).
 Proof.
   unfold CPa, CPb in *. intros c e1 e2 IHc IH1 IH2 v H.
@@ -1410,7 +1731,7 @@ Proof.
   destruct (compile_arith e1) as [V1 T1] eqn:C1.
   destruct (compile_arith e2) as [V2 T2] eqn:C2.
   cbn [eval_smt_arith]. rewrite <- IHc.
-  apply reps_cond; assumption.
+  apply reps_mk_ite; assumption.
 Qed.
 
 (* The operand must already carry [from]; the result is its bits masked into
@@ -1433,17 +1754,17 @@ Proof.
     destruct (crinttype_eqb ty fr) eqn:Ety.
     + apply reps_mask.
       * rewrite (eval_cmask to _ v av HV). reflexivity.
-      * cbn [eval_smt_arith]. rewrite Hti. apply cw_eval.
+      * unfold_mk. cbn [eval_smt_arith]. rewrite Hti. apply cw_eval.
     + apply (reps_err _ _ _ (mask_width (it_width to) (unsigned av))).
       * rewrite (eval_cmask to _ v av HV). reflexivity.
-      * cbn [eval_smt_arith]. rewrite Hti. unfold err_tag. apply cw_eval.
+      * unfold_mk. cbn [eval_smt_arith]. rewrite Hti. unfold err_tag. apply cw_eval.
   - assert (Hti : eval_smt_bool (tag_is T1 fr) v = false).
     { rewrite (eval_tag_is T1 v tv fr HT). apply Z.eqb_neq.
       pose proof (tag_z_range fr). lia. }
     destruct Hx as [-> | ->]; cbn [cast];
       apply (reps_err _ _ _ (mask_width (it_width to) (unsigned av)));
       solve [ rewrite (eval_cmask to _ v av HV); reflexivity
-            | cbn [eval_smt_arith]; rewrite Hti; unfold err_tag; apply cw_eval ].
+            | unfold_mk; cbn [eval_smt_arith]; rewrite Hti; unfold err_tag; apply cw_eval ].
 Qed.
 
 (* The eight binary operations, all [iv_binop_at] of their own [Integers]
@@ -1539,18 +1860,18 @@ Proof.
     { intro tyi. rewrite (eval_tag_is T1 v (repr (tag_z ty)) tyi HT), unsigned_repr_tag.
       apply tag_z_eqb. }
     rewrite Hx. cbn [CrVal.not]. apply reps_mask.
-    + cbn [eval_smt_arith]. rewrite !Hti.
+    + unfold_mk. cbn [eval_smt_arith]. rewrite !Hti.
       destruct ty as [w]; destruct w;
         cbn [crinttype_eqb crwidth_eqb it_width u8 u16 u32 u64];
         [ exact (eval_cmask u8 _ v _ Hnv)  | exact (eval_cmask u16 _ v _ Hnv)
         | exact (eval_cmask u32 _ v _ Hnv) | exact (eval_cmask u64 _ v _ Hnv) ].
-    + cbn [eval_smt_arith]. rewrite Hg. exact HT.
+    + unfold_mk. cbn [eval_smt_arith]. rewrite Hg. exact HT.
   - assert (Hti : forall tyi, eval_smt_bool (tag_is T1 tyi) v = false).
     { intro tyi. rewrite (eval_tag_is T1 v tv tyi HT). apply Z.eqb_neq.
       pose proof (tag_z_range tyi). lia. }
     destruct Hx as [-> | ->]; cbn [CrVal.not]; apply (reps_err _ _ _ (repr 0));
-      solve [ cbn [eval_smt_arith]; rewrite !Hti; unfold zero_w; apply cw_eval
-            | cbn [eval_smt_arith]; rewrite Hg; unfold err_tag; apply cw_eval ].
+      solve [ unfold_mk; cbn [eval_smt_arith]; rewrite !Hti; unfold zero_w; apply cw_eval
+            | unfold_mk; cbn [eval_smt_arith]; rewrite Hg; unfold err_tag; apply cw_eval ].
 Qed.
 
 (* The bounds guard [ld_arr] applies, made explicit: Z3's [select] is total
@@ -1568,24 +1889,24 @@ Proof.
   destruct (reps_dec _ _ _ IHi)
     as [[avi [ty [HVi [HTi [Hg Hx]]]]] | [avi [tvi [HVi [HTi [Hle [Hg Hx]]]]]]];
     cbn [fst snd] in HVi, HTi, Hg.
-  - assert (Hok : eval_smt_bool
-                    (SmtBoolAnd (is_int_tag ti)
-                       (SmtBoolLt vi (cw (unsigned (smt_arr_len a))))) v
+  - assert (Hok : (eval_smt_bool (is_int_tag ti) v
+                   && eval_smt_bool (SmtBoolLt vi (cw (unsigned (smt_arr_len a)))) v)%bool
                   = Integers.ltu avi (smt_arr_len a)).
-    { cbn [eval_smt_bool]. rewrite Hg, andb_true_l, HVi, cw_eval, repr_unsigned.
-      apply ltb_ltu. }
+    { rewrite Hg, andb_true_l. cbn [eval_smt_bool].
+      rewrite HVi, cw_eval, repr_unsigned. apply ltb_ltu. }
     rewrite Hx. unfold CrVal.ld_arr.
     destruct (eval_smt_mem a v) as [b |] eqn:Ea; cbn [arr_len_of] in Hlen.
     + (* in bounds or not, the guard and [ld_arr] test the same thing *)
       rewrite Hlen, <- Hok.
-      destruct (eval_smt_bool (SmtBoolAnd (is_int_tag ti)
-                  (SmtBoolLt vi (cw (unsigned (smt_arr_len a))))) v) eqn:Eok.
+      destruct (eval_smt_bool (is_int_tag ti) v
+                && eval_smt_bool (SmtBoolLt vi (cw (unsigned (smt_arr_len a)))) v)%bool
+        eqn:Eok.
       * apply reps_cell;
-          cbn [eval_smt_arith]; rewrite Eok, IHa, HVi; rewrite ?Ea;
+          unfold_mk; cbn [eval_smt_arith]; rewrite Eok, IHa, HVi; rewrite ?Ea;
           cbn [cell_at region_bytes];
           destruct ((arr_bytes b) !! (offset_to_key avi)); reflexivity.
       * apply (reps_err _ _ _ (repr 0));
-          cbn [eval_smt_arith]; rewrite Eok;
+          unfold_mk; cbn [eval_smt_arith]; rewrite Eok;
           [unfold zero_w | unfold err_tag]; apply cw_eval.
     + assert (Hz : Integers.ltu avi (smt_arr_len a) = false).
       { rewrite <- Hlen, ltu64_spec.
@@ -1593,15 +1914,16 @@ Proof.
         pose proof (unsigned_range64 avi). apply Z.ltb_ge. lia. }
       rewrite Hz in Hok.
       apply (reps_err _ _ _ (repr 0));
-        cbn [eval_smt_arith]; rewrite Hok; [unfold zero_w | unfold err_tag]; apply cw_eval.
-  - assert (Hok : eval_smt_bool
-                    (SmtBoolAnd (is_int_tag ti)
-                       (SmtBoolLt vi (cw (unsigned (smt_arr_len a))))) v = false)
-      by (cbn [eval_smt_bool]; rewrite Hg; reflexivity).
+        unfold_mk; cbn [eval_smt_arith]; rewrite Hok;
+        [unfold zero_w | unfold err_tag]; apply cw_eval.
+  - assert (Hok : (eval_smt_bool (is_int_tag ti) v
+                   && eval_smt_bool (SmtBoolLt vi (cw (unsigned (smt_arr_len a)))) v)%bool
+                  = false)
+      by (rewrite Hg; reflexivity).
     destruct Hx as [-> | ->]; unfold CrVal.ld_arr;
       destruct (eval_smt_mem a v) as [b |] eqn:Ea;
       apply (reps_err _ _ _ (repr 0));
-      cbn [eval_smt_arith]; rewrite Hok;
+      unfold_mk; cbn [eval_smt_arith]; rewrite Hok;
       solve [ unfold zero_w; apply cw_eval | unfold err_tag; apply cw_eval ].
 Qed.
 
@@ -1632,10 +1954,10 @@ Proof.
     as [[avi [ty [HVi [HTi [Hg Hx]]]]] | [avi [tvi [HVi [HTi [Hle [Hg Hx]]]]]]];
     cbn [fst snd] in HVi, HTi, Hg.
   - rewrite Hx. apply reps_mask.
-    + cbn [eval_smt_arith]. rewrite Hg, IHa, HVi. reflexivity.
+    + unfold_mk. cbn [eval_smt_arith]. rewrite Hg, IHa, HVi. reflexivity.
     + apply cw_eval.
   - destruct Hx as [-> | ->]; cbn [cell_at val_of]; apply reps_mask;
-      solve [ cbn [eval_smt_arith]; rewrite Hg; unfold zero_w; apply cw_eval
+      solve [ unfold_mk; cbn [eval_smt_arith]; rewrite Hg; unfold zero_w; apply cw_eval
             | apply cw_eval ].
 Qed.
 
@@ -1651,10 +1973,10 @@ Proof.
     as [[avi [ty [HVi [HTi [Hg Hx]]]]] | [avi [tvi [HVi [HTi [Hle [Hg Hx]]]]]]];
     cbn [fst snd] in HVi, HTi, Hg.
   - rewrite Hx. apply reps_mask.
-    + cbn [eval_smt_arith]. rewrite Hg, IHa, HVi. reflexivity.
+    + unfold_mk. cbn [eval_smt_arith]. rewrite Hg, IHa, HVi. reflexivity.
     + apply cw_eval.
   - destruct Hx as [-> | ->]; cbn [cell_at tag_of]; apply reps_mask;
-      solve [ cbn [eval_smt_arith]; rewrite Hg; unfold zero_w; apply cw_eval
+      solve [ unfold_mk; cbn [eval_smt_arith]; rewrite Hg; unfold zero_w; apply cw_eval
             | apply cw_eval ].
 Qed.
 
