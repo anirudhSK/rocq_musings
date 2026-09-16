@@ -688,8 +688,15 @@ Definition symbolic_input_bits (n : nat) : list (ConditionalVal SmtBoolExpr) :=
    state and ctrl config do take a prefix, because those are each program's own
    internals rather than a shared input.
 
-   Sharing the name is well defined because [modnet_equivalence_checker]
-   already refuses to compare programs whose region declarations differ. *)
+   Sharing the name is well defined only where the two programs declare the
+   region at the same length, and that is what [CrModule.shared_region_decls]
+   picks out: there the two runs start from the SAME expression, which is what
+   [SmtModuleQuery.check_sym_region_equal] compares and what the single
+   [mk_eq] its lowering emits relies on.  Elsewhere the name is still shared --
+   both programs see prefixes of one byte stream [sv_arrs f (region_name k)] --
+   but no conjunct compares those regions, and
+   [SmtModuleQuery.mem_writes_shared] refuses the pair outright if either
+   program can STORE to one. *)
 Definition init_symbolic_mem (rs : list MemRegionDecl) : PMap.t SmtArrExpr :=
   List.fold_left
     (fun acc d =>

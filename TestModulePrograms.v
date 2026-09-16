@@ -840,6 +840,71 @@ Definition mod_prog_mem_direct_two_u8_ld : GeneralCaracaraProgram :=
         end)
       (ModuleNameCtr 1)).
 
+(* ------------------------------------------------------------------ *)
+(* The observable-region guard.  [SmtModuleQuery.mem_writes_shared] is what
+   these are about: two programs no longer have to declare the same regions,
+   only to agree about every region either of them can WRITE.
+
+   All five have the same shape -- no parser, no packet input (so there is no
+   rejection path and no way for a pair to come back Equivalent because both
+   refused), a transformer that puts the literal 7 into h1 and may touch
+   memory, and a deparser that emits h1.  The emitted byte is therefore the
+   same in all five whatever memory holds; what separates them is the
+   declaration and whether the transformer loads or stores.  Reading the
+   verdicts in [TestEquality] left to right:
+
+     obs_read     vs obs_no_mem      Equivalent -- a load is not a side effect
+     obs_read     vs obs_read_len8   Equivalent -- neither can alter memory,
+                                     so the differing length is not compared
+     obs_write    vs obs_no_mem      NotEquivalentVariablesDiffer -- p1 leaves
+                                     something behind in a region p2 has not
+                                     got, so there is nothing to compare it to
+     obs_write    vs obs_write_len8  NotEquivalentVariablesDiffer -- ditto for
+                                     a shared name at two lengths
+     obs_write    vs obs_read        NotEquivalent -- region_1 IS shared here,
+                                     so the store is compared and it differs
+
+   The third and fourth are the ones that keep the relaxation honest: delete
+   [mem_writes_shared] and they flip to Equivalent, silently dropping a write.
+*)
+Definition obs_prog (rs : list MemRegionDecl) (ops : list HdrOp)
+  : GeneralCaracaraProgram :=
+  GeneralCaracaraProgramDef 0 rs
+    (mkModuleNetwork [
+      TransformerModule (ModuleNameCtr 1) [] [] [Seq (SeqCtr [] ops)];
+      DeparserModule (ModuleNameCtr 2)
+        (linear_dump_headers [(HeaderCtr 1, 8)])]
+      (fun m1 m2 =>
+        match m1, m2 with
+        | ModuleNameCtr 1, ModuleNameCtr 2 => true
+        | _, _ => false
+        end)
+      (ModuleNameCtr 1)).
+
+Definition mem_regions_8 : list MemRegionDecl := [mkMemRegionDecl region_1 8].
+
+(* Declares nothing and touches nothing. *)
+Definition mod_prog_obs_no_mem : GeneralCaracaraProgram :=
+  obs_prog [] (mem_cmp_emit 7).
+
+(* Declares region_1 and only READS it, into a header nothing emits. *)
+Definition mod_prog_obs_read : GeneralCaracaraProgram :=
+  obs_prog mem_regions_4
+    (mem_cmp_emit 7 ++ [LoadOp u8 region_1 (OpConst (repr 0)) (HeaderCtr 2)]).
+
+Definition mod_prog_obs_read_len8 : GeneralCaracaraProgram :=
+  obs_prog mem_regions_8
+    (mem_cmp_emit 7 ++ [LoadOp u8 region_1 (OpConst (repr 0)) (HeaderCtr 2)]).
+
+(* Declares region_1 and WRITES it. *)
+Definition mod_prog_obs_write : GeneralCaracaraProgram :=
+  obs_prog mem_regions_4
+    (mem_cmp_emit 7 ++ [StoreOp u8 region_1 (OpConst (repr 0)) (OpConst (repr 9))]).
+
+Definition mod_prog_obs_write_len8 : GeneralCaracaraProgram :=
+  obs_prog mem_regions_8
+    (mem_cmp_emit 7 ++ [StoreOp u8 region_1 (OpConst (repr 0)) (OpConst (repr 9))]).
+
 (* The single registry of module test programs, keyed by name.
 
    [Extraction.v] extracts this tree rather than each program individually, so
@@ -893,7 +958,12 @@ Definition mod_test_program_list
   ("mem_store_poisoned",     mod_prog_mem_store_poisoned);
   ("mem_u16_readback",       mod_prog_mem_u16_readback);
   ("mem_u16_load",           mod_prog_mem_direct_u16_ld);
-  ("mem_two_u8_loads",       mod_prog_mem_direct_two_u8_ld)
+  ("mem_two_u8_loads",       mod_prog_mem_direct_two_u8_ld);
+  ("obs_no_mem",             mod_prog_obs_no_mem);
+  ("obs_read",               mod_prog_obs_read);
+  ("obs_read_len8",          mod_prog_obs_read_len8);
+  ("obs_write",              mod_prog_obs_write);
+  ("obs_write_len8",         mod_prog_obs_write_len8)
 ].
 
 Definition mod_test_programs : PTree.t GeneralCaracaraProgram :=

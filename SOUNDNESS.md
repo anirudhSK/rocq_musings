@@ -141,11 +141,69 @@ Two runs of a network agree when either both rejected, or both accepted and
 - the emitted packets are equal (`sym_out_equal`, comparing presence conditions as well as
   bit values, so differing output *lengths* count as differing);
 - they read the same number of input bits (`check_sym_bits_read`);
-- every declared memory region holds the same contents over its declared length
+- every **shared** memory region holds the same contents over its declared length
   (`check_sym_mem_equal`, one `SmtArrEq` per region).
 
 Contents are compared because a region is an observable side effect — it is how a program
 talks to a map or to its caller's buffer — unlike a header, which is internal scratch.
+
+### Which regions are compared, and which programs are comparable at all
+
+Two programs do **not** have to declare the same memory. `modnet_equivalence_checker`
+guards memory with `mem_writes_shared`, not with an equality on the two declaration lists:
+
+- the regions **compared** are `CrModule.shared_region_decls` — those both programs
+  declare, at the same length;
+- the regions either program can **write** (`collect_store_regions`, a static walk for
+  `StoreOp`) must all be in that set, or the verdict is `NotEquivalentVariablesDiffer`
+  before any query is built.
+
+*A read is not a side effect.* The old guard refused a program that loads `region3[10]`
+against one with no memory operations at all. Declaring a region you only read is a
+statement about what you need to be *there*, not about what you leave behind, and the
+value a load produces is already compared wherever it lands — in a header, in the output
+packet, in a branch that decides `gps_valid`. There is nothing left of it to compare in
+the memory conjuncts, so a region only one side declares is simply absent from the list.
+
+*A write is.* The guard is what keeps that from being a hole. If p1 stores to `region3`
+and p2 does not declare it, p2's `sh_mem` holds `SmtArrInit` at that key — a fresh
+unallocated array with no relation to p1's — so an `Equivalent` verdict would be silently
+dropping a side effect p1 really has. The same applies to a shared *name* at two lengths:
+`init_symbolic_mem` roots region key `k` at `SmtArrVar (region_name k) len`, one variable
+for both programs, and the single `mk_eq` the lowering emits for `SmtArrEq` is faithful
+only between arrays rooted at the **same** variable. `SmtArrVar n 4` and `SmtArrVar n 8`
+denote different-length prefixes of one byte stream; an array equality between them is not
+a property of either program. Both cases are refused.
+
+*Unwritten regions need no agreement.* Two programs declaring `region1` at four and eight
+cells, neither writing it, are comparable and the region is not compared. It does not need
+to be: neither run can have altered it, and if the differing length matters to either run
+it shows up in `gps_valid`, since a read past four cells is an overrun for one program and
+in bounds for the other.
+
+*Matching write sets are NOT required.* If p1 stores to a shared region and p2 never
+touches it, the pair stays comparable and the query decides it — the right answer, since
+p1's store may well put back the byte that was already there. Demanding matching write
+sets would reject dead-store elimination for no gain, the same mistake the extent conjunct
+below made for dead loads.
+
+`collect_store_regions` over-approximates — a `StoreOp` on an unreachable path still counts
+its region as written — and that lands on the safe side: it can only make the guard demand
+a region be shared that need not have been, costing precision, never soundness.
+
+As with the extent conjunct below, this change makes the checker **more permissive**, and
+for the same kind of reason: the pairs it newly admits differ in nothing observable, and
+the pairs where a real side effect would go uncompared are refused outright rather than
+admitted. `TestEquality`'s five `obs:` tests pin both halves — the two
+`NotEquivalentVariablesDiffer` ones are what fail if the guard is dropped.
+
+The soundness and completeness statements moved with the checker: both now quantify their
+memory conjunct over
+`shared_region_decls (get_mem_regions_from_general p1) (get_mem_regions_from_general p2)`
+rather than over p1's declaration list. Nothing else in either proof changed — the two
+supporting lemmas (`check_sym_mem_equal_sound` / `_complete`) always took the region list
+as a parameter — and `Print Assumptions` still reports only `smt_query` and its one
+soundness axiom for each direction.
 
 **Access extents are deliberately NOT compared**, and this list used to have a fourth
 entry that compared them (`check_sym_mem_extent`, one past the highest offset touched per

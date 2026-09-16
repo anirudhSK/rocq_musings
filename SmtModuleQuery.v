@@ -61,10 +61,20 @@ Fixpoint sym_out_equal (out1 out2 : list (ConditionalVal SmtBoolExpr)) : SmtBool
 Definition check_sym_bits_read (s1 s2 : GeneralSymbolicState) : SmtBoolExpr :=
   SmtBoolEq (sh_bits_read s1) (sh_bits_read s2).
 
-(* Two accepting runs must also leave every declared memory region holding the
+(* Two accepting runs must also leave every SHARED memory region holding the
    same thing.  Unlike a header, a region is an observable side effect -- it is
    how a program talks to a map or to its caller's buffer -- so it is compared,
    not treated as internal scratch.
+
+   SHARED, not "every region p1 declares": the list handed in is
+   [CrModule.shared_region_decls], the regions both programs declare at the
+   same length.  A region only one side declares is one only that side can
+   READ, and the whole content of a read is the value it produces, which is
+   already compared where that value lands -- in a header, in the output
+   packet, in a branch that decides [gps_valid].  There is nothing left of it
+   to compare here.  What keeps this from losing a WRITE is the checker's
+   guard: a region either program can store to must be shared, or the two are
+   refused outright.  See [mem_writes_shared].
 
    ONE [SmtArrEq], not a cell-by-cell conjunction: [SmtArrEq] carries the bound
    to fold over, so the Coq side reads "agree cell by cell over the declared
@@ -125,6 +135,47 @@ Definition check_sym_pkt_out (rs : list MemRegionDecl) (s1 s2 : GeneralSymbolicS
                   (check_sym_mem_equal rs s1 s2))) in
   SmtBoolNot eq_expr.
 
+(* THE MEMORY GUARD.  Every region either program can WRITE must be one the two
+   SHARE -- declared by both, at the same length ([shared_region_decls]).
+
+   This replaced an equality test on the two declaration lists, and the reason
+   is that the old test conflated reading a region with altering it.  A program
+   that loads [region3[10]] and one with no memory operations at all were
+   refused as incomparable, although a load is not an observable side effect:
+   it yields a value, and that value is already compared wherever it ends up.
+   Declaring a region you only read is a statement about what you need to be
+   there, not about what you leave behind, and the checker has no business
+   insisting the other program need the same.
+
+   A WRITE is different, and that is what the guard keeps.  If p1 stores to
+   [region3] and p2 does not declare [region3], then p2's [sh_mem] holds
+   [SmtArrInit] at that key -- a fresh unallocated array with no relation to
+   p1's -- so there is no expression to compare p1's stored region against, and
+   an [Equivalent] verdict would be silently ignoring a side effect p1 really
+   has.  Same if the two declare it at different lengths: the roots are
+   [SmtArrVar n l1] and [SmtArrVar n l2], and the single [mk_eq] the lowering
+   emits for [SmtArrEq] is faithful only between arrays rooted at the SAME
+   variable.  Either way the answer is [NotEquivalentVariablesDiffer].
+
+   Note what is NOT required: that the two programs write the same regions.  If
+   p1 stores to a shared region and p2 never touches it, the pair stays
+   comparable and the query decides it -- which is the right answer, since p1's
+   store may well put back the byte that was already there.  Demanding matching
+   write sets would reject dead-store elimination for no gain.
+
+   The over-approximation in [collect_store_regions] (a store on an unreachable
+   path still counts) lands on the safe side here: it can only make the guard
+   demand a region be shared that need not have been. *)
+Definition mem_writes_shared (p1 p2 : GeneralCaracaraProgram) : bool :=
+  let shared := shared_region_decls (get_mem_regions_from_general p1)
+                                    (get_mem_regions_from_general p2) in
+  List.forallb
+    (fun r => match find_region_decl shared (unwrap r) with
+              | Some _ => true
+              | None => false
+              end)
+    (collect_store_regions p1 ++ collect_store_regions p2).
+
 Definition modnet_equivalence_checker
   (p1 : GeneralCaracaraProgram) (p2 : GeneralCaracaraProgram)
   : EquivalenceResult :=
@@ -132,16 +183,18 @@ Definition modnet_equivalence_checker
   let len_2 := get_inp_len_from_general p2 in
   let mem_1 := get_mem_regions_from_general p1 in
   let mem_2 := get_mem_regions_from_general p2 in
-  (* packet shape must be the same, and so must the declared memory: the two
-     runs share one set of region input variables (see [init_symbolic_mem]), so
-     comparing programs that disagree about which regions exist, or how long
-     they are, is not meaningful. *)
-  if andb (Nat.eqb len_1 len_2) (mem_region_decls_eqb mem_1 mem_2) then
+  (* The packet shape must be the same -- the two runs share one set of input
+     bit variables, so a different declared length makes the query vacuous.
+     Memory is guarded more weakly, by [mem_writes_shared]: the two runs share
+     one set of region input variables (see [init_symbolic_mem]), so they must
+     agree about every region either of them can WRITE, but not about the ones
+     they merely read. *)
+  if andb (Nat.eqb len_1 len_2) (mem_writes_shared p1 p2) then
     let sym1_opt := eval_general_program_symbolic p1 (init_general_symbolic_state "p1" p1) in
     let sym2_opt := eval_general_program_symbolic p2 (init_general_symbolic_state "p2" p2) in
     match sym1_opt, sym2_opt with
     | Some fs1, Some fs2 =>
-      match smt_query (check_sym_pkt_out mem_1 fs1 fs2) with
+      match smt_query (check_sym_pkt_out (shared_region_decls mem_1 mem_2) fs1 fs2) with
       | SmtUnsat => Equivalent
       | SmtSat f => NotEquivalent f
       | SmtUnknown => NotEquivalentUnknown
@@ -841,31 +894,15 @@ Proof.
   - rewrite He in Hm. discriminate.
 Qed.
 
-(* The checker's region guard is an equality test, so the two programs really
-   do declare the same list -- which is what lets both symbolic runs be rooted
-   at ONE initial memory map. *)
-Lemma mem_region_decl_eqb_eq : forall a b, mem_region_decl_eqb a b = true -> a = b.
-Proof.
-  intros [ia la] [ib lb] H. unfold mem_region_decl_eqb in H. cbn in H.
-  apply Bool.andb_true_iff in H as [Hi Hl].
-  apply PeanoNat.Nat.eqb_eq in Hl.
-  assert (Hi' : ia = ib).
-  { apply (@posesque_eqb_iff MemRegion Posesque_MemRegion). exact Hi. }
-  subst. reflexivity.
-Qed.
-
-Lemma mem_region_decls_eqb_eq : forall a b, mem_region_decls_eqb a b = true -> a = b.
-Proof.
-  intros a. induction a as [| x a IH]; intros b H;
-    unfold mem_region_decls_eqb in H; apply Bool.andb_true_iff in H as [Hlen Hall].
-  - destruct b; [reflexivity | cbn in Hlen; discriminate].
-  - destruct b as [| y b]; [cbn in Hlen; discriminate |].
-    cbn in Hlen, Hall. apply Bool.andb_true_iff in Hall as [Hxy Hrest].
-    apply mem_region_decl_eqb_eq in Hxy. subst y. f_equal.
-    apply IH. unfold mem_region_decls_eqb. apply Bool.andb_true_iff.
-    split; [exact Hlen | exact Hrest].
-Qed.
-
+(* The checker's region guard USED TO BE an equality test on the two
+   declaration lists, and a [mem_region_decls_eqb_eq] here turned it back into
+   [a = b] -- which is what let both symbolic runs be rooted at one initial
+   memory map.  The guard is now [mem_writes_shared], which gives less and
+   needs to: the two maps agree on the SHARED keys, and every conjunct
+   [check_sym_mem_equal] builds is over exactly those.  Both lemmas below take
+   the region list as a parameter rather than deriving it from either program,
+   so neither notices the change.  [mem_region_decls_eqb] stays in [CrModule]
+   as the natural equality on the type; it simply has no caller here. *)
 (* ---------- the two memory conjuncts, concretized ---------- *)
 
 Lemma check_crval_eqb_eq : forall x y, check_crval_eqb x y = true -> x = y.
@@ -1070,14 +1107,20 @@ Lemma modnet_equivalence_checker_sound_symbolic :
     sh_bits_read c_f1 = sh_bits_read c_f2 /\
     List.Forall (fun '(b1, b2) => b1 = b2)
       (List.combine (sh_write_tape c_f1) (sh_write_tape c_f2)) /\
-    (* ...left every declared region holding the same contents
+    (* ...left every SHARED region holding the same contents
        ([check_sym_mem_equal]), cell by cell over the declared length -- the
-       checker never constrains cells past it, so neither does this... *)
+       checker never constrains cells past it, so neither does this.  A region
+       only one program declares is absent from this list: only that program
+       can address it, so nothing the other does is being ignored, and a READ
+       leaves no trace to compare.  [mem_writes_shared] is what makes that
+       safe -- the checker would have answered [NotEquivalentVariablesDiffer]
+       had either program been able to STORE outside this list. *)
     List.Forall (fun d =>
       forall i, (i < mr_len d)%nat ->
         ld_arr ((sh_mem c_f1) !! (unwrap (mr_id d))) (mk_int u64 (Z.of_nat i)) =
         ld_arr ((sh_mem c_f2) !! (unwrap (mr_id d))) (mk_int u64 (Z.of_nat i)))
-      (get_mem_regions_from_general p1)).
+      (shared_region_decls (get_mem_regions_from_general p1)
+                           (get_mem_regions_from_general p2))).
 Proof.
   intros p1 p2 Hwf1 Hwf2 Hlc1 Hlc2 Hcheck s_i1 s_i2 s_f1 s_f2 Hi1 Hi2 He1 He2
          c_f1 c_f2 f Hc1 Hc2.
@@ -1090,12 +1133,14 @@ Proof.
   pose proof (eval_general_program_symbolic_wt _ _ _ He2) as Hwt2.
   unfold modnet_equivalence_checker in Hcheck.
   destruct (andb (Nat.eqb (get_inp_len_from_general p1) (get_inp_len_from_general p2))
-                 (mem_region_decls_eqb (get_mem_regions_from_general p1)
-                                       (get_mem_regions_from_general p2))) eqn:Hguard;
+                 (mem_writes_shared p1 p2)) eqn:Hguard;
     [| discriminate].
   (* The checker ran exactly the evaluations the hypotheses name. *)
   rewrite He1, He2 in Hcheck.
-  destruct (smt_query (check_sym_pkt_out (get_mem_regions_from_general p1) s_f1 s_f2))
+  destruct (smt_query (check_sym_pkt_out
+                         (shared_region_decls (get_mem_regions_from_general p1)
+                                              (get_mem_regions_from_general p2))
+                         s_f1 s_f2))
     eqn:Hq; try discriminate. clear Hcheck.
   (* Unsat means the negated agreement formula is false under EVERY valuation,
      so agreement itself holds under [f]. *)
@@ -1228,14 +1273,20 @@ Lemma modnet_equivalence_checker_sound :
     sh_bits_read c_f1 = sh_bits_read c_f2 /\
     List.Forall (fun '(b1, b2) => b1 = b2)
       (List.combine (sh_write_tape c_f1) (sh_write_tape c_f2)) /\
-    (* ...left every declared region holding the same contents
+    (* ...left every SHARED region holding the same contents
        ([check_sym_mem_equal]), cell by cell over the declared length -- the
-       checker never constrains cells past it, so neither does this... *)
+       checker never constrains cells past it, so neither does this.  A region
+       only one program declares is absent from this list: only that program
+       can address it, so nothing the other does is being ignored, and a READ
+       leaves no trace to compare.  [mem_writes_shared] is what makes that
+       safe -- the checker would have answered [NotEquivalentVariablesDiffer]
+       had either program been able to STORE outside this list. *)
     List.Forall (fun d =>
       forall i, (i < mr_len d)%nat ->
         ld_arr ((sh_mem c_f1) !! (unwrap (mr_id d))) (mk_int u64 (Z.of_nat i)) =
         ld_arr ((sh_mem c_f2) !! (unwrap (mr_id d))) (mk_int u64 (Z.of_nat i)))
-      (get_mem_regions_from_general p1)).
+      (shared_region_decls (get_mem_regions_from_general p1)
+                           (get_mem_regions_from_general p2))).
 Proof.
   intros p1 p2 Hwf1 Hwf2 Hlc1 Hlc2 Hcheck s_i1 s_i2 c_i1 c_i2 f Hi1 Hi2 Hci1 Hci2
          Hval1 Hval2 c_f1 c_f2 Hrun1 Hrun2.
@@ -1247,8 +1298,7 @@ Proof.
             eval_general_program_symbolic p2 s_i2 = Some s_f2).
   { rewrite Hi1, Hi2. unfold modnet_equivalence_checker in Hcheck.
     destruct (Nat.eqb (get_inp_len_from_general p1) (get_inp_len_from_general p2) &&
-              mem_region_decls_eqb (get_mem_regions_from_general p1)
-                                   (get_mem_regions_from_general p2))%bool;
+              mem_writes_shared p1 p2)%bool;
       [| discriminate].
     destruct (eval_general_program_symbolic p1 (init_general_symbolic_state "p1" p1)) eqn:E1;
       destruct (eval_general_program_symbolic p2 (init_general_symbolic_state "p2" p2)) eqn:E2;
@@ -1320,12 +1370,13 @@ Lemma modnet_equivalence_checker_complete :
       sh_bits_read c_f1 <> sh_bits_read c_f2 \/
     ~ List.Forall (fun '(b1, b2) => b1 = b2)
       (List.combine (sh_write_tape c_f1) (sh_write_tape c_f2)) \/
-    (* ...or a declared region's contents differ somewhere in bounds... *)
+    (* ...or a SHARED region's contents differ somewhere in bounds... *)
     ~ List.Forall (fun d =>
         forall i, (i < mr_len d)%nat ->
           ld_arr ((sh_mem c_f1) !! (unwrap (mr_id d))) (mk_int u64 (Z.of_nat i)) =
           ld_arr ((sh_mem c_f2) !! (unwrap (mr_id d))) (mk_int u64 (Z.of_nat i)))
-        (get_mem_regions_from_general p1))).
+        (shared_region_decls (get_mem_regions_from_general p1)
+                             (get_mem_regions_from_general p2)))).
 Proof.
   intros p1 p2 f Hwf1 Hwf2 Hlc1 Hlc2 Hcheck s_i1 s_i2 s_f1 s_f2 Hi1 Hi2 He1 He2
          c_f1 c_f2 Hc1 Hc2.
@@ -1338,11 +1389,13 @@ Proof.
   pose proof (eval_general_program_symbolic_wt _ _ _ He2) as Hwt2.
   unfold modnet_equivalence_checker in Hcheck.
   destruct (andb (Nat.eqb (get_inp_len_from_general p1) (get_inp_len_from_general p2))
-                 (mem_region_decls_eqb (get_mem_regions_from_general p1)
-                                       (get_mem_regions_from_general p2))) eqn:Hguard;
+                 (mem_writes_shared p1 p2)) eqn:Hguard;
     [| discriminate].
   rewrite He1, He2 in Hcheck.
-  destruct (smt_query (check_sym_pkt_out (get_mem_regions_from_general p1) s_f1 s_f2))
+  destruct (smt_query (check_sym_pkt_out
+                         (shared_region_decls (get_mem_regions_from_general p1)
+                                              (get_mem_regions_from_general p2))
+                         s_f1 s_f2))
     as [v | |] eqn:Hq; try discriminate.
   injection Hcheck as Hvf. subst v.
   (* Sat means the negated agreement formula holds under the witness, i.e.
