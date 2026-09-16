@@ -637,7 +637,12 @@ let%expect_test "ModProgs: registry contents" =
     mem_u16_readback
     mem_u16_load
     mem_two_u8_loads
-    (41 programs)
+    obs_no_mem
+    obs_read
+    obs_read_len8
+    obs_write
+    obs_write_len8
+    (46 programs)
     |}]
 
 (* A u16 store lands in two byte cells, little-endian: 0x1234 -> [0x34, 0x12].

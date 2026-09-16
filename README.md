@@ -336,16 +336,15 @@ In this light, the only way in which two equivalent programs are allowed to diff
 
 ## Equivalence
 
-`modnet_equivalence_checker p1 p2` first requires the two programs to declare the same input length; otherwise they are not comparable and it answers `NotEquivalentVariablesDiffer`. It then runs both symbolically from their initial states and asks Z3 for a packet making the two observably differ. `Unsat` means no such packet exists, so `Equivalent`; a model is returned as `NotEquivalent f`.
+`modnet_equivalence_checker p1 p2` first requires the two programs to be comparable at all; otherwise it answers `NotEquivalentVariablesDiffer` without building a query. That takes two things: the same declared input length, and — `mem_writes_shared` — every memory region either program can *write* being one they **share**, i.e. both declare at the same length. They need not declare the same memory otherwise: a region only one program declares is one only that program can *read*, and a read is not an observable side effect. It then runs both symbolically from their initial states and asks Z3 for a packet making the two observably differ. `Unsat` means no such packet exists, so `Equivalent`; a model is returned as `NotEquivalent f`.
 
 Two runs count as agreeing when either both rejected, or both accepted and
 
 - their output packets are equal (`sym_out_equal`, comparing presence conditions as well as bit values, so differing output *lengths* count as differing),
-- they read the same number of bits (`check_sym_bits_read`),
-- every declared memory region holds the same contents (`check_sym_mem_equal`), and
-- they required the same number of bytes of every region (`check_sym_mem_extent`).
+- they read the same number of bits (`check_sym_bits_read`), and
+- every **shared** memory region holds the same contents (`check_sym_mem_equal`, one `SmtArrEq` per region, over `shared_region_decls`).
 
-The read-extent conjunct is the bitstream analogue of the memory access-extent equivalence described above: a network that reads further into its input needs more of it to be there, so two networks that emit identical packets while consuming different amounts are not interchangeable.
+The read-extent conjunct is the bitstream analogue of an access-extent equivalence on memory: a network that reads further into its input needs more of it to be there, so two networks that emit identical packets while consuming different amounts are not interchangeable. There is deliberately **no** such conjunct on memory — `check_sym_mem_extent` was removed because region lengths are static, so a run that overruns one is already rejected by `gps_valid`, while comparing extents rejected dead-load elimination. `SOUNDNESS.md` has both arguments in full.
 
 The checker also refuses to compare two programs whose declared regions differ, the same way it refuses when their input lengths differ: the two runs share one set of region input variables, so the comparison would not be meaningful otherwise.
 
