@@ -1,798 +1,137 @@
 # Caracara IR — working notes
 
-A Rocq/Coq formalization of a P4-like packet-processing IR, extracted to OCaml and
-discharged against Z3. The **base/network IR** (parsers, transformers, deparsers over
-a packet, plus loads and stores over declared memory regions) is the whole IR: there
-is one syntax, one solver and one equivalence notion. A second, standalone **memory
-IR** (`CrMem.v`, `Memmas.v`, `CrMemEx.v`, `MemSolver.ml`, `MemEq.ml`) used to live
-alongside it; it was deleted once the eBPF transpiler in `translation/ect` was retargeted
-to emit the unified IR, since nothing else depended on it. If you find a reference to
-it, it is stale.
-
-Longer prose lives in `README.md` (semantics, worked example, equivalence),
-`SOUNDNESS.md` (proof status, trust assumptions, model debt), and `memo-memo.txt`
-(why the Z3 lowering memoises).
+Rocq/Coq formalization of a P4-like packet-processing IR, extracted to OCaml and discharged against Z3. One unified IR (parsers, transformers, deparsers, loads/stores over declared memory regions). The old standalone memory IR (`CrMem.v` etc.) is deleted — any reference to it is stale. Longer prose: `README.md`, `SOUNDNESS.md`, `memo-memo.txt`.
 
 ## Build & test
 
 ```bash
-rocq makefile -f _CoqProject *.v -o Makefile   # regenerate after adding/removing a .v
-make -j                                        # Coq check + extraction into extracted_code/
-perl sync_dune_modules.pl                      # only if extraction produced new modules
+rocq makefile -f _CoqProject *.v -o Makefile   # after adding/removing a .v
+make -j                                         # Coq check + extraction → extracted_code/
+perl sync_dune_modules.pl                       # only if extraction produced new modules
 dune build --profile release
-dune runtest                                   # ppx_expect
-dune promote                                   # accept diffs after intentional output changes
+dune runtest                                    # ppx_expect
+dune promote                                    # accept intentional output diffs
 ```
 
-CI (`.github/workflows/validate_build.yaml`) runs exactly that sequence on PRs to
-`master`, so anything that passes locally in that order passes CI.
+`make` must run before `dune build` — `extracted_code/*.ml` are generated (gitignored).
 
-`make` must be run before `dune build` — `extracted_code/*.ml` are generated
-artifacts (gitignored) and the OCaml side will compile against stale extraction
-otherwise.
-
-Three test suites sit OUTSIDE that sequence and outside CI, because each needs a
-toolchain the workflow does not build. Run them by hand after touching what they
-cover:
-
+Outside CI (need separate toolchain):
 ```bash
-translation/tests/run.sh            # the P4 backend: pairs that must agree
-translation/tests/p4c_bugs/run.sh   # a real p4c miscompilation, caught
-dune exec --profile release bench_eq -- --reps 3   # the evaluation benchmark
+translation/tests/run.sh
+translation/tests/p4c_bugs/run.sh
+dune exec --profile release bench_eq -- --reps 3
 ```
-
-The first two need `(cd translation/p4c/build && make rocq p4test)`. `bench_eq`
-needs nothing extra — it reads checked-in `.ir` files from `bench/` — but
-regenerating those does; see `bench/README.md`.
+First two need `(cd translation/p4c/build && make rocq p4test)`.
 
 ## Layout
 
-- `Cr*.v` — the IR: `CrDsl`/`CrModule`/`CrParser`/`CrTransformer`/`CrDeparser` are
-  syntax; `CrConcreteSemantics*` and `CrSymbolicSemantics*` are the two evaluators;
-  `CrGeneralProgramState` is the shared state record; `CrProgramState` holds the
-  per-module state records and the `MemCtx` bundle; `CrVarLike` is state
-  construction plus assorted helpers.
-- `Smt*.v` — `SmtExpr` (the three mutually recursive expression types: bool, arith,
-  array), `SmtTypes` (`SmtValuation`, a record of a scalar and an array component),
-  `SmtQuery` (transformer-level checker + the solver axioms), `SmtModuleQuery` (the
-  network checker `modnet_equivalence_checker`), `SmtCompile` (the query compiler —
-  see "The core fragment" below).
-- `InitReachable.v` — which concrete initial states the network lemmas are
-  about. `InitInputs` + `init_general_concrete_state_with` build them;
-  `valid_iff_reachable` says they are exactly the concretizations of
-  `init_general_symbolic_state`. Not extracted.
-- `*Lemmas.v`, `CtrlPlaneInvariants.v` — proof development.
-  `ConcreteTransformerLemmas.v` is the congruence layer: `cs_lookup_eq` says
-  two transformer states agree on every program-variable lookup, and every
-  evaluator preserves it. It has a `_preserves_eq` lemma for each of the two
-  concrete recursions, since they are separate recursions and neither
-  reduces to the other (see below).
-- `Test*Programs.v`, `PktClass.v` — example programs, extracted for the OCaml tests.
-- `Extraction.v` — **the gate**. Nothing reaches OCaml unless named in the
-  `Separate Extraction` list.
-- `extracted_code/` — everything is generated except the files `.gitignore`
-  explicitly un-ignores. That list is the authority and it is longer than it
-  looks: the four `Test*.ml` expect-test modules, the plumbing (`Shim.ml`,
-  `CrTypeIF.ml`, `Z3Solver.ml`, `SmtCompile` support), the executables
-  (`EqCheck`, `DumpSexp`, `RunParser`, `RunNet`, `FuzzTss`, `BenchEq`), and the
-  measurement modules `IrSize.ml` / `SmtSize.ml` / `SolveTime.ml`.
-- `test/` — `.out`/`.ir` fixtures consumed by the executables and expect tests.
-  `bpf_O0.ir`/`bpf_O2.ir` are network programs generated by
-  `translation/ect/bpf_to_ir` from `translation/ect/ex/basic/ex0.c` at `-O0` and
-  `-O2`. `bpf_map_*.ir` are more from `translation/ect/ex/map/*.c`, and
-  `bpf_map_lookup_elem` reads the map region, so the `_miss_differs` and
-  `_hit_differs` pairs are what pin both arms of a lookup as reachable.
-  **A HASH map's region stores each slot's KEY**, so with key 4, value 8 and
-  four modelled slots it is 53 bytes — presence at `[0,4)`, the stored keys at
-  `[4,20)`, the values at `[20,52)`, and a "the real map is full" byte at 52.
-  Deriving the slot as `key % nslots` instead, which is what these fixtures
-  used to do, forces distinct keys that collide modulo nslots to share one
-  entry and so DELETES reachable map states — a difference the checker then
-  cannot find, i.e. a wrong Equivalent. An ARRAY map keeps the simpler layout
-  (presence, never read, then values), because its key *is* the index.
-  `TestModuleSemantics`'s `seed_map` is where that layout is written down on
-  this side; `MapInfo` in `translation/ect/pybpf/translate.py` is the argument.
-  `parse_reject_deparse.ir` is the one
-  fixture whose parser has a `select` (neither eBPF program branches in its
-  parser); regenerate it with
-  `dune exec dump_sexp -- --modprog parse_reject_deparse > test/parse_reject_deparse.ir`.
-- `translation/` — the front ends; excluded from the Coq build via
-  `_CoqProject`. Two submodules, `p4c` (the fork carrying the `rocq` backend in
-  its `extensions/`) and `ect` (eBPF → IR); plus `parserhawk/lower_table.py` and
-  `tests/`, the P4 backend's differential tests. Those tests live here rather
-  than in the p4c submodule because their ORACLE does — every one of them gets
-  its verdict from `EqCheck.exe` or `RunNet.exe`. See `translation/README.md`.
-- `bench/` — the programs the equivalence benchmark checks, one directory per
-  family (`p4`, `ebpf`, `parserhawk`), each holding the sources, the `.ir`
-  generated from them, a `README.md` and a `regen.sh` that carries the exact
-  commands. `bench_eq` reads only the `.ir`, so a benchmark run needs no
-  compiler.
+- `Cr*.v` — IR syntax (`CrDsl`/`CrModule`/`CrParser`/`CrTransformer`/`CrDeparser`) and evaluators (`CrConcreteSemantics*`, `CrSymbolicSemantics*`). `CrGeneralProgramState` = shared state; `CrProgramState` = per-module state + `MemCtx`; `CrVarLike` = state construction.
+- `Smt*.v` — `SmtExpr` (bool/arith/array), `SmtTypes` (`SmtValuation`), `SmtQuery` (checker + axioms), `SmtModuleQuery` (`modnet_equivalence_checker`), `SmtCompile` (query compiler).
+- `InitReachable.v` — which concrete initial states the lemmas are about (`valid_iff_reachable`). Not extracted.
+- `*Lemmas.v`, `CtrlPlaneInvariants.v` — proof development. `ConcreteTransformerLemmas.v` is the congruence layer (`cs_lookup_eq`).
+- `Test*Programs.v`, `PktClass.v` — example programs for OCaml tests.
+- `Extraction.v` — **the gate**: nothing reaches OCaml unless named in `Separate Extraction`.
+- `extracted_code/` — generated except files un-ignored in `.gitignore` (that list is authoritative): `Test*.ml`, `Shim.ml`, `CrTypeIF.ml`, `Z3Solver.ml`, executables (`EqCheck`, `DumpSexp`, `RunParser`, `RunNet`, `FuzzTss`, `BenchEq`), `IrSize.ml`/`SmtSize.ml`/`SolveTime.ml`.
+- `test/` — `.out`/`.ir` fixtures. Hash map layout: presence `[0,4)`, keys `[4,20)`, values `[20,52)`, "real map full" byte at 52 (key=4, value=8, 4 slots → 53 bytes). Array map: presence then values. `TestModuleSemantics.seed_map` / `MapInfo` in `translation/ect/pybpf/translate.py`.
+- `translation/` — front ends (excluded from Coq build). `p4c` and `ect` submodules, `parserhawk/lower_table.py`, differential tests.
+- `bench/` — equivalence benchmark programs by family; `bench_eq` reads only `.ir`.
 
-## Things that will bite you
+## Critical rules
 
-**Do not hand-edit the `(modules ...)` lists in `extracted_code/dune`.**
-`sync_dune_modules.pl` regenerates them from two sources: the `*.mli` files present
-after extraction, and the `!/extracted_code/*.ml` un-ignore lines in `.gitignore`.
-A hand-written `.ml` that is not un-ignored in `.gitignore` gets silently dropped
-from the dune stanza on the next sync. Files named `Test*` go to `semantics_tests`,
-`EqCheck`/`DumpSexp`/`RunParser`/`RunNet`/`FuzzTss`/`BenchEq` are executables,
-everything else goes to `extracted_code_lib`. That executable list is hardcoded in the script, so adding
-or removing one means editing `sync_dune_modules.pl` and the stanza in
-`extracted_code/dune` as well as `.gitignore`.
+**`extracted_code/dune` modules lists** — never hand-edit. `sync_dune_modules.pl` regenerates from `*.mli` files and `.gitignore` un-ignore lines. A hand-written `.ml` not un-ignored is silently dropped on next sync. Adding/removing an executable requires editing `sync_dune_modules.pl`, `extracted_code/dune`, and `.gitignore`.
 
-**A network program can be read from a sexp now, and the two things that made
-that impossible are both in `CrTypeIF.ml`.** `ModuleNetwork.net_edges` is a
-*function*, so the derived converters are sexplib's arrow stubs — `sexp_of`
-prints `<fun>` and `of_sexp` raises — and it is hand-written as an explicit edge
-list instead. And `positive`/`nat`/`Z` now *emit* decimal and *accept* either
-decimal or Coq's own encoding, because nothing outside this tree can reasonably
-write a 64-deep tower of `S`. Both are needed by `Shim.load_general_program`,
-which is what `EqCheck --net` and the eBPF tests use.
+**Sexp encoding** (`CrTypeIF.ml`): `net_edges` is hand-written as an explicit edge list (derived converters would stub as `<fun>`). `positive`/`nat`/`Z` emit decimal and accept decimal or Coq encoding. `sc_pattern` (`list bool`) uses derived converters — plain `Coq_cons` chain, NOT `0b` literals (that sugar was removed in `1a04afc`). Pattern is **MSB-first** (`bits_to_Z` folds head as high bit); front-ends build the chain from the LSB out.
 
-There is **no** third departure: a select case's `sc_pattern` (`list bool`) is
-written as the plain `Coq_cons` chain, so an eight-bit pattern is eight nested
-constructors. A `0b` literal was accepted once and was deliberately removed
-(`1a04afc`, "remove bool list syntactic sugar", which also rewrote the
-fixtures), so `coq_SelectCase`'s converters are **derived** and a bool list
-goes through the generic `Datatypes.list_of_sexp` — hand an atom like
-`0b00000001` to `EqCheck --net` and it dies with "unexpected variant
-constructor". Only `coq_ModuleNetwork` still hand-writes its converters, and it does so
-inline — the `sexp_record_field` helper it used to share is gone.
+**`run_net`**: runs a program concretely. One-shot: `run_net <prog.ir> [<region>:<off>:<width>:<val> ...]`. `--serve` mode: co-process for external tests (used by `translation/ect/tests/irrunner.py`). Not part of `EqCheck`.
 
-The pattern **is MSB-first** — `CrParser.bits_to_Z` folds the list head in as
-the high bit — and leading zeros are preserved even though
-`select_case_matches_concrete` only compares `bits_to_Z` of the pattern, so a
-four-element `0011` and a two-element `11` mean the same thing. A front-end
-emitting one should build the chain from the LSB outwards, which is what
-`translation/parserhawk/lower_table.py`'s `pat` and the p4c extension's
-`bits_to_str` both do.
+**`fuzz_tss`**: priorities must be DISTINCT in 1..254 (255 = "no match" sentinel). Filters are generated around a witness packet — do not change to independent draws (the `--mutate` expect test measures this). Do not delete the `--prec` test (coverage number, not a verdict).
 
-**`run_net` runs a network program concretely and prints what it did** — the
-emitted packet, then every declared region's final contents and access extent,
-or just `reject`. One shot is `run_net <prog.ir> [<region>:<off>:<width>:<val>
-...]`; `--serve` is a co-process reading one command per line (`run`, `forget`,
-`quit`) and replying up to a line containing only `.`. It exists so a test
-outside this tree can use the REAL evaluator as its oracle instead of
-reimplementing the semantics — `translation/ect`'s property tests drive it
-through its `tests/irrunner.py`, spawning it once because the spawn costs far more than a
-run. It is deliberately not part of `EqCheck`, which checks equivalence and
-does not run anything.
+**`dump_sexp`**: three subcommands: `--pkt [idx]`, `--parser [idx]`, `--modprog NAME`.
 
-**`fuzz_tss` samples the claim `PktClass.v` says the checker cannot make.**
-`linear_db` and `tss_db` are supposed to classify identically for EVERY filter
-database; the checker only ever speaks about two SPECIFIC programs, so the
-general statement is approached by generating databases and asking
-`modnet_equivalence_checker` about each. `extracted_code/PktClassFuzz.ml` is
-the generator (its own splitmix64, not `Random`, so a failing seed reproduces
-across OCaml versions); `TestEquality`'s three "tss fuzz:" tests run a small
-fixed campaign in `dune runtest`, and `dune exec fuzz_tss -- --seed S --count N
---size 1,2,4,8` runs a big one. Four things about it:
+**Adding a module test program**: two steps — add to `mod_test_program_list` in `TestModulePrograms.v`; look up with `Shim.find_modprog "name"`. Do not mirror the name→key encoding in OCaml.
 
-- **Priorities must be DISTINCT and in 1..254.** `linear_db` breaks a tie by
-  position in the stably-sorted database; `tss_db`'s merger only displaces the
-  accumulator on a *strictly* lower priority, so across two tables the tie goes
-  to whichever table `PTree.elements` yields first — unrelated to database
-  order. Equal priorities make the two genuinely disagree. 255 is
-  `make_table_transformer`'s "this table matched nothing" sentinel.
-- **Each filter is generated around a WITNESS packet** — five field values
-  drawn first, every condition then chosen so the witness satisfies it. This is
-  not tidiness. Independently drawn conditions contradict each other
-  (`src_port < 0`, two different constants on one field), the database then
-  classifies nothing, both programs emit only zeros, and the checker says
-  Equivalent — the both-reject trap below, with every verdict vacuous.
-- **`--mutate` is the control that measures exactly that**, and the second
-  expect test is it. It relabels the tss side, so any database that classifies
-  anything must come back NotEquivalent. Witness generation: 20/20. The
-  independent-draw version it replaced: 3/12. Do not delete that test; without
-  it a regression in the generator turns the whole campaign into a no-op that
-  still passes.
-- **About half of each database's filters share ONE witness, and `--prec` is
-  why.** Precedence is the entire difference between the two constructions —
-  first-match on a sorted list against per-table best plus a strictly-lower-wins
-  merger — and filters that no single packet matches together exercise none of
-  it. `--prec` inverts the priorities on the tss side and counts the databases
-  that NOTICE; the third expect test pins that count (10 of 24, of which 8 hold
-  0 or 1 filter and cannot). It is a coverage number, not a verdict: a database
-  whose filters happen not to overlap legitimately does not notice. Remove the
-  shared witness and it falls towards zero while every other test still passes.
+**`string_to_pos` is NOT the inverse of `pos_to_string`** — do not round-trip.
 
-**`dump_sexp` has three subcommands**: `--pkt [idx]` over the `PktClass`
-network programs and `--parser [idx]` over `TestParserPrograms.parser_test_programs`
-(each dumping everything when the index is omitted), plus `--modprog NAME` over
-the `TestModulePrograms` registry, keyed by name because that registry is.
-Another index-keyed one is a list and one `dump` line — printing and index
-handling are shared.
+**`Local Open Scope string_scope.`** is required around any Rocq list of string literals.
 
-**Adding a module test program is two steps, not three.** Add it to
-`mod_test_program_list` in `TestModulePrograms.v`; look it up from OCaml with
-`Shim.find_modprog "name"`. `Extraction.v` exports
-`lookup_mod_test_program : string -> option program` (keyed by
-`CrVarLike.string_to_pos`), so the name→key encoding stays on the Rocq side and
-there is nothing to mirror. An unknown name fails loudly, and an expect test lists
-the registry so an unbound program is noticed.
+**Memo tables**: compiler tables (`memo_cb`/`memo_ca`/`memo_cm`) must NOT be reset per call — they hold `SmtExpr` terms that belong to no Z3 context. Lowering tables (`memo_bool`/`memo_arith`/`memo_arr`) MUST be reset per call (`reset_lowering_memo ()` at top of `solve`) — Z3 expressions belong to the context they were built in. A new expression sort needs a new lowering table + a line in the reset. `reset_lowering_memo` also clears `undeclared_arr`.
 
-`string_to_pos` is injective but is **not** the inverse of `pos_to_string` — do not
-round-trip through it.
+**No `side_constraints` list** — both former constraints are now inside the query (`SmtCompile.regions_wf` for region byte-ness; tag/value coercion inside `compile_arith`'s `SmtArithVar` case). Do not add one back.
 
-**`Local Open Scope string_scope.`** is needed around any Rocq list of string
-literals, or you get "No interpretation for string".
+**`SmtArrInit` must be memoised** — `mk_fresh_const` is generative; a memo miss produces two unequal Z3 terms that must be one. The "witness: two undeclared regions agree" test catches this.
 
-**The query compiler's memo tables must NOT be reset per call; the lowering's
-must.** `memo_cb`/`memo_ca`/`memo_cm` and `memo_lb`/`memo_la`/`memo_lm` hold
-`SmtExpr` terms and booleans, which belong to no Z3 context, so they persist and
-a repeated query keeps its compilation. Everything below is about the *lowering*
-tables, which hold Z3 expressions and must not.
+**Every DAG walk must use physical-identity memo tables** — structural `Hashtbl` blows up (hash collision → walks as tree). `collect_arr_lens` also needs a visited set.
 
-**`Z3Solver.solve` must reset the lowering memo tables per call.** Z3 expressions
-belong to the context they were built in and `solve` builds a fresh context; the
-`reset_lowering_memo ()` at the top of `solve` is load-bearing and its absence
-fails in a query-order-dependent way that tests would not reliably catch. There
-are **three** tables now (`memo_bool`, `memo_arith`, `memo_arr`) — a new
-expression sort needs a new table and a line in the reset. `reset_lowering_memo`
-also clears `undeclared_arr`, which is context-bound but not a table; anything
-holding a Z3 expression across the call belongs there.
+**Both-reject is "equivalent"** — `check_sym_pkt_out` accepts when both runs reject. Catch with concrete-output tests (`TestModuleSemantics`), not just verdicts.
 
-**There is no `side_constraints` list any more, and getting one back would be a
-regression.** An assumption asserted beside the goal is not covered by
-`smt_query_sound_none`, which concludes about *every* valuation, while an UNSAT
-of goal-and-assumptions only rules out the valuations satisfying them. Both
-former constraints are now inside the query: a region's cells being bytes is the
-conjunct `SmtCompile.regions_wf` (proved vacuous in Rocq by `regions_wf_true`,
-so it changes nothing the axioms say), and a scalar's tag/value coercion is
-emitted into the term by `compile_arith`'s `SmtArithVar` case. See `memo-memo.txt` — removing the memoisation entirely costs ~7s on a
-single query (4.6M node expansions against a 388-node DAG).
+**Rejection is a STATE, not `None`** — `run_parser_concrete`/`eval_network_from_concrete` return `None` only on non-termination, not on rejection. A rejected run keeps running and returns `Some` with `gps_valid = false`. Do not add a short-circuit.
 
-**A memo miss must only cost time — `SmtArrInit` is the one place it wouldn't.**
-Every other node lowers idempotently, but `SmtArrInit` lowers via
-`mk_fresh_const`, which is *generative*: call it twice, get two unequal
-constants. `eval_smt_mem` sends every `SmtArrInit` to the single value
-`Unallocated`, so they must be one Z3 term, or `SmtArrEq` between two
-undeclared regions goes satisfiable-false while
-`arr_agree_upto n Unallocated Unallocated` stays `true`. So a
-"leaves are cheap, don't cache them" change in `Z3Solver.ml` — which for any
-other constructor is a pure performance question — would break correctness here.
+**`check_sym_region_equal` emits ONE `SmtArrEq`**, not a cell-by-cell conjunction. The Z3 lowering emits `mk_eq`, which is correct only because both arrays are rooted at the same `SmtArrVar` (`eval_general_program_symbolic_mem_rooted`) and every `SmtArrSt` is guarded in bounds.
 
-Two things guard it, and only one of them is real:
+**`gps_valid` must be exact** — over- or under-approximation is unsound due to the both-reject disjunct. `eval_deparser_concrete` is total for this reason.
 
-- `TestEquality`'s **"witness: two undeclared regions agree"** is the guard. It
-  hand-builds an `SmtArrEq` over `SmtArrInit`, which the checker never emits
-  (`check_sym_mem_equal` folds over *declared* regions and `init_symbolic_mem`
-  seeds those with `SmtArrVar`), so it catches lost sharing now rather than
-  after someone changes the checker to compare touched regions.
-- `get_undeclared_arr` hoists the constant so sharing does not depend on
-  `SmtArrInit` being a constant constructor — hence an immediate, hence
-  physically equal to itself. That is **redundant with the memo today**; the
-  test passes with or without it. Don't read it as fixing a live bug.
+**Match semantics**: first-match, type-first. `CrVal.eqb`/`ltb` compare `CrIntType` before value; both are false on `UninitVal`.
 
-**Every walk over a query needs memoising, not just the ones that build
-something,** and the tables must key on **physical** identity. `collect_arr_lens`
-is a pre-pass that returns nothing and was still the whole cost of the eBPF
-query — 21s of traversal against a 0.02s solve — until it got a visited set.
-And the polymorphic `Hashtbl` the lowering memos used to key on structural
-equality is itself the blowup: `Hashtbl.hash` reads a bounded prefix, so the
-merge nodes of a transformer chain all collide, and resolving a collision runs
-structural `=`, which walks the DAG as a tree. Worst when the comparison is
-*easiest* — comparing a program against itself makes every subterm structurally
-equal, and `bpf_O0` against itself went **131s → 0.01s** on that one change.
-Physical keys lose only distinct-but-equal subterms, which Z3 hash-conses back
-together anyway. See `memo-memo.txt`, which also records what is *not* worth
-doing (~40% of merge nodes are `ite c x x`; removing them measurably does not
-help).
+**Read tape concretizes through `present_bits`; write tape positionally** — the asymmetry is forced. Do not merge these paths. `ParserCommuteLemmas.pprefix` is the invariant.
 
-**A both-reject pair is "equivalent".** `check_sym_pkt_out` accepts when both runs
-reject, so two programs that are simply broken agree. The same trap has a quieter
-form: a deparser is total and emits a header holding no integer as zeroed bits, so
-two programs that both emit nothing but zeros also agree — which is easy to hit
-with memory, since a cell that was never written loads as `ErrorVal`.
-Concrete-output tests, not just checker verdicts, are what catch this;
-`TestModuleSemantics` does both for the `PktClass` classifiers and for the memory
-programs (printing region contents and extents, not just the output packet —
-the extent is semantics, checked there, even though it is not an equivalence
-criterion).
-
-**A rejection is a STATE, not a `None` — on both sides, at both levels.** The
-narrow `option` is the discipline: `run_parser_concrete` returns `None` only
-when the run did not complete (out of fuel, undefined state), and
-`eval_network_from_concrete` likewise — *neither* has a `gps_valid` guard, so a
-rejected packet keeps running through the remaining modules and comes back as
-`Some` with the flag false. That mirrors the symbolic side, which never had a
-guard because `pr_accept` is a formula with no truth value to branch on. It is
-safe because nothing sets the flag back: every writer conjoins (`andb` /
-`SmtBoolAnd`). Re-adding a short-circuit would collapse rejection into
-non-termination and make the both-rejected disjunct of
-`modnet_equivalence_checker_sound` unreachable for any network whose parser is
-not also its sink. Two consequences worth knowing: a rejecting run's deparser
-still writes the tape (concretely as well as symbolically now), and the
-concrete residual on rejection is `[]` because `concretize_sym_modnet_state`
-maps the read tape positionally and discards `cvc`, so the two sides correspond
-by length. Regression tests: `TestModuleSemantics`'s "reject is a state: ..."
-group, which uses `print_net_outcome` — `run_prog` renders `None` and an invalid
-state both as the word "reject" and cannot tell them apart.
-
-**`check_sym_region_equal` emits ONE `SmtArrEq`, not a cell-by-cell
-conjunction — do not "simplify" it back.** The old encoding was quadratic in
-both the cells compared and the number of stores (32 cells against 1 store:
-10.4s; 4 stores: 125s), which put any program that rewrites a header out of
-reach. One extensional array equality makes it 0.02s, and 16 stores over 96
-cells 0.13s. `SmtArrEq n a1 a2` carries `n` only so `eval_smt_bool` has a finite
-bound to fold; the Z3 lowering ignores it and emits `mk_eq`, which is the same
-statement **only** because both arrays are rooted at the same `SmtArrVar` (proved:
-`eval_general_program_symbolic_mem_rooted`) and every `SmtArrSt` is guarded in
-bounds. That store guard became load-bearing with this change — extensional
-equality sees every index, where the old conjunction never looked past the
-declared length. Measurements in `memo-memo.txt`.
-
-**Imprecision in `gps_valid` is unsound in either direction**, because of that same
-both-reject disjunct: over-approximating acceptance compares outputs that never
-happen, under-approximating hides real differences. This is why
-`eval_deparser_concrete` is total rather than carrying an approximate validity
-condition (the argument is in the comment on that definition).
-
-**Match semantics are first-match and type-first.** `eval_transformer_concrete`
-runs the first rule whose pattern holds, so list order is priority. `CrVal.eqb`/
-`ltb` compare `CrIntType` before the value, so a `u64` header never matches a `u8`
-constant, and both are false on `UninitVal` — an unwritten header matches nothing.
-
-**Deparsers append to `sh_write_tape`**, they do not overwrite; multiple deparsers
-concatenate in run order. The unconsumed residual survives in `sh_read_tape` and is
-not part of the emitted packet.
-
-**A read tape concretizes through `present_bits`, a write tape positionally, and
-the asymmetry is forced in both directions.** `merge_bitstream` pads the shorter
-branch of a `select` with absent (`cvc` false) positions, so a positional read-tape
-concretization hands a chained parser padding as real data and it ACCEPTS where the
-symbolic run rejects — a wrong verdict, not merely an unprovable lemma. Write tapes
-must not filter: `wt_unconditional` says every emitted bit carries `cvc := SmtTrue`,
-and `sym_out_equal_sound` compares them positionally. `present_bits` and
-`eval_sym_parser_state` (which uses it) live in `CrSymbolicSemanticsParser.v`, and
-`concretize_sym_module_state`'s `ParserMod` branch goes through the latter so there
-is one definition and not two that can drift. `ParserCommuteLemmas.pprefix` is the
-invariant that makes the filtered tape a PREFIX rather than a compaction of
-scattered survivors.
-
-**Three things in the symbolic parser are load-bearing in ways that are not
-obvious, and two of them were bugs until the commutation proof found them.**
-
-- **`select_bits_valid` measures from the CURSOR, not from the peeked window.**
-  `select_bits_available_concrete` asks whether the packet reaches
-  `cursor + off + width`; the presence conjunct has to say the same thing, and the
-  window `[cursor + off, cursor + off + width)` does not — at `width = 0` it is
-  empty and contributes `SmtTrue` however short the packet is, so a chained parser
-  whose residual ended before `cursor + off` rejected concretely and accepted
-  symbolically. Starting at the cursor makes the two exact, given the cursor is
-  itself inside the present prefix.
-- **`merge_header_maps` folds over BOTH key sets.** It used to take keys from the
-  then-branch alone, which silently dropped a header extracted only on the else
-  side of a `select` — the same failure mode as the `update_all_varlike` one in
-  SOUNDNESS.md model debt 2, and contained only by the same seeding. The union
-  form leaves just one obligation, that both maps carry the same default, which
-  `PMap.set` guarantees.
-- **`run_target_symbolic` is a top-level definition, not a local `let`.** It is
-  the one transition step, and the commutation proof has to state "this step
-  accepts nothing when the guard is false" about exactly that term. A nameless
-  let-bound lambda cannot appear in a lemma statement. The recursive call is
-  passed in as an argument; the guard checker accepts it because at the one call
-  site it is applied to a structural subterm of the fuel. Do not inline it back.
+**Three symbolic parser invariants** (do not change):
+- `select_bits_valid` measures from the CURSOR, not the peeked window.
+- `merge_header_maps` folds over BOTH key sets.
+- `run_target_symbolic` is a top-level definition, not a local `let`.
 
 ## The core fragment
 
-`Z3Solver.ml` no longer knows what a `CrVal` is. `solve` runs
-`SmtCompile.compile_bool` first, which rewrites the query into the **core
-fragment** — the sublanguage of `SmtExpr` where every arith term denotes
-`IntVal _ u64` and every node has one Z3 counterpart. Masking to widths, the
-`(value, tag)` pair, the type tests behind `eqb`/`ltb`/`iv_binop_at`, the
-`CrVal.not` width chain and the bounds guards around `ld_arr`/`st_arr` are all
-Rocq now. The lowering is a transliteration: **a case may pick one Z3
-constructor and pass its children down**; a case that builds an `ite`, a mask or
-a comparison is doing semantics and belongs in `SmtCompile.v`.
+`Z3Solver.ml` does not know `CrVal`. `solve` runs `SmtCompile.compile_bool` first, rewriting to the core fragment (every arith term denotes `IntVal _ u64`, every node has one Z3 counterpart). **A lowering case picks one Z3 constructor and passes children down** — any case building an `ite`, mask, or comparison belongs in `SmtCompile.v`. Three exceptions with comments: `SmtArrEq`, `SmtBitDiv`, `SmtBitSlice`.
 
-Three lowering cases bend that rule and each says why in a comment: `SmtArrEq`
-(Z3's array equality is extensional and `arr_agree_upto` is bounded — the
-rootedness argument in SOUNDNESS.md, unchanged), `SmtBitDiv` (`Z.div _ 0 = 0`
-where `bvudiv` is all-ones — one provably-right `ite`), and `SmtBitSlice` (a
-shift and a mask, both operands static).
+**A non-core constructor reaching the lowering raises** (`SmtArithVar`, `SmtCast`, `SmtUninit`, `SmtArrSt`).
 
-Five constructors carry the fragment: `SmtVarVal`/`SmtVarTag` split a scalar in
-the SYNTAX, which is what keeps the theorem
-`eval_smt_bool (compile_bool e) v = eval_smt_bool e v` about ONE valuation and
-one evaluator — no encoding relation between two valuations. `SmtCellVal`/
-`SmtCellTag`/`SmtStCell` are the total `select`/`store` Z3 actually has.
+**A new `SmtArithExpr` constructor needs a `compile_arith` case, not a lowering case.**
 
-**A non-core constructor reaching the lowering raises.** `SmtArithVar`,
-`SmtCast`, `SmtUninit`, `SmtArrSt` mean the compiler let something through, and
-failing loudly is the only way that gets noticed.
+**Do not inline the `cstep_*`/`lcstep_*` split back to direct `compile_bool` calls** — a structural fixpoint over a DAG visits shared subterms once per PATH.
 
-**Both compilers are split into one-layer `cstep_*`/`lcstep_*` steps and the
-knot is tied in OCaml over a cache. Do not "simplify" that back to calling
-`SmtCompile.compile_bool` directly.** A structural Rocq `Fixpoint` over a DAG
-visits a shared subterm once per PATH: compiling `bpf_O0` against itself that
-way did not finish in ten minutes. The same trap bit `lcb`, which builds
-nothing and still cost 52s against 0.13s for everything else — the
-`collect_arr_lens` lesson again. `compile_bool_step`/`lcb_step` are the licence:
-any fixpoint satisfying those equations is the function the theorem is about.
+**`compile_correct` is `Qed`** with no axioms. Two invariants a change to `SmtCompile.v` must preserve:
+- The `reps` induction carries tag ∈ 0..5 (not just any word).
+- `SmtCellVal`/`SmtCellTag`/`SmtStCell` carry an `is_int_tag` guard on their index.
 
-**`SmtCompile.compile_correct` is `Qed`**, with `Print Assumptions` reporting
-*Closed under the global context* — it depends on no axiom at all, being a
-statement about two `eval_smt_*` runs. What is still merely structural is
-`Z3Solver.ml`'s transliteration of the core fragment. Two things the proof
-needs, and a change to `SmtCompile.v` has to keep:
+**`solve` checks `lcb` and refuses a query that fails it** (guards the `smt_arr_len` = `arr_len` agreement hypothesis).
 
-- **The induction carries a stronger invariant than the theorem states**
-  (`reps`): the tag half denotes one of the six tags, `0..5`, not merely a
-  word. `mk_cell` sends every tag outside `1..5` to `ErrorVal`, so without the
-  bound two DIFFERENT tags stand for the same `CrVal` and the compiled
-  `SmtBoolEq` — which decides `CrVal.eqb` by comparing tags — answers `false`
-  where `eqb` answers `true`.
-- **`SmtCellVal`/`SmtCellTag`/`SmtStCell` carry an `is_int_tag` guard on their
-  index, and it is not decoration.** They are core in their value and not in
-  their index, and dropping the index's tag made the theorem FALSE: `cell_at`
-  is `ErrorVal` on a non-integer index, so the source reads no cell, while the
-  compiled index is a word and reads cell 0. `SmtCellTag a SmtUninit` over a
-  region of bytes denotes tag 0 and its unguarded compilation denotes tag 2.
-  The branch is dead in practice — those three constructors are `SmtCompile`'s
-  own output and appear in no source query — but the theorem quantifies over
-  every expression.
-
-`TestEquality`'s `witness:` tests — solve a hand-built expression, re-check
-Z3's model against `eval_smt_bool` of the ORIGINAL term — are no longer the
-guard on `compile_bool`. They now cover what is left: the lowering and
-`solve`'s plumbing. Keep them for that.
-
-**The region conjunct is load-bearing and easy to break silently.**
-`arr_decls` is collected by `collect_arr_lens`; a region it misses loses its
-conjunct, and the solver may then pick cells no `CrVal` denotes. To check it is
-live, empty the list — `TestEquality`'s "mem: comparing a loaded byte either way
-round agrees", "u16 load == two u8 loads" and "witness: a memory cell cannot be
-left non-integer" all fail, which is what those tests are for. A *spurious*
-entry is harmless: the conjunct is vacuous in Rocq whatever region it names.
-
-**`solve` checks `lcb` and refuses a query that fails it.** That is the
-hypothesis `compile_correct` assumes: every array merge joins regions of equal
-declared length, which is what makes the syntactic `smt_arr_len` agree with the
-denoted `arr_len`. It holds of everything the checker builds
-(`eval_general_program_symbolic_mem_rooted`), so the check is one linear pass
-that converts a silent unsoundness into a loud failure.
+**`SmtArrSel`'s bounds guard lives in `SmtCompile.v`** (`compile_arith` wraps in `SmtConditional`); the lowering emits a bare `select`. Regression: "an out-of-bounds read is ErrorVal, not a cell".
 
 ## Memory
 
-Loads and stores are `HdrOp` constructors: `LoadOp`/`StoreOp` name a `MemRegion`
-**statically** and take the offset within it as a runtime `Operand`. There is no
-pointer value — `CrVal` has none. Regions are declared on the program
-(`GeneralCaracaraProgramDef len regions net`) with a length in BYTES.
+`LoadOp`/`StoreOp` name a `MemRegion` statically; offset is a runtime `Operand`. No pointer values. Regions declared with lengths in bytes on `GeneralCaracaraProgramDef`.
 
-**A region's contents ON ENTRY are bytes, and all three sides say so.** A
-region is an input; a real one is a byte array. `eval_smt_mem`'s `SmtArrVar`
-arm sends a model's cells through `CrVal.to_byte` (u8 tag, value masked to 8
-bits), `Z3Solver.ml` pins each cell of `0..len` to the u8 tag with value ≤ 255,
-`CrVarLike.init_concrete_mem` builds regions of zero bytes
-(`CrVal.mk_region_zero`, not `mk_region`), and
-`InitReachable.valid_regions_hold_bytes` derives it for every state the
-equivalence results are about — it used to be asserted as a clause of
-`concrete_gp_state_is_valid`, and is now a consequence of the initializer
-putting every region through `region_of_bytes`. **Those must move together** —
-loosen the side constraint alone and `smt_query_sound_none` is false, tighten
-`to_byte` alone and `smt_query_sound_some` is.
+**Region entry contents are bytes on all three sides**: `eval_smt_mem` uses `CrVal.to_byte`; `Z3Solver.ml` pins cells 0..len to u8 tag, value ≤ 255; `init_concrete_mem` uses `mk_region_zero`. These must move together — loosening one side makes a soundness theorem false.
 
-Why it matters, and it is not hygiene: `ld_val` casts every cell with
-`cast u8 _`, so ONE cell that is `UninitVal`, `ErrorVal` or an `IntVal` of the
-wrong width makes the whole multi-byte load `ErrorVal` — and `CrVal.ltb` is
-false on `ErrorVal` in **both** directions. So `x > 100` and `x < 101` are both
-false, and two programs testing opposite ways came back `NotEquivalent` on a
-machine state that cannot occur. That is the family an `-O0`/`-O2` pair is full
-of. The value is masked as well as the tag checked for a second reason:
-`cast u8 u64` masks to the TARGET width and so does not truncate, so an
-`IntVal 69206016 u8` would make `ld_val`'s byte assembly overlap neighbouring
-cells and a `u64` load would stop agreeing with eight `u8` loads recombined.
-Regression tests: `TestEquality`'s "mem: comparing a loaded byte either way
-round agrees" (the positive control — it fails without the pinning) and
-"witness: a memory cell cannot be left non-integer".
+**Width-`ty` access covers `it_bytes ty` consecutive cells, little-endian.** `ld_val`/`st_val` decompose; `ld_arr`/`st_arr` are single-cell. Symbolic mirrors: `smt_ld_val`/`smt_st_val` mirror node-for-node.
 
-This constrains only the ENTRY contents. A cell can still become `ErrorVal`
-during a run — `byte_of_val` sends every non-`IntVal` there, so storing an
-unwritten header fills its cells with it — and that is real behaviour.
+**A store is not atomic** — out-of-bounds cells are dropped, in-bounds cells are written.
 
-A width-`ty` access covers `it_bytes ty` consecutive cells, little-endian --
-`CrVal.ld_val`/`st_val` do the decomposition and `ld_arr`/`st_arr` stay
-single-cell primitives. `CrSymbolicSemanticsTransformer.smt_ld_val`/`smt_st_val`
-mirror them node for node (`SmtArrSel`↔`ld_cell`, `SmtBitMul`/`SmtBitOr`↔
-`mul_at`/`or_at`, `SmtBitSlice`↔`slice_val`); a divergence there is invisible to
-the Coq development, which only relates the two through `eval_smt_*`.
+**Memory lives on `GeneralProgramState`** (`sh_mem`, `sh_mem_extent`), not `TransformerState`. Threaded through transformers as `MemCtx`.
 
-This replaced a model where a cell held a whole `CrVal` and the width lived in
-its `CrIntType`. That made a `u16` store occupy ONE address, so it was not the
-same thing as the two `u8` stores an optimiser coalesces it from -- which
-reported real `-O0`/`-O2` pairs as inequivalent. Regression test:
-`TestEquality` "a u16 store is the two u8 stores it coalesces from".
+**Every evaluator exists twice** — `eval_transformer_concrete_mem` (threads memory, used by network) and `eval_transformer_concrete` (memory-free, domain of `CaracaraProgram`). Do not delete the memory-free pair: it is the only evaluator whose soundness is stated over concrete execution.
 
-**A store is not atomic.** A byte outside the region is dropped and the rest
-are still written. That is what the symbolic side gives -- `SmtArrSt` is guarded
-per cell and "all of these are in bounds" is not expressible as an
-`SmtBoolExpr` -- and the two have to agree.
+**Out-of-bounds access yields `ErrorVal`/is dropped and records the overrun in `sh_mem_extent`; rejection happens at the sink.** `sh_mem_extent` = one past highest offset touched per region. Undeclared region default = 0, so any access is an overrun.
 
-Memory lives on `GeneralProgramState` (`sh_mem`, `sh_mem_extent`), not on
-`TransformerState`: `TransformerState T` is homogeneous in one element type and a
-region's contents are not of that type (`Array CrVal` / `SmtArrExpr`). It is threaded
-into a transformer as a `MemCtx` argument/result, forwarded in and copied back out
-like the header map.
+**`sh_mem_extent` is NOT an equivalence criterion** — it was removed because it rejected dead-load elimination, load hoisting, and speculation. Regression: "mem: a dead load is not observable" expects `Equivalent`.
 
-**Every evaluator exists twice, on BOTH sides, and neither pair is derived
-from the other.** `eval_transformer_concrete_mem` and friends thread memory and
-are what the network semantics runs; `eval_transformer_concrete` and friends are
-the memory-free recursion, the domain of `CaracaraProgram` and of
-`SmtQuery.equivalence_checker_cr_dsl`. They are separate `Definition`s that
-happen to agree — both delegate to `eval_hdr_op_expr_concrete`, and on a memory
-op the memory-free one gives what the threading one gives for an *undeclared*
-region: a load yields `ErrorVal`, a store does nothing. So `unfold` works on
-either; there is no `..._eq` layer to go through, and
-`eval_transformer_concrete` is a real `Definition` that does survive extraction.
-
-The memory-free pair is **not** dead weight and must not simply be deleted:
-`equivalence_checker_cr_dsl`'s soundness is the only result in the project
-stated over concrete execution rather than over concretized symbolic states.
-Collapsing the two is TODO.md 1.4, which is still open on both sides — the
-comment above `eval_hdr_op_assign_concrete` in
-`CrConcreteSemanticsTransformer.v` points at it.
-
-What `ConcreteTransformerLemmas.v` gives is a different property — congruence,
-not agreement: `cs_lookup_eq c1 c2` says two states agree on every
-program-variable lookup, and each evaluator has a `_preserves_eq` lemma saying
-it takes `cs_lookup_eq` states to `cs_lookup_eq` results (`mem_and_state_eq` for
-the threading ones, which must also return the same memory). Because the two
-recursions are separate, each needs its own copy of every such lemma; that
-duplication is the visible cost of TODO.md 1.4 being open.
-
-**Loads and stores are total, but a run that overruns is REJECTED — the two are not
-in tension.** An individual out-of-bounds access yields `ErrorVal` / is dropped and
-clears nothing; the overrun is recorded in `sh_mem_extent` and turned into a rejection
-once, at the sink, by `eval_general_program_concrete` /
-`eval_general_program_symbolic`, which conjoin `mem_extents_in_bounds_concrete` /
-`mem_extents_in_bounds_smt` into the final `gps_valid`. Per-run rather than per-access
-is what makes it expressible symbolically at all: a store is not atomic, so "every
-cell this access touched was in bounds" is not an `SmtBoolExpr`, while one more
-conjunct on a flag that is already a formula is free. The two checks are exact
-mirrors — same fold over `pmap_keys` of the extent map, `negb (CrVal.ltb …)` against
-`SmtBoolNot (SmtBoolLt …)`, same u64 bound out of `CrModule.region_len_map`, whose
-default of 0 makes any access to an *undeclared* region an overrun.
-
-`sh_mem_extent` is per region **how many bytes of it the run required** — one past the
-highest offset touched, not the offset itself. That keeps 0 meaning "never touched" (a
-highest-offset reading could not tell that from "touched only byte 0"). Every cell an
-access covers bumps it, not just the base, so a `u64` load one byte from the end of a
-region records needing eight bytes past where it started.
-
-**It feeds `mem_extents_in_bounds` only — it is NOT an equivalence criterion, and adding
-it back would be a regression.** It used to be one. The rationale was that a program
-reaching further can fault where the other cannot, and that does not survive the region
-model: lengths are declared and static, an overrun is already rejected into `gps_valid`,
-and every equivalence conjunct sits inside `check_sym_pkt_out`'s both-valid branch — so
-both runs have provably stayed in bounds before any of them is consulted. What the
-conjunct actually did was reject **dead-load elimination**, and load hoisting, and
-speculation: the whole `-O0`/`-O2` workload. For a map region it made the verdict depend
-on the transpiler's chosen layout. See the note on `check_sym_pkt_out` and SOUNDNESS.md;
-`TestEquality`'s "mem: a dead load is not observable" is the regression test, and it now
-expects `Equivalent`.
-
-The rejection lands in the both-reject trap below, deliberately but consciously: two
-programs that **both** overrun are "equivalent" whatever they emit. It also cost
-`TestEquality`'s test 26 its teeth — a fixed out-of-bounds pair is now Equivalent by
-that disjunct no matter what the Z3 lowering does with the access — so the
-`SmtArrSel`/`SmtArrSt` guards are pinned by the `witness:` tests at the bottom of that
-file instead. Do not delete those thinking test 26 covers them.
-
-**`SmtArrSel`'s guard now lives in `SmtCompile.v`, not `Z3Solver.ml`.**
-`compile_arith` wraps the read in `SmtConditional`, and the lowering emits a
-bare `select`. The reasoning below is why the guard exists at all and is
-unchanged; only its address has moved. (Historical form: "`SmtArrSel` must stay
-guarded in `Z3Solver.ml`.") Z3's `select` is total and
-`CrVal.ld_arr` is not, so the lowering emits `ite (idx < smt_arr_len a) (select ...) 0`.
-Drop that guard and the checker becomes unsound on every out-of-bounds read. Its
-regression test is `TestEquality`'s `witness:` test "an out-of-bounds read is
-ErrorVal, not a cell" (and "an out-of-bounds write leaves the region alone" for the
-store side) — **not** the verdict test "out of bounds, the order stops mattering",
-which stopped covering it once an overrunning run started rejecting. `SmtArrSt`
-conversely lowers to a plain total `store`, which is fine — see `SOUNDNESS.md`.
-
-Memory ops are barred from `ParRule` by `CrDslProperties.no_mem_ops_in_parb`: the
-`NoDup` obligation on `ParCtr` cannot express what two parallel stores would need
-(disjoint offsets, a runtime property).
+**Memory ops are barred from `ParRule`** (`CrDslProperties.no_mem_ops_in_parb`).
 
 ## Proof status
 
-`SOUNDNESS.md` was rewritten alongside the memory merge and is current. Summary:
+- Both checkers are **`Qed`**. They relate the verdict to `concretize_sym_modnet_state` of SYMBOLIC final states (solver-to-symbolic gap, not symbolic-to-concrete). See `SOUNDNESS.md`.
+- Symbolic-to-concrete commutation exists at every level: `ConcreteToSymbolicLemmas.v`, `MemCommuteLemmas.v`, `DeparserCommuteLemmas.v`, `ParserCommuteLemmas.v`, `NetworkCommuteLemmas.v`. **No admits.** `Print Assumptions` shows one solver axiom only.
+- `eval_general_program_commute` is stated for `init_general_symbolic_state` only — not arbitrary `s`. Do not generalise.
+- `InitReachable.valid_iff_reachable` is `Qed`. Validity is defined as the image of the concrete initializer. `valid_is_reachable_pair` is the form the checker needs.
+- Seeded names are built in one place: `CrVarLike.seed_name` over `SeedVar`. Add a seeded name by adding a `SeedVar` constructor, not by string concatenation.
+- `gps_agree` is POINTWISE, not record equality — do not "simplify" to `=`. `sh_mem_extent` trees differ between symbolic and concrete runs.
+- Solver axiomatised in `SmtQuery.v`: `smt_query_sound_some`/`smt_query_sound_none`. `SmtModuleQuery.v` ends with `Print Assumptions` calls that print during `make`.
+- `smt_arr_len` is syntactic only (not part of Coq semantics). Its `SmtArrIte` case reads one branch — sound only because both branches are rooted at the same region.
+- **Linear chain only** (`is_linear_chain` = `is_dag ∧ single_sink ∧ no_fan_out ∧ no_fan_in`). Fan-out DAGs are not faithfully modelled.
+- **A write to a key not already in the map is DROPPED symbolically.** Two seeds close this: headers via `collect_write_headers`, transformer state via `force_keys` over `collect_module_state_targets`. `force_keys` must not set the default.
+- **Initial header map seeded with the whole network header interface** (`collect_write_headers`). Do not simplify to `PMap.init`.
+- Header seeding: extracted headers get `SmtCast u64 ty (SmtVarVal "hdr_<h>")`/`mk_int ty 0`; transformer-only headers get `SmtUninit`/`UninitVal`. Split by `collect_header_types`. Names are UNPREFIXED (both programs share one variable per header).
+- Arith expressions compile to `(value, tag)` pairs in `SmtCompile.v`. Tag encoding: 0=ErrorVal, 1=UninitVal, 2..5=W8/W16/W32/W64. `regions_wf` pins array cells to u8 tag — do not normalise inside `SmtArrSel` instead.
+- `TestEquality.ml`'s `witness:` tests are the guard on the lowering and `solve` plumbing. Add one when adding an expression form.
 
-- Both checkers are **`Qed`**. Do not over-read that: both network lemmas
-  relate the verdict to `concretize_sym_modnet_state` of the SYMBOLIC final
-  states, so they close the solver-to-symbolic gap, not the
-  symbolic-to-concrete one. The supporting invariants
-  (`eval_general_program_symbolic_wt`, `..._mem_rooted`) are load-bearing;
-  breaking either makes a conclusion false, not just unproven. See
-  `SOUNDNESS.md`.
-- The symbolic-to-concrete commutation now exists at every level except the
-  network: `ConcreteToSymbolicLemmas.v` (transformers, memory-free),
-  `MemCommuteLemmas.v` (memory, up through the transformer),
-  `DeparserCommuteLemmas.v`, `ParserCommuteLemmas.v`, and the network
-  induction that assembles them in `NetworkCommuteLemmas.v`. **There are no
-  admits left**, and `Print Assumptions` on either checker lemma reports one
-  solver axiom and nothing else.
-  **`eval_general_program_commute` is stated for `init_general_symbolic_state`,
-  not for an arbitrary symbolic state, and that is forced: over an arbitrary
-  `s` it is FALSE.** Give `s` a read tape whose first position is absent under
-  `f` and whose second is present, and hand it to a parser extracting one bit
-  — the concrete run sees `present_bits` of it, one bit, reads it and ACCEPTS,
-  while the symbolic run conjoins position 0's presence into its guard and
-  REJECTS, so the two `gps_valid`s differ. Do not try to generalise it back.
-  It carries `well_formed_general_program` and `is_linear_chain`, which
-  `modnet_equivalence_checker_sound` already had — those two hypotheses had no
-  use before this.
-  Three things in it are worth knowing before touching that area:
-  - **Rejection absorption is what makes the induction's invariant
-    inductive.** After a rejection the two states genuinely diverge and
-    `eval_parser_commute` does not apply, so the accept flags cannot be shown
-    to AGREE there — only to be jointly false. Every writer of the flag
-    conjoins, on both sides, so that is enough.
-  - **A deparser is handed a packet the two sides disagree about**: the read
-    tape concretizes through `present_bits`, a filter, while
-    `concretize_sym_module_state`'s `DeparserMod` branch maps positionally.
-    The case goes through only because a deparser reads nothing but its header
-    map (`eval_deparser_concrete_cong`). Give a deparser a reason to read its
-    input packet and this breaks.
-  - **The invariant's unconditional part is module-state KIND agreement, not
-    domain agreement.** Both `module_update_gs_*` dispatch on the module kind
-    and the stored state's kind together and write nothing when they disagree,
-    so different kinds at one key would make one side store its result and the
-    other not — and the domains would come apart, after which the two runs can
-    disagree about whether the network completes at all. `ms_kind_agree` is
-    what is preserved; its preservation is where `well_formed_parser` is first
-    needed, since on a REJECTING run the concrete parser must still return
-    `Some`.
-  - **`gps_agree` does not need weakening for `sh_hdr_map`/`mod_states`**, and
-    TODO 1.1 item 5's recommendation to the contrary is now corrected there.
-    Pointwise `!!` agreement alone is not enough — `!!` cannot see the key set
-    — but the key set and the default are both available:
-    `update_all_varlike` is `new_pmap_from_old` in all three instances, which
-    moves neither, and `pmap_ext` closes the gap.
-- **`InitReachable.v` says which concrete initial states the network lemmas
-  are about: exactly the valid ones** (`valid_iff_reachable`, `Qed`, no
-  axioms). Validity is **defined, not described** — a state is valid when the
-  concrete initializer produces it from some `InitInputs` — and that shape is
-  forced. The old version was a predicate listing sanity facts with
-  `reachable_if_valid` admitted, and it was not provable: such a predicate can
-  only speak POINTWISE about a state's maps while the conclusion is an equality
-  of records, and `PMap` is not extensional (`PMap.set k v m` and `m` read the
-  same everywhere when `v` is what `k` already held, and differ as trees).
-  Every concretization of an initial state has the empty tree in
-  `sh_mem_extent`, so a "valid" state with any other tree there was outside the
-  image whatever the predicate said. Three consequences worth knowing:
-  - **The conclusion stays an equation**, so it rewrites straight into
-    `modnet_equivalence_checker_sound` with no congruence lemma needed. That
-    works because concretization commutes with every fold the initializer uses
-    (`pmap_map_set`/`pmap_map_fold`/`pmap_map_force`/`ptree_map1_of_list`),
-    which in turn needs `PTree.extensionality` — do not replace those folds
-    with a shape the lemmas do not cover.
-  - **Each input is held RAW and the builder applies the normalizer** the
-    symbolic side applies (`mk_int ty ∘ val_of`, `region_of_bytes`, `as_int`,
-    `as_bit`). So the reachable values of an input are a consequence, not a
-    constraint anyone states — which is why `UninitVal` is correctly absent at
-    a seeded variable and a region correctly has the declared length.
-  - **`valid_is_reachable_pair` is the form the checker needs**, since
-    `modnet_equivalence_checker_sound` uses ONE valuation for both programs.
-    It needs the two input choices to agree on the shared families and the two
-    prefixes to be `prefixes_disjoint` (true by computation for `"p1"`/`"p2"`).
-- **Every seeded variable name is built in one place**, `CrVarLike.seed_name`
-  over `SeedVar`, and `InitReachable.seed_parse_name` inverts it. That inverse
-  IS the claim that the four families are pairwise distinct, which is what
-  makes the four kinds of input independently choosable — without it
-  `valid_is_reachable` is false, not merely unproven. A module-local name
-  starts with `mod_mark` (`$`) and an input name never does, so the two
-  namespaces separate for EVERY program prefix rather than for the ones the
-  checker happens to pass. Add a seeded name by adding a `SeedVar`
-  constructor, not by concatenating a string at the use site.
-- **The bridge concludes `gps_agree`, not an equality of states, and the two
-  memory maps in it are compared POINTWISE.** An equality of
-  `GeneralConcreteState` records is false: `sh_mem_extent` starts as
-  `PMap.init` and every access adds a key, so a symbolic merge binds keys for
-  every branch's regions where a concrete run binds only the branch that ran.
-  `PMap.map` preserves trees, so the records differ while `!!` agrees
-  everywhere — the surplus bindings all hold the map's own default. Nothing
-  downstream notices: `modnet_equivalence_checker_sound` compares
-  `ld_arr (… !! …)`, `… !! …`, the two tapes and the flag, all extensional.
-  Do not "simplify" `gps_agree` back to `=`. The fields that ARE structurally
-  equal are so because of the header-map seeding — see the comment on
-  `gps_agree`.
-- The solver is axiomatised in `SmtQuery.v`: `Parameter smt_query` plus
-  `smt_query_sound_some` / `smt_query_sound_none`. These are what a
-  `Print Assumptions` on a network lemma should show; anything beyond them is a
-  new trust assumption. Each direction in fact uses only one of the two —
-  `_sound` reports `smt_query_sound_none`, `_complete` reports
-  `smt_query_sound_some`. `SmtModuleQuery.v` ends with the `Print Assumptions`
-  calls that check this — they print during `make`, so a new axiom shows up in
-  the build log.
-- **`smt_arr_len` is not part of the Coq semantics.** `eval_smt_mem` bounds a read
-  by the *denoted* array's `arr_len`; `smt_arr_len` is a separate syntactic walk
-  that exists only so `Z3Solver.ml` can emit the bounds guard Z3's total `select`
-  otherwise lacks. Its `SmtArrIte` case reads one branch and discards the other,
-  which is sound only because both branches of every merge the checker builds are
-  rooted at the same region. `eval_general_program_symbolic_arr_len_agrees` is what
-  ties the two together; it uses both `eval_general_program_symbolic_mem_rooted` and
-  `eval_smt_mem_rooted`, so breaking the invariant now breaks the build rather than
-  silently weakening the solver's guard.
-- Modelling caveats that remain real: the semantics assume a **linear chain**
-  (`is_linear_chain` = `is_dag ∧ single_sink ∧ no_fan_out ∧ no_fan_in`); fan-out
-  DAGs are not faithfully modelled, and memory being global state makes that
-  sharper than it was.
-- **A write to a key that is not already in the map is DROPPED symbolically and
-  kept concretely.** `update_all_varlike` rebuilds a map from the keys already
-  in it, so it can never introduce one, while the concrete `update_varlike` is
-  `PMap.set`. Two seeds close this, and they are not interchangeable: headers
-  by `collect_write_headers` (see below), and a transformer's state variables
-  by `CrVarLike.force_keys` over `collect_module_state_targets`, because
-  `t_state_map` is seeded from the module's *declared* states and nothing
-  requires a rule's targets to be among them. `force_keys` re-sets each key to
-  the value it already reads (`PMap.gsident`), so it is the identity
-  extensionally and changes only the domain — it must not set the default, or
-  it would erase a declared state variable's free `SmtArithVar`.
-- **The initial header map is seeded with the network's whole header interface**
-  (`CrVarLike.collect_write_headers`), in both `init_general_symbolic_state` and
-  `init_general_concrete_state`. Do not "simplify" that back to `PMap.init`.
-  `update_all_varlike` rebuilds a header map from the keys already in it, so it
-  cannot introduce one; `eval_transformer_smt` merges through it and therefore
-  used to drop any header first written inside a transformer, while the concrete
-  `update_varlike` (`PMap.set`) kept it — and the network checker then compared
-  two empty outputs and said `Equivalent`. That is why the DOMAIN is seeded.
-- **What each seeded entry HOLDS depends on whether a parser extracts it.**
-  A header some parser extracts is a **field register**: `seed_header_syms`
-  gives it `SmtCast u64 ty (SmtVarVal "hdr_<h>")` — an arbitrary value of its
-  own width — and `seed_header_concrete` starts it at `mk_int ty 0`, one
-  inhabitant of that family. A header only a transformer writes is a temporary
-  and still holds `SmtUninit`/`UninitVal`. `collect_header_types` is the split,
-  and an `ExtractOpConstructor h _ ty` is the only thing that declares a width.
-  - The name is **unprefixed**, so both programs share one variable per header
-    — the checker asks "for every initial value, do these agree?". Prefixing
-    would give them unrelated inputs and report every pair different.
-  - `SmtVarVal` always denotes a `u64`, so the cast's source check always
-    passes and `cast u64 ty` masks into `ty`. The seed therefore **forces**
-    `concrete_gp_state_is_valid`'s header clause rather than the solver having
-    to be told it — the same arrangement `CrVal.to_byte` gives a region, and for
-    the same reason: a constraint the semantics does not already imply would
-    make `smt_query_sound_none` false.
-  - Regression test: `TestEquality`'s "hdr init: a register read before its
-    extraction is free", a parser pair differing only in a select that reads h1
-    before the state extracting it. Seed registers uninit instead and it comes
-    back `Equivalent`, because `slice_val UninitVal` is `ErrorVal` and no
-    pattern ever matches. Verified both ways round.
-- **An arith expression is compiled into a `(value, tag)` PAIR OF TERMS, and that
-  now happens in `SmtCompile.v`, not in the lowering.** `eval_smt_arith` is type-checked throughout (`eqb`/`ltb` need matching
-  `CrIntType`s, `iv_binop_at ty` needs both operands typed `ty`, `cast` checks
-  `from`, and `UninitVal`/`ErrorVal` are distinct values). A lowering to bare
-  64-bit bitvectors cannot express that and made `smt_query_sound_some` **false**
-  for the real solver — `TestEquality`'s "tss basic" used to return
-  `NotEquivalent` on a model `eval_smt_bool` rejected. The tag encoding (0 =
-  ErrorVal, 1 = UninitVal, 2..5 = W8/W16/W32/W64) is now written down once, as
-  `CrVal.tag_of`/`val_of`/`mk_cell`, and `SmtCompile.compile_arith` builds the
-  pair out of ordinary `SmtExpr` nodes. **A new `SmtArithExpr` constructor needs
-  a `compile_arith` case, not a lowering case** — see "The core fragment" below.
-  To spot-check: take a `NotEquivalent f` and confirm
-  `eval_smt_bool (check_sym_pkt_out regions s1 s2) f` is `true`.
-
-  **Reading a tag back is equally load-bearing, and the array path is the delicate
-  one.** `eval_smt_arith`'s `SmtArithVar` arm coerces any non-`IntVal` to `ErrorVal`,
-  so scalars are safe by construction; `SmtArrSel` returns the cell **verbatim**, so
-  a region's cells must reconstruct exactly. Tag 0 is `ErrorVal`, tag 1 is
-  `UninitVal`, `eqb ErrorVal UninitVal = false` — `to_amap` must not collapse them,
-  as it used to. `ErrorVal` cells are the common case: `byte_of_val` sends every
-  non-`IntVal` there, so storing an unwritten header fills its cells with it.
-
-  A free `SmtArrVar`'s cell tags are unconstrained, so a model can pick 6 or 7.
-  **`SmtCompile.regions_wf` pins cells `0..len` to the `u8` tag with value ≤ 255,
-  as a conjunct of the query — do not "simplify" that into a normalisation
-  inside `SmtArrSel`.** `SmtArrEq` lowers to `mk_eq` on
-  whole arrays and so compares cells raw; a read-side fix lets Z3 find differences no
-  valuation can express. Regression test: `TestEquality`'s "a cell read back is the
-  cell that is there".
-
-  **`TestEquality.ml` ends with `witness:` tests** that solve a hand-built
-  `SmtBoolExpr` and re-check the model with `eval_smt_bool`. That is the only thing
-  that catches a wrong witness — the verdict is right in these cases, so verdict
-  tests see nothing. Add one when you add an expression form.
-
-Update `SOUNDNESS.md` alongside any proof work rather than letting it drift again.
+Update `SOUNDNESS.md` alongside any proof work.
