@@ -335,6 +335,22 @@ let cases : case list = [
     pair = Net ("bench/ebpf/ir/filter_O1.ir", "bench/ebpf/ir/filter_O2.ir");
     want = Eq };
 
+  (* The family's NotEquivalent probe: not a second C source, but a single
+     in-place edit to vlan_filter's compiled -O2 bytecode (bench/ebpf/
+     mutate_bpf.py, reusing ect's tests/mutate.py).  The VLAN mask
+     vlan_filter.c ANDs vlan_tci with changes from 0x0fff to 0x1000 -- the
+     lowered IR differs in exactly one constant, (OpConst 4095) becoming
+     (OpConst 4096) -- so it selects on a different bit entirely.  Every
+     other eBPF row expects Equivalent, and an Equivalent verdict is also
+     what two runs that both merely reject produce, so without this row the
+     family is not evidence the checker can tell these programs apart. *)
+  { family = "eBPF"; name = "suricata-vlan-mask";
+    what = "OISF/suricata vlan_filter.c, -O2 vs the same bytecode with its \
+            VLAN mask changed 0x0fff -> 0x1000";
+    pair = Net ("bench/ebpf/ir/vlan_filter_O2.ir",
+                "bench/ebpf/ir/vlan_filter_mask.ir");
+    want = NotEq };
+
   { family = "eBPF"; name = "suricata-vlan";
     what = "OISF/suricata vlan_filter.c, -O1 vs -O2";
     pair = Net ("bench/ebpf/ir/vlan_filter_O1.ir",
