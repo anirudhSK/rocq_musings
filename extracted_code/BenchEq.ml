@@ -310,8 +310,7 @@ let cases : case list = [
   (* The same shape as the P4 rows and for the same reason: each pair is one
      program against the SAME program after LLVM's optimizer has had at it,
      which is a statement about the optimizer rather than about two things
-     somebody wrote.  bench/ebpf/regen.sh builds them; bench/ebpf/README.md
-     says why four of the five are -O1 against -O2. *)
+     somebody wrote.  bench/ebpf/regen.sh builds them, all five at -O1 vs -O2. *)
 
   { family = "eBPF"; name = "xdp-pktcntr";
     what = "dslab-epfl/ebpf-se katran/xdp_pktcntr.c, -O1 vs -O2";
@@ -336,10 +335,9 @@ let cases : case list = [
     pair = Net ("bench/ebpf/ir/filter_O1.ir", "bench/ebpf/ir/filter_O2.ir");
     want = Eq };
 
-  (* A -O0 against -O2 pair. *)
   { family = "eBPF"; name = "suricata-vlan";
-    what = "OISF/suricata vlan_filter.c, -O0 vs -O2";
-    pair = Net ("bench/ebpf/ir/vlan_filter_O0.ir",
+    what = "OISF/suricata vlan_filter.c, -O1 vs -O2";
+    pair = Net ("bench/ebpf/ir/vlan_filter_O1.ir",
                 "bench/ebpf/ir/vlan_filter_O2.ir");
     want = Eq };
 
