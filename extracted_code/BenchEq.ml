@@ -615,10 +615,19 @@ let () =
   let adhoc = ref [] in
   let isolate = ref false in
   let scale = ref false in
+  let case_exact = ref false in
   let rec parse = function
     | [] -> ()
     | "--family" :: v :: r -> family := v; parse r
     | "--case" :: v :: r -> only := v; parse r
+    (* Internal: what [--isolate] passes ITSELF to re-run exactly the one
+       case it's isolating, in a child process.  [--case] is substring
+       matching (see usage below), which is not safe for that: a name that
+       happens to be a prefix of another's -- "suricata-vlan" of
+       "suricata-vlan-mask" -- would make the child run BOTH, and the parent
+       would hand back whichever one printed its row first, silently
+       substituting one case's numbers for another's. *)
+    | "--case-exact" :: v :: r -> only := v; case_exact := true; parse r
     | "--reps" :: v :: r -> reps := int_of_string v; parse r
     | "--csv" :: v :: r -> csv := v; parse r
     | "--list" :: r -> list := true; parse r
@@ -639,6 +648,8 @@ let () =
         else go (i + 1)
       in go 0
   in
+  let name_matches c =
+    if !case_exact then c.name = !only else contains c.name !only in
   let selected =
     match !adhoc with
     | [a; b] ->
@@ -654,8 +665,7 @@ let () =
          should run exactly that one row, same as any other case. *)
       let pool = if !scale then scale_cases else cases in
       Stdlib.List.filter
-        (fun c ->
-           (!family = "" || c.family = !family) && contains c.name !only)
+        (fun c -> (!family = "" || c.family = !family) && name_matches c)
         pool
   in
 
@@ -697,8 +707,9 @@ let () =
          let tmp = Filename.temp_file "bench_iso_" ".csv" in
          let out = Filename.temp_file "bench_iso_" ".txt" in
          let cmd =
-           Stdlib.Printf.sprintf "%s --case %s --reps %d --csv %s > %s 2>&1"
+           Stdlib.Printf.sprintf "%s%s --case-exact %s --reps %d --csv %s > %s 2>&1"
              (Filename.quote Sys.executable_name)
+             (if !scale then " --scale" else "")
              (Filename.quote c.name) !reps (Filename.quote tmp)
              (Filename.quote out) in
          let rc = Sys.command cmd in
