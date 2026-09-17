@@ -11,6 +11,13 @@
 # and copies what it wants.  translation/ect/Makefile carries the exact
 # compiler flags and is the authority for how a .ir is produced.
 #
+# One more row, vlan_filter_mask, is not a second C source: it's a single
+# in-place edit to vlan_filter's compiled bytecode (mutate_bpf.py, reusing
+# ect's tests/mutate.py), expected NotEquivalent against vlan_filter_O2.  The
+# rows above all expect Equivalent, and an Equivalent verdict is also what two
+# runs that both merely REJECT produce, so a family with no NotEquivalent
+# probe is not evidence the checker can distinguish these programs at all.
+#
 # Needs a clang and an `llc` WITH THE BPF TARGET -- the stock macOS toolchain
 # has neither:
 #
@@ -26,6 +33,10 @@ src="$here/src"; out="$here/ir"; mkdir -p "$out" "$src"
 
 [ -f "$ECT/Makefile" ] || {
   echo "no Makefile under $ECT -- git submodule update --init translation/ect" >&2
+  exit 2
+}
+command -v python3 >/dev/null || {
+  echo "no python3 -- needed for the vlan_filter_mask mutation probe" >&2
   exit 2
 }
 
@@ -91,3 +102,18 @@ take filter      suricata/filter      O1
 take filter      suricata/filter      O2
 take vlan_filter suricata/vlan_filter O1
 take vlan_filter suricata/vlan_filter O2
+
+# The NotEquivalent probe.  Matched by substring rather than instruction
+# index: the index an optimizer assigns the mask op is not stable across
+# clang/llc versions, so a hardcoded index would silently mutate the wrong
+# instruction on a different toolchain instead of failing loudly.  "4095" is
+# the 0x0fff mask vlan_filter.c ANDs vlan_tci with; the mutant changes it to
+# 0x1000 (4096), selecting on a different bit entirely.
+python3 "$here/mutate_bpf.py" "$ECT" "4095->4096" \
+    "$ECT/ex/suricata/vlan_filter.O2.o" "$ECT/ex/suricata/vlan_filter_mask.O2.o" || {
+  echo "FAIL  mutating vlan_filter for the mask probe" >&2; exit 1; }
+make -C "$ECT" ${CLANG:+CLANG="$CLANG"} ${LLC:+LLC="$LLC"} \
+     ex/suricata/vlan_filter_mask.O2.ir >/dev/null || {
+  echo "FAIL  lowering vlan_filter_mask.O2.o" >&2; exit 1; }
+cp "$ECT/ex/suricata/vlan_filter_mask.O2.ir" "$out/vlan_filter_mask.ir"
+echo "ok    vlan_filter_mask.ir"
