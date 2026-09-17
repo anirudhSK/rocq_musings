@@ -80,12 +80,6 @@ for f in ebpf-se/xdp_pktcntr.c ebpf-se/cls_pktcntr.c ebpf-se/map_access.c \
   cp "$ECT/ex/$f" "$src/$(basename "$f")"
 done
 
-# dslab-epfl/ebpf-se.  -O0 is NOT usable for any of these three: the shim
-# declares each helper as a function POINTER initialized to its number, and
-# only -O1 and up fold that to an immediate -- at -O0 clang emits an indirect
-# `call rN`, which bpf_to_ir does not model, and every map access downstream
-# then loses its provenance.  translation/ect/Makefile says the same thing
-# where it picks the two levels.
 take xdp_pktcntr ebpf-se/xdp_pktcntr O1
 take xdp_pktcntr ebpf-se/xdp_pktcntr O2
 take cls_pktcntr ebpf-se/cls_pktcntr O1
@@ -93,16 +87,7 @@ take cls_pktcntr ebpf-se/cls_pktcntr O2
 take map_access  ebpf-se/map_access  O1
 take map_access  ebpf-se/map_access  O2
 
-# OISF/suricata.  filter.c calls helpers and so has the same -O0 limitation;
-# vlan_filter.c calls none, so -O0 works and that pair is the real -O0/-O2 one.
 take filter      suricata/filter      O1
 take filter      suricata/filter      O2
+take vlan_filter suricata/vlan_filter O1
 take vlan_filter suricata/vlan_filter O2
-
-# ... except that the Makefile only builds -O0 for ex/basic/ex0.c, since that
-# is the one source the IR's own fixtures need it for.  Ask for this one
-# explicitly.
-make -C "$ECT" ${CLANG:+CLANG="$CLANG"} ${LLC:+LLC="$LLC"} \
-     ex/suricata/vlan_filter.O0.ir >/dev/null || {
-  echo "FAIL  building vlan_filter at -O0" >&2; exit 1; }
-take vlan_filter suricata/vlan_filter O0
