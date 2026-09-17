@@ -727,14 +727,10 @@ denotation, so `eval_hdr_op_assign_smt_eq` cannot be stated in the old form, and
 `commute_sym_conc_assign` needs a lemma `eval_smt_arith (smt_ld_val ty SmtArrInit o) f
 = ErrorVal` — the mirror of `CrVal.ld_val_unalloc`. Six `unfold` sites.
 
-Groundwork already in the tree:
-
-- `CrVal.ld_val_unalloc` / `st_val_unalloc` — an undeclared region reads
-  `ErrorVal` and swallows writes, at every width. These are what make the
-  equality hold; note it is *provable*, not definitional, because
-  `List.seq 0 (it_bytes ty)` cannot reduce for a variable `ty`.
-- `NoMemLemmas.v` — the reverse reduction, for transformers with no memory ops.
-  Unused today; it is the escape hatch if a lemma resists porting.
+Groundwork already in the tree: `CrVal.ld_val_unalloc` / `st_val_unalloc` — an
+undeclared region reads `ErrorVal` and swallows writes, at every width. These
+are what make the equality hold; note it is *provable*, not definitional,
+because `List.seq 0 (it_bytes ty)` cannot reduce for a variable `ty`.
 
 What is still needed:
 
@@ -865,16 +861,16 @@ cannot express. Concretely:
   `eval_general_program_concrete` has to run it too.
 
 Until then the guard above is what keeps the unsound cases loud. The one
-concrete gap it does not cover is a computed key, and `test/bpf_map_alias.ir`
-is a checked-in reminder of the shape.
+concrete gap it does not cover is a computed key.
 
 ### 1.7. A control-plane config is an input, but `ctrl` is seeded per program
 
-`init_general_symbolic_state` seeds a transformer's ctrl variables as
-`SmtArithVar (prefix ++ "ctrl_" ++ ...)` (`CrVarLike.v:707`), where `prefix` is
-`get_mod_prefix prog_prefix m_id` — so a ctrl name is `p1_m10_ctrl_1` and the
-two programs a comparison is about get *unrelated* control-plane
-configurations. Regions and packet bits are deliberately unprefixed for the
+`init_general_symbolic_state` seeds a transformer's ctrl variables through
+`seed_name prog_prefix (SVCtrl m_id v)` (`CrVarLike.v:735`, in
+`init_sym_mod_state`), which expands to
+`get_mod_prefix prog_prefix m_id ++ "ctrl_" ++ pos_to_string v`
+(`CrVarLike.v:551`) — so a ctrl name is `p1_m10_ctrl_1` and the two programs a
+comparison is about get *unrelated* control-plane configurations. Regions and packet bits are deliberately unprefixed for the
 opposite reason, and the comment on `init_symbolic_mem` states it: give the two
 runs independent variables for an input and "the solver satisfies 'the outputs
 differ' by simply handing them different memories."
