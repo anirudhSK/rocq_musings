@@ -2,6 +2,7 @@ From MyProject Require Import CrDsl.
 From MyProject Require Import CrVarLike.
 From MyProject Require Import CrIdentifiers.
 From MyProject Require Import CrModule.
+From MyProject Require Import ParserWellFormed.
 From MyProject Require Import ListUtils.
 From MyProject Require Import CrTransformer.
 From Stdlib Require Import PArith.BinPos.
@@ -106,10 +107,10 @@ Qed.
 (* TODO: Needs extension once parser semantics are fleshed out *)
 Definition well_formed_module (m : CrModule) : Prop :=
   match m with
-  (* TODO: parser/deparser modules are currently unconstrained.  A deparser
-     should at least require its emit widths to be well-formed (and, once
-     header types carry widths, that each emit width match its header). *)
-  | ParserModule _ _ => True
+  (* TODO: deparser modules are still unconstrained.  A deparser should at
+     least require its emit widths to be well-formed (and, once header types
+     carry widths, that each emit width match its header). *)
+  | ParserModule _ p => well_formed_parser p
   | DeparserModule _ _ => True
   | TransformerModule _ states ctrls t =>
       Coqlib.list_norepet states /\ Coqlib.list_norepet ctrls /\
@@ -278,7 +279,7 @@ Qed.
 
 Definition well_formed_moduleb (m : CrModule) : bool :=
   match m with
-  | ParserModule _ _ => true
+  | ParserModule _ p => well_formed_parserb p
   | DeparserModule _ _ => true
   | TransformerModule _ states ctrls t =>
       negb (has_duplicates varlike_equal states) &&
@@ -295,7 +296,8 @@ Lemma well_formed_module_prop_bool_lemma :
 Proof.
   intros.
   unfold well_formed_module, well_formed_moduleb.
-  destruct m; try (split; intros; reflexivity).
+  destruct m; try (split; intros; reflexivity);
+    try (apply well_formed_parser_prop_bool_lemma).
   pose proof (sorted_is_sorted_lemma State s varlike_lt varlike_ltb
     (fun x y => iff_sym (Pos.ltb_lt (get_key x) (get_key y)))) as SIFFs.
   pose proof (sorted_is_sorted_lemma Ctrl c varlike_lt varlike_ltb

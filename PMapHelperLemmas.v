@@ -380,4 +380,82 @@ Proof.
   destruct (Coqlib.peq i k); reflexivity.
 Qed.
 
+(* [lookup_varlike_map] commutes with [PMap.map] -- it is [PMap.gmap] once
+   unfolded.  Stated here, immediately before the seal, because both the
+   parser and the deparser commutation proofs need it and neither should have
+   to break the seal to get it. *)
+Lemma lookup_varlike_map_commute :
+  forall {A} `{CrVarLike A} {T U} (g : T -> U) (m : PMap.t T) (v : A),
+    lookup_varlike_map (PMap.map g m) v = g (lookup_varlike_map m v).
+Proof.
+  intros A HA T U g m v. unfold lookup_varlike_map. apply PMap.gmap.
+Qed.
+
 Global Opaque lookup_varlike_map.
+
+(* ------------------------------------------------------------------ *)
+(* Key-indexed rebuilds of a [PMap].
+
+   Both symbolic memory merges -- [merge_mem_ctx_smt] at the rule level and
+   the [mem']/[ext'] folds inside [eval_transformer_smt_mem] -- have the same
+   shape: fold [PMap.set k (g k)] over an explicit key list, starting from one
+   of the maps being merged.  Unlike [PMap.map], that does NOT touch the keys
+   outside the list, so reasoning about such a map splits into the two cases
+   below.  The [~ In] case is why [pmap_get_notin_keys] is needed: a key
+   outside every list reads the map's DEFAULT, and a merge is only correct
+   there because the defaults on both sides agree. *)
+
+Lemma pmap_fold_set_notin :
+  forall {A : Type} (g : positive -> A) (ks : list positive) (m0 : PMap.t A) k,
+    ~ In k ks ->
+    (List.fold_left (fun acc k' => PMap.set k' (g k') acc) ks m0) !! k = m0 !! k.
+Proof.
+  intros A g ks. induction ks as [| k' rest IH]; intros m0 k Hnin; simpl.
+  - reflexivity.
+  - rewrite IH by (intro; apply Hnin; right; assumption).
+    apply PMap.gso. intro; apply Hnin; left; congruence.
+Qed.
+
+Lemma pmap_fold_set_in :
+  forall {A : Type} (g : positive -> A) (ks : list positive) (m0 : PMap.t A) k,
+    In k ks ->
+    (List.fold_left (fun acc k' => PMap.set k' (g k') acc) ks m0) !! k = g k.
+Proof.
+  intros A g ks. induction ks as [| k' rest IH]; intros m0 k Hin; simpl.
+  - destruct Hin.
+  - destruct (in_dec Coqlib.peq k rest) as [Hr | Hr].
+    + apply IH; assumption.
+    + assert (k = k') by (destruct Hin; congruence).
+      subst k'. rewrite pmap_fold_set_notin by assumption. apply PMap.gss.
+Qed.
+
+(* A key with no explicit binding reads the map's default.  Stated over
+   [pmap_keys] because that is what the merges enumerate. *)
+Lemma pmap_get_notin_keys :
+  forall {A : Type} (m : PMap.t A) k,
+    ~ In k (pmap_keys m) -> m !! k = fst m.
+Proof.
+  intros A m k Hnin. unfold PMap.get.
+  destruct (PTree.get k (snd m)) eqn:Hg; [| reflexivity].
+  exfalso. apply Hnin. unfold pmap_keys.
+  apply in_map with (f := fst) (x := (k, a)).
+  apply PTree.elements_correct. assumption.
+Qed.
+
+(* [PMap.set] never changes the default, so any number of them leave it
+   alone -- which is what makes two independently updated copies of the same
+   map agree outside their explicit keys. *)
+Lemma pmap_set_default :
+  forall {A : Type} (k : positive) (v : A) (m : PMap.t A),
+    fst (PMap.set k v m) = fst m.
+Proof. reflexivity. Qed.
+
+(* ...and so a key-indexed rebuild inherits its starting map's default. *)
+Lemma pmap_fold_set_default :
+  forall {A : Type} (g : positive -> A) (ks : list positive) (m0 : PMap.t A),
+    fst (List.fold_left (fun acc k' => PMap.set k' (g k') acc) ks m0) = fst m0.
+Proof.
+  intros A g ks. induction ks as [| k' rest IH]; intros m0; simpl.
+  - reflexivity.
+  - rewrite IH. reflexivity.
+Qed.

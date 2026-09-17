@@ -61,7 +61,7 @@ dune exec eq_check test/prog1.out test/prog1.out
 # -> Equivalent
 dune exec eq_check test/prog1.out test/prog2.out
 # -> ┌ SAT Valuation
-# -> | var( hdr_1 ) := 0
+# -> | var( hdr_1 ) := error
 # -> └
 # -> Not Equivalent
 
@@ -119,17 +119,30 @@ transformer alongside the state, forwarded in and copied back out the same way t
 map is.
 
 Both operations are **total**. An access outside the region's declared length yields
-`ErrorVal` (load) or is dropped (store), and neither clears `gps_valid`. See
+`ErrorVal` (load) or is dropped (store), and no *single* access rejects. See
 `SOUNDNESS.md` for why a partial operation would be unsound here rather than merely
 conservative.
 
-What distinguishes a program that walks off the end is instead `sh_mem_extent`: per region,
-how many bytes of it the run required — one past the largest offset touched, in bounds or
-not, so 0 means the region was never touched at all. This is the memory analogue of
-`sh_bits_read`, and equivalence compares it — if you hand two programs the same buffer and
-one reads further into it, they are not interchangeable, because one can fault where the
-other does not. Equivalence also compares each declared region's final contents, cell by
-cell, since a region is an observable side effect rather than internal scratch.
+What carries the overrun instead is `sh_mem_extent`: per region, how many bytes of it the
+run required — one past the largest offset touched, in bounds or not, so 0 means the region
+was never touched at all. This is the memory analogue of `sh_bits_read`, and it does two
+jobs.
+
+First, the whole run is checked against it once, at the end. `eval_general_program_concrete`
+and `eval_general_program_symbolic` each conjoin a memory-safety condition into the final
+`gps_valid`: every region the run touched has to have stayed inside its declared length
+(`mem_extents_in_bounds_concrete` / `mem_extents_in_bounds_smt`, against `region_len_map`,
+whose default of 0 makes any access to an *undeclared* region an overrun). Extents only
+grow, so the final map is the whole run's reach and one test at the sink covers every
+access made anywhere in the network. A program that walks off the end is therefore
+rejected, even though the access that did it was total.
+
+Second, equivalence compares it — if you hand two programs the same buffer and one reads
+further into it, they are not interchangeable, because one can fault where the other does
+not. Equivalence also compares each declared region's final contents, cell by cell, since a
+region is an observable side effect rather than internal scratch. Both of those conjuncts
+are inside the "both accepted" branch, so a pair that *both* overrun agrees by the
+both-rejected branch instead — the same trap the next section describes.
 
 A separate, older memory IR (`CrMem.v`, `MemSolver.ml`) used to sit alongside this one with
 its own syntax, solver and test path. It was removed once the eBPF transpiler stopped
@@ -182,8 +195,8 @@ As a high-level overview we have something like:
 
 ```
 eval_network_from_concrete net start f_hdrs f_bits gs fuel :=
-  (* stop if out of fuel, or if some upstream module already rejected *)
-  if fuel = 0 || not (gps_valid gs) then None else
+  (* stop only if out of fuel -- a rejected packet keeps going *)
+  if fuel = 0 then None else
   match lookup_module net start, mod_states gs ?? start with
   | Some m, Some ls ->
       (* a module sees the header map and packet handed down its incoming edge *)
@@ -212,14 +225,14 @@ After some bootstrapping, `eval_network_from_concrete` recurses through the netw
 
 Each module has a definition and a state, and they have to agree: a `ParserModule` paired with a `TransformerMod` state is a malformed network.
 
-There are two distinct failure channels:
+There are two distinct failure channels, and they are kept apart:
 
-* **`None`:** the walk could not proceed at all (no fuel or module/state not found).
-* **`gps_valid := false`:** the run executed, but the packet was not accepted (parser rejected, module definition and state did not match).
+* **`None`:** the walk could not proceed at all (no fuel, or module/state not found).
+* **`gps_valid := false`:** the run executed, but the packet was not accepted (a parser rejected, or a module definition and state did not match).
 
-The recursion refuses to continue once `gps_valid` is clear, so in a chain the second turns into the first at the next hop. The exception is a sink: if the last module clears the flag there is no next hop, and you get `Some` state with `gps_valid = false` and whatever tapes were published before that point. Code that inspects a result therefore has to check both (`Some` is not automatically an accepted packet).
+A rejected packet is a **state**, not an absence. The recursion does *not* stop when `gps_valid` goes false — the remaining modules still run, and you get `Some` state carrying the flag. That is safe because nothing can set the flag back: every writer conjoins (`andb` concretely, `SmtBoolAnd` symbolically). Code inspecting a result therefore has to check both; `Some` is not automatically an accepted packet.
 
-The distinction matters because rejection is packet-dependent and is part of what two programs must agree on, whereas `None` means the program does not run at all.
+This mirrors the symbolic side, which never had a validity guard because a symbolic `pr_accept` is a formula with no single truth value to branch on. The recursion used to short-circuit to `None` on a cleared flag, which collapsed the two channels: rejection became indistinguishable from non-termination for any network whose parser is not also its sink, and the "both runs rejected" case of `modnet_equivalence_checker_sound` was unreachable. The distinction matters because rejection is packet-dependent and is part of what two programs must agree on, whereas `None` means the program does not run at all.
 
 ### Transformer Modules
 
@@ -234,9 +247,19 @@ Match comparisons go through `CrVal.eqb` / `CrVal.ltb`, which compare the `CrInt
 
 ### Parser Modules
 
-`eval_parser_concrete` runs the state machine from `parser_start`. Each action advances a cursor: `SeekForward` skips bits, `ExtractOpConstructor h width ty` reads `width` bits into header `h` at type `ty`. Reading past the end of the packet fails the parse, as does a `Reject` transition. Both clear `gps_valid`.
+`eval_parser_concrete` runs the state machine from `parser_start`. A state performs at most one action: `SeekForward` skips bits, and `ExtractOpConstructor h width ty` reads `width` bits into header `h` at type `ty`. Reading past the end of the packet is a rejection, as is a `Reject` transition; both come back as a result with `pr_accept := false`, which folds into `gps_valid`.
 
-On `Accept`, the bits after the cursor become the **residual**, which is handed downstream as the next module's read tape, and the cursor is added to the network's `sh_bits_read`. Chained parsers therefore each consume a prefix of what the previous one left, and `sh_bits_read` accumulates across the whole chain.
+It returns `option ParserResult`, and the `option` is narrow on purpose: `None` means the run **did not complete** — fuel exhausted, or a transition naming a state with no definition — and nothing else. Every verdict about the packet is a `Some`. `ParserWellFormed`'s conditions rule out both `None` cases, which is what makes the evaluator total on the programs the checker is allowed to see (`ParserTerminationLemmas.eval_parser_no_fuel_starvation`). The symbolic evaluator has no `option` at all: it collapses the same four situations into `pr_accept := SmtFalse`, and on a well-formed parser the two agree because the `None` cases are unreachable.
+
+The result carries four things, and all four are threaded into the general state: `pr_headers` into `sh_hdr_map`, `pr_residual` into `sh_read_tape`, `pr_bits_read` into `sh_bits_read` (summed, not replaced), and `pr_accept` into `gps_valid` (conjoined). The parser module's own local state holds the residual at cursor 0 — what the run *produced*, not the packet it was handed. There is no cursor in the result because symbolically there is no single one: the parse is path-merged, which is also why `pr_bits_read` is an expression rather than a `nat`.
+
+On `Accept` the residual is the bits after the cursor, so chained parsers each consume a prefix of what the previous one left and `sh_bits_read` accumulates across the chain. On any rejection the residual is empty, on both sides.
+
+#### Lookahead
+
+Peeking lives in a `select`'s key, not in a state's action: a `SelectCase`'s `sc_origin` is either `SelHdr h lo hi` (bits of an already-parsed header, which cannot fail) or `Peek off width` (`width` bits of the packet, `off` bits past the cursor). The latter is P4's `lookahead`. It does not consume, so the cursor is the same after the transition as before it and a state can peek at bits a later state goes on to extract; but it can run out of packet, and when it does the parse rejects rather than falling through to the select's default, so a peeked range joins the accept condition exactly as an extract's does.
+
+A select reads the bits of **every** case before matching any of them, so a `Peek` that runs off the end rejects even when an earlier case would have matched and those bits would never have been looked at. That mirrors P4 evaluating a select's key once, in full — and it is the only reading the symbolic side can express, since it path-merges the cases and has a single accept condition to put the presence conditions in rather than one per case.
 
 ### Deparser Modules
 
@@ -313,16 +336,15 @@ In this light, the only way in which two equivalent programs are allowed to diff
 
 ## Equivalence
 
-`modnet_equivalence_checker p1 p2` first requires the two programs to declare the same input length; otherwise they are not comparable and it answers `NotEquivalentVariablesDiffer`. It then runs both symbolically from their initial states and asks Z3 for a packet making the two observably differ. `Unsat` means no such packet exists, so `Equivalent`; a model is returned as `NotEquivalent f`.
+`modnet_equivalence_checker p1 p2` first requires the two programs to be comparable at all; otherwise it answers `NotEquivalentVariablesDiffer` without building a query. That takes two things: the same declared input length, and — `mem_writes_shared` — every memory region either program can *write* being one they **share**, i.e. both declare at the same length. They need not declare the same memory otherwise: a region only one program declares is one only that program can *read*, and a read is not an observable side effect. It then runs both symbolically from their initial states and asks Z3 for a packet making the two observably differ. `Unsat` means no such packet exists, so `Equivalent`; a model is returned as `NotEquivalent f`.
 
 Two runs count as agreeing when either both rejected, or both accepted and
 
 - their output packets are equal (`sym_out_equal`, comparing presence conditions as well as bit values, so differing output *lengths* count as differing),
-- they read the same number of bits (`check_sym_bits_read`),
-- every declared memory region holds the same contents (`check_sym_mem_equal`), and
-- they required the same number of bytes of every region (`check_sym_mem_extent`).
+- they read the same number of bits (`check_sym_bits_read`), and
+- every **shared** memory region holds the same contents (`check_sym_mem_equal`, one `SmtArrEq` per region, over `shared_region_decls`).
 
-The read-extent conjunct is the bitstream analogue of the memory access-extent equivalence described above: a network that reads further into its input needs more of it to be there, so two networks that emit identical packets while consuming different amounts are not interchangeable.
+The read-extent conjunct is the bitstream analogue of an access-extent equivalence on memory: a network that reads further into its input needs more of it to be there, so two networks that emit identical packets while consuming different amounts are not interchangeable. There is deliberately **no** such conjunct on memory — `check_sym_mem_extent` was removed because region lengths are static, so a run that overruns one is already rejected by `gps_valid`, while comparing extents rejected dead-load elimination. `SOUNDNESS.md` has both arguments in full.
 
 The checker also refuses to compare two programs whose declared regions differ, the same way it refuses when their input lengths differ: the two runs share one set of region input variables, so the comparison would not be meaningful otherwise.
 

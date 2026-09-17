@@ -1,0 +1,5 @@
+# Dev-only, for test_lower_table.py.  lower_table.py itself stays stdlib-only:
+# it is what generates the checked-in .ir fixtures, and it should not need a
+# virtualenv to run.
+hypothesis>=6.100
+pytest>=8.0

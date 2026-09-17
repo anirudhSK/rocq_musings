@@ -12,7 +12,6 @@ From MyProject Require Import PMapHelperLemmas.
 From MyProject Require Import CrVal.
 From Stdlib Require Import Lists.List.
 From Stdlib Require Import ZArith.ZArith.
-From Stdlib Require Import FunctionalExtensionality.
 From Stdlib Require Import Strings.String.
 From Stdlib Require Import Strings.Ascii.
 From Stdlib Require Import micromega.Lia.

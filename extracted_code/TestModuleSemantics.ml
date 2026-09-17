@@ -152,7 +152,7 @@ let%expect_test "two_parsers: packet [7;42] threads -> h1=7, h2=42" =
   Shim.print_general_state (run "two_parsers" [7; 42]);
   [%expect {|
     Module 1:
-      h1=7, h2=-1
+      h1=7, h2=0
     Module 2:
       h1=7, h2=42
     Module 3:
@@ -341,11 +341,88 @@ let%expect_test "packet width: 192 bits is exactly enough for field_extractor" =
   run_prog PktClass.ex_lin_prog (pkt 1);
   [%expect {| [42] 8b |}]
 
+(* ------------------------------------------------------------------ *)
+(* A reject is a STATE, not an absence.                               *)
+(*                                                                    *)
+(* [pr_accept] made rejection a value at the parser level; these pin  *)
+(* the same thing at the network level.  The distinction only shows   *)
+(* up through [print_net_outcome] -- [run_prog] renders both [None]   *)
+(* and an invalid state as the word "reject".                         *)
+(* ------------------------------------------------------------------ *)
+
+let run_outcome name bytes =
+  let p = Shim.find_modprog name in
+  let gcs0 = CrVarLike.init_general_concrete_state p in
+  Shim.print_net_outcome
+    (CrConcreteSemanticsModule.eval_general_program_concrete p
+       (Shim.set_net_packet bytes gcs0))
+
+(* 0xFF takes the parser's Reject transition.  The network still runs to
+   completion and hands back a state; the verdict is in gps_valid.  This
+   returned [None] before -- the deparser downstream never ran, so there was no
+   final state to inspect and no way to tell this from a broken program. *)
+let%expect_test "reject is a state: parse_reject_deparse on 0xFF" =
+  run_outcome "parse_reject_deparse" [0xFF];
+  [%expect {| rejected, bits_read=8, residual=0b |}]
+
+(* The same pipeline on a packet it accepts, for contrast. *)
+let%expect_test "reject is a state: parse_reject_deparse on 0x07 accepts" =
+  run_outcome "parse_reject_deparse" [0x07];
+  [%expect {| accepted, bits_read=8, residual=0b |}]
+
+(* Because the run no longer stops at the rejection, the deparser downstream
+   still executes and still appends to the write tape -- it emits h1, which the
+   parser had already extracted before taking the Reject transition.  That is
+   what the symbolic side has always done (no validity guard there either), so
+   this is the two evaluators agreeing rather than a new quirk.  The tape is not
+   junk to be read as output: gps_valid is false, and check_sym_pkt_out's
+   both-rejected disjunct is what governs a pair like this. *)
+let%expect_test "reject is a state: the deparser downstream still runs" =
+  let p = Shim.find_modprog "parse_reject_deparse" in
+  let gcs0 = CrVarLike.init_general_concrete_state p in
+  (match CrConcreteSemanticsModule.eval_general_program_concrete p
+           (Shim.set_net_packet [0xFF] gcs0) with
+   | None -> print_endline "incomplete (None)"
+   | Some s -> Shim.print_net_output s);
+  [%expect {| [255] 8b |}]
+
+(* Running off the end of the packet is the same kind of verdict as an explicit
+   Reject transition, and reports the same way. *)
+let%expect_test "reject is a state: running off the end of the packet" =
+  run_outcome "consume2_emit1" [0xAA];
+  [%expect {| rejected, bits_read=8, residual=0b |}]
+
+(* ------------------------------------------------------------------ *)
+(* The module-local parser state records the run.                     *)
+(* ------------------------------------------------------------------ *)
+
+(* two_parsers: parser 1 consumes one byte of three and leaves two; parser 2
+   consumes one of those and leaves one.  Both used to report residual=24b at
+   cursor 0 -- the packet each was handed, at the cursor each started from --
+   however much they had actually consumed. *)
+let%expect_test "module-local state: each parser holds its own residual" =
+  Shim.print_parser_residuals (run "two_parsers" [0x07; 0x2A; 0xCC]);
+  [%expect {|
+    Module 1: residual=16b, cursor=0
+    Module 2: residual=8b, cursor=0
+    |}]
+
+(* A rejecting parser leaves no residual, matching the symbolic side, whose
+   four non-accepting exits all produce an empty one. *)
+let%expect_test "module-local state: a rejecting parser leaves nothing" =
+  let p = Shim.find_modprog "parse_reject_deparse" in
+  let gcs0 = CrVarLike.init_general_concrete_state p in
+  (match CrConcreteSemanticsModule.eval_general_program_concrete p
+           (Shim.set_net_packet [0xFF] gcs0) with
+   | None -> print_endline "incomplete (None)"
+   | Some s -> Shim.print_parser_residuals s);
+  [%expect {| Module 1: residual=0b, cursor=0 |}]
+
 let%expect_test "packet width: one byte short rejects mid-parse" =
   (* 23 bytes = 184 bits: the final dst_port extract runs past the end. *)
   let short = Stdlib.List.filteri (fun i _ -> i < 23) (pkt 1) in
   run_prog PktClass.ex_lin_prog short;
-  [%expect {| reject (None) |}]
+  [%expect {| reject |}]
 
 let%expect_test "packet width: bits_read confirms the full 192 are consumed" =
   let gcs0 = CrVarLike.init_general_concrete_state PktClass.ex_lin_prog in
@@ -418,21 +495,26 @@ let%expect_test "mem_store_load: round-trips a byte through cell 2" =
   report (run "mem_store_load" [0x2A]);
   [%expect {|
     [42] 8b
-    mem1=[-, -, 42, -]
+    mem1=[0, 0, 42, 0]
     extent1=3
     |}]
 
-(* Reading a cell that was never written gives UninitVal, which fails the
-   load's type check and lands as ErrorVal.  The deparser is TOTAL, so it does
-   not decline to emit: a header holding no integer goes out as its full width
-   in zeroed bits.  The output is one zero byte, not an empty packet.  That is
-   the "two broken programs agree" trap in the flesh -- see
-   [TestModulePrograms]'s comment on [mem_load0]. *)
+(* A declared region starts as [len] ZERO BYTES ([CrVal.mk_region_zero]), so
+   an unwritten cell reads as an honest [0:u8] and the load succeeds.  The
+   output is one zero byte.
+
+   It used to read [UninitVal], fail the load's [cast u8 _] and land as
+   ErrorVal, which the TOTAL deparser then emitted as zeroed bits -- the same
+   output for a quite different reason, and an instance of the "two broken
+   programs agree" trap.  That reading went away with the region model: a
+   region's contents are an input, and a real input is bytes (see
+   [CrVal.to_byte]).  The trap itself has not: [mem_oob_store_load] below still
+   reads ErrorVal, out of bounds this time, and still emits zeros for it. *)
 let%expect_test "mem_load0: an unwritten cell reads as a zero byte" =
   report (run "mem_load0" [0x2A]);
   [%expect {|
     [0] 8b
-    mem1=[-, -, -, -]
+    mem1=[0, 0, 0, 0]
     extent1=1
     |}]
 
@@ -443,23 +525,39 @@ let%expect_test "mem_load1_load0: a dead load still widens the extent" =
   report (run "mem_load1_load0" [0x2A]);
   [%expect {|
     [0] 8b
-    mem1=[-, -, -, -]
+    mem1=[0, 0, 0, 0]
     extent1=2
     |}]
 
-(* Out of bounds is total, not a rejection: the store is dropped, the load
-   yields ErrorVal, [gps_valid] stays true and the run completes.  The extent
-   still records the five bytes the run required, which is how a program that
-   walks off the end is distinguished from one that does not. *)
-let%expect_test "mem_oob_store_load: out of bounds is dropped, not a reject" =
+(* The individual ACCESS is still total -- the store is dropped, the load
+   yields ErrorVal, and the run completes rather than stopping -- but the RUN
+   is not valid: [eval_general_program_concrete] conjoins
+   [mem_extents_in_bounds_concrete] into [gps_valid] at the end, and this run
+   required five bytes of a four-byte region.  The extent is what carries that
+   to the end of the network; the fault is reported once, there. *)
+let%expect_test "mem_oob_store_load: the access is dropped, the run rejects" =
   let gcs = run "mem_oob_store_load" [0x2A] in
   report gcs;
   Printf.printf "valid=%b\n" (gcs.CrGeneralProgramState.gps_valid = Datatypes.Coq_true);
   [%expect {|
     [0] 8b
-    mem1=[-, -, -, -]
+    mem1=[0, 0, 0, 0]
     extent1=5
-    valid=true
+    valid=false
+    |}]
+
+(* A store is not atomic, and this is where that shows: the u16 at offset 3
+   puts its low byte in cell 3 and drops the high one, so the region really is
+   half-written -- and the run is rejected all the same. *)
+let%expect_test "mem_oob_mb_store_load: extent1 = 5, and the run rejects" =
+  let gcs = run "mem_oob_mb_store_load" [0x2A] in
+  report gcs;
+  Printf.printf "valid=%b\n" (gcs.CrGeneralProgramState.gps_valid = Datatypes.Coq_true);
+  [%expect {|
+    [0] 8b
+    mem1=[0, 0, 0, 42]
+    extent1=5
+    valid=false
     |}]
 
 (* A pre-seeded cell reads back out, and reading it does not disturb the rest
@@ -469,7 +567,7 @@ let%expect_test "mem_load0: a seeded cell reads back" =
   report (run_mem "mem_load0" [0x2A] (Shim.set_net_mem_cell 1 0 CrVal.W8 0x7F));
   [%expect {|
     [127] 8b
-    mem1=[127, -, -, -]
+    mem1=[127, 0, 0, 0]
     extent1=1
     |}]
 
@@ -480,7 +578,7 @@ let%expect_test "mem_ib_load_store: load-then-store sees the old cell" =
   report (run_mem "mem_ib_load_store" [0x2A] (Shim.set_net_mem_cell 1 2 CrVal.W8 0x11));
   [%expect {|
     [17] 8b
-    mem1=[-, -, 42, -]
+    mem1=[0, 0, 42, 0]
     extent1=3
     |}]
 
@@ -507,6 +605,9 @@ let%expect_test "ModProgs: registry contents" =
     parse_deparse_swapped
     parse_reject_deparse
     parse_accept_deparse
+    peek0_reject
+    extract_reject
+    peek8_reject
     consume1_emit1
     consume2_emit1
     varlen_emit1
@@ -520,15 +621,28 @@ let%expect_test "ModProgs: registry contents" =
     mem_load1_load0
     mem_load1_load0_alt
     mem_load0
+    mem_cmp_gt
+    mem_cmp_lt
+    hdr_init_sel
+    hdr_init_nosel
     mem_ib_load_store
     mem_oob_load_store
     mem_oob_store_load
+    mem_oob_mb_store_load
     mem_guard_tautology
     mem_two_u8_stores
+    mem_u8_into_u16_load
     mem_one_u16_store
     mem_store_poisoned
     mem_u16_readback
-    (30 programs)
+    mem_u16_load
+    mem_two_u8_loads
+    obs_no_mem
+    obs_read
+    obs_read_len8
+    obs_write
+    obs_write_len8
+    (46 programs)
     |}]
 
 (* A u16 store lands in two byte cells, little-endian: 0x1234 -> [0x34, 0x12].
@@ -538,7 +652,7 @@ let%expect_test "mem_one_u16_store: 0x1234 decomposes little-endian" =
   report (run "mem_one_u16_store" [0x2A]);
   [%expect {|
     [52] 8b
-    mem1=[52, 18, -, -]
+    mem1=[52, 18, 0, 0]
     extent1=2
     |}]
 
@@ -548,7 +662,7 @@ let%expect_test "mem_u16_readback: two bytes reassemble into a u16" =
   report (run "mem_u16_readback" [0x2A]);
   [%expect {|
     [52] 8b
-    mem1=[52, 18, -, -]
+    mem1=[52, 18, 0, 0]
     extent1=2
     |}]
 
@@ -596,7 +710,7 @@ let%expect_test "bpf O2: an IP packet is stamped and passed" =
                 (fun gcs -> gcs |> seed_ctx |> seed_ethertype 0x08 0x00));
   [%expect {|
     [0, 0, 0, 2] 32b
-    mem2=[-, -, -, -, -, -, -, -, -, -, -, -, 0, 8, 255, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -]
+    mem2=[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
     extent2=15
     |}]
 
@@ -608,7 +722,7 @@ let%expect_test "bpf O0: same packet, same stamp and verdict" =
                 (fun gcs -> gcs |> seed_ctx |> seed_ethertype 0x08 0x00));
   [%expect {|
     [0, 0, 0, 2] 32b
-    mem2=[-, -, -, -, -, -, -, -, -, -, -, -, 0, 8, 255, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -]
+    mem2=[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
     extent2=15
     |}]
 
@@ -620,7 +734,7 @@ let%expect_test "bpf: a non-IP packet is dropped, untouched" =
                 (fun gcs -> gcs |> seed_ctx |> seed_ethertype 0x86 0xDD));
   [%expect {|
     [0, 0, 0, 1] 32b
-    mem2=[-, -, -, -, -, -, -, -, -, -, -, -, 221, 134, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -]
+    mem2=[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 221, 134, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
     extent2=14
     |}]
 
@@ -634,7 +748,7 @@ let%expect_test "bpf: a short packet is aborted before any packet read" =
                    |> Shim.set_net_mem_cell 1 4 CrVal.W32 8));
   [%expect {|
     [0, 0, 0, 0] 32b
-    mem2=[-, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -]
+    mem2=[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
     extent2=0
     |}]
 
@@ -667,7 +781,7 @@ let%expect_test "mem_store_load_alias: a computed offset hits the same cell" =
   report (run "mem_store_load_alias" [0x2A]);
   [%expect {|
     [42] 8b
-    mem1=[-, -, 42, -]
+    mem1=[0, 0, 42, 0]
     extent1=3
     |}]
 
@@ -678,7 +792,7 @@ let%expect_test "mem_guard_tautology: a guard that always holds is no guard" =
   report (run "mem_guard_tautology" [0x2A]);
   [%expect {|
     [42] 8b
-    mem1=[-, -, 42, -]
+    mem1=[0, 0, 42, 0]
     extent1=3
     |}]
 
@@ -692,10 +806,10 @@ let%expect_test "mem: a u16 store and the two u8 stores agree concretely" =
   report (run "mem_one_u16_store" [0x2A]);
   [%expect {|
     [52] 8b
-    mem1=[52, 18, -, -]
+    mem1=[52, 18, 0, 0]
     extent1=2
     [52] 8b
-    mem1=[52, 18, -, -]
+    mem1=[52, 18, 0, 0]
     extent1=2
     |}]
 
@@ -708,6 +822,344 @@ let%expect_test "mem_store_poisoned: storing an unwritten header poisons cells" 
   report (run "mem_store_poisoned" [0x2A]);
   [%expect {|
     [0] 8b
-    mem1=[!, !, -, -]
+    mem1=[!, !, 0, 0]
     extent1=2
+    |}]
+
+(* -------------------------------------------------------------------- *)
+(* bpf_map_ref.ir: a bpf_map_lookup_elem program                        *)
+(* (translation/ect/ex/map/map_ref.c)                                   *)
+(*                                                                      *)
+(* Region 10 is a HASH map, and a hash map STORES EACH SLOT'S KEY in the *)
+(* region rather than deriving the slot from the key.  With key 4,       *)
+(* value 8 and four modelled slots it is 53 bytes:                      *)
+(*                                                                      *)
+(*   [0, 4)    presence bytes, 1 = the slot is filled                   *)
+(*   [4, 20)   the key each slot holds, 4 bytes apiece                  *)
+(*   [20, 52)  the values, 8 bytes apiece                               *)
+(*   [52]      1 = the real map is at capacity                          *)
+(*                                                                      *)
+(* The stored key is the point, and it is why these tests read the way   *)
+(* they do.  Deriving the slot as `key % nslots` -- which the model did  *)
+(* until the translator was fixed -- forces distinct keys that collide   *)
+(* modulo nslots to SHARE one entry, so the state "k1 present, k2        *)
+(* absent" has no representative at all.  A state the model cannot       *)
+(* express is a difference the checker cannot find, which is a wrong     *)
+(* Equivalent rather than a loud failure.  See MapInfo's docstring in    *)
+(* translation/ect's pybpf/translate.py.                                *)
+(*                                                                      *)
+(* So a SLOT is no longer a function of the key: the lookup scans slots  *)
+(* in order and takes the first whose presence byte is 1 and whose       *)
+(* stored key matches.  [seed_map] therefore says which slot to fill.    *)
+(*                                                                      *)
+(* The checker verdicts in TestEquality say the two arms of a lookup are *)
+(* distinguishable; these say what each arm actually does, on cells that *)
+(* are well-formed bytes.  r0 is emitted as 32 bits, so the last output  *)
+(* byte is the return value.                                            *)
+(* -------------------------------------------------------------------- *)
+
+let map_prog = "../test/bpf_map_ref.ir"
+
+let map_presence slot = slot
+let map_tag slot = 4 + 4 * slot
+let map_value slot = 20 + 8 * slot
+
+(* key -> ctx, then one slot's presence byte, stored key and value.  The
+   stored key is [tag], which defaults to the looked-up key so that
+   [present = 1] means a genuine hit; a test that wants a filled slot
+   holding a DIFFERENT key passes [tag] itself. *)
+let seed_map ?(slot = 0) ?tag key present value gcs =
+  let tag = match tag with Some t -> t | None -> key in
+  gcs
+  |> Shim.set_net_mem_cell 1 12 CrVal.W32 key
+  |> Shim.set_net_mem_cell 10 (map_presence slot) CrVal.W8 present
+  |> Shim.set_net_mem_cell 10 (map_tag slot) CrVal.W32 tag
+  |> Shim.set_net_mem_cell 10 (map_value slot) CrVal.W64 value
+
+let run_map ?slot ?tag key present value =
+  let gcs = run_named_prog "bpf_map_ref" (bpf_prog map_prog)
+              (seed_map ?slot ?tag key present value) in
+  Shim.print_net_output gcs;
+  Shim.print_net_mem_extent 10 gcs
+
+(* A miss reads every presence byte and every stored key -- it has to, to
+   conclude the key is in none of them -- and no value, so the extent stops
+   at 20, where the values begin. *)
+let%expect_test "bpf map: a miss returns 1 and never reads the value" =
+  run_map 2 0 999;
+  [%expect {|
+    [0, 0, 0, 1] 32b
+    extent10=20
+    |}]
+
+let%expect_test "bpf map: a hit over the threshold returns 2" =
+  run_map 2 1 200;
+  [%expect {|
+    [0, 0, 0, 2] 32b
+    extent10=28
+    |}]
+
+let%expect_test "bpf map: a hit under the threshold returns 0" =
+  run_map 2 1 50;
+  [%expect {|
+    [0, 0, 0, 0] 32b
+    extent10=28
+    |}]
+
+(* A filled slot holding a DIFFERENT key is a miss, not a hit.  This is the
+   regression test for the stored key: under the old `key % nslots` model
+   the slot alone decided presence, so seeding slot 0 as filled made EVERY
+   key that hashes there a hit and this could not be written at all. *)
+let%expect_test "bpf map: a filled slot holding another key is still a miss" =
+  run_map ~slot:0 ~tag:6 2 1 200;
+  [%expect {|
+    [0, 0, 0, 1] 32b
+    extent10=20
+    |}]
+
+(* ... and the two keys that the old model conflated -- 2 and 6 collide
+   modulo the four modelled slots -- now occupy separate entries, so one can
+   be present while the other is absent. *)
+let%expect_test "bpf map: keys 2 and 6 no longer share an entry" =
+  run_map ~slot:1 ~tag:6 6 1 200;
+  [%expect {|
+    [0, 0, 0, 2] 32b
+    extent10=36
+    |}]
+
+(* -------------------------------------------------------------------- *)
+(* Suricata's vlan_filter: accept (-1) VLAN 2 and 4, drop (0) the rest.  *)
+(* vlan_tci is a u32 at ctx offset 24 and the filter masks it with       *)
+(* 0x0fff.  r0 is emitted as 32 bits, so -1 prints as four 255s.         *)
+(* -------------------------------------------------------------------- *)
+
+let run_vlan tci =
+  Shim.print_net_output
+    (run_named_prog "vlan_filter" (bpf_prog "../test/bpf_vlan_filter.ir")
+       (Shim.set_net_mem_cell 1 24 CrVal.W32 tci))
+
+let%expect_test "vlan_filter: VLAN 2 is accepted" =
+  run_vlan 2; [%expect {| [255, 255, 255, 255] 32b |}]
+
+let%expect_test "vlan_filter: VLAN 4 is accepted" =
+  run_vlan 4; [%expect {| [255, 255, 255, 255] 32b |}]
+
+let%expect_test "vlan_filter: VLAN 3 is dropped" =
+  run_vlan 3; [%expect {| [0, 0, 0, 0] 32b |}]
+
+(* The filter masks off the PCP/DEI bits, so 0x2002 is still VLAN 2. *)
+let%expect_test "vlan_filter: the priority bits are masked off" =
+  run_vlan 0x2002; [%expect {| [255, 255, 255, 255] 32b |}]
+
+
+
+(* -------------------------------------------------------------------- *)
+(* ex/pkt_load.c: the classic-BPF packet loads and BPF_END, one per arm  *)
+(* of a switch on skb->mark so each is checked on its own.               *)
+(*                                                                      *)
+(* load_byte/half/word convert from NETWORK byte order, and BPF_END is a *)
+(* plain byte swap; neither is a primitive the IR has, so both are built *)
+(* from multiply/divide by powers of two.  These values are hand-        *)
+(* computed from the seeded bytes -- an arithmetic byte swap is exactly  *)
+(* the kind of thing that is wrong in a way no verdict test would show.  *)
+(* -------------------------------------------------------------------- *)
+
+let pkt_bytes = [0x00;0x11;0x22;0x33;0x44;0x55;0x66;0x77;
+                 0x88;0x99;0xAA;0xBB;0xCC;0xDD;0xEE;0xFF]
+
+let run_pkt_load mark =
+  let seed gcs =
+    let g = Stdlib.List.fold_left
+              (fun g (i, v) -> Shim.set_net_mem_cell 2 i CrVal.W8 v g)
+              gcs (Stdlib.List.mapi (fun i v -> (i, v)) pkt_bytes) in
+    g |> Shim.set_net_mem_cell 1 8 CrVal.W32 mark        (* skb->mark    *)
+      |> Shim.set_net_mem_cell 1 48 CrVal.W32 2          (* skb->cb[0]   *)
+      |> Shim.set_net_mem_cell 1 68 CrVal.W32 0x01020304 (* skb->hash    *)
+  in
+  Shim.print_net_output
+    (run_named_prog "pkt_load" (bpf_prog "../test/bpf_pkt_load.ir") seed)
+
+(* packet[4..7] = 44 55 66 77, big-endian *)
+let%expect_test "pkt_load: LD_ABS at 32 bits" =
+  run_pkt_load 0; [%expect {| [68, 85, 102, 119] 32b |}]
+
+(* packet[2..3] = 22 33, and the upper half of r0 stays zero *)
+let%expect_test "pkt_load: LD_ABS at 16 bits" =
+  run_pkt_load 1; [%expect {| [0, 0, 34, 51] 32b |}]
+
+(* packet[1] = 0x11; a single byte needs no swap *)
+let%expect_test "pkt_load: LD_ABS at 8 bits" =
+  run_pkt_load 2; [%expect {| [0, 0, 0, 17] 32b |}]
+
+(* cb[0] = 2, so the offset is 2 + 8 = 10: packet[10..13] = AA BB CC DD *)
+let%expect_test "pkt_load: LD_IND at a runtime offset" =
+  run_pkt_load 3; [%expect {| [170, 187, 204, 221] 32b |}]
+
+(* BPF_END on skb->hash = 0x01020304 *)
+let%expect_test "pkt_load: BPF_END swaps 32 bits" =
+  run_pkt_load 9; [%expect {| [4, 3, 2, 1] 32b |}]
+
+(* -------------------------------------------------------------------- *)
+(* ex/sur_filter.c: Suricata's filter.c.  IPv4 over ethernet, so         *)
+(* h_proto (packet 12..13) is 0x0800 and nhoff is 14; saddr is then at   *)
+(* packet 26..29 and daddr at 30..33.  Map region 10 has 4 presence      *)
+(* bytes then four 4-byte values, and the slot is address % 4.           *)
+(* -------------------------------------------------------------------- *)
+
+let run_sur_filter ~saddr ~daddr ~drop_saddr ~drop_daddr =
+  let put_be32 off v g =
+    Stdlib.List.fold_left (fun g (i, sh) ->
+        Shim.set_net_mem_cell 2 (off + i) CrVal.W8 ((v lsr sh) land 0xff) g)
+      g [(0,24);(1,16);(2,8);(3,0)] in
+  let seed gcs =
+    gcs
+    |> Shim.set_net_mem_cell 2 12 CrVal.W8 0x08     (* h_proto = ETH_P_IP *)
+    |> Shim.set_net_mem_cell 2 13 CrVal.W8 0x00
+    |> put_be32 26 saddr
+    |> put_be32 30 daddr
+    |> Shim.set_net_mem_cell 10 (saddr mod 4) CrVal.W8 (if drop_saddr then 1 else 0)
+    |> Shim.set_net_mem_cell 10 (daddr mod 4) CrVal.W8 (if drop_daddr then 1 else 0)
+  in
+  Shim.print_net_output
+    (run_named_prog "sur_filter" (bpf_prog "../test/bpf_sur_filter.ir") seed)
+
+(* Neither address is in the drop map: the filter passes the packet (-1). *)
+let%expect_test "sur_filter: an address in neither drop list passes" =
+  run_sur_filter ~saddr:0 ~daddr:1 ~drop_saddr:false ~drop_daddr:false;
+  [%expect {| [255, 255, 255, 255] 32b |}]
+
+(* The source address is in the drop map: dropped (0), on the first lookup. *)
+let%expect_test "sur_filter: a dropped source address returns 0" =
+  run_sur_filter ~saddr:0 ~daddr:1 ~drop_saddr:true ~drop_daddr:false;
+  [%expect {| [0, 0, 0, 0] 32b |}]
+
+(* Only the DESTINATION is in the drop map, so this is decided by the second
+   lookup -- the one that was unreachable while the packet region was 32
+   bytes and the daddr read at offset 30..33 overran it. *)
+let%expect_test "sur_filter: a dropped destination address returns 0" =
+  run_sur_filter ~saddr:0 ~daddr:1 ~drop_saddr:false ~drop_daddr:true;
+  [%expect {| [0, 0, 0, 0] 32b |}]
+
+(* -------------------------------------------------------------------- *)
+(* ex/map/map_update.c: look the key up and, on a miss, write 7 back.    *)
+(*                                                                      *)
+(* Same 53-byte hash-map region as bpf_map_ref above, so the slot to     *)
+(* seed is given rather than derived from the key; see that comment for  *)
+(* the layout and for why the stored key matters.  The checker verdicts  *)
+(* say these programs are distinguishable; these say what the update     *)
+(* actually does to the region.                                         *)
+(* -------------------------------------------------------------------- *)
+
+let run_map_update ?(slot = 0) ?tag ~key ~present ~value () =
+  let seed = seed_map ~slot ?tag key present value in
+  let gcs = run_named_prog "map_update" (bpf_prog "../test/bpf_map_update.ir") seed in
+  Shim.print_net_output gcs;
+  Shim.print_net_mem_region 10 gcs
+
+(* A miss: the first free slot is filled with the key and the value 7 and
+   marked present.  Slot 0 is scanned first, so that is where it lands --
+   presence byte 0 becomes 1, the stored key at 4..7 becomes 2, and the
+   value at 20..27 becomes 7. *)
+let%expect_test "map update: a miss writes the value and marks the slot" =
+  run_map_update ~key:2 ~present:0 ~value:0 ();
+  [%expect {|
+    [0, 0, 0, 0] 32b
+    mem10=[1, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    |}]
+
+(* A hit: the program returns early, so the slot keeps the value it had. *)
+let%expect_test "map update: a hit leaves the slot alone" =
+  run_map_update ~key:2 ~present:1 ~value:41 ();
+  [%expect {|
+    [0, 0, 0, 0] 32b
+    mem10=[1, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 41, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    |}]
+
+(* A presence byte that is neither 0 nor 1 is neither OCCUPIED nor FREE, and
+   the two scans ask different questions: a hit needs `presence == 1` and an
+   insert needs `presence == 0`.  So seeding slot 0 with 7 makes the lookup
+   miss AND leaves slot 0 unusable, and the insert lands in slot 1 -- slot 0
+   keeps its 7 and its seeded value.  Such a state cannot arise in a real
+   map; it is reachable here because the presence byte is a free region cell,
+   and it is harmless because BOTH compared programs see the same cell. *)
+let%expect_test "map update: a presence byte that is not 1 counts as a miss" =
+  run_map_update ~key:2 ~present:7 ~value:99 ();
+  [%expect {|
+    [0, 0, 0, 0] 32b
+    mem10=[7, 1, 0, 0, 2, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 99, 0, 0, 0, 0, 0, 0, 0, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    |}]
+
+(* -------------------------------------------------------------------- *)
+(* ex/ebpf-se/xdp_pktcntr.c: katran's XDP packet counter.               *)
+(*                                                                      *)
+(* Two maps, named in sorted order: region 10 is cntrs_array (key 4,     *)
+(* value 8, 4 slots -- presence at 0..3, values from 4) and region 11 is *)
+(* ctl_array (key 4, value 4, 2 slots -- presence at 0..1, values from   *)
+(* 2).  Both lookups use key 0, so both land in slot 0.                  *)
+(*                                                                      *)
+(* The program returns XDP_PASS (2) whatever happens, so the counter in  *)
+(* the region is the only thing that records what it did.               *)
+(* -------------------------------------------------------------------- *)
+
+let run_pktcntr ~flag_present ~flag ~cntr_present ~cntr =
+  let seed gcs =
+    gcs
+    |> Shim.set_net_mem_cell 11 0 CrVal.W8  (if flag_present then 1 else 0)
+    |> Shim.set_net_mem_cell 11 2 CrVal.W32 flag
+    |> Shim.set_net_mem_cell 10 0 CrVal.W8  (if cntr_present then 1 else 0)
+    |> Shim.set_net_mem_cell 10 4 CrVal.W64 cntr
+  in
+  let gcs = run_named_prog "xdp_pktcntr"
+              (bpf_prog "../test/bpf_xdp_pktcntr.ir") seed in
+  Shim.print_net_output gcs;
+  Shim.print_net_mem_region 10 gcs;
+  Shim.print_net_mem_extent 10 gcs
+
+(* The control flag is set, so the counter is found and incremented. *)
+let%expect_test "katran pktcntr: an enabled counter is incremented" =
+  run_pktcntr ~flag_present:true ~flag:1 ~cntr_present:true ~cntr:41;
+  [%expect {|
+    [0, 0, 0, 2] 32b
+    mem10=[1, 0, 0, 0, 42, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    extent10=12
+    |}]
+
+(* The flag reads 0, so the program returns before touching cntrs_array at
+   all -- the counter keeps its value and the extent stays 0. *)
+let%expect_test "katran pktcntr: a cleared flag returns before the counter" =
+  run_pktcntr ~flag_present:true ~flag:0 ~cntr_present:true ~cntr:41;
+  [%expect {|
+    [0, 0, 0, 2] 32b
+    mem10=[1, 0, 0, 0, 41, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    extent10=0
+    |}]
+
+(* The control slot's presence byte is 0 -- and it makes no difference.
+   ctl_array is BPF_MAP_TYPE_ARRAY, which is pre-allocated and zero-filled when
+   it is created, so a lookup with an in-range key CANNOT return NULL.  The
+   model reads no presence byte for an array map; the key alone decides, and
+   key 0 is in range.  So the flag is found, its value 1 is non-zero, and the
+   counter is reached.
+
+   These two tests used to assert the opposite, because the model gave every
+   map a free presence byte and so invented a miss path that no array map
+   has. *)
+let%expect_test "katran pktcntr: an array lookup cannot miss" =
+  run_pktcntr ~flag_present:false ~flag:1 ~cntr_present:true ~cntr:41;
+  [%expect {|
+    [0, 0, 0, 2] 32b
+    mem10=[1, 0, 0, 0, 42, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    extent10=12
+    |}]
+
+(* Likewise for the counter itself: cntrs_array is a PERCPU_ARRAY, so slot 0
+   exists whatever its presence byte says, and the increment happens.  The
+   extent reaches 12 -- one past the 8-byte value at offset 4 -- because the
+   value was read and written, not because a presence byte was consulted. *)
+let%expect_test "katran pktcntr: an array counter slot always exists" =
+  run_pktcntr ~flag_present:true ~flag:1 ~cntr_present:false ~cntr:41;
+  [%expect {|
+    [0, 0, 0, 2] 32b
+    mem10=[0, 0, 0, 0, 42, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    extent10=12
     |}]

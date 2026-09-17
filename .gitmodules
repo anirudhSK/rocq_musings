@@ -1,3 +1,6 @@
 [submodule "translation/p4c"]
 	path = translation/p4c
-	url = https://github.com/LanderDuncan/p4c
+	url = git@github.com:LanderDuncan/p4c.git
+[submodule "translation/ect"]
+	path = translation/ect
+	url = git@github.com:seenry/ect.git

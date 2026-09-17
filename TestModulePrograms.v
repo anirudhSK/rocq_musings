@@ -276,7 +276,7 @@ Definition mod_prog_parse_reject_deparse : GeneralCaracaraProgram :=
         (mkParser (ParserStateLabelCtr 1) [
           mkParserStateDef (ParserStateLabelCtr 1)
             (Some (ExtractOpConstructor (HeaderCtr 1) 8 u64))
-            (Select [mkSelectCase (HeaderCtr 1) 0 8
+            (Select [mkSelectCase (SelHdr (HeaderCtr 1) 0 8)
                        [true;true;true;true;true;true;true;true] Reject]
                     Accept)]);
       DeparserModule (ModuleNameCtr 2)
@@ -294,6 +294,138 @@ Definition mod_prog_parse_accept_deparse : GeneralCaracaraProgram :=
     (mkModuleNetwork [
       ParserModule (ModuleNameCtr 1)
         (simple_parser_generator [SParserTgt 0 8 1 u8]);
+      DeparserModule (ModuleNameCtr 2)
+        (linear_dump_headers [(HeaderCtr 1, 8)])]
+      (fun m1 m2 =>
+        match m1, m2 with
+        | ModuleNameCtr 1, ModuleNameCtr 2 => true
+        | _, _ => false
+        end)
+      (ModuleNameCtr 1)).
+
+(* ------------------------------------------------------------------ *)
+(* Reading a field register BEFORE its extraction.                      *)
+(*                                                                      *)
+(* State 1 selects on h1 and state 2 extracts it, so the select reads    *)
+(* the register's value ON ENTRY.  [_sel] rejects when that value's low  *)
+(* byte is 0xFF; [_nosel] has no select at all.                          *)
+(*                                                                      *)
+(* These are NotEquivalent, and only because a header some parser        *)
+(* extracts starts as an ARBITRARY value of its own width rather than    *)
+(* [UninitVal] -- see [CrVarLike.seed_header_syms].  Seed it uninit and  *)
+(* [slice_val] gives [ErrorVal], [CrVal.eqb] is false against every      *)
+(* pattern, the case can never fire, and these two collapse into the     *)
+(* same program.  That is what this pair is here to stop.                *)
+(*                                                                      *)
+(* It is also the shape ParserHawk's IPU pipelines emit: a transition    *)
+(* key naming a field a later node extracts, which its model reads as    *)
+(* the field register's initial contents.  See                           *)
+(* translation/parserhawk/lower_table.py. *)
+Definition hdr_init_prog (sel : bool) : GeneralCaracaraProgram :=
+  GeneralCaracaraProgramDef 8 []
+    (mkModuleNetwork [
+      ParserModule (ModuleNameCtr 1)
+        (mkParser (ParserStateLabelCtr 1) [
+          mkParserStateDef (ParserStateLabelCtr 1)
+            None
+            (if sel
+             then Select [mkSelectCase (SelHdr (HeaderCtr 1) 0 8)
+                            [true;true;true;true;true;true;true;true] Reject]
+                         (TargetState (ParserStateLabelCtr 2))
+             else Unconditional (TargetState (ParserStateLabelCtr 2)));
+          mkParserStateDef (ParserStateLabelCtr 2)
+            (Some (ExtractOpConstructor (HeaderCtr 1) 8 u64))
+            (Unconditional Accept)]);
+      DeparserModule (ModuleNameCtr 2)
+        (linear_dump_headers [(HeaderCtr 1, 8)])]
+      (fun m1 m2 =>
+        match m1, m2 with
+        | ModuleNameCtr 1, ModuleNameCtr 2 => true
+        | _, _ => false
+        end)
+      (ModuleNameCtr 1)).
+
+Definition mod_prog_hdr_init_sel : GeneralCaracaraProgram := hdr_init_prog true.
+Definition mod_prog_hdr_init_nosel : GeneralCaracaraProgram := hdr_init_prog false.
+
+(* ------------------------------------------------------------------ *)
+(* Lookahead ([Peek]) in a transition.                                  *)
+(*                                                                      *)
+(* These three are what keep the two parser evaluators in step on a     *)
+(* peek, and nothing in the proofs does -- no lemma relates concrete    *)
+(* parser execution to symbolic.  Sixteen bits of input so that a peek  *)
+(* at offset 8 has bits to read.                                        *)
+(*                                                                      *)
+(*   peek0_reject   peek bits [0,8), reject on 0xFF, then extract them  *)
+(*   extract_reject the same thing written with an extract and a SelHdr *)
+(*   peek8_reject   identical to [peek0_reject] but peeking at [8,16)   *)
+(*                                                                      *)
+(* [peek0_reject] = [extract_reject] pins BOTH halves of what a peek    *)
+(* is: it reads the bits AT THE CURSOR (or the two would disagree on    *)
+(* which byte decides the reject) and it does NOT CONSUME them (or the  *)
+(* following extract would land on byte 1 and the residuals would       *)
+(* differ).  [peek0_reject] <> [peek8_reject] is what pins the offset   *)
+(* itself: drop [cursor_offset] on either side of the evaluator pair    *)
+(* and these two collapse into the same program. *)
+
+(* Peek at the first byte; reject if it is 0xFF, else extract it into h1. *)
+Definition mod_prog_peek0_reject : GeneralCaracaraProgram :=
+  GeneralCaracaraProgramDef 16 []
+    (mkModuleNetwork [
+      ParserModule (ModuleNameCtr 1)
+        (mkParser (ParserStateLabelCtr 1) [
+          mkParserStateDef (ParserStateLabelCtr 1)
+            None
+            (Select [mkSelectCase (Peek 0 8)
+                       [true;true;true;true;true;true;true;true] Reject]
+                    (TargetState (ParserStateLabelCtr 2)));
+          mkParserStateDef (ParserStateLabelCtr 2)
+            (Some (ExtractOpConstructor (HeaderCtr 1) 8 u64))
+            (Unconditional Accept)]);
+      DeparserModule (ModuleNameCtr 2)
+        (linear_dump_headers [(HeaderCtr 1, 8)])]
+      (fun m1 m2 =>
+        match m1, m2 with
+        | ModuleNameCtr 1, ModuleNameCtr 2 => true
+        | _, _ => false
+        end)
+      (ModuleNameCtr 1)).
+
+(* The same program without a peek: extract first, branch on the header. *)
+Definition mod_prog_extract_reject : GeneralCaracaraProgram :=
+  GeneralCaracaraProgramDef 16 []
+    (mkModuleNetwork [
+      ParserModule (ModuleNameCtr 1)
+        (mkParser (ParserStateLabelCtr 1) [
+          mkParserStateDef (ParserStateLabelCtr 1)
+            (Some (ExtractOpConstructor (HeaderCtr 1) 8 u64))
+            (Select [mkSelectCase (SelHdr (HeaderCtr 1) 0 8)
+                       [true;true;true;true;true;true;true;true] Reject]
+                    Accept)]);
+      DeparserModule (ModuleNameCtr 2)
+        (linear_dump_headers [(HeaderCtr 1, 8)])]
+      (fun m1 m2 =>
+        match m1, m2 with
+        | ModuleNameCtr 1, ModuleNameCtr 2 => true
+        | _, _ => false
+        end)
+      (ModuleNameCtr 1)).
+
+(* [mod_prog_peek0_reject] with the peek moved one byte along: it now rejects
+   on the SECOND byte being 0xFF while still extracting the first. *)
+Definition mod_prog_peek8_reject : GeneralCaracaraProgram :=
+  GeneralCaracaraProgramDef 16 []
+    (mkModuleNetwork [
+      ParserModule (ModuleNameCtr 1)
+        (mkParser (ParserStateLabelCtr 1) [
+          mkParserStateDef (ParserStateLabelCtr 1)
+            None
+            (Select [mkSelectCase (Peek 8 8)
+                       [true;true;true;true;true;true;true;true] Reject]
+                    (TargetState (ParserStateLabelCtr 2)));
+          mkParserStateDef (ParserStateLabelCtr 2)
+            (Some (ExtractOpConstructor (HeaderCtr 1) 8 u64))
+            (Unconditional Accept)]);
       DeparserModule (ModuleNameCtr 2)
         (linear_dump_headers [(HeaderCtr 1, 8)])]
       (fun m1 m2 =>
@@ -351,7 +483,7 @@ Definition mod_prog_varlen_emit1 : GeneralCaracaraProgram :=
         (mkParser (ParserStateLabelCtr 1) [
           mkParserStateDef (ParserStateLabelCtr 1)
             (Some (ExtractOpConstructor (HeaderCtr 1) 8 u64))
-            (Select [mkSelectCase (HeaderCtr 1) 0 8
+            (Select [mkSelectCase (SelHdr (HeaderCtr 1) 0 8)
                        [false;false;false;false;false;false;false;false] Accept]
                     (TargetState (ParserStateLabelCtr 2)));
           mkParserStateDef (ParserStateLabelCtr 2)
@@ -515,6 +647,68 @@ Definition mod_prog_mem_load1_load0_alt : GeneralCaracaraProgram :=
 Definition mod_prog_mem_load0 : GeneralCaracaraProgram :=
   mem_prog [LoadOp u8 region_1 (OpConst (repr 0)) (HeaderCtr 2)].
 
+(* ------------------------------------------------------------------ *)
+(* Branch on a LOADED value, two ways round.  The positive control for the
+   region model.
+
+   A transformer's match is evaluated against the state it is HANDED, so the
+   load cannot sit in the same module as the branch -- module 1 loads cell 0
+   into h2 and module 2 branches on it.
+
+   There is no parser, and the declared input length is 0: nothing here reads
+   the packet, the whole test runs off the region.  That is not only tidiness.
+   A parser is a rejection path, and two programs that both reject are
+   "equivalent" -- so an unnecessary one is a way for this control to go
+   vacuous while still printing Equivalent.  With no parser and every access in
+   bounds, there is no way for either program to reject at all.
+
+   The deparser emits h1, the BRANCH OUTPUT, not h2, the loaded byte.  Emitting
+   h2 would make both programs emit the same thing unconditionally: Equivalent
+   for a trivial reason, and still Equivalent with the byte constraint removed.
+   That is the way this control breaks silently, so check it by removing the
+   constraint (see below) rather than by reading the verdict.
+
+   For any byte b, [b > 100] and [not (b < 101)] are the same test, so these
+   two emit the same packet on every input and must be Equivalent.  They come
+   back NotEquivalent the moment a region cell is allowed to be something
+   other than a byte: [ld_val] casts each cell with [cast u8 _], so one
+   [UninitVal], [ErrorVal] or wrong-width cell makes h2 ErrorVal, and
+   [CrVal.ltb] is false on ErrorVal in BOTH directions -- so both matches fail,
+   the two default rules fire, and they emit different bytes.  That is a
+   verdict about a machine state that cannot occur.  See [CrVal.to_byte] and
+   the [regions_wf] conjunct in [SmtCompile.v] -- emptying that conjunct is
+   what should flip this pair to NotEquivalent. *)
+Definition mem_cmp_prog (rules : Transformer) : GeneralCaracaraProgram :=
+  GeneralCaracaraProgramDef 0 mem_regions_4
+    (mkModuleNetwork [
+      TransformerModule (ModuleNameCtr 1) [] []
+        [Seq (SeqCtr [] [LoadOp u8 region_1 (OpConst (repr 0)) (HeaderCtr 2)])];
+      TransformerModule (ModuleNameCtr 2) [] [] rules;
+      DeparserModule (ModuleNameCtr 3)
+        (linear_dump_headers [(HeaderCtr 1, 8)])]
+      (fun m1 m2 =>
+        match m1, m2 with
+        | ModuleNameCtr 1, ModuleNameCtr 2 => true
+        | ModuleNameCtr 2, ModuleNameCtr 3 => true
+        | _, _ => false
+        end)
+      (ModuleNameCtr 1)).
+
+(* [OrOp] of a constant with itself is that constant -- a way to write a
+   literal into h1 with the ops the DSL has. *)
+Definition mem_cmp_emit (n : Z) : list HdrOp :=
+  [StatelessOp OrOp u8 (OpConst (repr n)) (OpConst (repr n)) (HeaderCtr 1)].
+
+Definition mod_prog_mem_cmp_gt : GeneralCaracaraProgram :=
+  mem_cmp_prog [
+    Seq (SeqCtr [(HeaderCtr 2, CmpGt, MatchConst (repr 100) u8)] (mem_cmp_emit 1));
+    Seq (SeqCtr [] (mem_cmp_emit 0))].
+
+Definition mod_prog_mem_cmp_lt : GeneralCaracaraProgram :=
+  mem_cmp_prog [
+    Seq (SeqCtr [(HeaderCtr 2, CmpLt, MatchConst (repr 101) u8)] (mem_cmp_emit 0));
+    Seq (SeqCtr [] (mem_cmp_emit 1))].
+
 (* In bounds, the order of a load and a store to the same cell is observable. *)
 Definition mod_prog_mem_ib_load_store : GeneralCaracaraProgram :=
   mem_prog [
@@ -537,6 +731,12 @@ Definition mod_prog_mem_oob_store_load : GeneralCaracaraProgram :=
     StoreOp u8 region_1 (OpConst (repr 4)) (OpHeader (HeaderCtr 1));
     LoadOp  u8 region_1 (OpConst (repr 4)) (HeaderCtr 2)].
 
+Definition mod_prog_mem_oob_mb_store_load : GeneralCaracaraProgram :=
+  mem_prog [
+    CastHeaderOp u8 u16 (OpHeader (HeaderCtr 1)) (HeaderCtr 1);
+    StoreOp u16 region_1 (OpConst (repr 3)) (OpHeader (HeaderCtr 1));
+    LoadOp  u16 region_1 (OpConst (repr 3)) (HeaderCtr 2)].
+
 (* Multi-byte access.  A region is an array of bytes, so a u16 store covers two
    cells little-endian and is EXACTLY the two u8 stores an optimiser coalesces
    it from.  Under the old one-value-per-cell model these two were reported
@@ -547,6 +747,18 @@ Definition mod_prog_mem_two_u8_stores : GeneralCaracaraProgram :=
     StoreOp u8 region_1 (OpConst (repr 0)) (OpConst (repr 52));   (* 0x34 *)
     StoreOp u8 region_1 (OpConst (repr 1)) (OpConst (repr 18));   (* 0x12 *)
     LoadOp  u8 region_1 (OpConst (repr 0)) (HeaderCtr 2)].
+
+Definition mod_prog_mem_two_u8_into_u16_load : GeneralCaracaraProgram :=
+  mem_prog [
+    StoreOp u8 region_1 (OpConst (repr 0)) (OpConst (repr 52));   (* 0x34 *)
+    StoreOp u8 region_1 (OpConst (repr 1)) (OpConst (repr 18));
+    StatefulLoadOp u8 region_1 (OpConst (repr 0)) (StateCtr 1);
+    StatefulLoadOp u8 region_1 (OpConst (repr 1)) (StateCtr 2);
+    CastStateOp u8 u16 (OpState (StateCtr 1)) (StateCtr 1);
+    CastStateOp u8 u16 (OpState (StateCtr 2)) (StateCtr 2);
+    StatelessOp AddOp u16
+      (OpState (StateCtr 1)) (OpState (StateCtr 2))
+      (HeaderCtr 2)].
 
 Definition mod_prog_mem_one_u16_store : GeneralCaracaraProgram :=
   mem_prog [
@@ -589,6 +801,110 @@ Definition mod_prog_mem_guard_tautology : GeneralCaracaraProgram :=
       LoadOp  u8 region_1 (OpConst (repr 2)) (HeaderCtr 2)]);
     Seq (SeqCtr [] [])].
 
+Definition mod_prog_mem_direct_u16_ld : GeneralCaracaraProgram :=
+  GeneralCaracaraProgramDef 0 [mkMemRegionDecl region_1 2]
+    (mkModuleNetwork [
+      TransformerModule (ModuleNameCtr 1) [] [] [
+        Seq (SeqCtr [] [
+          LoadOp u16 region_1 (OpConst (repr 0)) (HeaderCtr 1)
+        ])
+      ];
+      DeparserModule (ModuleNameCtr 2)
+        (linear_dump_headers [(HeaderCtr 1, 16)])]
+      (fun m1 m2 =>
+        match m1, m2 with
+        | ModuleNameCtr 1, ModuleNameCtr 2 => true
+        | _, _ => false
+        end)
+      (ModuleNameCtr 1)).
+
+Definition mod_prog_mem_direct_two_u8_ld : GeneralCaracaraProgram :=
+  GeneralCaracaraProgramDef 0 [mkMemRegionDecl region_1 2]
+    (mkModuleNetwork [
+      TransformerModule (ModuleNameCtr 1) [(StateCtr 1); (StateCtr 2)] [] [
+        Seq (SeqCtr [] [
+          StatefulLoadOp u8 region_1 (OpConst (repr 0)) (StateCtr 1);
+          CastStateOp u8 u16 (OpState (StateCtr 1)) (StateCtr 1);
+          StatefulLoadOp u8 region_1 (OpConst (repr 1)) (StateCtr 2);
+          CastStateOp u8 u16 (OpState (StateCtr 2)) (StateCtr 2);
+          StatefulOp MulOp u16 (OpState (StateCtr 2)) (OpConst (repr 256)) (StateCtr 2);
+          StatelessOp OrOp u16 (OpState (StateCtr 1)) (OpState (StateCtr 2)) (HeaderCtr 1)
+        ])
+      ];
+      DeparserModule (ModuleNameCtr 2)
+        (linear_dump_headers [(HeaderCtr 1, 16)])]
+      (fun m1 m2 =>
+        match m1, m2 with
+        | ModuleNameCtr 1, ModuleNameCtr 2 => true
+        | _, _ => false
+        end)
+      (ModuleNameCtr 1)).
+
+(* ------------------------------------------------------------------ *)
+(* The observable-region guard.  [SmtModuleQuery.mem_writes_shared] is what
+   these are about: two programs no longer have to declare the same regions,
+   only to agree about every region either of them can WRITE.
+
+   All five have the same shape -- no parser, no packet input (so there is no
+   rejection path and no way for a pair to come back Equivalent because both
+   refused), a transformer that puts the literal 7 into h1 and may touch
+   memory, and a deparser that emits h1.  The emitted byte is therefore the
+   same in all five whatever memory holds; what separates them is the
+   declaration and whether the transformer loads or stores.  Reading the
+   verdicts in [TestEquality] left to right:
+
+     obs_read     vs obs_no_mem      Equivalent -- a load is not a side effect
+     obs_read     vs obs_read_len8   Equivalent -- neither can alter memory,
+                                     so the differing length is not compared
+     obs_write    vs obs_no_mem      NotEquivalentVariablesDiffer -- p1 leaves
+                                     something behind in a region p2 has not
+                                     got, so there is nothing to compare it to
+     obs_write    vs obs_write_len8  NotEquivalentVariablesDiffer -- ditto for
+                                     a shared name at two lengths
+     obs_write    vs obs_read        NotEquivalent -- region_1 IS shared here,
+                                     so the store is compared and it differs
+
+   The third and fourth are the ones that keep the relaxation honest: delete
+   [mem_writes_shared] and they flip to Equivalent, silently dropping a write.
+*)
+Definition obs_prog (rs : list MemRegionDecl) (ops : list HdrOp)
+  : GeneralCaracaraProgram :=
+  GeneralCaracaraProgramDef 0 rs
+    (mkModuleNetwork [
+      TransformerModule (ModuleNameCtr 1) [] [] [Seq (SeqCtr [] ops)];
+      DeparserModule (ModuleNameCtr 2)
+        (linear_dump_headers [(HeaderCtr 1, 8)])]
+      (fun m1 m2 =>
+        match m1, m2 with
+        | ModuleNameCtr 1, ModuleNameCtr 2 => true
+        | _, _ => false
+        end)
+      (ModuleNameCtr 1)).
+
+Definition mem_regions_8 : list MemRegionDecl := [mkMemRegionDecl region_1 8].
+
+(* Declares nothing and touches nothing. *)
+Definition mod_prog_obs_no_mem : GeneralCaracaraProgram :=
+  obs_prog [] (mem_cmp_emit 7).
+
+(* Declares region_1 and only READS it, into a header nothing emits. *)
+Definition mod_prog_obs_read : GeneralCaracaraProgram :=
+  obs_prog mem_regions_4
+    (mem_cmp_emit 7 ++ [LoadOp u8 region_1 (OpConst (repr 0)) (HeaderCtr 2)]).
+
+Definition mod_prog_obs_read_len8 : GeneralCaracaraProgram :=
+  obs_prog mem_regions_8
+    (mem_cmp_emit 7 ++ [LoadOp u8 region_1 (OpConst (repr 0)) (HeaderCtr 2)]).
+
+(* Declares region_1 and WRITES it. *)
+Definition mod_prog_obs_write : GeneralCaracaraProgram :=
+  obs_prog mem_regions_4
+    (mem_cmp_emit 7 ++ [StoreOp u8 region_1 (OpConst (repr 0)) (OpConst (repr 9))]).
+
+Definition mod_prog_obs_write_len8 : GeneralCaracaraProgram :=
+  obs_prog mem_regions_8
+    (mem_cmp_emit 7 ++ [StoreOp u8 region_1 (OpConst (repr 0)) (OpConst (repr 9))]).
+
 (* The single registry of module test programs, keyed by name.
 
    [Extraction.v] extracts this tree rather than each program individually, so
@@ -611,6 +927,9 @@ Definition mod_test_program_list
   ("parse_deparse_swapped",mod_prog_parse_deparse_swapped);
   ("parse_reject_deparse", mod_prog_parse_reject_deparse);
   ("parse_accept_deparse", mod_prog_parse_accept_deparse);
+  ("peek0_reject",         mod_prog_peek0_reject);
+  ("extract_reject",       mod_prog_extract_reject);
+  ("peek8_reject",         mod_prog_peek8_reject);
   ("consume1_emit1",       mod_prog_consume1_emit1);
   ("consume2_emit1",       mod_prog_consume2_emit1);
   ("varlen_emit1",         mod_prog_varlen_emit1);
@@ -624,14 +943,27 @@ Definition mod_test_program_list
   ("mem_load1_load0",        mod_prog_mem_load1_load0);
   ("mem_load1_load0_alt",    mod_prog_mem_load1_load0_alt);
   ("mem_load0",              mod_prog_mem_load0);
+  ("mem_cmp_gt",             mod_prog_mem_cmp_gt);
+  ("mem_cmp_lt",             mod_prog_mem_cmp_lt);
+  ("hdr_init_sel",           mod_prog_hdr_init_sel);
+  ("hdr_init_nosel",         mod_prog_hdr_init_nosel);
   ("mem_ib_load_store",      mod_prog_mem_ib_load_store);
   ("mem_oob_load_store",     mod_prog_mem_oob_load_store);
   ("mem_oob_store_load",     mod_prog_mem_oob_store_load);
+  ("mem_oob_mb_store_load",  mod_prog_mem_oob_mb_store_load);
   ("mem_guard_tautology",    mod_prog_mem_guard_tautology);
   ("mem_two_u8_stores",      mod_prog_mem_two_u8_stores);
+  ("mem_u8_into_u16_load",   mod_prog_mem_two_u8_into_u16_load);
   ("mem_one_u16_store",      mod_prog_mem_one_u16_store);
   ("mem_store_poisoned",     mod_prog_mem_store_poisoned);
-  ("mem_u16_readback",       mod_prog_mem_u16_readback)
+  ("mem_u16_readback",       mod_prog_mem_u16_readback);
+  ("mem_u16_load",           mod_prog_mem_direct_u16_ld);
+  ("mem_two_u8_loads",       mod_prog_mem_direct_two_u8_ld);
+  ("obs_no_mem",             mod_prog_obs_no_mem);
+  ("obs_read",               mod_prog_obs_read);
+  ("obs_read_len8",          mod_prog_obs_read_len8);
+  ("obs_write",              mod_prog_obs_write);
+  ("obs_write_len8",         mod_prog_obs_write_len8)
 ].
 
 Definition mod_test_programs : PTree.t GeneralCaracaraProgram :=
@@ -653,3 +985,12 @@ Definition lookup_mod_test_program (name : string)
 Definition mod_test_program_names : list string :=
   List.map fst mod_test_program_list.
 Local Close Scope string_scope.
+
+From MyProject Require Import CrConcreteSemanticsModule.
+From MyProject Require Import CrGeneralProgramState.
+
+(* Compute eval_general_program_concrete
+  mod_prog_mem_oob_mb_store_load
+  (set_gps_shared_read_tape
+    (init_general_concrete_state mod_prog_mem_oob_mb_store_load)
+    [false; false; true; false; true; false; true; false]). *)

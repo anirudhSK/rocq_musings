@@ -246,9 +246,14 @@ Qed.
 (* ------------------------------------------------------------------ *)
 
 (* A memory region a program can address: a name and a declared length in
-   cells.  Regions are static -- there is no runtime allocation -- so this is
-   the analogue of the declared input packet length, and like it, two programs
-   must agree on it to be comparable at all. *)
+   cells.  Regions are static -- there is no runtime allocation.
+
+   Unlike the declared input packet length, two programs do NOT have to declare
+   the same regions to be comparable.  A region only one of them declares is
+   still a region only one of them can READ, and a read is not an observable
+   side effect; what has to line up is the regions either program can WRITE.
+   See [shared_region_decls] and [collect_store_regions] below, and
+   [SmtModuleQuery.mem_writes_shared] for how the two are used. *)
 Record MemRegionDecl : Type := mkMemRegionDecl {
   mr_id  : MemRegion;
   mr_len : nat;
@@ -260,6 +265,52 @@ Definition mem_region_decl_eqb (a b : MemRegionDecl) : bool :=
 Definition mem_region_decls_eqb (a b : list MemRegionDecl) : bool :=
   (Nat.eqb (List.length a) (List.length b)) &&
   List.forallb (fun '(x, y) => mem_region_decl_eqb x y) (List.combine a b).
+
+(* The declaration for region key [k], if this program has one.  Regions are
+   NAMED rather than positional, so putting two programs' declarations side by
+   side is a lookup by key, not a walk of two lists in step. *)
+Definition find_region_decl (rs : list MemRegionDecl) (k : positive)
+  : option MemRegionDecl :=
+  List.find (fun d => Pos.eqb (unwrap (mr_id d)) k) rs.
+
+(* Does [rs] declare [d]'s region, at [d]'s length? *)
+Definition region_declared_as (rs : list MemRegionDecl) (d : MemRegionDecl) : bool :=
+  match find_region_decl rs (unwrap (mr_id d)) with
+  | Some d' => Nat.eqb (mr_len d) (mr_len d')
+  | None => false
+  end.
+
+(* The regions two programs SHARE: declared by both, at the same length.  This
+   is exactly the set over which comparing final contents is MEANINGFUL, and
+   the reason is the encoding rather than taste.  [CrVarLike.init_symbolic_mem]
+   gives region key [k] the expression [SmtArrVar (region_name k) len] -- one
+   variable name for both programs, so that they are run against the same input
+   memory.  When both declare [k] at the same length the two runs therefore
+   start from the SYNTACTICALLY IDENTICAL expression, which is what entitles
+   the Z3 lowering of [SmtArrEq] to emit one extensional [mk_eq] (see the note
+   on [SmtModuleQuery.check_sym_region_equal]).
+
+   Drop either half and the comparison stops meaning anything.  If only one
+   program declares [k], the other's map holds [SmtArrInit], a fresh
+   unallocated array with no relation to the first; asking whether the two
+   agree is not a question about the programs.  If both declare [k] but at
+   different lengths, the two roots are [SmtArrVar n l1] and [SmtArrVar n l2],
+   which denote different-length prefixes of the same byte stream -- an array
+   equality between them is not the property either program is about, and the
+   difference is already observable elsewhere (a read past [min l1 l2] is in
+   bounds for one program and an overrun for the other, which
+   [mem_extents_in_bounds_smt] turns into a difference in [gps_valid]). *)
+Definition shared_region_decls (rs1 rs2 : list MemRegionDecl)
+  : list MemRegionDecl :=
+  List.filter (region_declared_as rs2) rs1.
+
+(* How many bytes each region key is DECLARED to hold, as a total map.  The
+   default is 0, which is exactly right for a region the program never
+   declared: no offset into it is in bounds, so any access at all overruns it.
+   Both module-level semantics compare [sh_mem_extent] against this. *)
+Definition region_len_map (rs : list MemRegionDecl) : PMap.t nat :=
+  List.fold_left (fun acc d => PMap.set (unwrap (mr_id d)) (mr_len d) acc)
+    rs (PMap.init 0%nat).
 
 Inductive GeneralCaracaraProgram : Type :=
   | GeneralCaracaraProgramDef :
@@ -276,6 +327,45 @@ Definition get_mem_regions_from_general (p : GeneralCaracaraProgram) : list MemR
 
 Definition get_network_from_general (p : GeneralCaracaraProgram) : ModuleNetwork :=
   match p with GeneralCaracaraProgramDef _ _ net => net end.
+
+(* ---- which regions a program can WRITE ---------------------------- *)
+
+(* [StoreOp] is the ONLY operation that changes memory: it is the only arm of
+   [CrSymbolicSemanticsTransformer.eval_hdr_op_assign_smt_mem] that touches
+   [mc_mem], and the only arm of its concrete counterpart that touches
+   [sh_mem].  [LoadOp]/[StatefulLoadOp] read a cell into a varlike and bump the
+   access extent, and no parser or deparser addresses memory at all.  So this
+   static walk over-approximates nothing it does not have to: a region key with
+   no [StoreOp] naming it anywhere in the network is a region the run cannot
+   have altered, whatever path it took.
+
+   It is an over-approximation in the other direction, deliberately: a
+   [StoreOp] on an unreachable path, or one whose offset always overruns, still
+   counts its region as written.  Reachability is not decidable here and the
+   error is on the safe side -- naming a region written costs precision (the
+   two programs must then both declare it), never soundness. *)
+Definition hdr_op_store_regions (op : HdrOp) : list MemRegion :=
+  match op with
+  | StoreOp _ r _ _ => [r]
+  | _ => []
+  end.
+
+Definition rule_store_regions (rule : MatchActionRule) : list MemRegion :=
+  match rule with
+  | Seq (SeqCtr _ ops) => List.flat_map hdr_op_store_regions ops
+  | Par (ParCtr _ ops) => List.flat_map hdr_op_store_regions (proj1_sig ops)
+  end.
+
+Definition collect_module_store_regions (m : CrModule) : list MemRegion :=
+  match m with
+  | ParserModule _ _ => []
+  | DeparserModule _ _ => []
+  | TransformerModule _ _ _ t => List.flat_map rule_store_regions t
+  end.
+
+Definition collect_store_regions (p : GeneralCaracaraProgram) : list MemRegion :=
+  List.flat_map collect_module_store_regions
+    (net_modules (get_network_from_general p)).
 
 Definition module_states (m : CrModule) : list State :=
   match m with

@@ -146,6 +146,8 @@ module CrParser = struct
   [@@deriving sexp]
   type coq_ParserTarget = [%import: CrParser.coq_ParserTarget]
   [@@deriving sexp]
+  type coq_SelBits = [%import: CrParser.coq_SelBits]
+  [@@deriving sexp]
   type coq_SelectCase = [%import: CrParser.coq_SelectCase]
   [@@deriving sexp]
   type coq_Transition = [%import: CrParser.coq_Transition]

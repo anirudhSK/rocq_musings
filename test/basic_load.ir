@@ -1,0 +1,8 @@
+(GeneralCaracaraProgramDef 0 (Coq_cons ((mr_id 1) (mr_len 2)) Coq_nil)
+ ((net_modules
+   (Coq_cons
+    (TransformerModule 1 Coq_nil Coq_nil (Coq_cons (Seq (SeqCtr Coq_nil (Coq_cons
+      (LoadOp W16 1 (OpConst 0) 1)      Coq_nil))) Coq_nil)) (Coq_cons
+    (DeparserModule 2 (Coq_cons
+      (EmitOpConstructor 1 16)          Coq_nil)) Coq_nil)))
+  (net_edges ((1 2))) (start_module 1)))

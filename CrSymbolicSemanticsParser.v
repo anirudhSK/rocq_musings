@@ -2,6 +2,7 @@ From Stdlib Require Import List.
 Import ListNotations.
 From MyProject Require Import CrIdentifiers.
 From MyProject Require Import CrProgramState.
+From MyProject Require Import CrGeneralProgramState.
 From MyProject Require Import SmtExpr.
 From MyProject Require Import SmtTypes.
 From MyProject Require Import CrParser.
@@ -69,15 +70,77 @@ Definition slice_valid (pkt : list (ConditionalVal SmtBoolExpr)) (cursor width :
   List.fold_right SmtBoolAnd SmtTrue
     (List.map cvc (List.firstn width (List.skipn cursor pkt))).
 
-(* The symbolic condition under which a [select] case fires: bits
-   [sc_start_index, sc_end_index) of header [sc_header]'s current value equal
-   the pattern's denoted value.  Mirrors [select_case_matches_concrete]. *)
+(* The bits a [select] case matches against.  Mirrors
+   [select_bits_concrete] node for node: [SmtBitSlice] denotes [slice_val]
+   and [SmtBitsToInt] denotes [mk_int u64 (bits_to_Z ...)], so the [Peek]
+   arm reads the same bits at the same offset as the concrete one.  [None]
+   on the same length condition, and like there the cursor does not move. *)
+Definition select_bits_symbolic (ps : SymbolicParserState) (o : SelBits)
+    : option SmtArithExpr :=
+  match o with
+  | SelHdr h lo hi =>
+      Some (SmtBitSlice lo hi (lookup_varlike_map (p_header_map ps) h))
+  | Peek off width =>
+      if Nat.leb (p_cursor ps + off + width) (List.length (p_packet ps)) then
+        Some (SmtBitsToInt (List.map cvv
+                (List.firstn width (List.skipn (p_cursor ps + off) (p_packet ps)))))
+      else None
+  end.
+
+(* Mirrors [select_bits_available_concrete]: the packet must be long enough
+   for EVERY case's peek, or the parse rejects.  This is the length check
+   only -- concrete on each path, since offsets, widths and the cursor are
+   all [nat]s.  Whether those positions are PRESENT rather than padding is
+   the separate, symbolic [select_bits_valid] below. *)
+Definition select_bits_available_symbolic (ps : SymbolicParserState)
+    (cases : list SelectCase) : bool :=
+  List.forallb
+    (fun c => match select_bits_symbolic ps (sc_origin c) with
+              | Some _ => true
+              | None => false
+              end)
+    cases.
+
+(* Presence of everything a peek requires, conjoined.  A [Peek] examines
+   packet positions without consuming them, so its range contributes to the
+   accept condition exactly as an extract's does even though no cursor moves
+   -- for a chained parser reading an upstream residual, peeking at padding
+   must not accept.  [SelHdr] reads a header, not the packet, and contributes
+   nothing.
+
+   The range is [cursor, cursor + off + width), NOT the peeked window
+   [cursor + off, cursor + off + width), and the difference is load-bearing.
+   [select_bits_available_concrete] asks whether the packet REACHES
+   [cursor + off + width]; the presence conjunct has to say the same thing,
+   and it only does when it starts at the cursor.  With the window alone a
+   zero-width peek at a positive offset contributes [SmtTrue] no matter how
+   short the packet is, so a chained parser whose residual ends before
+   [cursor + off] would REJECT concretely and ACCEPT symbolically.  Starting
+   at the cursor makes the two exact: given that the cursor is itself inside
+   the present prefix (which it is, since every step that moved it passed
+   this same check), "the present prefix reaches [cursor + off + width]" and
+   "every position in [cursor, cursor + off + width) is present" are the same
+   statement.  See [ParserCommuteLemmas.slice_range_out_of_prefix]. *)
+Definition select_bits_valid (ps : SymbolicParserState)
+    (cases : list SelectCase) : SmtBoolExpr :=
+  List.fold_right SmtBoolAnd SmtTrue
+    (List.map (fun c => match sc_origin c with
+                        | SelHdr _ _ _ => SmtTrue
+                        | Peek off width =>
+                            slice_valid (p_packet ps) (p_cursor ps) (off + width)
+                        end)
+              cases).
+
+(* The symbolic condition under which a [select] case fires.  Mirrors
+   [select_case_matches_concrete]. *)
 Definition select_case_cond_symbolic (ps : SymbolicParserState) (c : SelectCase)
     : SmtBoolExpr :=
-  SmtBoolEq
-    (SmtBitSlice (sc_start_index c) (sc_end_index c)
-      (lookup_varlike_map (p_header_map ps) (sc_header c)))
-    (SmtArithConst (mask_width W64 (bits_to_Z (sc_pattern c))) u64).
+  match select_bits_symbolic ps (sc_origin c) with
+  | None => SmtFalse
+  | Some bits =>
+      SmtBoolEq bits
+        (SmtArithConst (mask_width W64 (bits_to_Z (sc_pattern c))) u64)
+  end.
 
 (* ===================================================================== *)
 (* Accept-aware symbolic parser semantics.                               *)
@@ -86,18 +149,16 @@ Definition select_case_cond_symbolic (ps : SymbolicParserState) (c : SelectCase)
 (* flow is merged into a single symbolic header map, and a [Reject] is a *)
 (* symbolic predicate over the packet bits rather than a control-flow    *)
 (* abort.  The evaluator threads three things together:                  *)
-(*   - [spr_accept]: the condition under which the parse accepts;        *)
-(*   - [spr_headers]: the merged final header values;                    *)
-(*   - [spr_residual]: the bits left unconsumed (the network's next read *)
+(*   - [pr_accept]: the condition under which the parse accepts;         *)
+(*   - [pr_headers]: the merged final header values;                     *)
+(*   - [pr_residual]: the bits left unconsumed (the network's next read  *)
 (*     tape), path-merged as a [ConditionalVal] bitstream.               *)
+(*                                                                       *)
+(* [SymParserResult] is [CrGeneralProgramState.ParserResult] at the      *)
+(* symbolic types, the same record the concrete evaluator returns at the *)
+(* concrete ones.  This side has no [option] around it: it never fails   *)
+(* to produce a result, it only produces [SmtFalse].                     *)
 (* ===================================================================== *)
-
-Record SymParserResult : Type := mkSymParserResult {
-  spr_accept    : SmtBoolExpr;                          (* accepts iff this holds *)
-  spr_headers   : PMap.t SmtArithExpr;                  (* final header values *)
-  spr_residual  : list (ConditionalVal SmtBoolExpr);    (* unconsumed tail *)
-  spr_bits_read : SmtArithExpr;                         (* bits consumed *)
-}.
 
 (* A [nat] bit count as a [u64] SMT constant.  The count is concrete on each
    individual path (the cursor is a [nat]); it only becomes symbolic once
@@ -110,14 +171,30 @@ Definition smt_bool_ite (c a b : SmtBoolExpr) : SmtBoolExpr :=
   SmtBoolOr (SmtBoolAnd c a) (SmtBoolAnd (SmtBoolNot c) b).
 
 (* Merge two header maps under [cond]: each header becomes
-   [SmtConditional cond then_val else_val].  Keys are taken from [m_then]
-   (the two maps share the same header domain in practice). *)
+   [SmtConditional cond then_val else_val].
+
+   Keys come from BOTH maps.  This used to take them from [m_then] alone, on
+   the grounds that "the two maps share the same header domain in practice" --
+   which was true only because [init_general_symbolic_state] seeds the header
+   map with the whole network's header interface, so every header a branch
+   could write was already a key.  Where that seeding does not apply (a parser
+   evaluated on its own, as [SmtParserQuery] and the parser test programs do),
+   a header extracted only on the ELSE side of a [select] was not a key of
+   [m_then] and was silently dropped: on that path it read back the map's
+   default instead of what the branch parsed.  That is the same failure mode
+   as SOUNDNESS.md model-debt item 2, where a dropped header made the network
+   checker compare two empty outputs and answer [Equivalent].
+
+   Folding over the union is the same shape [merge_mem_ctx_smt] uses one level
+   up, and it leaves only one obligation -- that the two maps carry the same
+   DEFAULT, which they do because [PMap.set] is the only writer and it never
+   moves the default. *)
 Definition merge_header_maps (cond : SmtBoolExpr)
     (m_then m_else : PMap.t SmtArithExpr) : PMap.t SmtArithExpr :=
-  (fst m_then,
-   PTree.map (fun k v_then =>
-                SmtConditional cond v_then (PMap.get k m_else))
-             (snd m_then)).
+  List.fold_left
+    (fun acc k => PMap.set k (SmtConditional cond (m_then !! k) (m_else !! k)) acc)
+    (pmap_keys m_then ++ pmap_keys m_else)
+    m_then.
 
 (* Merge two residuals under [cond]: keep [l1] where [cond] holds, else [l2];
    pad the shorter side with absent ([SmtFalse] presence) positions.
@@ -146,10 +223,10 @@ Fixpoint merge_bitstream (cond : SmtBoolExpr)
 (* Merge two results under [cond]. *)
 Definition merge_results (cond : SmtBoolExpr) (r_then r_else : SymParserResult)
     : SymParserResult :=
-  {| spr_accept    := smt_bool_ite cond (spr_accept r_then) (spr_accept r_else);
-     spr_headers   := merge_header_maps cond (spr_headers r_then) (spr_headers r_else);
-     spr_residual  := merge_bitstream cond (spr_residual r_then) (spr_residual r_else);
-     spr_bits_read := SmtConditional cond (spr_bits_read r_then) (spr_bits_read r_else) |}.
+  {| pr_accept    := smt_bool_ite cond (pr_accept r_then) (pr_accept r_else);
+     pr_headers   := merge_header_maps cond (pr_headers r_then) (pr_headers r_else);
+     pr_residual  := merge_bitstream cond (pr_residual r_then) (pr_residual r_else);
+     pr_bits_read := SmtConditional cond (pr_bits_read r_then) (pr_bits_read r_else) |}.
 
 (* Merge all [select] cases into one accept-aware result, given a total
    continuation [run_tgt].  Structurally recursive on [cases]. *)
@@ -170,16 +247,39 @@ Fixpoint resolve_select_symbolic
    [guard] (the presence of everything consumed so far) alongside the merged
    header map and residual.  [fuel] bounds state visits.  Total (never [None]):
    a dead-end (missing state, failed extraction, fuel exhaustion, [Reject])
-   yields [spr_accept := SmtFalse] with the headers reached so far, an empty
+   yields [pr_accept := SmtFalse] with the headers reached so far, an empty
    residual (which [merge_bitstream] pads as absent), and the bits consumed up
    to that point.  On a non-accepting path the count is never observed -- the
    checker only compares it where both sides accept -- but it must still be a
    well-defined expression for [merge_results] to combine. *)
+(* One transition target, under accept condition [g].
+
+   Factored out of [run_parser_symbolic] below rather than left as a local
+   [let] so that proofs can name it -- the concrete/symbolic commutation
+   argument needs to say "this step accepts nothing when [g] is false", and a
+   nameless [let]-bound lambda cannot appear in a lemma statement.  The
+   recursive call is passed in as [rec]; the guard checker accepts that
+   because at the one call site it is applied to a structural subterm of the
+   fuel. *)
+Definition run_target_symbolic
+    (rec : ParserStateLabel -> SymbolicParserState -> SmtBoolExpr -> SymParserResult)
+    (ps : SymbolicParserState) (g : SmtBoolExpr) (tgt : ParserTarget)
+    : SymParserResult :=
+  match tgt with
+  | Accept =>
+      mkParserResult g (p_header_map ps)
+        (List.skipn (p_cursor ps) (p_packet ps))
+        (smt_bits_count (p_cursor ps))
+  | Reject =>
+      mkParserResult SmtFalse (p_header_map ps) [] (smt_bits_count (p_cursor ps))
+  | TargetState next => rec next ps g
+  end.
+
 Fixpoint run_parser_symbolic (p : Parser) (lbl : ParserStateLabel)
     (ps : SymbolicParserState) (guard : SmtBoolExpr) (fuel : nat)
     : SymParserResult :=
   let reject :=
-    mkSymParserResult SmtFalse (p_header_map ps) [] (smt_bits_count (p_cursor ps)) in
+    mkParserResult SmtFalse (p_header_map ps) [] (smt_bits_count (p_cursor ps)) in
   match fuel with
   | O => reject
   | S fuel' =>
@@ -203,21 +303,26 @@ Fixpoint run_parser_symbolic (p : Parser) (lbl : ParserStateLabel)
           match ext with
           | None => reject
           | Some (ps', guard') =>
-              let run_tgt := fun (tgt : ParserTarget) =>
-                match tgt with
-                | Accept =>
-                    mkSymParserResult guard' (p_header_map ps')
-                      (List.skipn (p_cursor ps') (p_packet ps'))
-                      (smt_bits_count (p_cursor ps'))
-                | Reject =>
-                    mkSymParserResult SmtFalse (p_header_map ps') []
-                      (smt_bits_count (p_cursor ps'))
-                | TargetState next => run_parser_symbolic p next ps' guard' fuel'
-                end in
+              (* [run_tgt] takes the guard rather than closing over [guard'],
+                 because a [select]'s peeks add to it before any target runs. *)
+              let run_tgt := run_target_symbolic
+                (fun next ps'' g => run_parser_symbolic p next ps'' g fuel')
+                ps' in
               match psd_trans d with
-              | Unconditional tgt => run_tgt tgt
+              | Unconditional tgt => run_tgt guard' tgt
               | Select cases default =>
-                  resolve_select_symbolic run_tgt ps' cases default
+                  (* Mirrors [eval_transition_concrete].  Too short for some
+                     case's peek rejects outright; otherwise the presence of
+                     every peeked range joins the guard on EVERY path out of
+                     the select, because concretely we would have rejected
+                     before finding out which case fires. *)
+                  if select_bits_available_symbolic ps' cases then
+                    resolve_select_symbolic
+                      (run_tgt (SmtBoolAnd guard' (select_bits_valid ps' cases)))
+                      ps' cases default
+                  else
+                    mkParserResult SmtFalse (p_header_map ps') []
+                      (smt_bits_count (p_cursor ps'))
               end
           end
       end
@@ -229,13 +334,46 @@ Definition eval_parser_symbolic (p : Parser) (ps : SymbolicParserState)
   run_parser_symbolic p (parser_start p) ps SmtTrue
     (List.length (parser_states p) * S (List.length (p_packet ps))).
 
+(* The bits of a symbolic bitstream that are actually THERE under [f]:
+   [cvc] decides presence, [cvv] supplies the value.
+
+   Read tapes are concretized with this rather than positionally, and the
+   reason is [merge_bitstream].  A [select] whose branches consume different
+   amounts leaves a merged residual as long as the LONGEST branch, with the
+   surplus positions carrying [cvc] false on the paths that did not take them.
+   A concrete run takes ONE path and leaves exactly that path's residual, so a
+   positional concretization compares a short concrete tape against a longer
+   symbolic one and no commutation lemma can hold.  Dropping the absent
+   positions is what makes the two lengths agree.
+
+   Write tapes do NOT need this and must not use it: [wt_unconditional] says
+   every bit a deparser emits carries [cvc := SmtTrue], which is exactly the
+   invariant that lets the write tape be compared positionally -- and
+   [sym_out_equal_sound], which the soundness proof runs on, is stated that
+   way.  Hence the split in [concretize_sym_module_state]: a parser module's
+   local packet goes through here, a deparser module's does not.
+
+   Lives at the parser level rather than in [CrSymbolicSemanticsModule], where
+   it used to, because [eval_sym_parser_state] below needs it and the module
+   file is downstream of this one. *)
+Definition present_bits (l : list (ConditionalVal SmtBoolExpr)) (f : SmtValuation)
+    : list bool :=
+  List.map (fun b => eval_smt_bool (cvv b) f)
+           (List.filter (fun b => eval_smt_bool (cvc b) f) l).
+
 (* Concretize a symbolic parser state under a valuation [f]: the parser analogue
    of [eval_sym_state] for transformers.  Every symbolic header value runs
-   through [eval_smt_arith f] and every symbolic packet bit's value through
-   [eval_smt_bool f]; the cursor is unchanged.  [List.map] preserves the packet
-   length. *)
+   through [eval_smt_arith f]; the cursor is unchanged.
+
+   The packet goes through [present_bits], NOT positionally -- a parser's
+   packet is a read tape.  This used to map over it positionally, which is the
+   concretization TODO 1.1.1 records as giving a wrong VERDICT rather than
+   merely an unprovable lemma; it was dead code, so nothing depended on the
+   wrong version, but it is the function a parser-commutation proof reaches for
+   first.  [concretize_sym_module_state]'s [ParserMod] branch is this, so there
+   is one definition and not two that can drift. *)
 Definition eval_sym_parser_state (s : SymbolicParserState) (f : SmtValuation)
     : ConcreteParserState :=
   {| p_header_map := PMap.map (fun e => eval_smt_arith e f) (p_header_map s);
-     p_packet     := List.map (fun b => eval_smt_bool (cvv b) f) (p_packet s);
+     p_packet     := present_bits (p_packet s) f;
      p_cursor     := p_cursor s |}.

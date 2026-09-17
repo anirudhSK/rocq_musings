@@ -12,7 +12,10 @@ let equivalence_check_programs str1 str2 =
   let res = SmtQuery.equivalence_checker_cr_dsl prog_1 prog_2 in
   match res with
   | Equivalent -> print_endline "Equivalent"
-  | NotEquivalent _ -> print_endline "Not Equivalent"
+  | NotEquivalent f -> begin
+      Shim.print_valuation f;
+      print_endline "Not Equivalent"
+    end
   | NotEquivalentUnknown -> print_endline "Not Equivalent (unknown)"
   | NotEquivalentVariablesDiffer -> print_endline "Not Equivalent (variables differ)"
 
@@ -26,7 +29,10 @@ let equivalence_check_programs str1 str2 =
   let res = SmtModuleQuery.modnet_equivalence_checker prog_1 prog_2 in
   match res with
   | Equivalent -> print_endline "Equivalent"
-  | NotEquivalent _ -> print_endline "Not Equivalent"
+  | NotEquivalent f -> begin
+      Shim.print_valuation f;
+      print_endline "Not Equivalent"
+    end
   | NotEquivalentUnknown -> print_endline "Not Equivalent (unknown)"
   | NotEquivalentVariablesDiffer -> print_endline "Not Equivalent (variables differ)"
 
@@ -36,6 +42,7 @@ let load f =
   let str = really_input_string x len in
   close_in x;
   str
+
 
 let usage () =
   prerr_endline "usage: ./bin [--net] <path/to/s/expr/1> <path/to/s/expr/2>";

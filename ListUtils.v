@@ -1,6 +1,5 @@
 From Stdlib Require Import Lists.List.
 Import ListNotations.
-From Stdlib Require Import FunctionalExtensionality.
 From Stdlib Require Import Strings.String.
 Open Scope string_scope.
 From MyProject Require Import Coqlib.
@@ -51,6 +50,30 @@ Section ListUtilsLemmas.
 
    Context (my_eqb_symmetric: forall (a b : T), eqb a b = eqb b a).
 
+   (* [existsb] respects pointwise equality of its predicate.  This is the
+      congruence [has_duplicates_correct] needs to turn [existsb (fun y =>
+      eqb y a)] into [existsb (eqb a)]: the two predicates agree at every
+      point by [my_eqb_symmetric], but they are not the same TERM.
+
+      Proving it pointwise, by induction on the list, is what keeps this file
+      axiom-free.  Rewriting the lambda itself instead -- [apply
+      functional_extensionality] on [(fun y => eqb y a) = (fun y => eqb a y)]
+      -- also works and is shorter, but it charges the whole development an
+      axiom: [functional_extensionality] is a stdlib LEMMA derived from the
+      axiom [functional_extensionality_dep], so [Print Assumptions] on
+      anything downstream reports the dependent version even though nothing
+      here is dependently typed.  Downstream includes [PosGraphLemmas] and so
+      the parser termination and well-formedness results, none of which
+      otherwise assume anything.  Equality of functions is never actually
+      needed -- only that a fold over a list gives the same answer. *)
+   Lemma existsb_ext : forall (f g : T -> bool) (l : list T),
+      (forall x, f x = g x) -> List.existsb f l = List.existsb g l.
+   Proof.
+      intros f g l Hfg. induction l as [| x xs IH]; simpl.
+      - reflexivity.
+      - rewrite Hfg, IH. reflexivity.
+   Qed.
+
    Lemma not_exists_not_in : forall (l : list T) (a : T),
       List.existsb (eqb a) l = false ->
       ~ In a l.
@@ -100,15 +123,9 @@ Section ListUtilsLemmas.
             simpl in E.
             constructor.
             * apply not_exists_not_in.
-              assert (test: (fun y : T => eqb y a) =
-                      (fun y : T => eqb a y)).
-                      { apply functional_extensionality.
-                        intros y.
-                        rewrite my_eqb_symmetric.
-                        reflexivity.
-                        }
-              rewrite test in E.
-              apply E.  
+              rewrite (existsb_ext (eqb a) (fun y => eqb y a) l).
+              -- exact E.
+              -- intros y. apply my_eqb_symmetric.
             * apply H.
     Qed.
 End ListUtilsLemmas.

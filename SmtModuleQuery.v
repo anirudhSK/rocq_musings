@@ -20,8 +20,11 @@ From MyProject Require Import CrSymbolicSemanticsParser.
 From MyProject Require Import CrSymbolicSemanticsDeparser.
 From MyProject Require Import CrSymbolicSemanticsTransformer.
 From MyProject Require Import CrSymbolicSemanticsModule.
+From MyProject Require Import InitReachable.
+From MyProject Require Import NetworkCommuteLemmas.
 From MyProject Require Import CrConcreteSemanticsModule.
 From MyProject Require Import SmtHelperLemmas.
+From MyProject Require Import ParserCommuteLemmas.
 
 Definition keys_from_map {T A : Type} (fn : positive -> A) (m : PMap.t T) : list A :=
   List.map fn (List.map fst (PTree.elements (snd m))).
@@ -58,10 +61,20 @@ Fixpoint sym_out_equal (out1 out2 : list (ConditionalVal SmtBoolExpr)) : SmtBool
 Definition check_sym_bits_read (s1 s2 : GeneralSymbolicState) : SmtBoolExpr :=
   SmtBoolEq (sh_bits_read s1) (sh_bits_read s2).
 
-(* Two accepting runs must also leave every declared memory region holding the
+(* Two accepting runs must also leave every SHARED memory region holding the
    same thing.  Unlike a header, a region is an observable side effect -- it is
    how a program talks to a map or to its caller's buffer -- so it is compared,
    not treated as internal scratch.
+
+   SHARED, not "every region p1 declares": the list handed in is
+   [CrModule.shared_region_decls], the regions both programs declare at the
+   same length.  A region only one side declares is one only that side can
+   READ, and the whole content of a read is the value it produces, which is
+   already compared where that value lands -- in a header, in the output
+   packet, in a branch that decides [gps_valid].  There is nothing left of it
+   to compare here.  What keeps this from losing a WRITE is the checker's
+   guard: a region either program can store to must be shared, or the two are
+   refused outright.  See [mem_writes_shared].
 
    ONE [SmtArrEq], not a cell-by-cell conjunction: [SmtArrEq] carries the bound
    to fold over, so the Coq side reads "agree cell by cell over the declared
@@ -78,18 +91,35 @@ Definition check_sym_mem_equal (rs : list MemRegionDecl) (s1 s2 : GeneralSymboli
   List.fold_right (fun d acc => SmtBoolAnd acc (check_sym_region_equal d s1 s2))
     SmtTrue rs.
 
-(* The memory analogue of [check_sym_bits_read], and the reason loads and
-   stores are total rather than rejecting: a program that reaches further into
-   a region needs more of it to be there, so it can fault where the other does
-   not, even when the two emit identical packets and leave identical contents
-   behind.  This is the access-extent equivalence the memory IR checked with
-   an access-extent check. *)
-Definition check_sym_mem_extent (rs : list MemRegionDecl) (s1 s2 : GeneralSymbolicState)
-  : SmtBoolExpr :=
-  List.fold_right (fun d acc =>
-    let k := unwrap (mr_id d) in
-    SmtBoolAnd acc (SmtBoolEq ((sh_mem_extent s1) !! k) ((sh_mem_extent s2) !! k)))
-    SmtTrue rs.
+(* THE ACCESS EXTENT IS DELIBERATELY NOT AN EQUIVALENCE CRITERION.  It used to
+   be one -- a conjunct here requiring the two runs to have reached the same
+   distance into every region -- on the reasoning that a program reaching
+   further needs more of the region to be there, so it could fault where the
+   other did not.  That reasoning does not survive the region model, and the
+   clause cost real precision, so it is gone.  Do not add it back without
+   reading this.
+
+   IT CANNOT SEPARATE A FAULT.  Region lengths are declared and static
+   ([CrModule.region_len_map]), and a run that reaches past one is rejected by
+   [mem_extents_in_bounds_smt], which is conjoined into [gps_valid].  The
+   equivalence conjuncts below are all inside [check_sym_pkt_out]'s BOTH-VALID
+   branch, so by the time any of them is consulted both runs are already known
+   to have stayed inside every declared region.  Neither can fault.  The whole
+   fault story is [gps_valid]'s; an extent comparison adds nothing to it.
+
+   IT IS NOT OBSERVABLE.  [check_sym_mem_equal] already compares every cell of
+   every declared region, and the tapes are compared beside it.  Two both-valid
+   runs that agree on all of that but differ in extent differ in nothing this
+   semantics can see -- there is no timing channel and, within a declared
+   region, no fault.
+
+   WHEN IT WOULD EARN ITS PLACE AGAIN.  If a region's length ever becomes
+   DYNAMIC -- which for XDP it morally is, [data_end] being a runtime value --
+   then how far a run read is observable again, as a fault condition.  What
+   that would want is each extent compared against the symbolic length, not the
+   two extents compared against each other.  [sh_mem_extent] stays in the state
+   for exactly this reason as well as for [mem_extents_in_bounds]: the
+   bookkeeping is right, it is only the criterion that was wrong. *)
 
 Definition check_sym_pkt_out (rs : list MemRegionDecl) (s1 s2 : GeneralSymbolicState)
   : SmtBoolExpr :=
@@ -102,10 +132,49 @@ Definition check_sym_pkt_out (rs : list MemRegionDecl) (s1 s2 : GeneralSymbolicS
                   (SmtBoolAnd
                     (sym_out_equal (sh_write_tape s1) (sh_write_tape s2))
                     (check_sym_bits_read s1 s2))
-                  (SmtBoolAnd
-                    (check_sym_mem_equal rs s1 s2)
-                    (check_sym_mem_extent rs s1 s2)))) in
+                  (check_sym_mem_equal rs s1 s2))) in
   SmtBoolNot eq_expr.
+
+(* THE MEMORY GUARD.  Every region either program can WRITE must be one the two
+   SHARE -- declared by both, at the same length ([shared_region_decls]).
+
+   This replaced an equality test on the two declaration lists, and the reason
+   is that the old test conflated reading a region with altering it.  A program
+   that loads [region3[10]] and one with no memory operations at all were
+   refused as incomparable, although a load is not an observable side effect:
+   it yields a value, and that value is already compared wherever it ends up.
+   Declaring a region you only read is a statement about what you need to be
+   there, not about what you leave behind, and the checker has no business
+   insisting the other program need the same.
+
+   A WRITE is different, and that is what the guard keeps.  If p1 stores to
+   [region3] and p2 does not declare [region3], then p2's [sh_mem] holds
+   [SmtArrInit] at that key -- a fresh unallocated array with no relation to
+   p1's -- so there is no expression to compare p1's stored region against, and
+   an [Equivalent] verdict would be silently ignoring a side effect p1 really
+   has.  Same if the two declare it at different lengths: the roots are
+   [SmtArrVar n l1] and [SmtArrVar n l2], and the single [mk_eq] the lowering
+   emits for [SmtArrEq] is faithful only between arrays rooted at the SAME
+   variable.  Either way the answer is [NotEquivalentVariablesDiffer].
+
+   Note what is NOT required: that the two programs write the same regions.  If
+   p1 stores to a shared region and p2 never touches it, the pair stays
+   comparable and the query decides it -- which is the right answer, since p1's
+   store may well put back the byte that was already there.  Demanding matching
+   write sets would reject dead-store elimination for no gain.
+
+   The over-approximation in [collect_store_regions] (a store on an unreachable
+   path still counts) lands on the safe side here: it can only make the guard
+   demand a region be shared that need not have been. *)
+Definition mem_writes_shared (p1 p2 : GeneralCaracaraProgram) : bool :=
+  let shared := shared_region_decls (get_mem_regions_from_general p1)
+                                    (get_mem_regions_from_general p2) in
+  List.forallb
+    (fun r => match find_region_decl shared (unwrap r) with
+              | Some _ => true
+              | None => false
+              end)
+    (collect_store_regions p1 ++ collect_store_regions p2).
 
 Definition modnet_equivalence_checker
   (p1 : GeneralCaracaraProgram) (p2 : GeneralCaracaraProgram)
@@ -114,16 +183,18 @@ Definition modnet_equivalence_checker
   let len_2 := get_inp_len_from_general p2 in
   let mem_1 := get_mem_regions_from_general p1 in
   let mem_2 := get_mem_regions_from_general p2 in
-  (* packet shape must be the same, and so must the declared memory: the two
-     runs share one set of region input variables (see [init_symbolic_mem]), so
-     comparing programs that disagree about which regions exist, or how long
-     they are, is not meaningful. *)
-  if andb (Nat.eqb len_1 len_2) (mem_region_decls_eqb mem_1 mem_2) then
+  (* The packet shape must be the same -- the two runs share one set of input
+     bit variables, so a different declared length makes the query vacuous.
+     Memory is guarded more weakly, by [mem_writes_shared]: the two runs share
+     one set of region input variables (see [init_symbolic_mem]), so they must
+     agree about every region either of them can WRITE, but not about the ones
+     they merely read. *)
+  if andb (Nat.eqb len_1 len_2) (mem_writes_shared p1 p2) then
     let sym1_opt := eval_general_program_symbolic p1 (init_general_symbolic_state "p1" p1) in
     let sym2_opt := eval_general_program_symbolic p2 (init_general_symbolic_state "p2" p2) in
     match sym1_opt, sym2_opt with
     | Some fs1, Some fs2 =>
-      match smt_query (check_sym_pkt_out mem_1 fs1 fs2) with
+      match smt_query (check_sym_pkt_out (shared_region_decls mem_1 mem_2) fs1 fs2) with
       | SmtUnsat => Equivalent
       | SmtSat f => NotEquivalent f
       | SmtUnknown => NotEquivalentUnknown
@@ -139,6 +210,49 @@ Definition is_linear_chain (p : GeneralCaracaraProgram) : Prop :=
   single_sink net /\
   no_fan_out net /\
   no_fan_in net.
+
+(* Which concrete initial states the equivalence results are about.
+
+   This USED TO BE a list of sanity facts -- regions hold bytes, nothing has
+   run yet -- and with it [reachable_if_valid] below could not be proved, and
+   not for want of tightening: a predicate of that shape speaks
+   POINTWISE about the maps in a state, while the conclusion is an equality of
+   records, and [PMap] is not extensional.  [PMap.set k v m] and [m] read the
+   same everywhere when [v] is what [k] already held, and differ as trees; every
+   concretization of an initial state has the empty tree in [sh_mem_extent], so
+   a "valid" state with any other tree there was outside the image whatever the
+   predicate said.
+
+   So validity is now DEFINED rather than described: a valid initial state is
+   one the concrete initializer produces, for some choice of the free inputs.
+   [InitReachable] proves the two halves that make that the right definition --
+   every concretization is such a state ([init_concretize_eq]) and every such
+   state is some concretization ([valid_is_reachable]) -- and the facts the old
+   predicate asserted come out as consequences ([valid_regions_hold_bytes],
+   [valid_bits_read], [valid_extent_zero], ...). *)
+Definition concrete_gp_state_is_valid (p : GeneralCaracaraProgram) (cs : GeneralConcreteState) : Prop :=
+  concrete_gp_state_valid p cs.
+
+(* All valid are reachable. *)
+Lemma reachable_if_valid:
+  forall gp pf si ci,
+  si = init_general_symbolic_state pf gp ->
+  concrete_gp_state_is_valid gp ci ->
+  exists f, ci = concretize_sym_modnet_state si f.
+Proof.
+  intros gp pf si ci -> Hv. apply valid_is_reachable. exact Hv.
+Qed.
+
+(* ...and all reachable are valid, so the states the network lemmas below
+   quantify over are exactly the valid ones. *)
+Lemma valid_if_reachable:
+  forall gp pf si ci f,
+  si = init_general_symbolic_state pf gp ->
+  ci = concretize_sym_modnet_state si f ->
+  concrete_gp_state_is_valid gp ci.
+Proof.
+  intros gp pf si ci f -> ->. apply reachable_is_valid.
+Qed.
 
 (* ==================================================================== *)
 (* Soundness of [modnet_equivalence_checker].                           *)
@@ -300,17 +414,125 @@ Proof.
     + exact H.
 Qed.
 
+(* [eval_general_program_symbolic] is the network run plus one final
+   [set_gps_valid], which conjoins the memory-safety condition into the
+   validity (see [mem_extents_in_bounds_smt]).  Every invariant below is about
+   a field that wrapper leaves alone, so peel it off once, here, and let each
+   of them reason about [eval_network_from_symbolic] as it did before. *)
+Lemma eval_general_program_symbolic_net : forall p gs s,
+  eval_general_program_symbolic p gs = Some s ->
+  exists s',
+    eval_network_from_symbolic
+      (get_network_from_general p) (start_module (get_network_from_general p))
+      (sh_hdr_map gs) (sh_read_tape gs) gs
+      (List.length (net_modules (get_network_from_general p))) = Some s'
+    /\ sh_write_tape s = sh_write_tape s'
+    /\ sh_read_tape s = sh_read_tape s'
+    /\ sh_mem s = sh_mem s'.
+Proof.
+  intros p gs s H.
+  unfold eval_general_program_symbolic in H.
+  destruct ((mod_states gs)
+              ?? (unwrap (start_module (get_network_from_general p)))) eqn:Hst;
+    [| discriminate].
+  destruct (eval_network_from_symbolic
+              (get_network_from_general p)
+              (start_module (get_network_from_general p))
+              (sh_hdr_map gs) (sh_read_tape gs) gs
+              (List.length (net_modules (get_network_from_general p))))
+    as [s' |] eqn:Hnet; [| discriminate].
+  injection H as H. subst s.
+  exists s'. unfold set_gps_valid.
+  cbn [sh_write_tape sh_read_tape sh_mem].
+  repeat split; reflexivity.
+Qed.
+
 Lemma eval_general_program_symbolic_wt : forall p pre s,
   eval_general_program_symbolic p (init_general_symbolic_state pre p) = Some s ->
   wt_unconditional (sh_write_tape s).
 Proof.
   intros p pre s H.
-  unfold eval_general_program_symbolic in H.
-  destruct ((mod_states (init_general_symbolic_state pre p))
-              ?? (unwrap (start_module (get_network_from_general p)))) eqn:Hst;
-    [| discriminate].
-  eapply eval_network_from_symbolic_wt; [| exact H].
+  apply eval_general_program_symbolic_net in H as [s' [Hnet [Hwt _]]].
+  rewrite Hwt.
+  eapply eval_network_from_symbolic_wt; [| exact Hnet].
   cbn [init_general_symbolic_state sh_write_tape]. constructor.
+Qed.
+
+(* ---------- read tapes: presence is always a prefix ------------------------ *)
+
+(* The read-tape analogue of [wt_unconditional] above, and needed for the same
+   kind of reason: [concretize_sym_modnet_state] sends read tapes through
+   [present_bits], and the parser commutation argument can only line the
+   concrete packet up with the symbolic one index by index if the absent
+   positions are a SUFFIX.  [ParserCommuteLemmas] proves the bitstream cases;
+   these two carry them across a module and then along the network.
+
+   Note what does NOT need saying: a transformer and a deparser leave
+   [sh_read_tape] alone, so only the parser case has content -- which is why
+   this mirrors [module_update_gs_symbolic_wt], where only the deparser case
+   did. *)
+Lemma module_update_gs_symbolic_pprefix : forall f m ls f_hdrs f_bits gs,
+  pprefix f f_bits ->
+  pprefix f (sh_read_tape gs) ->
+  pprefix f (sh_read_tape (module_update_gs_symbolic m
+               (set_module_packet (set_module_header_map ls f_hdrs) f_bits) gs)).
+Proof.
+  intros f m ls f_hdrs f_bits gs Hbits Hgs.
+  destruct m as [m_id p | m_id d | m_id st ct t]; destruct ls as [ts | ps | ds];
+    cbn [module_update_gs_symbolic set_module_packet set_module_header_map];
+    unfold set_gps_valid, set_gps_mod_states, set_gps_shared_write_tape,
+           set_gps_shared_headers, set_gps_shared_read_tape, set_gps_bits_read,
+           set_gps_mem, set_gps_mem_extent;
+    cbn [sh_read_tape]; try exact Hgs.
+  (* parser: the tape becomes this parser's residual *)
+  apply pprefix_eval_parser_symbolic. cbn [p_packet]. exact Hbits.
+Qed.
+
+Lemma eval_network_from_symbolic_pprefix :
+  forall f fuel net start f_hdrs f_bits gs gs',
+  pprefix f f_bits ->
+  pprefix f (sh_read_tape gs) ->
+  eval_network_from_symbolic net start f_hdrs f_bits gs fuel = Some gs' ->
+  pprefix f (sh_read_tape gs').
+Proof.
+  induction fuel as [| fuel IH];
+    intros net start f_hdrs f_bits gs gs' Hbits Hgs H.
+  - cbn in H. discriminate.
+  - cbn [eval_network_from_symbolic] in H.
+    destruct (lookup_module net start) as [m |] eqn:Hm; [| discriminate].
+    destruct ((mod_states gs) ?? (unwrap start)) as [ls |] eqn:Hls; [| discriminate].
+    (* the state this module publishes satisfies the invariant, and it is also
+       the [f_bits] every downstream module is handed *)
+    assert (Hgs' : pprefix f (sh_read_tape (module_update_gs_symbolic m
+                     (set_module_packet (set_module_header_map ls f_hdrs) f_bits) gs)))
+      by (apply module_update_gs_symbolic_pprefix; assumption).
+    apply (fold_left_opt_inv
+             (fun g => pprefix f (sh_read_tape g))
+             (fun g d => eval_network_from_symbolic net d
+                           (sh_hdr_map (module_update_gs_symbolic m
+                              (set_module_packet (set_module_header_map ls f_hdrs) f_bits) gs))
+                           (sh_read_tape (module_update_gs_symbolic m
+                              (set_module_packet (set_module_header_map ls f_hdrs) f_bits) gs))
+                           g fuel)
+             (downstream_modules net start)
+             (Some (module_update_gs_symbolic m
+                      (set_module_packet (set_module_header_map ls f_hdrs) f_bits) gs))
+             gs').
+    + intros g d g' Hg Hstep. eapply IH; [exact Hgs' | exact Hg | exact Hstep].
+    + cbn. exact Hgs'.
+    + exact H.
+Qed.
+
+Theorem eval_general_program_symbolic_pprefix : forall f p pre s,
+  eval_general_program_symbolic p (init_general_symbolic_state pre p) = Some s ->
+  pprefix f (sh_read_tape s).
+Proof.
+  intros f p pre s H.
+  apply eval_general_program_symbolic_net in H as [s' [Hnet [_ [Hrt _]]]].
+  rewrite Hrt.
+  eapply eval_network_from_symbolic_pprefix; [| | exact Hnet];
+    cbn [init_general_symbolic_state sh_read_tape];
+    apply pprefix_symbolic_input_bits.
 Qed.
 
 (* ---------- memory: every region stays rooted at its initial expression ----- *)
@@ -331,13 +553,14 @@ Qed.
 Fixpoint arr_rooted (root : SmtArrExpr) (a : SmtArrExpr) : Prop :=
   match a with
   | SmtArrSt a' _ _ => arr_rooted root a'
+  | SmtStCell a' _ _ _ => arr_rooted root a'
   | SmtArrIte _ a1 a2 => arr_rooted root a1 /\ arr_rooted root a2
   | _ => a = root
   end.
 
 Definition arr_leaf (a : SmtArrExpr) : Prop :=
   match a with
-  | SmtArrSt _ _ _ | SmtArrIte _ _ _ => False
+  | SmtArrSt _ _ _ | SmtStCell _ _ _ _ | SmtArrIte _ _ _ => False
   | _ => True
   end.
 
@@ -353,11 +576,13 @@ Lemma eval_smt_mem_rooted : forall root a f,
   end.
 Proof.
   intros root a f. revert a.
-  induction a as [| nm len | a' IHa idx val | c a1 IH1 a2 IH2]; intros Hr.
+  induction a as [| nm len | a' IHa idx val | c a1 IH1 a2 IH2
+                 | a' IHa idx val tg]; intros Hr.
   - (* SmtArrInit *) cbn in Hr; subst root. cbn. reflexivity.
   - (* SmtArrVar *) cbn in Hr; subst root.
-    cbn [eval_smt_mem]. unfold region_with_len.
-    exists {| arr_len := len; arr_bytes := region_bytes (sv_arrs f nm) |}.
+    cbn [eval_smt_mem]. unfold region_of_bytes.
+    exists {| arr_len := len;
+              arr_bytes := PMap.map to_byte (region_bytes (sv_arrs f nm)) |}.
     split; reflexivity.
   - (* SmtArrSt *) cbn in Hr. specialize (IHa Hr).
     destruct (eval_smt_mem root f) as [b0 |] eqn:Hroot.
@@ -374,6 +599,16 @@ Proof.
     specialize (IH1 Hr1). specialize (IH2 Hr2).
     destruct (eval_smt_mem root f) as [b0 |] eqn:Hroot;
       cbn [eval_smt_mem]; destruct (eval_smt_bool c f); assumption.
+  - (* SmtStCell: unguarded in the index, so no [ltu] test to case on, but it
+       preserves both [arr_len] and [Unallocated] just as [SmtArrSt] does. *)
+    cbn in Hr. specialize (IHa Hr).
+    destruct (eval_smt_mem root f) as [b0 |] eqn:Hroot.
+    + destruct IHa as [blk [Hev Hlen]].
+      cbn [eval_smt_mem]. rewrite Hev. unfold st_cell.
+      destruct (eval_smt_arith idx f) as [i ti | |] eqn:Hi;
+        try (exists blk; split; [reflexivity | exact Hlen]).
+      eexists. split; [reflexivity | cbn; exact Hlen].
+    + cbn [eval_smt_mem]. rewrite IHa. unfold st_cell. reflexivity.
 Qed.
 
 (* Only the sets at key [k] can change what is stored at [k], and they all
@@ -439,6 +674,7 @@ Proof.
   destruct op; cbn [eval_hdr_op_assign_smt_mem fst]; try exact H.
   - (* LoadOp: only the extents move *)
     unfold bump_extent_span_smt. rewrite bump_extent_span_smt_mem. exact H.
+  - unfold bump_extent_span_smt. rewrite bump_extent_span_smt_mem. exact H.
   - (* StoreOp: the region becomes a chain of SmtArrSt, which keeps its leaves *)
     unfold bump_extent_span_smt. rewrite bump_extent_span_smt_mem.
     unfold set_mc_mem. cbn [mc_mem].
@@ -572,11 +808,9 @@ Lemma eval_general_program_symbolic_mem_rooted : forall p pre s,
   mem_rooted (init_symbolic_mem (get_mem_regions_from_general p)) (sh_mem s).
 Proof.
   intros p pre s H.
-  unfold eval_general_program_symbolic in H.
-  destruct ((mod_states (init_general_symbolic_state pre p))
-              ?? (unwrap (start_module (get_network_from_general p)))) eqn:Hst;
-    [| discriminate].
-  eapply eval_network_from_symbolic_mem_rooted; [| exact H].
+  apply eval_general_program_symbolic_net in H as [s' [Hnet [_ [_ Hmem]]]].
+  rewrite Hmem.
+  eapply eval_network_from_symbolic_mem_rooted; [| exact Hnet].
   cbn [init_general_symbolic_state sh_mem]. apply init_symbolic_mem_rooted.
 Qed.
 
@@ -599,11 +833,13 @@ Lemma arr_rooted_smt_arr_len : forall root a,
   arr_rooted root a -> smt_arr_len a = smt_arr_len root.
 Proof.
   intros root a. revert root.
-  induction a as [| name len | a' IH idx val | c a1 IH1 a2 IH2]; intros root H.
+  induction a as [| name len | a' IH idx val | c a1 IH1 a2 IH2
+                 | a' IH idx val tg]; intros root H.
   - cbn in H. subst. reflexivity.
   - cbn in H. subst. reflexivity.
   - cbn in H. cbn [smt_arr_len]. apply IH. exact H.
   - cbn in H. destruct H as [H1 _]. cbn [smt_arr_len]. apply IH1. exact H1.
+  - cbn in H. cbn [smt_arr_len]. apply IH. exact H.
 Qed.
 
 (* The guard Z3 emits for a region of a reachable symbolic state uses the
@@ -630,7 +866,7 @@ Lemma arr_leaf_eval_len : forall a f b,
 Proof.
   intros a f b Hl He. destruct a; cbn in Hl; try contradiction.
   - cbn in He. discriminate.
-  - cbn in He. unfold region_with_len in He.
+  - cbn in He. unfold region_of_bytes in He.
     injection He as He. subst b. reflexivity.
 Qed.
 
@@ -658,48 +894,16 @@ Proof.
   - rewrite He in Hm. discriminate.
 Qed.
 
-(* The checker's region guard is an equality test, so the two programs really
-   do declare the same list -- which is what lets both symbolic runs be rooted
-   at ONE initial memory map. *)
-Lemma mem_region_decl_eqb_eq : forall a b, mem_region_decl_eqb a b = true -> a = b.
-Proof.
-  intros [ia la] [ib lb] H. unfold mem_region_decl_eqb in H. cbn in H.
-  apply Bool.andb_true_iff in H as [Hi Hl].
-  apply PeanoNat.Nat.eqb_eq in Hl.
-  assert (Hi' : ia = ib).
-  { apply (@posesque_eqb_iff MemRegion Posesque_MemRegion). exact Hi. }
-  subst. reflexivity.
-Qed.
-
-Lemma mem_region_decls_eqb_eq : forall a b, mem_region_decls_eqb a b = true -> a = b.
-Proof.
-  intros a. induction a as [| x a IH]; intros b H;
-    unfold mem_region_decls_eqb in H; apply Bool.andb_true_iff in H as [Hlen Hall].
-  - destruct b; [reflexivity | cbn in Hlen; discriminate].
-  - destruct b as [| y b]; [cbn in Hlen; discriminate |].
-    cbn in Hlen, Hall. apply Bool.andb_true_iff in Hall as [Hxy Hrest].
-    apply mem_region_decl_eqb_eq in Hxy. subst y. f_equal.
-    apply IH. unfold mem_region_decls_eqb. apply Bool.andb_true_iff.
-    split; [exact Hlen | exact Hrest].
-Qed.
-
+(* The checker's region guard USED TO BE an equality test on the two
+   declaration lists, and a [mem_region_decls_eqb_eq] here turned it back into
+   [a = b] -- which is what let both symbolic runs be rooted at one initial
+   memory map.  The guard is now [mem_writes_shared], which gives less and
+   needs to: the two maps agree on the SHARED keys, and every conjunct
+   [check_sym_mem_equal] builds is over exactly those.  Both lemmas below take
+   the region list as a parameter rather than deriving it from either program,
+   so neither notices the change.  [mem_region_decls_eqb] stays in [CrModule]
+   as the natural equality on the type; it simply has no caller here. *)
 (* ---------- the two memory conjuncts, concretized ---------- *)
-
-Lemma check_sym_mem_extent_sound : forall rs s1 s2 f,
-  eval_smt_bool (check_sym_mem_extent rs s1 s2) f = true ->
-  List.Forall (fun d =>
-    (sh_mem_extent (concretize_sym_modnet_state s1 f)) !! (unwrap (mr_id d)) =
-    (sh_mem_extent (concretize_sym_modnet_state s2 f)) !! (unwrap (mr_id d))) rs.
-Proof.
-  intros rs s1 s2 f H.
-  unfold check_sym_mem_extent in H.
-  apply fold_and_true in H.
-  eapply List.Forall_impl; [| exact H]. cbn beta.
-  intros d Hd.
-  cbn [concretize_sym_modnet_state sh_mem_extent].
-  rewrite !PMap.gmap.
-  apply smt_bool_eq_true. exact Hd.
-Qed.
 
 Lemma check_crval_eqb_eq : forall x y, check_crval_eqb x y = true -> x = y.
 Proof.
@@ -808,22 +1012,6 @@ Proof.
     + exists x. split; [left; reflexivity | exact Hx].
 Qed.
 
-Lemma check_sym_mem_extent_complete : forall rs s1 s2 f,
-  eval_smt_bool (check_sym_mem_extent rs s1 s2) f = false ->
-  ~ List.Forall (fun d =>
-      (sh_mem_extent (concretize_sym_modnet_state s1 f)) !! (unwrap (mr_id d)) =
-      (sh_mem_extent (concretize_sym_modnet_state s2 f)) !! (unwrap (mr_id d))) rs.
-Proof.
-  intros rs s1 s2 f H.
-  unfold check_sym_mem_extent in H.
-  apply fold_and_false in H. destruct H as [d [Hin Hd]].
-  apply smt_bool_eq_false in Hd.
-  intro Hall. rewrite List.Forall_forall in Hall.
-  specialize (Hall d Hin).
-  cbn [concretize_sym_modnet_state sh_mem_extent] in Hall.
-  rewrite !PMap.gmap in Hall. contradiction.
-Qed.
-
 (* Note what this direction does NOT need: [_sound] had to know both regions
    have the same shape before an equality of loaded values became an equality of
    loads.  Here the implication runs the easy way -- differing values force
@@ -868,7 +1056,24 @@ Proof.
   rewrite !PMap.gmap in Hall. contradiction.
 Qed.
 
-Lemma modnet_equivalence_checker_sound :
+(* ==================================================================== *)
+(* Soundness, part 1 of 2: the SOLVER-to-SYMBOLIC half.                 *)
+(*                                                                      *)
+(* This is the original statement, and it is fully proved.  It relates  *)
+(* the checker's verdict to [concretize_sym_modnet_state] of the two    *)
+(* SYMBOLIC final states -- i.e. it closes the gap between what the     *)
+(* solver said and what the symbolic semantics means, and says nothing  *)
+(* about running the concrete semantics.                                *)
+(*                                                                      *)
+(* [modnet_equivalence_checker_sound] below is the stronger statement,  *)
+(* over concrete execution.  It follows from this one plus              *)
+(* [eval_general_program_commute], and both are now proved; keeping the *)
+(* two apart is what lets each be read on its own -- this half needs no *)
+(* well-formedness, while the bridge needs both of the hypotheses the   *)
+(* stronger statement carries.                                          *)
+(* ==================================================================== *)
+
+Lemma modnet_equivalence_checker_sound_symbolic :
   forall p1 p2,
   (* if two well-formed programs *)
   well_formed_general_program p1 ->
@@ -902,20 +1107,20 @@ Lemma modnet_equivalence_checker_sound :
     sh_bits_read c_f1 = sh_bits_read c_f2 /\
     List.Forall (fun '(b1, b2) => b1 = b2)
       (List.combine (sh_write_tape c_f1) (sh_write_tape c_f2)) /\
-    (* ...left every declared region holding the same contents
+    (* ...left every SHARED region holding the same contents
        ([check_sym_mem_equal]), cell by cell over the declared length -- the
-       checker never constrains cells past it, so neither does this... *)
+       checker never constrains cells past it, so neither does this.  A region
+       only one program declares is absent from this list: only that program
+       can address it, so nothing the other does is being ignored, and a READ
+       leaves no trace to compare.  [mem_writes_shared] is what makes that
+       safe -- the checker would have answered [NotEquivalentVariablesDiffer]
+       had either program been able to STORE outside this list. *)
     List.Forall (fun d =>
       forall i, (i < mr_len d)%nat ->
         ld_arr ((sh_mem c_f1) !! (unwrap (mr_id d))) (mk_int u64 (Z.of_nat i)) =
         ld_arr ((sh_mem c_f2) !! (unwrap (mr_id d))) (mk_int u64 (Z.of_nat i)))
-      (get_mem_regions_from_general p1) /\
-    (* ...and reached the same distance into each region
-       ([check_sym_mem_extent]), the memory analogue of [sh_bits_read]. *)
-    List.Forall (fun d =>
-      (sh_mem_extent c_f1) !! (unwrap (mr_id d)) =
-      (sh_mem_extent c_f2) !! (unwrap (mr_id d)))
-      (get_mem_regions_from_general p1)).
+      (shared_region_decls (get_mem_regions_from_general p1)
+                           (get_mem_regions_from_general p2))).
 Proof.
   intros p1 p2 Hwf1 Hwf2 Hlc1 Hlc2 Hcheck s_i1 s_i2 s_f1 s_f2 Hi1 Hi2 He1 He2
          c_f1 c_f2 f Hc1 Hc2.
@@ -928,12 +1133,14 @@ Proof.
   pose proof (eval_general_program_symbolic_wt _ _ _ He2) as Hwt2.
   unfold modnet_equivalence_checker in Hcheck.
   destruct (andb (Nat.eqb (get_inp_len_from_general p1) (get_inp_len_from_general p2))
-                 (mem_region_decls_eqb (get_mem_regions_from_general p1)
-                                       (get_mem_regions_from_general p2))) eqn:Hguard;
+                 (mem_writes_shared p1 p2)) eqn:Hguard;
     [| discriminate].
   (* The checker ran exactly the evaluations the hypotheses name. *)
   rewrite He1, He2 in Hcheck.
-  destruct (smt_query (check_sym_pkt_out (get_mem_regions_from_general p1) s_f1 s_f2))
+  destruct (smt_query (check_sym_pkt_out
+                         (shared_region_decls (get_mem_regions_from_general p1)
+                                              (get_mem_regions_from_general p2))
+                         s_f1 s_f2))
     eqn:Hq; try discriminate. clear Hcheck.
   (* Unsat means the negated agreement formula is false under EVERY valuation,
      so agreement itself holds under [f]. *)
@@ -951,9 +1158,8 @@ Proof.
     right.
     apply Bool.andb_true_iff in Haccept as [Hvalid Hrest].
     apply Bool.andb_true_iff in Hvalid as [Hv1 Hv2].
-    apply Bool.andb_true_iff in Hrest as [Hpkt Hmem].
+    apply Bool.andb_true_iff in Hrest as [Hpkt Hmemeq].
     apply Bool.andb_true_iff in Hpkt as [Hout Hbits].
-    apply Bool.andb_true_iff in Hmem as [Hmemeq Hmemext].
     pose proof (sym_out_equal_sound _ _ f Hwt1 Hwt2 Hout) as [Hlen Hbitsall].
     unfold check_sym_bits_read in Hbits.
     cbn [concretize_sym_modnet_state gps_valid sh_write_tape sh_bits_read].
@@ -962,9 +1168,177 @@ Proof.
     split; [rewrite !List.length_map; exact Hlen |].
     split; [apply smt_bool_eq_true; exact Hbits |].
     split; [exact Hbitsall |].
-    split.
-    + apply check_sym_mem_equal_sound. exact Hmemeq.
-    + apply check_sym_mem_extent_sound. exact Hmemext.
+    apply check_sym_mem_equal_sound. exact Hmemeq.
+Qed.
+
+(* ==================================================================== *)
+(* Soundness, part 2 of 2: the SYMBOLIC-to-CONCRETE half.               *)
+(*                                                                      *)
+(* The bridge.  Running the concrete semantics on a concretized state    *)
+(* agrees with concretizing the symbolic run -- but NOT as an equality   *)
+(* of states, and TWO separate weakenings are load-bearing.              *)
+(*                                                                       *)
+(* First, agreement holds only on an ACCEPTING run.  On a rejecting one  *)
+(* the concrete evaluator stops extracting the moment a read runs off    *)
+(* the end of the packet, while the symbolic one keeps going             *)
+(* structurally and records the failure in [pr_accept] instead, so the   *)
+(* two disagree about headers, [sh_bits_read] and the residual while     *)
+(* agreeing that the packet was refused.  That is why the conclusion is  *)
+(* a flag EQUALITY conjoined with an implication whose premise is        *)
+(* validity -- the flags agree unconditionally, nothing else does.       *)
+(*                                                                       *)
+(* Second, even under validity the conclusion is [gps_agree] rather than *)
+(* [=]: the two memory maps are compared POINTWISE, for the [PMap]       *)
+(* representation reason set out on [gps_agree] in                       *)
+(* [NetworkCommuteLemmas].                                               *)
+(*                                                                       *)
+(* It is proved, in dependency order:                                    *)
+(*   - deparser commutation      [DeparserCommuteLemmas]                 *)
+(*   - transformer commutation with memory threaded                      *)
+(*     [MemCommuteLemmas]                                                *)
+(*   - parser commutation        [ParserCommuteLemmas]                   *)
+(*   - the network induction that assembles them, and the entry           *)
+(*     conditions it needs        [NetworkCommuteLemmas]                 *)
+(* ==================================================================== *)
+
+
+(* The symbolic-to-concrete bridge.  PROVED, for the states the checker
+   actually passes.
+
+   It is stated over [init_general_symbolic_state] rather than over an
+   arbitrary symbolic state, and that is forced rather than convenient: over an
+   arbitrary [s] the statement is FALSE.  Give [s] a read tape whose first
+   position is absent under [f] and whose second is present, and hand it to a
+   parser that extracts one bit.  The concrete run sees
+   [present_bits] of that tape -- one bit -- reads it and ACCEPTS, while the
+   symbolic run conjoins the presence of position 0 into its guard and so
+   rejects.  The two [gps_valid]s then differ, which is the second conjunct
+   below.  Three of the five hypotheses [NetworkCommuteLemmas.program_commute_full]
+   takes are about [s] for exactly this kind of reason; the initial state
+   satisfies all of them, and [program_commute_init] discharges them.
+
+   The two hypotheses here are ones [modnet_equivalence_checker_sound] already
+   has, so its proof only has to pass them through -- which finally gives
+   [is_linear_chain] and [well_formed_general_program] a use.  SOUNDNESS.md
+   records that neither direction needed them before. *)
+Lemma eval_general_program_commute :
+  forall p pf s f s_f,
+  well_formed_general_program p ->
+  is_linear_chain p ->
+  s = init_general_symbolic_state pf p ->
+  eval_general_program_symbolic p s = Some s_f ->
+  exists c_f,
+    eval_general_program_concrete p (concretize_sym_modnet_state s f) = Some c_f /\
+    gps_valid c_f = gps_valid (concretize_sym_modnet_state s_f f) /\
+    (gps_valid c_f = true -> gps_agree c_f (concretize_sym_modnet_state s_f f)).
+Proof.
+  intros p pf s f s_f Hwf Hlc -> Hsym.
+  apply (program_commute_init p pf f s_f Hwf); [| exact Hsym ].
+  destruct Hlc as [_ [_ [H _]]]. exact H.
+Qed.
+
+Lemma modnet_equivalence_checker_sound :
+  forall p1 p2,
+  (* if two well-formed programs *)
+  well_formed_general_program p1 ->
+  well_formed_general_program p2 ->
+  (* have a single source and sink *)
+  is_linear_chain p1 ->
+  is_linear_chain p2 ->
+  (* and they're considered equivalent *)
+  modnet_equivalence_checker p1 p2 = Equivalent ->
+  (* if we concretize the initial state *)
+  forall s_i1 s_i2 c_i1 c_i2 f,
+  s_i1 = init_general_symbolic_state "p1" p1 ->
+  s_i2 = init_general_symbolic_state "p2" p2 ->
+  c_i1 = concretize_sym_modnet_state s_i1 f ->
+  c_i2 = concretize_sym_modnet_state s_i2 f ->
+  (* and the concretization is valid *)
+  concrete_gp_state_is_valid p1 c_i1 ->
+  concrete_gp_state_is_valid p2 c_i2 ->
+  (* and we run the two concrete programs *)
+  forall c_f1 c_f2,
+  eval_general_program_concrete p1 c_i1 = Some c_f1 ->
+  eval_general_program_concrete p2 c_i2 = Some c_f2 ->
+  (* either both are invalid *)
+  (gps_valid c_f1 = false /\ gps_valid c_f2 = false)
+  (* or both are valid and have identical output packets *)
+  \/
+  ( gps_valid c_f1 = true /\ gps_valid c_f2 = true /\
+    List.length (sh_write_tape c_f1) = List.length (sh_write_tape c_f2) /\
+    (* ...consumed the same amount of the input packet ([check_sym_bits_read]).
+       Stated over [sh_bits_read] rather than the residual's list length: the
+       symbolic residual is padded by [merge_bitstream], so its raw length is
+       not the read extent and concretization does not shrink it. *)
+    sh_bits_read c_f1 = sh_bits_read c_f2 /\
+    List.Forall (fun '(b1, b2) => b1 = b2)
+      (List.combine (sh_write_tape c_f1) (sh_write_tape c_f2)) /\
+    (* ...left every SHARED region holding the same contents
+       ([check_sym_mem_equal]), cell by cell over the declared length -- the
+       checker never constrains cells past it, so neither does this.  A region
+       only one program declares is absent from this list: only that program
+       can address it, so nothing the other does is being ignored, and a READ
+       leaves no trace to compare.  [mem_writes_shared] is what makes that
+       safe -- the checker would have answered [NotEquivalentVariablesDiffer]
+       had either program been able to STORE outside this list. *)
+    List.Forall (fun d =>
+      forall i, (i < mr_len d)%nat ->
+        ld_arr ((sh_mem c_f1) !! (unwrap (mr_id d))) (mk_int u64 (Z.of_nat i)) =
+        ld_arr ((sh_mem c_f2) !! (unwrap (mr_id d))) (mk_int u64 (Z.of_nat i)))
+      (shared_region_decls (get_mem_regions_from_general p1)
+                           (get_mem_regions_from_general p2))).
+Proof.
+  intros p1 p2 Hwf1 Hwf2 Hlc1 Hlc2 Hcheck s_i1 s_i2 c_i1 c_i2 f Hi1 Hi2 Hci1 Hci2
+         Hval1 Hval2 c_f1 c_f2 Hrun1 Hrun2.
+  (* The checker answers [Equivalent] only when BOTH symbolic runs produced a
+     final state -- every other path returns [NotEquivalentVariablesDiffer] --
+     so the symbolic half applies. *)
+  assert (Hsym : exists s_f1 s_f2,
+            eval_general_program_symbolic p1 s_i1 = Some s_f1 /\
+            eval_general_program_symbolic p2 s_i2 = Some s_f2).
+  { rewrite Hi1, Hi2. unfold modnet_equivalence_checker in Hcheck.
+    destruct (Nat.eqb (get_inp_len_from_general p1) (get_inp_len_from_general p2) &&
+              mem_writes_shared p1 p2)%bool;
+      [| discriminate].
+    destruct (eval_general_program_symbolic p1 (init_general_symbolic_state "p1" p1)) eqn:E1;
+      destruct (eval_general_program_symbolic p2 (init_general_symbolic_state "p2" p2)) eqn:E2;
+      try discriminate.
+    eauto. }
+  destruct Hsym as [s_f1 [s_f2 [Hs1 Hs2]]].
+  (* Bridge each concrete run to its symbolic counterpart. *)
+  destruct (eval_general_program_commute p1 "p1" s_i1 f s_f1 Hwf1 Hlc1 Hi1 Hs1)
+    as [d1 [Hd1 [Hdv1 Hde1]]].
+  destruct (eval_general_program_commute p2 "p2" s_i2 f s_f2 Hwf2 Hlc2 Hi2 Hs2)
+    as [d2 [Hd2 [Hdv2 Hde2]]].
+  subst c_i1 c_i2.
+  rewrite Hrun1 in Hd1. injection Hd1 as Hd1. subst d1.
+  rewrite Hrun2 in Hd2. injection Hd2 as Hd2. subst d2.
+  (* The verdict, stated over the concretized SYMBOLIC finals. *)
+  pose proof (modnet_equivalence_checker_sound_symbolic
+                p1 p2 Hwf1 Hwf2 Hlc1 Hlc2 Hcheck s_i1 s_i2 s_f1 s_f2 Hi1 Hi2 Hs1 Hs2
+                (concretize_sym_modnet_state s_f1 f)
+                (concretize_sym_modnet_state s_f2 f) f eq_refl eq_refl) as Hconc.
+  destruct Hconc as [[Hr1 Hr2] | Hacc].
+  - (* both rejected: only the flag is claimed, and the bridge transports it
+       even though the two states themselves need not agree *)
+    left. rewrite Hdv1, Hdv2. split; assumption.
+  - (* both accepted: the bridge gives agreement, and every conjunct below is
+       one the agreement transports -- the memory ones pointwise, the rest by
+       plain rewriting.  See [gps_agree]. *)
+    right.
+    destruct Hacc as [Ha1 [Ha2 [Hlen [Hbr [Hfa Hmemeq]]]]].
+    assert (Hc1 : gps_valid c_f1 = true) by (rewrite Hdv1; exact Ha1).
+    assert (Hc2 : gps_valid c_f2 = true) by (rewrite Hdv2; exact Ha2).
+    destruct (Hde1 Hc1) as [_ [_ [Hbr1 [Hwt1 [Hm1 _]]]]].
+    destruct (Hde2 Hc2) as [_ [_ [Hbr2 [Hwt2 [Hm2 _]]]]].
+    repeat split.
+    + exact Hc1.
+    + exact Hc2.
+    + rewrite Hwt1, Hwt2. exact Hlen.
+    + rewrite Hbr1, Hbr2. exact Hbr.
+    + rewrite Hwt1, Hwt2. exact Hfa.
+    + rewrite List.Forall_forall in Hmemeq |- *. intros d Hd i Hi.
+      rewrite Hm1, Hm2. exact (Hmemeq d Hd i Hi).
 Qed.
 
 Lemma modnet_equivalence_checker_complete :
@@ -996,17 +1370,13 @@ Lemma modnet_equivalence_checker_complete :
       sh_bits_read c_f1 <> sh_bits_read c_f2 \/
     ~ List.Forall (fun '(b1, b2) => b1 = b2)
       (List.combine (sh_write_tape c_f1) (sh_write_tape c_f2)) \/
-    (* ...or a declared region's contents differ somewhere in bounds... *)
+    (* ...or a SHARED region's contents differ somewhere in bounds... *)
     ~ List.Forall (fun d =>
         forall i, (i < mr_len d)%nat ->
           ld_arr ((sh_mem c_f1) !! (unwrap (mr_id d))) (mk_int u64 (Z.of_nat i)) =
           ld_arr ((sh_mem c_f2) !! (unwrap (mr_id d))) (mk_int u64 (Z.of_nat i)))
-        (get_mem_regions_from_general p1) \/
-    (* ...or one run reached further into some region than the other. *)
-    ~ List.Forall (fun d =>
-        (sh_mem_extent c_f1) !! (unwrap (mr_id d)) =
-        (sh_mem_extent c_f2) !! (unwrap (mr_id d)))
-        (get_mem_regions_from_general p1))).
+        (shared_region_decls (get_mem_regions_from_general p1)
+                             (get_mem_regions_from_general p2)))).
 Proof.
   intros p1 p2 f Hwf1 Hwf2 Hlc1 Hlc2 Hcheck s_i1 s_i2 s_f1 s_f2 Hi1 Hi2 He1 He2
          c_f1 c_f2 Hc1 Hc2.
@@ -1019,11 +1389,13 @@ Proof.
   pose proof (eval_general_program_symbolic_wt _ _ _ He2) as Hwt2.
   unfold modnet_equivalence_checker in Hcheck.
   destruct (andb (Nat.eqb (get_inp_len_from_general p1) (get_inp_len_from_general p2))
-                 (mem_region_decls_eqb (get_mem_regions_from_general p1)
-                                       (get_mem_regions_from_general p2))) eqn:Hguard;
+                 (mem_writes_shared p1 p2)) eqn:Hguard;
     [| discriminate].
   rewrite He1, He2 in Hcheck.
-  destruct (smt_query (check_sym_pkt_out (get_mem_regions_from_general p1) s_f1 s_f2))
+  destruct (smt_query (check_sym_pkt_out
+                         (shared_region_decls (get_mem_regions_from_general p1)
+                                              (get_mem_regions_from_general p2))
+                         s_f1 s_f2))
     as [v | |] eqn:Hq; try discriminate.
   injection Hcheck as Hvf. subst v.
   (* Sat means the negated agreement formula holds under the witness, i.e.
@@ -1038,27 +1410,27 @@ Proof.
   - (* both accepted: some observable must be the one that differs *)
     right. split; [reflexivity |]. split; [reflexivity |].
     cbn in HB.
-    apply Bool.andb_false_iff in HB as [Hpkt | Hmem].
+    apply Bool.andb_false_iff in HB as [Hpkt | Hmemeq].
     + apply Bool.andb_false_iff in Hpkt as [Hout | Hbits].
       * destruct (sym_out_equal_complete _ _ f Hwt1 Hwt2 Hout) as [Hlen | Hall].
         -- left. rewrite !List.length_map. exact Hlen.
         -- right. right. left. exact Hall.
       * right. left. unfold check_sym_bits_read in Hbits.
         apply smt_bool_eq_false. exact Hbits.
-    + apply Bool.andb_false_iff in Hmem as [Hmemeq | Hmemext].
-      * right. right. right. left.
-        apply check_sym_mem_equal_complete. exact Hmemeq.
-      * right. right. right. right.
-        apply check_sym_mem_extent_complete. exact Hmemext.
+    + right. right. right.
+      apply check_sym_mem_equal_complete. exact Hmemeq.
   - (* accept flags disagree *) left. discriminate.
   - (* accept flags disagree *) left. discriminate.
   - (* both rejected is an accepting case, so this cannot be a Sat witness *)
     cbn in HA. discriminate.
 Qed.
 
-(* The trust base.  Anything here beyond [smt_query], its two soundness
-   axioms, and CompCert's [Archi.ppc64] is a new assumption. *)
+(* The trust base.  Anything here beyond [smt_query] and its two soundness
+   axioms is a new assumption.  Each direction in fact uses only ONE of the
+   two: [_sound] reports [smt_query_sound_none], [_complete] reports
+   [smt_query_sound_some]. *)
 Print Assumptions modnet_equivalence_checker_sound.
 Print Assumptions modnet_equivalence_checker_complete.
 Print Assumptions eval_general_program_symbolic_smt_arr_len.
 Print Assumptions eval_general_program_symbolic_arr_len_agrees.
+

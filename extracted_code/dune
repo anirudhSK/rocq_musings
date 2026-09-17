@@ -10,6 +10,36 @@
   (modules DumpSexp)
   (libraries extracted_code_lib))
 
+(executable
+  (public_name run_parser)
+  (name RunParser)
+  (modules RunParser)
+  (libraries extracted_code_lib))
+
+(executable
+  (public_name run_net)
+  (name RunNet)
+  (modules RunNet)
+  (libraries extracted_code_lib))
+
+(executable
+  (public_name fuzz_tss)
+  (name FuzzTss)
+  (modules FuzzTss)
+  (libraries extracted_code_lib))
+
+(executable
+  (public_name bench_eq)
+  (name BenchEq)
+  (modules BenchEq)
+  (libraries extracted_code_lib unix))
+
+(executable
+  (public_name pretty_print)
+  (name PrettyPrint)
+  (modules PrettyPrint)
+  (libraries extracted_code_lib))
+
 (library
  (name semantics_tests)
  (modules TestEquality TestModuleSemantics TestParserSemantics TestProgramSemantics)
@@ -28,11 +58,13 @@
   CrGeneralProgramState CrIdentifiers CrModule CrParser CrProgramState
   CrSymbolicSemanticsDeparser CrSymbolicSemanticsModule
   CrSymbolicSemanticsParser CrSymbolicSemanticsTransformer CrTransformer
-  CrTypeIF CrVal CrVarLike Datatypes EquivDec Integers List ListDef ListUtils
-  Maps Mergesort MyInts Nat NatDef Orders PeanoNat PktClass PosDef
-  PosGraphLemmas Rocqlib Shim SmtExpr SmtModuleQuery SmtQuery SmtTypes Specif
-  String TestModulePrograms TestParserPrograms TestPrograms Z3Solver ZArith_dec
-  Zpower)
+  CrTypeIF CrVal CrVarLike Datatypes EquivDec Integers IrSize List ListDef
+  ListUtils Maps Mergesort MyInts Nat NatDef Orders ParserHawkEval
+  ParserWellFormed PeanoNat PktClass PktClassFuzz PosDef PosGraphLemmas Rocqlib
+  Shim SmtCompile SmtExpr SmtModuleQuery SmtQuery SmtSize SmtTypes SolveTime
+  Specif String TestModulePrograms TestParserPrograms TestPrograms Z3Solver
+  ZArith_dec Zpower)
  (preprocess (staged_pps ppx_import ppx_sexp_conv))
- (libraries z3 sexplib zarith)
+ ; unix is for SolveTime's clock, which Z3Solver stamps at each phase boundary.
+ (libraries z3 sexplib zarith unix)
  (flags (:standard -w -33)))

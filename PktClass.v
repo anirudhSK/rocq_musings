@@ -188,7 +188,8 @@ Definition field_extractor_width : nat := 192.
 Definition field_extractor : CrModule :=
 ParserModule (ModuleNameCtr 1) {|
   parser_start := ParserStateLabelCtr 1;
-  parser_states := [{| (* move to protocol @ bit 72 *)
+  parser_states :=
+  [   {| (* move to protocol @ bit 72 *)
     psd_action := Some (SeekForward 72);
     psd_label := ParserStateLabelCtr 1; psd_trans := Unconditional (TargetState (ParserStateLabelCtr 2))
   |}; {| (* extract protocol *)
@@ -209,7 +210,7 @@ ParserModule (ModuleNameCtr 1) {|
   |}; {| (* extract dst port *)
     psd_action := Some (ExtractOpConstructor h_dst_port 16 u16);
     psd_label := ParserStateLabelCtr 7; psd_trans := Unconditional Accept
-  |}]
+  |}   ]
 |}.
 
 (* Copy the classified label from [h_out] into (HeaderCtr 1), the header
@@ -314,22 +315,16 @@ Definition make_table_transformer (table : FilterDatabase) (h_body : Header): Tr
         (OpConst (repr (Zpos (priority f))))
         (OpConst (repr 0))
         (incr h_body)])
-  ) sorted.
+  ) sorted
+  ++ [Seq (SeqCtr []
+       [StatelessOp
+          AddOp u8 (OpConst (repr 0)) (OpConst (repr 0)) h_body;
+        StatelessOp
+          AddOp u8 (OpConst (repr 255)) (OpConst (repr 0)) (incr h_body)])].
 
 (* One merger rule.  A LOWER priority number means HIGHER precedence, so this
    table's match displaces the running best exactly when
-   (incr filter_base) < (incr acc_base).
-
-   This is the convention linear_db already implements: its rules are ordered by
-   ascending priority and [eval_transformer_concrete] takes the FIRST match, so
-   the smallest priority number wins.  [make_table_transformer] does the same
-   within a table.  Comparing the other way round here would make tss_db pick
-   the largest priority number across tables and disagree with linear_db on any
-   packet matching filters in two different tables.
-
-   A table that did not match leaves its priority slot uninitialized, and
-   [CrVal.ltb] is false on UninitVal, so a non-matching table never displaces
-   the accumulator. *)
+   (incr filter_base) < (incr acc_base). *)
 Definition check_match (acc_base : Header) (filter_base : Header) : Transformer :=
   [Seq (SeqCtr
     [((incr filter_base), CmpLt, MatchHeader (incr acc_base))]
@@ -391,30 +386,11 @@ Definition tss_db (db : FilterDatabase) : GeneralCaracaraProgram :=
   (* h_base is one past the largest Header uid mentioned in any MatchPattern,
      guaranteeing the (label, priority) headers don't collide with match-tested ones *)
   let h_base : Header := compute_h_base db in
-  (* Seed the network with the shared parser (field_extractor, name 1) and
-     deparser (dump_label, name 2).  Their fixed names mean
-     add_program_to_network allocates every table/merger/copy module at name
-     >= 3, so there are no collisions and both modules can be reused as-is.
-     The parser is the start module; the chain feeds into the deparser. *)
   let net_init : ModuleNetwork := {|
     net_modules  := [field_extractor; dump_label];
     net_edges    := fun _ _ => false;
     start_module := get_mod_name field_extractor;
   |} in
-  (* Seed the accumulator's priority slot before any merger runs.  Without this
-     it is UninitVal, [CrVal.ltb] is false on UninitVal, and no merger can ever
-     fire -- h_out would never be written at all.
-
-     The seed is the WORST precedence, so that any real match displaces it.
-     Since lower numbers win, that is the largest u8, 255.  Consequence: a
-     filter with priority 255 can never win a merge (255 < 255 is false), so
-     priorities must stay in [1, 254].  The priority slot is u8 because
-     [make_table_transformer] writes priorities with [AddOp u8] and [CrVal.ltb]
-     requires both operands to share an int type.
-
-     Only the priority slot is seeded, not h_out itself: that way a packet
-     matching no filter leaves h_out uninitialized and the deparser rejects,
-     exactly as it does in linear_db. *)
   let init_acc : Transformer :=
     [Seq (SeqCtr []
       [StatelessOp AddOp u8 (OpConst (repr 255)) (OpConst (repr 0)) (incr h_out)])] in
@@ -465,11 +441,6 @@ Definition SimpleDB : FilterDatabase :=
       key := 1%positive;
       priority := 1%positive |}, (repr 42));
     ({|
-      (* Two src_ip components, so this filter's GetTuple shape is (2,1,1,1,1)
-         rather than (1,1,1,1,1) and tss_db hashes it into a second table --
-         which is the point of the example.  The parser exposes src_ip as one
-         32-bit header, so the second component re-tests it; the redundancy is
-         what gives the filter its distinct tuple shape. *)
       src_ip := [(h_src_ip, CmpEq, MatchConst (repr 0) u32);
                  (h_src_ip, CmpEq, MatchConst (repr 0) u32)];
       dst_ip := [(h_dst_ip, CmpEq, MatchConst (repr 0) u32)];
