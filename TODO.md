@@ -900,10 +900,15 @@ declaration check behind it:
   uid and `Operand` is width-free by design, so a shared ctrl would stay a
   loose `SmtArithVar`: an arbitrary `CrVal`, possibly `ErrorVal` or the wrong
   tag (1.1.4). Shared-and-loose is *safer* than unshared, since both sides see
-  the same junk and agree on it, but it reopens `report.md`'s Bug 1 family
-  exactly when the two programs read one ctrl at different widths — one op gets
-  `ErrorVal`, the other does not, and the verdict is `NotEquivalent` on a
-  configuration no control plane can produce. So add a `collect_ctrl_types`
+  the same junk and agree on it, but it reopens the same bug the region fix
+  closed (SOUNDNESS.md model-debt item 3): a checked `cast` sends a
+  width-mismatched value to `ErrorVal`, and `CrVal.ltb`/`eqb` are false on
+  `ErrorVal` in *both* directions, so a pair of programs built around
+  complementary comparisons (e.g. `x > 100` vs `x < 101`) can silently lose a
+  case. That reopens exactly when the two programs read one ctrl at different
+  widths — one op gets `ErrorVal`, the other does not, and the verdict is
+  `NotEquivalent` on a configuration no control plane can produce. So add a
+  `collect_ctrl_types`
   walk over the ops that *consume* each ctrl, seed
   `SmtCast u64 ty (SmtVarVal "ctrl_<c>")`, and refuse a program that reads one
   ctrl at two widths, the way `solve` refuses a query failing `lcb`.
