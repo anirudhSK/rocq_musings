@@ -300,11 +300,16 @@ let distinct_priorities (r : rng) (n : int) : int Stdlib.List.t =
    is what is being compared" measures that this is really happening.
 
    Shapes come from a pool of at most [ceil (sqrt nfilters)] -- see
-   [shape_pool] for why that bound and not one shape per filter. *)
-let random_db (r : rng) (nfilters : int) : PktClass.coq_FilterDatabase * string =
+   [shape_pool] for why that bound and not one shape per filter.
+
+   [random_db_ntab] below is the same construction with the table count
+   supplied by the caller instead of derived from [nfilters]; [random_db] is
+   just [random_db_ntab] at the derived bound. *)
+let random_db_ntab (r : rng) (nfilters : int) (ntab : int)
+  : PktClass.coq_FilterDatabase * string =
   let prios = distinct_priorities r nfilters in
   let shared = gen_witness r in
-  let pool = shape_pool r (ceil_sqrt nfilters) in
+  let pool = shape_pool r ntab in
   let ntab = Stdlib.Array.length pool in
   (* Explicitly left to right: [List.map] does not promise an order, and this
      function consumes the generator. *)
@@ -322,6 +327,9 @@ let random_db (r : rng) (nfilters : int) : PktClass.coq_FilterDatabase * string 
     Stdlib.String.concat "\n"
       (Stdlib.List.mapi (fun i (_, d) -> Printf.sprintf "  f%d: %s" i d) entries) in
   (db, doc)
+
+let random_db (r : rng) (nfilters : int) : PktClass.coq_FilterDatabase * string =
+  random_db_ntab r nfilters (ceil_sqrt nfilters)
 
 (* ------------------------------------------------------------------ *)
 

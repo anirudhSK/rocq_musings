@@ -129,12 +129,46 @@ let tss_gen seed nfilters =
   let db, _doc = PktClassFuzz.random_db r nfilters in
   PktClass.linear_db db, PktClass.tss_db db
 
+(* Same as [tss_gen], but with the table count fixed rather than derived from
+   the filter count.  [tss_gen]/[random_db] couple table count to filter count
+   on purpose (PktClassFuzz's own cost control, see the comment above
+   [PktClassFuzz.shape_pool]); a --scale sweep wants the opposite -- hold table
+   count fixed and vary filter count alone -- so it needs the uncoupled
+   generator. *)
+let tss_gen_ntab seed nfilters ntab =
+  let r = PktClassFuzz.rng_make seed in
+  let db, _doc = PktClassFuzz.random_db_ntab r nfilters ntab in
+  PktClass.linear_db db, PktClass.tss_db db
+
 let h = Shim.int_to_pos
 let icmp_hdrs = ParserHawkEval.ICMPHdr (h 1, h 2)
 let eth_hdrs  = ParserHawkEval.EthHdr (h 1, h 2)
 let mfk_hdrs  = ParserHawkEval.MultiFieldHdr (h 1, h 2, h 3)
 let sai_hdrs  =
   ParserHawkEval.SAIHdr (h 1, h 2, h 3, h 4, h 5, h 6, h 7, h 8, h 9)
+
+(* ---------------- TSS scale: filter count varied, table count fixed - *)
+(* For `--scale`: table count held at 8 while filter count sweeps 8..128, so
+   the sweep isolates the filter-count axis from the table-count axis that
+   PktClassFuzz's own [ceil (sqrt nfilters)] bound normally couples to it (see
+   [tss_gen_ntab] above).  Every row is Equivalent, same as the "gen-N" family
+   above; the "cross-32" control below already covers the both-reject risk for
+   the whole TSS family, so these rows do not repeat it. *)
+let scale_sizes = [ 8; 16; 32; 64; 128 ]
+let scale_ntab = 8
+
+let scale_cases : case list =
+  Stdlib.List.map
+    (fun n ->
+       { family = "TSS"; name = Stdlib.Printf.sprintf "scale-%d" n;
+         what = Stdlib.Printf.sprintf
+             "spec vs tuple space search, %d filters over %d fixed tables (seed 1)"
+             n scale_ntab;
+         pair = GenNet
+             (Stdlib.Printf.sprintf "PktClassFuzz.random_db_ntab %d %d" n scale_ntab,
+              fun () -> tss_gen_ntab 1 n scale_ntab);
+         want = Eq })
+    scale_sizes
 
 let cases : case list = [
 
@@ -386,7 +420,7 @@ let cases : case list = [
                    fun () -> ph "bench/parserhawk/ir/sai_tofino.ir" sai_hdrs,
                              ph "bench/parserhawk/ir/sai_ipu.ir" sai_hdrs);
     want = Eq };
-]
+] @ scale_cases
 
 (* ------------------------------------------------------------------ *)
 (* Timing. *)
@@ -535,6 +569,10 @@ let usage () =
   prerr_endline "  --list    print the registry and exit, running nothing";
   prerr_endline "  --pair A B  time one ad-hoc pair of .ir files (no expected verdict)";
   prerr_endline "  --isolate run each case in its own process (slower, reproducible)";
+  prerr_endline
+    "  --scale   select the TSS scaling sweep (table count fixed at 8, \
+     filter count 8..128) in place of the main registry; combine with \
+     --case to run one size";
   exit 2
 
 let () =
@@ -542,6 +580,7 @@ let () =
   let csv = ref "" and list = ref false in
   let adhoc = ref [] in
   let isolate = ref false in
+  let scale = ref false in
   let rec parse = function
     | [] -> ()
     | "--family" :: v :: r -> family := v; parse r
@@ -551,6 +590,7 @@ let () =
     | "--list" :: r -> list := true; parse r
     | "--pair" :: a :: b :: r -> adhoc := [a; b]; parse r
     | "--isolate" :: r -> isolate := true; parse r
+    | "--scale" :: r -> scale := true; parse r
     | _ -> usage ()
   in
   parse (Stdlib.List.tl (Stdlib.Array.to_list Sys.argv));
@@ -575,10 +615,14 @@ let () =
       [ { family = "adhoc"; name = Filename.remove_extension (Filename.basename a);
           what = a ^ " vs " ^ b; pair = Net (a, b); want = Eq } ]
     | _ ->
+      (* [--scale] swaps in the scale-* registry as the pool to filter,
+         rather than bypassing --family/--case: [--scale --case scale-8]
+         should run exactly that one row, same as any other case. *)
+      let pool = if !scale then scale_cases else cases in
       Stdlib.List.filter
         (fun c ->
            (!family = "" || c.family = !family) && contains c.name !only)
-        cases
+        pool
   in
 
   if !list then begin
