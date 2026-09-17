@@ -148,13 +148,26 @@ let sai_hdrs  =
   ParserHawkEval.SAIHdr (h 1, h 2, h 3, h 4, h 5, h 6, h 7, h 8, h 9)
 
 (* ---------------- TSS scale: filter count varied, table count fixed - *)
-(* For `--scale`: table count held at 8 while filter count sweeps 8..128, so
-   the sweep isolates the filter-count axis from the table-count axis that
+(* For `--scale`: table count held at 8 while filter count sweeps, so the
+   sweep isolates the filter-count axis from the table-count axis that
    PktClassFuzz's own [ceil (sqrt nfilters)] bound normally couples to it (see
    [tss_gen_ntab] above).  Every row is Equivalent, same as the "gen-N" family
    above; the "cross-32" control below already covers the both-reject risk for
-   the whole TSS family, so these rows do not repeat it. *)
-let scale_sizes = [ 8; 16; 32; 64; 128 ]
+   the whole TSS family, so these rows do not repeat it.
+
+   Sizes are roughly geometric (~1.5-2x steps) rather than pure doublings, so
+   a log-log fit has more than 5 points to work with; they run past the
+   previous max (128) so a curve fit has a chance to catch an inflection
+   (e.g. Z3 tipping into combinatorial behaviour) rather than just
+   extrapolating one.
+
+   Capped at 254: [distinct_priorities] draws at most 254 distinct priorities
+   (1..254; 255 is the "no match" sentinel -- see PktClassFuzz's header
+   comment and CLAUDE.md), so any nfilters above that silently realises only
+   254 filters.  A size above 254 is therefore not a bigger database, it is
+   the SAME 254-filter database with a different label -- confirmed by two
+   such rows coming back with byte-identical IrSize/SmtSize. *)
+let scale_sizes = [ 8; 12; 16; 24; 32; 48; 64; 96; 128; 192; 224; 254 ]
 let scale_ntab = 8
 
 let scale_cases : case list =
