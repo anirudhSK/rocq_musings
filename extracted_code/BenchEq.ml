@@ -230,7 +230,7 @@ let cases : case list = [
   { family = "TSS"; name = "cross-32";
     what = "two tuple-space pipelines over different 32-filter databases (control)";
     pair = GenNet ("PktClassFuzz.random_db 32, seeds 1 and 2",
-                   fun () -> snd (tss_gen 1 32), snd (tss_gen 2 32));
+                   fun () -> fst (tss_gen 1 32), snd (tss_gen 2 32));
     want = NotEq };
 
   (* ---------------- P4: one program, before and after p4c's midend ---- *)
@@ -408,6 +408,13 @@ let cases : case list = [
     pair = GenNet ("multifield_ipu.ir / mfk_spec",
                    fun () -> ph "bench/parserhawk/ir/multifield_ipu.ir" mfk_hdrs,
                              ParserHawkEval.mfk_spec);
+    want = NotEq };
+
+  { family = "ParserHawk"; name = "multifield-cross";
+    what = "Multi-keys: the synthesized IPU pipeline vs tofino pipeline";
+    pair = GenNet ("multifield_ipu.ir / mfk_spec",
+                   fun () -> ph "bench/parserhawk/ir/multifield_ipu.ir" mfk_hdrs,
+                             ph "bench/parserhawk/ir/multifield_tofino.ir" mfk_hdrs);
     want = NotEq };
 
   (* SAI v4, not v2: both the spec in ParserHawkEval.v and the pipeline JSON
