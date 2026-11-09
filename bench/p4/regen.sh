@@ -14,10 +14,10 @@
 set -u
 here=$(cd "$(dirname "$0")" && pwd)
 root=$(cd "$here/../.." && pwd)
-rocq="$root/translation/p4c/build/rocq"
-p4test="$root/translation/p4c/build/p4test"
+rocq="$root/translation/p2c/build/rocq"
+p4test="$root/translation/p2c/build/p4test"
 for t in "$rocq" "$p4test"; do
-  [ -x "$t" ] || { echo "missing $t -- (cd translation/p4c/build && make rocq p4test)" >&2; exit 2; }
+  [ -x "$t" ] || { echo "missing $t -- (cd translation/p2c/build && make rocq p4test)" >&2; exit 2; }
 done
 src="$here/src"; out="$here/ir"; mkdir -p "$out" "$src"
 
@@ -50,7 +50,7 @@ done
 work=$(mktemp -d); trap 'rm -rf "$work"' EXIT
 : > "$work/empty.entries"
 
-TNA="-D__TARGET_TOFINO__=1 -I$root/translation/p4c/backends/tofino/bf-p4c/p4include"
+TNA="-D__TARGET_TOFINO__=1 -I$root/translation/p2c/backends/tofino/bf-p4c/p4include"
 
 # lower <out-name> <source.p4> <rocq flags...>
 lower () {

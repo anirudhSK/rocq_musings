@@ -21,8 +21,8 @@
 set -u
 here=$(cd "$(dirname "$0")" && pwd)
 root=$(cd "$here/../../.." && pwd)
-rocq="$root/translation/p4c/build/rocq"
-p4test="$root/translation/p4c/build/p4test"
+rocq="$root/translation/p2c/build/rocq"
+p4test="$root/translation/p2c/build/p4test"
 eqcheck="$root/_build/default/extracted_code/EqCheck.exe"
 runnet="$root/_build/default/extracted_code/RunNet.exe"
 work=$(mktemp -d); trap 'rm -rf "$work"' EXIT
@@ -64,7 +64,7 @@ if [ "$got" = "Not Equivalent" ]; then
   echo "ok    issue5765        the checker separates the two compilations"
 else
   echo "FAIL  issue5765        got '$got', want 'Not Equivalent'"
-  echo "      If this now says Equivalent, the p4c in translation/p4c has been"
+  echo "      If this now says Equivalent, the p4c in translation/p2c has been"
   echo "      updated with the fix -- which is the good outcome, not a broken"
   echo "      test.  Confirm against the issue and retire this case."
   fail=1

@@ -13,7 +13,7 @@ set -u
 
 here=$(cd "$(dirname "$0")" && pwd)
 root=$(cd "$here/../.." && pwd)
-rocq="$root/translation/p4c/build/rocq"
+rocq="$root/translation/p2c/build/rocq"
 eqcheck="$root/_build/default/extracted_code/EqCheck.exe"
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
@@ -23,7 +23,7 @@ fail=0
 for tool in "$rocq" "$eqcheck"; do
   if [ ! -x "$tool" ]; then
     echo "missing $tool" >&2
-    echo "  build it: (cd translation/p4c/build && make rocq)   /   (cd $root && make && dune build)" >&2
+    echo "  build it: (cd translation/p2c/build && make rocq)   /   (cd $root && make && dune build)" >&2
     exit 2
   fi
 done

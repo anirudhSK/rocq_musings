@@ -22,5 +22,5 @@ and see `extracted_code/BenchEq.ml` for the registry, which which programs are c
 Submodules the scripts use:
 
 ```
-git submodule update --init translation/p4c translation/ect
+git submodule update --init translation/p2c translation/ect
 ```
