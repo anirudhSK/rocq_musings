@@ -1,11 +1,11 @@
 # translation/ — getting other languages into the IR
 
 Three front-ends live here. Two are submodules of their own repositories
-(`p4c`, `ect`); the other is a script.
+(`p2c`, `ect`); the other is a script.
 
 | | language | entry point |
 |---|---|---|
-| `p4c/extensions/rocq` | P4 | `rocq`, a p4c backend |
+| `p2c/extensions/rocq` | P4 | `rocq`, a p4c backend |
 | `ect` | eBPF | `bpf_to_ir`, over a compiled object |
 | `parserhawk/lower_table.py` | ParserHawk pipelines | the script |
 
@@ -13,19 +13,19 @@ All three emit an s-expression the IR can read: a
 `GeneralCaracaraProgram` for the first two, a bare `Parser` for ParserHawk.
 `EqCheck --net` is what compares two of them.
 
-## `p4c/extensions/rocq` — P4
+## `p2c/extensions/rocq` — P4
 
 A p4c backend that lowers a P4 program to a `.ir` s-expression, written to
-**stdout**. See [its README](p4c/extensions/rocq/README.md) for usage, what
+**stdout**. See [its README](p2c/extensions/rocq/README.md) for usage, what
 lowers today, and what it refuses. Build and test:
 
 ```bash
-(cd p4c/build && make rocq)     # the backend
+(cd p2c/build && make rocq)     # the backend
 ./tests/run.sh                  # differential tests, via EqCheck
 ./tests/p4c_bugs/run.sh         # a real p4c miscompilation, caught
 ```
 
-`p4c/` is a submodule of a p4c fork; the backend lives in its `extensions/`
+`p2c/` is a submodule of a p4c fork; the backend lives in its `extensions/`
 directory, which CMake picks up automatically.
 
 `tests/` holds the differential tests for the backend: pairs of P4 programs

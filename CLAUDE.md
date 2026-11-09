@@ -21,7 +21,7 @@ translation/tests/run.sh
 translation/tests/p4c_bugs/run.sh
 dune exec --profile release bench_eq -- --reps 3
 ```
-First two need `(cd translation/p4c/build && make rocq p4test)`.
+First two need `(cd translation/p2c/build && make rocq p4test)`.
 
 ## Layout
 
@@ -33,7 +33,7 @@ First two need `(cd translation/p4c/build && make rocq p4test)`.
 - `Extraction.v` — **the gate**: nothing reaches OCaml unless named in `Separate Extraction`.
 - `extracted_code/` — generated except files un-ignored in `.gitignore` (that list is authoritative): `Test*.ml`, `Shim.ml`, `CrTypeIF.ml`, `Z3Solver.ml`, executables (`EqCheck`, `DumpSexp`, `RunParser`, `RunNet`, `FuzzTss`, `BenchEq`), `IrSize.ml`/`SmtSize.ml`/`SolveTime.ml`.
 - `test/` — `.out`/`.ir` fixtures. Hash map layout: presence `[0,4)`, keys `[4,20)`, values `[20,52)`, "real map full" byte at 52 (key=4, value=8, 4 slots → 53 bytes). Array map: presence then values. `TestModuleSemantics.seed_map` / `MapInfo` in `translation/ect/pybpf/translate.py`.
-- `translation/` — front ends (excluded from Coq build). `p4c` and `ect` submodules, `parserhawk/lower_table.py`, differential tests.
+- `translation/` — front ends (excluded from Coq build). `p2c` and `ect` submodules, `parserhawk/lower_table.py`, differential tests.
 - `bench/` — equivalence benchmark programs by family; `bench_eq` reads only `.ir`.
 
 ## Critical rules

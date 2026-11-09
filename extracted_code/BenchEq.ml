@@ -3,8 +3,8 @@
    One place that says what the evaluation checks and how big each case is, so
    a table in the paper is generated rather than transcribed.
 
-     dune exec bench_eq -- [--family F] [--case SUBSTR] [--reps N]
-                           [--csv FILE] [--list] [--timeout S]
+     dune exec bench_eq -- [--family F] [--case SUBSTR] [--name NAME]
+                           [--reps N] [--csv FILE] [--list] [--timeout S]
 
    What is timed is the CHECK ONLY: building the two programs (reading and
    parsing an s-expression, or generating a TSS pair in Rocq) happens once,
@@ -298,7 +298,7 @@ let cases : case list = [
      random() has just written is rewritten to the old constant.
 
      It is the one P4 row whose expected verdict is a DEFECT rather than a
-     control: if it ever reports Equivalent, the p4c in translation/p4c has
+     control: if it ever reports Equivalent, the p4c in translation/p2c has
      been updated with the fix.  Confirm against the issue and retire the row
      rather than "fixing" it. *)
   { family = "P4"; name = "issue5765";
@@ -440,7 +440,7 @@ let cases : case list = [
                    fun () -> ph "bench/parserhawk/ir/sai_tofino.ir" sai_hdrs,
                              ph "bench/parserhawk/ir/sai_ipu.ir" sai_hdrs);
     want = Eq };
-] @ scale_cases
+]
 
 (* ------------------------------------------------------------------ *)
 (* Timing. *)
@@ -580,10 +580,11 @@ let csv_row r =
 
 let usage () =
   prerr_endline
-    "usage: bench_eq [--family F] [--case SUBSTR] [--reps N] [--csv FILE] \
+    "usage: bench_eq [--family F] [--case SUBSTR] [--name NAME] [--reps N] [--csv FILE] \
      [--list]";
   prerr_endline "  --family  TSS | P4 | eBPF | ParserHawk | Core";
   prerr_endline "  --case    run only cases whose name contains SUBSTR";
+  prerr_endline "  --name    run only the case named exactly NAME";
   prerr_endline "  --reps    timed repetitions per case (default 3)";
   prerr_endline "  --csv     also write a machine-readable row per case";
   prerr_endline "  --list    print the registry and exit, running nothing";
@@ -591,12 +592,13 @@ let usage () =
   prerr_endline "  --isolate run each case in its own process (slower, reproducible)";
   prerr_endline
     "  --scale   select the TSS scaling sweep (table count fixed at 8, \
-     filter count 8..128) in place of the main registry; combine with \
+     filter count 8..254) in place of the main registry; combine with \
      --case to run one size";
   exit 2
 
 let () =
   let family = ref "" and only = ref "" and reps = ref 3 in
+  let exact = ref "" in
   let csv = ref "" and list = ref false in
   let adhoc = ref [] in
   let isolate = ref false in
@@ -605,6 +607,7 @@ let () =
     | [] -> ()
     | "--family" :: v :: r -> family := v; parse r
     | "--case" :: v :: r -> only := v; parse r
+    | "--name" :: v :: r -> exact := v; parse r
     | "--reps" :: v :: r -> reps := int_of_string v; parse r
     | "--csv" :: v :: r -> csv := v; parse r
     | "--list" :: r -> list := true; parse r
@@ -641,7 +644,8 @@ let () =
       let pool = if !scale then scale_cases else cases in
       Stdlib.List.filter
         (fun c ->
-           (!family = "" || c.family = !family) && contains c.name !only)
+           (!family = "" || c.family = !family) && contains c.name !only
+           && (!exact = "" || c.name = !exact))
         pool
   in
 
@@ -683,8 +687,9 @@ let () =
          let tmp = Filename.temp_file "bench_iso_" ".csv" in
          let out = Filename.temp_file "bench_iso_" ".txt" in
          let cmd =
-           Stdlib.Printf.sprintf "%s --case %s --reps %d --csv %s > %s 2>&1"
+           Stdlib.Printf.sprintf "%s%s --name %s --reps %d --csv %s > %s 2>&1"
              (Filename.quote Sys.executable_name)
+             (if !scale then " --scale" else "")
              (Filename.quote c.name) !reps (Filename.quote tmp)
              (Filename.quote out) in
          let rc = Sys.command cmd in

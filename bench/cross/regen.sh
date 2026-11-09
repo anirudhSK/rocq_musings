@@ -5,7 +5,7 @@
 # of a submodule into src/, bench/cross/src IS the source: one XDP program
 # and one P4 program, written here to say the same thing (parse an Ethernet
 # header, pass IPv4, drop everything else), each run through its own front
-# end -- ect for basic.c, the rocq extension in translation/p4c for basic.p4.
+# end -- ect for basic.c, the rocq extension in translation/p2c for basic.p4.
 #
 # ect and the rocq extension declare their own, unrelated memory regions and
 # header interfaces for that same intent, so basic_bpf.ir and basic_p4.ir are
@@ -15,7 +15,7 @@
 #
 # Needs a clang and an `llc` WITH THE BPF TARGET for the eBPF side -- see
 # bench/ebpf/regen.sh for the macOS toolchain note -- a built p4c
-# (`cd translation/p4c/build && make rocq p4test`) for the P4 side, and this
+# (`cd translation/p2c/build && make rocq p4test`) for the P4 side, and this
 # repository built (`make -j && dune build --profile release`) for pretty_print.
 #
 # Alongside ir/, this writes a gitignored build/ holding the INPUT each front
@@ -39,8 +39,8 @@ set -u
 here=$(cd "$(dirname "$0")" && pwd)
 root=$(cd "$here/../.." && pwd)
 ECT=${ECT:-$root/translation/ect}
-ROCQ=${ROCQ:-$root/translation/p4c/build/rocq}
-P4TEST=${P4TEST:-$root/translation/p4c/build/p4test}
+ROCQ=${ROCQ:-$root/translation/p2c/build/rocq}
+P4TEST=${P4TEST:-$root/translation/p2c/build/p4test}
 src="$here/src"; out="$here/ir"; build="$here/build"; mkdir -p "$out" "$build"
 
 [ -x "$ECT/bpf_to_ir" ] || {
@@ -49,7 +49,7 @@ src="$here/src"; out="$here/ir"; build="$here/build"; mkdir -p "$out" "$build"
 }
 for t in "$ROCQ" "$P4TEST"; do
   [ -x "$t" ] || {
-    echo "missing $t -- (cd translation/p4c/build && make rocq p4test)" >&2
+    echo "missing $t -- (cd translation/p2c/build && make rocq p4test)" >&2
     exit 2
   }
 done

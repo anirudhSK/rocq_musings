@@ -17,7 +17,7 @@ there is nothing to interpret.
 
 Needs p4testgen, which is not built by default:
 
-    cd translation/p4c/build && cmake -DENABLE_TEST_TOOLS=ON .. && make p4testgen
+    cd translation/p2c/build && cmake -DENABLE_TEST_TOOLS=ON .. && make p4testgen
 """
 
 import argparse
@@ -28,8 +28,8 @@ import sys
 import tempfile
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-ROCQ = os.path.join(ROOT, "translation/p4c/build/rocq")
-TESTGEN = os.path.join(ROOT, "translation/p4c/build/p4testgen")
+ROCQ = os.path.join(ROOT, "translation/p2c/build/rocq")
+TESTGEN = os.path.join(ROOT, "translation/p2c/build/p4testgen")
 RUNNET = os.path.join(ROOT, "_build/default/extracted_code/RunNet.exe")
 
 
@@ -196,9 +196,9 @@ def main():
     args, unknown = ap.parse_known_args()
     args.rocq_flags = list(args.rocq_flags) + unknown  # anything we do not know is rocq's
 
-    need(ROCQ, "cd translation/p4c/build && make rocq")
+    need(ROCQ, "cd translation/p2c/build && make rocq")
     need(RUNNET, "cd %s && make && dune build" % ROOT)
-    need(TESTGEN, "cd translation/p4c/build && cmake -DENABLE_TEST_TOOLS=ON .. && make p4testgen")
+    need(TESTGEN, "cd translation/p2c/build && cmake -DENABLE_TEST_TOOLS=ON .. && make p4testgen")
 
     work = tempfile.mkdtemp(prefix="differential.")
     name = os.path.splitext(os.path.basename(args.p4))[0]
