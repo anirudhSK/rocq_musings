@@ -30,7 +30,7 @@ jobs:
 
       - name: Install Switch
         run: |
-          opam install -y rocq-runtime rocq-stdlib z3 ppx_import sexplib ppx_sexp_conv ppx_expect
+          opam install -y coq.9.1.0 z3 ppx_import sexplib ppx_sexp_conv ppx_expect
 
   validate-build:
     runs-on: ubuntu-latest
