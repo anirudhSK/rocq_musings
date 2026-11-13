@@ -73,7 +73,12 @@ Local Open Scope Z_scope.
 Definition cw (z : Z) : SmtArithExpr := SmtArithConst (repr z) u64.
 
 Definition tag_z (ty : CrIntType) : Z :=
-  match it_width ty with W8 => 2 | W16 => 3 | W32 => 4 | W64 => 5 end.
+  match it_signed ty, it_width ty with
+  | false, W8 => 2 | false, W16 => 3
+  | false, W32 => 4 | false, W64 => 5
+  | true, W8 => 6 | true, W16 => 7
+  | true, W32 => 8 | true, W64 => 9
+  end.
 
 (* ------------------------------------------------------------------ *)
 (* Sharing the fixed literals.
@@ -89,21 +94,29 @@ Definition tag_z (ty : CrIntType) : Z :=
    downstream has to change -- the proofs below [unfold] them exactly as they
    unfolded [cw]. *)
 Definition c_two  : SmtArithExpr := cw 2.
-Definition c_six  : SmtArithExpr := cw 6.
+Definition c_ten  : SmtArithExpr := cw 10.
 Definition c_tag8 : SmtArithExpr := cw 2.
 Definition c_tag16 : SmtArithExpr := cw 3.
 Definition c_tag32 : SmtArithExpr := cw 4.
 Definition c_tag64 : SmtArithExpr := cw 5.
+Definition c_stag8  : SmtArithExpr := cw 6.
+Definition c_stag16 : SmtArithExpr := cw 7.
+Definition c_stag32 : SmtArithExpr := cw 8.
+Definition c_stag64 : SmtArithExpr := cw 9.
 
 (* [cw (tag_z ty)] with the four results shared. *)
 Definition ctag (ty : CrIntType) : SmtArithExpr :=
-  match it_width ty with
-  | W8 => c_tag8 | W16 => c_tag16 | W32 => c_tag32 | W64 => c_tag64
+  match it_signed ty, it_width ty with
+  | false, W8 => c_tag8 | false, W16 => c_tag16
+  | false, W32 => c_tag32 | false, W64 => c_tag64
+  | true, W8 => c_stag8 | true, W16 => c_stag16
+  | true, W32 => c_stag32 | true, W64 => c_stag64
   end.
 
 Lemma ctag_cw : forall ty, ctag ty = cw (tag_z ty).
-Proof. intro ty. unfold ctag, tag_z, c_tag8, c_tag16, c_tag32, c_tag64.
-       destruct (it_width ty); reflexivity. Qed.
+Proof.
+  intros [w sg]. destruct sg, w; reflexivity.
+Qed.
 
 (* Mask a word into [ty]'s width.  [W64] is the identity rather than an
    [and] with all-ones so the compiled term does not grow for the common case. *)
@@ -122,7 +135,7 @@ Definition cmask (ty : CrIntType) (e : SmtArithExpr) : SmtArithExpr :=
 (* [2 <= t <= 5]: the tag says [IntVal].  Written with [<] alone because that
    is the one comparison the fragment has. *)
 Definition is_int_tag (t : SmtArithExpr) : SmtBoolExpr :=
-  SmtBoolAnd (SmtBoolNot (SmtBoolLt t c_two)) (SmtBoolLt t c_six).
+  SmtBoolAnd (SmtBoolNot (SmtBoolLt t c_two)) (SmtBoolLt t c_ten).
 
 Definition tag_is (t : SmtArithExpr) (ty : CrIntType) : SmtBoolExpr :=
   SmtBoolEq t (ctag ty).
@@ -274,7 +287,8 @@ Qed.
 (* [is_int_tag] reads its argument only through its VALUE, which is what lets
    [tag_decide] push through a merge. *)
 Definition itv (x : CrVal) : bool :=
-  (negb (CrVal.ltb x (IntVal (repr 2) u64)) && CrVal.ltb x (IntVal (repr 6) u64))%bool.
+  (negb (CrVal.ltb x (IntVal (repr 2) u64)) &&
+   CrVal.ltb x (IntVal (repr 10) u64))%bool.
 
 (* FUEL, and it is not a formality.  A tag is a DAG -- the merge at every rule
    shares its branches -- and a structural walk visits a shared subterm once
@@ -431,7 +445,24 @@ Definition cstep_bool (e : SmtBoolExpr) : SmtBoolExpr :=
       let (v1, t1) := ra e1 in
       let (v2, t2) := ra e2 in
       mk_and (mk_beq t1 t2)
-        (mk_and (mk_int_tag t1) (mk_blt v1 v2))
+        (mk_and (mk_int_tag t1)
+          (mk_or
+            (mk_and (SmtBoolLt t1 c_stag8) (mk_blt v1 v2))
+            (mk_or
+              (mk_and (tag_is t1 s8) (SmtBoolSLt s8 v1 v2))
+              (mk_or
+                (mk_and (tag_is t1 s16)
+                        (SmtBoolSLt s16 v1 v2))
+                (mk_or
+                  (mk_and (tag_is t1 s32)
+                          (SmtBoolSLt s32 v1 v2))
+                  (mk_and (tag_is t1 s64)
+                          (SmtBoolSLt s64 v1 v2)))))))
+  | SmtBoolSLt ty e1 e2 =>
+      let (v1, t1) := ra e1 in
+      let (v2, t2) := ra e2 in
+      mk_and (tag_is t1 u64)
+        (mk_and (tag_is t2 u64) (SmtBoolSLt ty v1 v2))
   | SmtBoolVar name => SmtBoolVar name
   | SmtArrEq n a1 a2 => SmtArrEq n (rm a1) (rm a2)
   end
@@ -470,7 +501,9 @@ Definition cstep_arith (e : SmtArithExpr) : carith :=
       (mk_ite cb v1 v2, mk_ite cb t1 t2)
   | SmtCast from to e1 =>
       let (v1, t1) := ra e1 in
-      (cmask to v1,
+      (cmask to
+        (if it_signed from then SmtSignExt from v1
+         else cmask from v1),
        mk_ite (tag_is t1 from) (ctag to) err_tag)
   | SmtBitAdd ty e1 e2 => mk_binop ty SmtBitAdd (ra e1) (ra e2)
   | SmtBitSub ty e1 e2 => mk_binop ty SmtBitSub (ra e1) (ra e2)
@@ -478,8 +511,22 @@ Definition cstep_arith (e : SmtArithExpr) : carith :=
   | SmtBitOr  ty e1 e2 => mk_binop ty SmtBitOr (ra e1) (ra e2)
   | SmtBitXor ty e1 e2 => mk_binop ty SmtBitXor (ra e1) (ra e2)
   | SmtBitMul ty e1 e2 => mk_binop ty SmtBitMul (ra e1) (ra e2)
-  | SmtBitDiv ty e1 e2 => mk_binop ty SmtBitDiv (ra e1) (ra e2)
-  | SmtBitMod ty e1 e2 => mk_binop ty SmtBitMod (ra e1) (ra e2)
+  | SmtBitDiv ty e1 e2 =>
+      if it_signed ty then
+        mk_binop ty (fun _ => SmtBitSDiv ty) (ra e1) (ra e2)
+      else mk_binop ty SmtBitDiv (ra e1) (ra e2)
+  | SmtBitMod ty e1 e2 =>
+      if it_signed ty then
+        mk_binop ty (fun _ => SmtBitSRem ty) (ra e1) (ra e2)
+      else mk_binop ty SmtBitMod (ra e1) (ra e2)
+  | SmtBitSDiv ty e1 e2 =>
+      mk_binop u64 (fun _ => SmtBitSDiv ty) (ra e1) (ra e2)
+  | SmtBitSRem ty e1 e2 =>
+      mk_binop u64 (fun _ => SmtBitSRem ty) (ra e1) (ra e2)
+  | SmtSignExt ty e1 =>
+      let (v1, t1) := ra e1 in
+      (SmtSignExt ty v1,
+       mk_ite (tag_is t1 u64) (ctag u64) err_tag)
   (* [CrVal.not] masks at the operand's OWN type, which is a runtime value, so
      the width has to be selected by a conditional chain.  This is the case the
      OCaml lowering wrote by hand as a fold over the four widths. *)
@@ -489,7 +536,12 @@ Definition cstep_arith (e : SmtArithExpr) : carith :=
       (mk_ite (tag_is t1 u8) (cmask u8 nv)
         (mk_ite (tag_is t1 u16) (cmask u16 nv)
           (mk_ite (tag_is t1 u32) (cmask u32 nv)
-            (mk_ite (tag_is t1 u64) (cmask u64 nv) zero_w))),
+            (mk_ite (tag_is t1 u64) (cmask u64 nv)
+              (mk_ite (tag_is t1 s8) (cmask s8 nv)
+                (mk_ite (tag_is t1 s16) (cmask s16 nv)
+                  (mk_ite (tag_is t1 s32) (cmask s32 nv)
+                    (mk_ite (tag_is t1 s64)
+                      (cmask s64 nv) zero_w))))))),
        mk_ite (mk_int_tag t1) t1 err_tag)
   (* The bounds guard [ld_arr] applies, made explicit.  [smt_arr_len] is the
      declared length of the region the expression is rooted at; it agrees with
@@ -673,8 +725,9 @@ Proof.
   rewrite PMap.gmap. unfold to_byte.
   destruct ((region_bytes (sv_arrs v n)) !! (offset_to_key (repr i)))
     as [c |] eqn:E; [| exists 0%Z; reflexivity].
-  destruct c as [b [w] | |]; try (exists 0%Z; reflexivity).
-  destruct w; try (exists 0%Z; reflexivity).
+  destruct c as [b [w sg] | |]; try (exists 0%Z; reflexivity).
+  destruct w, sg; cbn [crinttype_eqb crwidth_eqb Bool.eqb];
+    try (exists 0%Z; reflexivity).
   exists (unsigned b); reflexivity.
 Qed.
 
@@ -685,7 +738,8 @@ Proof.
   destruct (arrvar_cell_byte n len i v) as [z Hz].
   unfold cell_is_byte. cbn [eval_smt_bool eval_smt_arith].
   rewrite Hz, cw_eval.
-  unfold tag_z, tag_of, mk_int, u8, u64. cbn [it_width].
+  unfold tag_z, tag_of, mk_int, u8, u64.
+  cbn [it_width it_signed].
   rewrite (mask_width_W64_small 2) by lia.
   cbn [CrVal.eqb crinttype_eqb crwidth_eqb]. rewrite int_eq_refl. reflexivity.
 Qed.
@@ -776,7 +830,8 @@ Definition lcstep_bool (e : SmtBoolExpr) : bool :=
   | SmtTrue | SmtFalse | SmtBoolVar _ => true
   | SmtBoolNot e1 => qb e1
   | SmtBoolAnd e1 e2 | SmtBoolOr e1 e2 => qb e1 && qb e2
-  | SmtBoolEq e1 e2 | SmtBoolLt e1 e2 => qa e1 && qa e2
+  | SmtBoolEq e1 e2 | SmtBoolLt e1 e2
+  | SmtBoolSLt _ e1 e2 => qa e1 && qa e2
   | SmtArrEq _ a1 a2 => qm a1 && qm a2
   end.
 
@@ -787,11 +842,13 @@ Definition lcstep_arith (e : SmtArithExpr) : bool :=
   | SmtBitsToInt bits =>
       (fix go (bs : list SmtBoolExpr) : bool :=
          match bs with nil => true | b :: r => andb (qb b) (go r) end) bits
-  | SmtBitSlice _ _ e1 | SmtCast _ _ e1 | SmtBitNot e1 => qa e1
+  | SmtBitSlice _ _ e1 | SmtCast _ _ e1
+  | SmtBitNot e1 | SmtSignExt _ e1 => qa e1
   | SmtConditional c e1 e2 => qb c && qa e1 && qa e2
   | SmtBitAdd _ e1 e2 | SmtBitSub _ e1 e2 | SmtBitAnd _ e1 e2
   | SmtBitOr _ e1 e2 | SmtBitXor _ e1 e2 | SmtBitMul _ e1 e2
-  | SmtBitDiv _ e1 e2 | SmtBitMod _ e1 e2 => qa e1 && qa e2
+  | SmtBitDiv _ e1 e2 | SmtBitMod _ e1 e2
+  | SmtBitSDiv _ e1 e2 | SmtBitSRem _ e1 e2 => qa e1 && qa e2
   | SmtArrSel a idx | SmtCellVal a idx | SmtCellTag a idx => qm a && qa idx
   end.
 
@@ -881,19 +938,25 @@ Qed.
 (* ------------------------------------------------------------------ *)
 (* The (value, tag) calculus. *)
 
-Lemma tag_z_range : forall ty, 2 <= tag_z ty <= 5.
-Proof. intros [w]; destruct w; cbn; lia. Qed.
+Lemma tag_z_range : forall ty, 2 <= tag_z ty <= 9.
+Proof. intros [w sg]; destruct w, sg; cbn; lia. Qed.
 
-Lemma tag_of_range : forall x, 0 <= tag_of x <= 5.
-Proof. intros [a [w] | |]; try (cbn; lia). destruct w; cbn; lia. Qed.
+Lemma tag_of_range : forall x, 0 <= tag_of x <= 9.
+Proof.
+  intros [a [w sg] | |]; try (cbn; lia).
+  destruct w, sg; cbn; lia.
+Qed.
 
 Lemma val_of_range : forall x, 0 <= val_of x < 2 ^ 64.
 Proof. intros [a ty | |]; cbn; try (split; [lia | vm_compute; reflexivity]). apply unsigned_range64. Qed.
 
 Lemma mk_cell_tag_z : forall (a : uint64) ty, mk_cell (unsigned a) (tag_z ty) = IntVal a ty.
 Proof.
-  intros a [w]; destruct w; unfold mk_cell, tag_z, u8, u16, u32, u64; cbn [it_width];
-    cbn [Z.eqb Pos.eqb]; rewrite repr_unsigned; reflexivity.
+  intros a [w sg]. destruct w, sg;
+    unfold mk_cell, tag_z, u8, u16, u32, u64,
+      s8, s16, s32, s64;
+    cbn [it_width it_signed Z.eqb Pos.eqb];
+    rewrite repr_unsigned; reflexivity.
 Qed.
 
 Lemma mk_cell_int_inv : forall va tg (a : uint64) ty,
@@ -908,6 +971,14 @@ Proof.
   { apply Z.eqb_eq in E4. subst tg. inversion H; subst. split; reflexivity. }
   destruct (Z.eqb tg 5) eqn:E5.
   { apply Z.eqb_eq in E5. subst tg. inversion H; subst. split; reflexivity. }
+  destruct (Z.eqb tg 6) eqn:E6.
+  { apply Z.eqb_eq in E6. subst tg. inversion H; subst. split; reflexivity. }
+  destruct (Z.eqb tg 7) eqn:E7.
+  { apply Z.eqb_eq in E7. subst tg. inversion H; subst. split; reflexivity. }
+  destruct (Z.eqb tg 8) eqn:E8.
+  { apply Z.eqb_eq in E8. subst tg. inversion H; subst. split; reflexivity. }
+  destruct (Z.eqb tg 9) eqn:E9.
+  { apply Z.eqb_eq in E9. subst tg. inversion H; subst. split; reflexivity. }
   destruct (Z.eqb tg 1); discriminate.
 Qed.
 
@@ -941,11 +1012,11 @@ Definition reps (p : carith) (v : SmtValuation) (x : CrVal) : Prop :=
   exists av tv : uint64,
     eval_smt_arith (fst p) v = IntVal av u64
     /\ eval_smt_arith (snd p) v = IntVal tv u64
-    /\ unsigned tv <= 5
+    /\ unsigned tv <= 9
     /\ x = mk_cell (unsigned av) (unsigned tv).
 
-Lemma small64 : forall z, 0 <= z <= 5 -> 0 <= z < 2 ^ 64.
-Proof. intros z Hz. assert (H : 5 < 2 ^ 64) by (vm_compute; reflexivity). lia. Qed.
+Lemma small64 : forall z, 0 <= z <= 9 -> 0 <= z < 2 ^ 64.
+Proof. intros z Hz. assert (H : 9 < 2 ^ 64) by (vm_compute; reflexivity). lia. Qed.
 
 Lemma eval_zero_w : forall v, eval_smt_arith zero_w v = IntVal (repr 0) u64.
 Proof. intro v. apply cw_eval. Qed.
@@ -1007,7 +1078,7 @@ Qed.
 Lemma is_int_tag_val : forall t v,
   eval_smt_bool (is_int_tag t) v = itv (eval_smt_arith t v).
 Proof.
-  intros t v. unfold is_int_tag, itv, c_two, c_six.
+  intros t v. unfold is_int_tag, itv, c_two, c_ten.
   cbn [eval_smt_bool]. rewrite !cw_eval. reflexivity.
 Qed.
 
@@ -1018,6 +1089,7 @@ Proof.
   destruct t as [ x ty | | nm | bits | lo hi e | c a1 a2 | fr to e
                 | ty e1 e2 | ty e1 e2 | ty e1 e2 | ty e1 e2 | ty e1 e2 | e
                 | ty e1 e2 | ty e1 e2 | ty e1 e2
+                | ty e1 e2 | ty e1 e2 | ty e
                 | ar ix | nm | nm | ar ix | ar ix ];
     cbn [tag_decide] in Hd; try discriminate.
   - (* SmtArithConst: the literal decides outright. *)
@@ -1051,18 +1123,21 @@ Ltac unfold_mk :=
 
 Lemma eval_is_int_tag : forall t v (tv : uint64),
   eval_smt_arith t v = IntVal tv u64 ->
-  eval_smt_bool (is_int_tag t) v = ((2 <=? unsigned tv) && (unsigned tv <? 6))%bool.
+  eval_smt_bool (is_int_tag t) v =
+    ((2 <=? unsigned tv) && (unsigned tv <? 10))%bool.
 Proof.
-  intros t v tv Ht. unfold is_int_tag, c_two, c_six. cbn [eval_smt_bool].
-  rewrite Ht, !cw_eval. unfold CrVal.ltb, u64. cbn [crinttype_eqb crwidth_eqb it_width].
+  intros t v tv Ht. unfold is_int_tag, c_two, c_ten.
+  cbn [eval_smt_bool].
+  rewrite Ht, !cw_eval. unfold CrVal.ltb, u64.
+  cbn [crinttype_eqb crwidth_eqb it_width it_signed Bool.eqb].
   rewrite !andb_true_l, !ltu64_spec.
   rewrite (unsigned_repr64 2) by (split; [lia | vm_compute; reflexivity]).
-  rewrite (unsigned_repr64 6) by (split; [lia | vm_compute; reflexivity]).
+  rewrite (unsigned_repr64 10) by (split; [lia | vm_compute; reflexivity]).
   f_equal. rewrite Z.ltb_antisym. apply negb_involutive.
 Qed.
 
 Lemma eval_is_int_tag_true : forall t v (tv : uint64),
-  eval_smt_arith t v = IntVal tv u64 -> 2 <= unsigned tv <= 5 ->
+  eval_smt_arith t v = IntVal tv u64 -> 2 <= unsigned tv <= 9 ->
   eval_smt_bool (is_int_tag t) v = true.
 Proof.
   intros t v tv Ht Hr. rewrite (eval_is_int_tag t v tv) by assumption.
@@ -1100,6 +1175,30 @@ Proof.
     rewrite mask_width_W64_id; reflexivity.
 Qed.
 
+Lemma eval_cast_word : forall fr to e v (a : uint64),
+  eval_smt_arith e v = IntVal a u64 ->
+  eval_smt_arith
+    (cmask to
+      (if it_signed fr then SmtSignExt fr e else cmask fr e)) v =
+  IntVal
+    (mask_width (it_width to)
+      (if it_signed fr then
+         unsigned (mask_width W64 (signed_at fr a))
+       else unsigned (mask_width (it_width fr) (unsigned a)))) u64.
+Proof.
+  intros fr to e v a He.
+  destruct (it_signed fr) eqn:Hsg.
+  - rewrite (eval_cmask to _ v
+      (mask_width W64 (signed_at fr a))).
+    + reflexivity.
+    + cbn [eval_smt_arith]. rewrite He, crinttype_eqb_refl.
+      reflexivity.
+  - rewrite (eval_cmask to _ v
+      (mask_width (it_width fr) (unsigned a))).
+    + reflexivity.
+    + apply eval_cmask. exact He.
+Qed.
+
 (* ------------------------------------------------------------------ *)
 (* A type test that fails makes the whole operation [ErrorVal] -- on either
    operand, and whatever the other one is. *)
@@ -1128,8 +1227,9 @@ Qed.
 (* [mk_binop] is right whenever both compiled operands are. *)
 Lemma reps_binop : forall ty (op : CrIntType -> SmtArithExpr -> SmtArithExpr -> SmtArithExpr)
     (f : uint64 -> uint64 -> uint64) p1 p2 v x y,
-  (forall t e1 e2 vv, eval_smt_arith (op t e1 e2) vv
-      = iv_binop_at f t (eval_smt_arith e1 vv) (eval_smt_arith e2 vv)) ->
+  (forall e1 e2 vv, eval_smt_arith (op u64 e1 e2) vv
+      = iv_binop_at f u64 (eval_smt_arith e1 vv)
+                            (eval_smt_arith e2 vv)) ->
   reps p1 v x -> reps p2 v y ->
   reps (mk_binop ty op p1 p2) v (iv_binop_at f ty x y).
 Proof.
@@ -1191,6 +1291,8 @@ Hypothesis HAnd    : forall e1 e2, Pb e1 -> Pb e2 -> Pb (SmtBoolAnd e1 e2).
 Hypothesis HOr     : forall e1 e2, Pb e1 -> Pb e2 -> Pb (SmtBoolOr e1 e2).
 Hypothesis HEq     : forall e1 e2, Pa e1 -> Pa e2 -> Pb (SmtBoolEq e1 e2).
 Hypothesis HLt     : forall e1 e2, Pa e1 -> Pa e2 -> Pb (SmtBoolLt e1 e2).
+Hypothesis HSLt    : forall ty e1 e2, Pa e1 -> Pa e2 ->
+  Pb (SmtBoolSLt ty e1 e2).
 Hypothesis HBVar   : forall n, Pb (SmtBoolVar n).
 Hypothesis HArrEq  : forall n a1 a2, Pm a1 -> Pm a2 -> Pb (SmtArrEq n a1 a2).
 
@@ -1210,6 +1312,11 @@ Hypothesis HBNot   : forall e, Pa e -> Pa (SmtBitNot e).
 Hypothesis HMul    : forall ty e1 e2, Pa e1 -> Pa e2 -> Pa (SmtBitMul ty e1 e2).
 Hypothesis HDiv    : forall ty e1 e2, Pa e1 -> Pa e2 -> Pa (SmtBitDiv ty e1 e2).
 Hypothesis HMod    : forall ty e1 e2, Pa e1 -> Pa e2 -> Pa (SmtBitMod ty e1 e2).
+Hypothesis HSDiv   : forall ty e1 e2, Pa e1 -> Pa e2 ->
+  Pa (SmtBitSDiv ty e1 e2).
+Hypothesis HSRem   : forall ty e1 e2, Pa e1 -> Pa e2 ->
+  Pa (SmtBitSRem ty e1 e2).
+Hypothesis HSignExt : forall ty e, Pa e -> Pa (SmtSignExt ty e).
 Hypothesis HSel    : forall a idx, Pm a -> Pa idx -> Pa (SmtArrSel a idx).
 Hypothesis HVarVal : forall n, Pa (SmtVarVal n).
 Hypothesis HVarTag : forall n, Pa (SmtVarTag n).
@@ -1231,6 +1338,8 @@ Fixpoint smt_bool_mutind (e : SmtBoolExpr) {struct e} : Pb e :=
   | SmtBoolOr e1 e2 => HOr e1 e2 (smt_bool_mutind e1) (smt_bool_mutind e2)
   | SmtBoolEq e1 e2 => HEq e1 e2 (smt_arith_mutind e1) (smt_arith_mutind e2)
   | SmtBoolLt e1 e2 => HLt e1 e2 (smt_arith_mutind e1) (smt_arith_mutind e2)
+  | SmtBoolSLt ty e1 e2 =>
+      HSLt ty e1 e2 (smt_arith_mutind e1) (smt_arith_mutind e2)
   | SmtBoolVar n => HBVar n
   | SmtArrEq n a1 a2 => HArrEq n a1 a2 (smt_arr_mutind a1) (smt_arr_mutind a2)
   end
@@ -1259,6 +1368,11 @@ with smt_arith_mutind (e : SmtArithExpr) {struct e} : Pa e :=
   | SmtBitMul ty e1 e2 => HMul ty e1 e2 (smt_arith_mutind e1) (smt_arith_mutind e2)
   | SmtBitDiv ty e1 e2 => HDiv ty e1 e2 (smt_arith_mutind e1) (smt_arith_mutind e2)
   | SmtBitMod ty e1 e2 => HMod ty e1 e2 (smt_arith_mutind e1) (smt_arith_mutind e2)
+  | SmtBitSDiv ty e1 e2 =>
+      HSDiv ty e1 e2 (smt_arith_mutind e1) (smt_arith_mutind e2)
+  | SmtBitSRem ty e1 e2 =>
+      HSRem ty e1 e2 (smt_arith_mutind e1) (smt_arith_mutind e2)
+  | SmtSignExt ty e1 => HSignExt ty e1 (smt_arith_mutind e1)
   | SmtArrSel a idx => HSel a idx (smt_arr_mutind a) (smt_arith_mutind idx)
   | SmtVarVal n => HVarVal n
   | SmtVarTag n => HVarTag n
@@ -1296,9 +1410,11 @@ Proof.
 Qed.
 
 Lemma ltb_same_ty : forall (a b : uint64) ty,
+  it_signed ty = false ->
   CrVal.ltb (IntVal a ty) (IntVal b ty) = (unsigned a <? unsigned b).
 Proof.
-  intros a b ty. unfold CrVal.ltb. rewrite crinttype_eqb_refl, andb_true_l.
+  intros a b ty Hsg. unfold CrVal.ltb.
+  rewrite crinttype_eqb_refl, andb_true_l, Hsg.
   apply ltu64_spec.
 Qed.
 
@@ -1308,18 +1424,23 @@ Proof. intros a b. apply eqb_same_ty. Qed.
 
 Lemma ltb_words : forall (a b : uint64),
   CrVal.ltb (IntVal a u64) (IntVal b u64) = (unsigned a <? unsigned b).
-Proof. intros a b. apply ltb_same_ty. Qed.
+Proof. intros a b. apply ltb_same_ty. reflexivity. Qed.
 
-Lemma mk_cell_int_ex : forall (av : uint64) tg, 2 <= tg <= 5 ->
+Lemma mk_cell_int_ex : forall (av : uint64) tg, 2 <= tg <= 9 ->
   exists ty, tag_z ty = tg /\ mk_cell (unsigned av) tg = IntVal av ty.
 Proof.
   intros av tg Hr.
-  assert (D : tg = 2 \/ tg = 3 \/ tg = 4 \/ tg = 5) by lia.
-  destruct D as [-> | [-> | [-> | ->]]].
+  assert (D : tg = 2 \/ tg = 3 \/ tg = 4 \/ tg = 5 \/
+              tg = 6 \/ tg = 7 \/ tg = 8 \/ tg = 9) by lia.
+  destruct D as [-> | [-> | [-> | [-> | [-> | [-> | [-> | ->]]]]]]].
   - exists u8.  split; [reflexivity | exact (mk_cell_tag_z av u8)].
   - exists u16. split; [reflexivity | exact (mk_cell_tag_z av u16)].
   - exists u32. split; [reflexivity | exact (mk_cell_tag_z av u32)].
   - exists u64. split; [reflexivity | exact (mk_cell_tag_z av u64)].
+  - exists s8.  split; [reflexivity | exact (mk_cell_tag_z av s8)].
+  - exists s16. split; [reflexivity | exact (mk_cell_tag_z av s16)].
+  - exists s32. split; [reflexivity | exact (mk_cell_tag_z av s32)].
+  - exists s64. split; [reflexivity | exact (mk_cell_tag_z av s64)].
 Qed.
 
 Lemma mk_cell_low : forall va tg, 0 <= tg <= 1 ->
@@ -1360,12 +1481,20 @@ Proof.
 Qed.
 
 (* Two tags are equal exactly when the types they stand for are. *)
-Lemma tag_z_eqb : forall ty1 ty2, (tag_z ty1 =? tag_z ty2) = crinttype_eqb ty1 ty2.
-Proof. intros [w1] [w2]; destruct w1, w2; reflexivity. Qed.
+Lemma tag_z_eqb : forall ty1 ty2,
+  (tag_z ty1 =? tag_z ty2) = crinttype_eqb ty1 ty2.
+Proof.
+  intros [w1 s1] [w2 s2].
+  destruct w1, w2, s1, s2; reflexivity.
+Qed.
 
 Lemma ltb_ltu : forall (a b : uint64) ty,
+  it_signed ty = false ->
   CrVal.ltb (IntVal a ty) (IntVal b ty) = Integers.ltu a b.
-Proof. intros a b ty. unfold CrVal.ltb. rewrite crinttype_eqb_refl. apply andb_true_l. Qed.
+Proof.
+  intros a b ty Hsg. unfold CrVal.ltb.
+  rewrite crinttype_eqb_refl, Hsg. reflexivity.
+Qed.
 
 Lemma val_of_vguard : forall p v x,
   reps p v x -> val_of (eval_smt_arith (vguard p) v) = val_of x.
@@ -1381,20 +1510,28 @@ Qed.
    them.  Brute force over the six tags each side can carry: the tags are what
    the type test is, and there are thirty-six of them. *)
 Lemma mk_cell_eqb : forall (av1 tv1 av2 tv2 : uint64),
-  unsigned tv1 <= 5 -> unsigned tv2 <= 5 ->
+  unsigned tv1 <= 9 -> unsigned tv2 <= 9 ->
   CrVal.eqb (mk_cell (unsigned av1) (unsigned tv1)) (mk_cell (unsigned av2) (unsigned tv2))
   = ((unsigned tv1 =? unsigned tv2)
-     && (negb ((2 <=? unsigned tv1) && (unsigned tv1 <? 6))
+     && (negb ((2 <=? unsigned tv1) && (unsigned tv1 <? 10))
          || (unsigned av1 =? unsigned av2)))%bool.
 Proof.
   intros av1 tv1 av2 tv2 H1 H2.
   pose proof (unsigned_range64 tv1). pose proof (unsigned_range64 tv2).
   assert (D1 : unsigned tv1 = 0 \/ unsigned tv1 = 1 \/ unsigned tv1 = 2
-               \/ unsigned tv1 = 3 \/ unsigned tv1 = 4 \/ unsigned tv1 = 5) by lia.
+               \/ unsigned tv1 = 3 \/ unsigned tv1 = 4
+               \/ unsigned tv1 = 5 \/ unsigned tv1 = 6
+               \/ unsigned tv1 = 7 \/ unsigned tv1 = 8
+               \/ unsigned tv1 = 9) by lia.
   assert (D2 : unsigned tv2 = 0 \/ unsigned tv2 = 1 \/ unsigned tv2 = 2
-               \/ unsigned tv2 = 3 \/ unsigned tv2 = 4 \/ unsigned tv2 = 5) by lia.
-  destruct D1 as [E1 | [E1 | [E1 | [E1 | [E1 | E1]]]]];
-  destruct D2 as [E2 | [E2 | [E2 | [E2 | [E2 | E2]]]]];
+               \/ unsigned tv2 = 3 \/ unsigned tv2 = 4
+               \/ unsigned tv2 = 5 \/ unsigned tv2 = 6
+               \/ unsigned tv2 = 7 \/ unsigned tv2 = 8
+               \/ unsigned tv2 = 9) by lia.
+  destruct D1 as [E1 | [E1 | [E1 | [E1 | [E1 |
+    [E1 | [E1 | [E1 | [E1 | E1]]]]]]]]];
+  destruct D2 as [E2 | [E2 | [E2 | [E2 | [E2 |
+    [E2 | [E2 | [E2 | [E2 | E2]]]]]]]]];
     rewrite E1, E2; unfold mk_cell; cbn [Z.eqb Pos.eqb];
     try reflexivity;
     rewrite !repr_unsigned, eqb_same_ty;
@@ -1402,23 +1539,44 @@ Proof.
 Qed.
 
 Lemma mk_cell_ltb : forall (av1 tv1 av2 tv2 : uint64),
-  unsigned tv1 <= 5 -> unsigned tv2 <= 5 ->
+  unsigned tv1 <= 9 -> unsigned tv2 <= 9 ->
   CrVal.ltb (mk_cell (unsigned av1) (unsigned tv1)) (mk_cell (unsigned av2) (unsigned tv2))
   = ((unsigned tv1 =? unsigned tv2)
-     && ((2 <=? unsigned tv1) && (unsigned tv1 <? 6) && (unsigned av1 <? unsigned av2)))%bool.
+     && ((2 <=? unsigned tv1) && (unsigned tv1 <? 10) &&
+       (((unsigned tv1 <? 6) && (unsigned av1 <? unsigned av2)) ||
+        ((unsigned tv1 =? 6) &&
+         (signed_at s8 av1 <? signed_at s8 av2)) ||
+        ((unsigned tv1 =? 7) &&
+         (signed_at s16 av1 <? signed_at s16 av2)) ||
+        ((unsigned tv1 =? 8) &&
+         (signed_at s32 av1 <? signed_at s32 av2)) ||
+        ((unsigned tv1 =? 9) &&
+         (signed_at s64 av1 <? signed_at s64 av2)))))%bool.
 Proof.
   intros av1 tv1 av2 tv2 H1 H2.
   pose proof (unsigned_range64 tv1). pose proof (unsigned_range64 tv2).
   assert (D1 : unsigned tv1 = 0 \/ unsigned tv1 = 1 \/ unsigned tv1 = 2
-               \/ unsigned tv1 = 3 \/ unsigned tv1 = 4 \/ unsigned tv1 = 5) by lia.
+               \/ unsigned tv1 = 3 \/ unsigned tv1 = 4
+               \/ unsigned tv1 = 5 \/ unsigned tv1 = 6
+               \/ unsigned tv1 = 7 \/ unsigned tv1 = 8
+               \/ unsigned tv1 = 9) by lia.
   assert (D2 : unsigned tv2 = 0 \/ unsigned tv2 = 1 \/ unsigned tv2 = 2
-               \/ unsigned tv2 = 3 \/ unsigned tv2 = 4 \/ unsigned tv2 = 5) by lia.
-  destruct D1 as [E1 | [E1 | [E1 | [E1 | [E1 | E1]]]]];
-  destruct D2 as [E2 | [E2 | [E2 | [E2 | [E2 | E2]]]]];
+               \/ unsigned tv2 = 3 \/ unsigned tv2 = 4
+               \/ unsigned tv2 = 5 \/ unsigned tv2 = 6
+               \/ unsigned tv2 = 7 \/ unsigned tv2 = 8
+               \/ unsigned tv2 = 9) by lia.
+  destruct D1 as [E1 | [E1 | [E1 | [E1 | [E1 |
+    [E1 | [E1 | [E1 | [E1 | E1]]]]]]]]];
+  destruct D2 as [E2 | [E2 | [E2 | [E2 | [E2 |
+    [E2 | [E2 | [E2 | [E2 | E2]]]]]]]]];
     rewrite E1, E2; unfold mk_cell; cbn [Z.eqb Pos.eqb];
     try reflexivity;
-    rewrite !repr_unsigned, ltb_same_ty;
-    destruct (unsigned av1 <? unsigned av2); reflexivity.
+    rewrite !repr_unsigned;
+    unfold CrVal.ltb; rewrite crinttype_eqb_refl;
+    cbn [u8 u16 u32 u64 s8 s16 s32 s64
+         andb orb it_signed Z.ltb Z.leb Z.eqb];
+    try (rewrite ltu64_spec); simpl;
+    repeat rewrite orb_false_r; reflexivity.
 Qed.
 
 (* ------------------------------------------------------------------ *)
@@ -1513,7 +1671,88 @@ Proof.
   rewrite (eval_is_int_tag T1 v tv1 HT1).
   cbn [eval_smt_bool]. rewrite HV1, HV2, HT1, HT2, Hx1, Hx2.
   rewrite eqb_words, ltb_words, !if_id.
+  rewrite (eval_tag_is T1 v tv1 s8 HT1).
+  rewrite (eval_tag_is T1 v tv1 s16 HT1).
+  rewrite (eval_tag_is T1 v tv1 s32 HT1).
+  rewrite (eval_tag_is T1 v tv1 s64 HT1).
+  unfold c_stag8. rewrite cw_eval, ltb_words.
+  rewrite (unsigned_repr64 6) by (split; [lia | vm_compute; reflexivity]).
+  rewrite !crinttype_eqb_refl. cbn [andb].
+  cbn [tag_z it_width it_signed s8 s16 s32 s64].
+  repeat rewrite orb_assoc.
   symmetry. apply mk_cell_ltb; assumption.
+Qed.
+
+Lemma signed_lt_cell : forall ty (a t b u : uint64),
+  (match mk_cell (unsigned a) (unsigned t),
+         mk_cell (unsigned b) (unsigned u) with
+   | IntVal x tx, IntVal y ty' =>
+       (crinttype_eqb tx u64 && crinttype_eqb ty' u64 &&
+        (signed_at ty x <? signed_at ty y))%bool
+   | _, _ => false
+   end) =
+  ((unsigned t =? 5) && (unsigned u =? 5) &&
+   (signed_at ty a <? signed_at ty b))%bool.
+Proof.
+  intros ty a t b u.
+  destruct (unsigned t =? 5) eqn:Et;
+    destruct (unsigned u =? 5) eqn:Eu.
+  - apply Z.eqb_eq in Et. apply Z.eqb_eq in Eu.
+    rewrite Et, Eu. unfold mk_cell.
+    cbn [Z.eqb Pos.eqb crinttype_eqb crwidth_eqb
+         it_width it_signed].
+    rewrite !repr_unsigned.
+    reflexivity.
+  - apply Z.eqb_eq in Et. apply Z.eqb_neq in Eu.
+    rewrite Et. unfold mk_cell at 1.
+    cbn [Z.eqb Pos.eqb].
+    destruct (mk_cell (unsigned b) (unsigned u)) as [y yt | |]
+      eqn:Hy; try reflexivity.
+    assert (Hne : crinttype_eqb yt u64 = false).
+    { eapply mk_cell_ne_ty; [| exact Hy].
+      cbn [tag_z it_width it_signed]. exact Eu. }
+    cbn [crinttype_eqb crwidth_eqb it_width it_signed].
+    rewrite Hne. reflexivity.
+  - apply Z.eqb_neq in Et.
+    destruct (mk_cell (unsigned a) (unsigned t)) as [x xt | |]
+      eqn:Hx; try reflexivity.
+    assert (Hne : crinttype_eqb xt u64 = false).
+    { eapply mk_cell_ne_ty; [| exact Hx].
+      cbn [tag_z it_width it_signed]. exact Et. }
+    destruct (mk_cell (unsigned b) (unsigned u));
+      cbn [eval_smt_bool]; rewrite ?Hne, ?Eu; reflexivity.
+  - apply Z.eqb_neq in Et.
+    destruct (mk_cell (unsigned a) (unsigned t)) as [x xt | |]
+      eqn:Hx; try reflexivity.
+    assert (Hne : crinttype_eqb xt u64 = false).
+    { eapply mk_cell_ne_ty; [| exact Hx].
+      cbn [tag_z it_width it_signed]. exact Et. }
+    destruct (mk_cell (unsigned b) (unsigned u));
+      cbn [eval_smt_bool]; rewrite ?Hne, ?Eu; reflexivity.
+Qed.
+
+Lemma cc_slt : forall ty e1 e2, CPa e1 -> CPa e2 ->
+  CPb (SmtBoolSLt ty e1 e2).
+Proof.
+  unfold CPa, CPb in *.
+  intros ty e1 e2 IH1 IH2 v H.
+  rewrite lcb_step in H. cbn [lcstep_bool] in H.
+  apply andb_prop in H as [H1 H2].
+  specialize (IH1 v H1). specialize (IH2 v H2).
+  destruct (compile_arith e1) as [V1 T1] eqn:C1.
+  destruct (compile_arith e2) as [V2 T2] eqn:C2.
+  destruct IH1 as [a [t [HV1 [HT1 [Ht Hx]]]]].
+  destruct IH2 as [b [u [HV2 [HT2 [Hu Hy]]]]].
+  cbn [fst snd] in *.
+  rewrite compile_bool_step. cbn [cstep_bool]. rewrite C1, C2.
+  unfold_mk. cbn [eval_smt_bool].
+  rewrite (eval_tag_is T1 v t u64 HT1).
+  rewrite (eval_tag_is T2 v u u64 HT2).
+  cbn [tag_z it_width it_signed].
+  rewrite HV1, HV2, Hx, Hy.
+  rewrite !crinttype_eqb_refl. cbn [andb].
+  change (tag_z u64) with 5.
+  symmetry. rewrite andb_assoc. apply signed_lt_cell.
 Qed.
 
 (* ---- regions ---- *)
@@ -1752,18 +1991,27 @@ Proof.
     { rewrite (eval_tag_is T1 v (repr (tag_z ty)) fr HT), unsigned_repr_tag.
       apply tag_z_eqb. }
     destruct (crinttype_eqb ty fr) eqn:Ety.
-    + apply reps_mask.
-      * rewrite (eval_cmask to _ v av HV). reflexivity.
+    + apply crinttype_eqb_true in Ety. subst ty.
+      apply reps_mask.
+      * apply eval_cast_word. exact HV.
       * unfold_mk. cbn [eval_smt_arith]. rewrite Hti. apply cw_eval.
-    + apply (reps_err _ _ _ (mask_width (it_width to) (unsigned av))).
-      * rewrite (eval_cmask to _ v av HV). reflexivity.
+    + apply (reps_err _ _ _
+        (mask_width (it_width to)
+          (if it_signed fr then
+             unsigned (mask_width W64 (signed_at fr av))
+           else unsigned (mask_width (it_width fr) (unsigned av))))).
+      * apply eval_cast_word. exact HV.
       * unfold_mk. cbn [eval_smt_arith]. rewrite Hti. unfold err_tag. apply cw_eval.
   - assert (Hti : eval_smt_bool (tag_is T1 fr) v = false).
     { rewrite (eval_tag_is T1 v tv fr HT). apply Z.eqb_neq.
       pose proof (tag_z_range fr). lia. }
     destruct Hx as [-> | ->]; cbn [cast];
-      apply (reps_err _ _ _ (mask_width (it_width to) (unsigned av)));
-      solve [ rewrite (eval_cmask to _ v av HV); reflexivity
+      apply (reps_err _ _ _
+        (mask_width (it_width to)
+          (if it_signed fr then
+             unsigned (mask_width W64 (signed_at fr av))
+           else unsigned (mask_width (it_width fr) (unsigned av)))));
+      solve [ apply eval_cast_word; exact HV
             | unfold_mk; cbn [eval_smt_arith]; rewrite Hti; unfold err_tag; apply cw_eval ].
 Qed.
 
@@ -1827,18 +2075,96 @@ Lemma cc_div : forall ty e1 e2, CPa e1 -> CPa e2 -> CPa (SmtBitDiv ty e1 e2).
 Proof.
   unfold CPa in *. intros ty e1 e2 IH1 IH2 v H.
   rewrite lca_step in H. cbn [lcstep_arith] in H. apply andb_prop in H as [H1 H2].
-  rewrite compile_arith_step. cbn [cstep_arith]. cbn [eval_smt_arith]. unfold divu_at.
-  apply (reps_binop ty SmtBitDiv Integers.divu);
-    [intros; reflexivity | apply IH1; exact H1 | apply IH2; exact H2].
+  rewrite compile_arith_step. cbn [cstep_arith eval_smt_arith].
+  unfold div_at. destruct (it_signed ty).
+  - rewrite signed_binop_as_iv.
+    apply (reps_binop ty (fun _ => SmtBitSDiv ty)
+      (fun a b => mask_width W64
+        (Z.quot (signed_at ty a) (signed_at ty b))));
+      [intros; reflexivity | apply IH1; exact H1 | apply IH2; exact H2].
+  - unfold divu_at. apply (reps_binop ty SmtBitDiv Integers.divu);
+      [intros; reflexivity | apply IH1; exact H1 | apply IH2; exact H2].
 Qed.
 
 Lemma cc_mod : forall ty e1 e2, CPa e1 -> CPa e2 -> CPa (SmtBitMod ty e1 e2).
 Proof.
   unfold CPa in *. intros ty e1 e2 IH1 IH2 v H.
   rewrite lca_step in H. cbn [lcstep_arith] in H. apply andb_prop in H as [H1 H2].
-  rewrite compile_arith_step. cbn [cstep_arith]. cbn [eval_smt_arith]. unfold modu_at.
-  apply (reps_binop ty SmtBitMod Integers.modu);
-    [intros; reflexivity | apply IH1; exact H1 | apply IH2; exact H2].
+  rewrite compile_arith_step. cbn [cstep_arith eval_smt_arith].
+  unfold mod_at. destruct (it_signed ty).
+  - rewrite signed_binop_as_iv.
+    apply (reps_binop ty (fun _ => SmtBitSRem ty)
+      (fun a b => mask_width W64
+        (Z.rem (signed_at ty a) (signed_at ty b))));
+      [intros; reflexivity | apply IH1; exact H1 | apply IH2; exact H2].
+  - unfold modu_at. apply (reps_binop ty SmtBitMod Integers.modu);
+      [intros; reflexivity | apply IH1; exact H1 | apply IH2; exact H2].
+Qed.
+
+Lemma cc_sdiv : forall ty e1 e2, CPa e1 -> CPa e2 ->
+  CPa (SmtBitSDiv ty e1 e2).
+Proof.
+  unfold CPa in *. intros ty e1 e2 IH1 IH2 v H.
+  rewrite lca_step in H. cbn [lcstep_arith] in H.
+  apply andb_prop in H as [H1 H2].
+  rewrite compile_arith_step. cbn [cstep_arith eval_smt_arith].
+  apply (reps_binop u64 (fun _ => SmtBitSDiv ty)
+    (fun a b => mask_width W64
+      (Z.quot (signed_at ty a) (signed_at ty b))));
+    [intros; reflexivity | apply IH1; exact H1
+    | apply IH2; exact H2].
+Qed.
+
+Lemma cc_srem : forall ty e1 e2, CPa e1 -> CPa e2 ->
+  CPa (SmtBitSRem ty e1 e2).
+Proof.
+  unfold CPa in *. intros ty e1 e2 IH1 IH2 v H.
+  rewrite lca_step in H. cbn [lcstep_arith] in H.
+  apply andb_prop in H as [H1 H2].
+  rewrite compile_arith_step. cbn [cstep_arith eval_smt_arith].
+  apply (reps_binop u64 (fun _ => SmtBitSRem ty)
+    (fun a b => mask_width W64
+      (Z.rem (signed_at ty a) (signed_at ty b))));
+    [intros; reflexivity | apply IH1; exact H1
+    | apply IH2; exact H2].
+Qed.
+
+Lemma cc_signext : forall ty e, CPa e -> CPa (SmtSignExt ty e).
+Proof.
+  unfold CPa in *. intros ty e IH v H.
+  rewrite lca_step in H. cbn [lcstep_arith] in H.
+  specialize (IH v H).
+  rewrite compile_arith_step. cbn [cstep_arith].
+  destruct (compile_arith e) as [V T] eqn:C.
+  destruct IH as [av [tv [HV [HT [Hle Hx]]]]].
+  cbn [fst snd] in *.
+  assert (Hval : eval_smt_arith (SmtSignExt ty V) v =
+    IntVal (mask_width W64 (signed_at ty av)) u64).
+  { cbn [eval_smt_arith]. rewrite HV, crinttype_eqb_refl.
+    reflexivity. }
+  cbn [eval_smt_arith]. rewrite Hx.
+  destruct (unsigned tv =? tag_z u64) eqn:Et.
+  - apply Z.eqb_eq in Et.
+    assert (Hx' : mk_cell (unsigned av) (unsigned tv) =
+      IntVal av u64) by (rewrite Et; apply mk_cell_tag_z).
+    rewrite Hx'. rewrite crinttype_eqb_refl.
+    apply (reps_mask _ _ _ u64 (signed_at ty av) Hval).
+    unfold_mk. rewrite (eval_tag_is T v tv u64 HT), Et.
+    apply cw_eval.
+  - assert (Hne : mk_cell (unsigned av) (unsigned tv) =
+      UninitVal \/ mk_cell (unsigned av) (unsigned tv) = ErrorVal \/
+      (exists a t, mk_cell (unsigned av) (unsigned tv) = IntVal a t /\
+                   crinttype_eqb t u64 = false)).
+    { destruct (mk_cell (unsigned av) (unsigned tv)) as [a t | |]
+        eqn:He; [right; right; exists a, t; split; [reflexivity |] | now left
+        | now right; left].
+      eapply mk_cell_ne_ty; [| exact He].
+      apply Z.eqb_neq in Et. exact Et. }
+    destruct Hne as [He | [He | [a [t [He Hty]]]]];
+      rewrite He; cbn [eval_smt_arith];
+      try (rewrite Hty); apply (reps_err _ _ _ _ Hval);
+      unfold_mk; rewrite (eval_tag_is T v tv u64 HT), Et;
+      unfold err_tag; apply cw_eval.
 Qed.
 
 (* [CrVal.not] masks at the operand's OWN type, which is a runtime value, so
@@ -1861,10 +2187,17 @@ Proof.
       apply tag_z_eqb. }
     rewrite Hx. cbn [CrVal.not]. apply reps_mask.
     + unfold_mk. cbn [eval_smt_arith]. rewrite !Hti.
-      destruct ty as [w]; destruct w;
-        cbn [crinttype_eqb crwidth_eqb it_width u8 u16 u32 u64];
-        [ exact (eval_cmask u8 _ v _ Hnv)  | exact (eval_cmask u16 _ v _ Hnv)
-        | exact (eval_cmask u32 _ v _ Hnv) | exact (eval_cmask u64 _ v _ Hnv) ].
+      destruct ty as [w sg]; destruct sg, w;
+        cbn [crinttype_eqb crwidth_eqb it_width it_signed
+             u8 u16 u32 u64 s8 s16 s32 s64 Bool.eqb];
+        [ exact (eval_cmask s8 _ v _ Hnv)
+        | exact (eval_cmask s16 _ v _ Hnv)
+        | exact (eval_cmask s32 _ v _ Hnv)
+        | exact (eval_cmask s64 _ v _ Hnv)
+        | exact (eval_cmask u8 _ v _ Hnv)
+        | exact (eval_cmask u16 _ v _ Hnv)
+        | exact (eval_cmask u32 _ v _ Hnv)
+        | exact (eval_cmask u64 _ v _ Hnv) ].
     + unfold_mk. cbn [eval_smt_arith]. rewrite Hg. exact HT.
   - assert (Hti : forall tyi, eval_smt_bool (tag_is T1 tyi) v = false).
     { intro tyi. rewrite (eval_tag_is T1 v tv tyi HT). apply Z.eqb_neq.
@@ -1893,7 +2226,8 @@ Proof.
                    && eval_smt_bool (SmtBoolLt vi (cw (unsigned (smt_arr_len a)))) v)%bool
                   = Integers.ltu avi (smt_arr_len a)).
     { rewrite Hg, andb_true_l. cbn [eval_smt_bool].
-      rewrite HVi, cw_eval, repr_unsigned. apply ltb_ltu. }
+      rewrite HVi, cw_eval, repr_unsigned. apply ltb_ltu.
+      reflexivity. }
     rewrite Hx. unfold CrVal.ld_arr.
     destruct (eval_smt_mem a v) as [b |] eqn:Ea; cbn [arr_len_of] in Hlen.
     + (* in bounds or not, the guard and [ld_arr] test the same thing *)
@@ -2017,9 +2351,11 @@ Theorem compile_correct :
        eval_smt_mem (compile_arr a) v = eval_smt_mem a v).
 Proof.
   destruct (smt_mutind CPb CPa CPm
-    cc_true cc_false cc_not cc_and cc_or cc_eq cc_lt cc_bvar cc_arreq
+    cc_true cc_false cc_not cc_and cc_or cc_eq cc_lt cc_slt
+    cc_bvar cc_arreq
     cc_const cc_uninit cc_avar cc_bits cc_slice cc_cond cc_cast
     cc_add cc_sub cc_andb cc_orb cc_xor cc_bnot cc_mul cc_div cc_mod
+    cc_sdiv cc_srem cc_signext
     cc_sel cc_varval cc_vartag cc_cellval cc_celltag
     cc_arrinit cc_arrvar cc_arrst cc_arrite cc_stcell) as [Hb [Ha Hm]].
   split; [exact Hb | split; [| exact Hm]].

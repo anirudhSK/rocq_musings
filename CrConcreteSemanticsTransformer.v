@@ -19,8 +19,8 @@ Definition apply_bin_op_of (f : BinaryOp) (ty : CrIntType) (v1 v2 : CrVal) : CrV
   | OrOp  => or_at   ty v1 v2
   | XorOp => xor_at  ty v1 v2
   | MulOp => mul_at  ty v1 v2
-  | DivOp => divu_at ty v1 v2
-  | ModOp => modu_at ty v1 v2
+  | DivOp => div_at ty v1 v2
+  | ModOp => mod_at ty v1 v2
   end.
 
 (* Reinterpret [v] from int type [from] to [to] (the operand must be typed

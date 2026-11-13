@@ -720,7 +720,7 @@ Definition init_concrete_mem (rs : list MemRegionDecl) : PMap.t (@Array CrVal) :
 
 Definition empty_transformer_mod : SymbolicModuleState :=
   TransformerMod {| t_ctrl_map := PMap.init SmtUninit; t_header_map := PMap.init SmtUninit; t_state_map := PMap.init SmtUninit; |}.
-  
+
 (* One module's state at the start of a run.  Lifted out of the fold in
    [init_general_symbolic_state] so that the fold has the shape
    [PMap.set (key m) (val m)], which is what lets [InitReachable] push

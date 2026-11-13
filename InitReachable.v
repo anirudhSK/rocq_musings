@@ -736,8 +736,10 @@ Qed.
    cell through [CrVal.to_byte], so it holds of the raw input whatever it is. *)
 Lemma to_byte_is_byte : forall c, exists z, to_byte c = Init (mk_int u8 z).
 Proof.
-  intros [[b [w] | | ] | ].
-  - destruct w; [exists (unsigned b) | exists 0%Z | exists 0%Z | exists 0%Z]; reflexivity.
+  intros [[b [w sg] | | ] | ].
+  - destruct w, sg;
+      try (exists 0%Z; reflexivity).
+    exists (unsigned b). reflexivity.
   - exists 0%Z. reflexivity.
   - exists 0%Z. reflexivity.
   - exists 0%Z. reflexivity.

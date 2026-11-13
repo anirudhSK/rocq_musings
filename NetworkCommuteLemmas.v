@@ -452,9 +452,12 @@ Qed.
    declared length is, because nothing is [CrVal.ltb] below zero. *)
 Lemma ltb_zero_false : forall x, CrVal.ltb x (mk_int u64 0) = false.
 Proof.
-  intros [a ty | | ]; unfold CrVal.ltb, mk_int, u64; cbn [it_width];
+  intros [a ty | | ]; unfold CrVal.ltb, mk_int; cbn [it_width];
     try reflexivity.
-  destruct (crinttype_eqb ty (mkCrIntType W64)); cbn [andb]; [| reflexivity].
+  destruct (crinttype_eqb ty u64) eqn:E;
+    cbn [andb]; [| reflexivity].
+  apply crinttype_eqb_true in E. subst ty.
+  unfold u64. cbn [it_signed it_width].
   rewrite ltu64_spec_local.
   rewrite (unsigned_mask_W64_local 0) by (split; [lia | vm_compute; reflexivity]).
   pose proof (unsigned_range_local a). apply Z.ltb_ge. lia.

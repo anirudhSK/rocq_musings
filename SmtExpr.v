@@ -18,6 +18,7 @@ Inductive SmtBoolExpr : Type :=
     | SmtBoolOr (e1 e2 : SmtBoolExpr)
     | SmtBoolEq (e1 e2 : SmtArithExpr)
     | SmtBoolLt (e1 e2 : SmtArithExpr)
+    | SmtBoolSLt (ty : CrIntType) (e1 e2 : SmtArithExpr)
     (* A free boolean variable (e.g. a single symbolic packet bit).  Evaluated
        via the valuation, interpreting a nonzero stored value as [true]. *)
     | SmtBoolVar (name : string)
@@ -57,6 +58,9 @@ with SmtArithExpr : Type :=
     | SmtBitMul (ty : CrIntType) (e1 e2 : SmtArithExpr)
     | SmtBitDiv (ty : CrIntType) (e1 e2 : SmtArithExpr)
     | SmtBitMod (ty : CrIntType) (e1 e2 : SmtArithExpr)
+    | SmtBitSDiv (ty : CrIntType) (e1 e2 : SmtArithExpr)
+    | SmtBitSRem (ty : CrIntType) (e1 e2 : SmtArithExpr)
+    | SmtSignExt (ty : CrIntType) (e : SmtArithExpr)
     (* Read offset [idx] of region [a].  Out of bounds is [ErrorVal], where the
        bound is the region's declared length -- see [smt_arr_len]. *)
     | SmtArrSel (a : SmtArrExpr) (idx : SmtArithExpr)
@@ -126,6 +130,13 @@ Fixpoint eval_smt_bool (e : SmtBoolExpr) (v : SmtValuation) : bool :=
       (eval_smt_arith e1 v) (eval_smt_arith e2 v)) then true else false
     | SmtBoolLt e1 e2 => CrVal.ltb
       (eval_smt_arith e1 v) (eval_smt_arith e2 v)
+    | SmtBoolSLt ty e1 e2 =>
+        match eval_smt_arith e1 v, eval_smt_arith e2 v with
+        | IntVal a ta, IntVal b tb =>
+            (crinttype_eqb ta u64 && crinttype_eqb tb u64 &&
+             ((signed_at ty a <? signed_at ty b)%Z))%bool
+        | _, _ => false
+        end
     | SmtBoolVar name => match sv_ints v name with
       | IntVal a _ => negb (Integers.eq a Integers.zero)
       | _ => false
@@ -165,8 +176,28 @@ with eval_smt_arith (e : SmtArithExpr) (v : SmtValuation) : CrVal :=
     | SmtBitXor ty e1 e2 => xor_at  ty (eval_smt_arith e1 v) (eval_smt_arith e2 v)
     | SmtBitNot e => CrVal.not (eval_smt_arith e v)
     | SmtBitMul ty e1 e2 => mul_at  ty (eval_smt_arith e1 v) (eval_smt_arith e2 v)
-    | SmtBitDiv ty e1 e2 => divu_at ty (eval_smt_arith e1 v) (eval_smt_arith e2 v)
-    | SmtBitMod ty e1 e2 => modu_at ty (eval_smt_arith e1 v) (eval_smt_arith e2 v)
+    | SmtBitDiv ty e1 e2 =>
+        div_at ty (eval_smt_arith e1 v) (eval_smt_arith e2 v)
+    | SmtBitMod ty e1 e2 =>
+        mod_at ty (eval_smt_arith e1 v) (eval_smt_arith e2 v)
+    | SmtBitSDiv ty e1 e2 =>
+        iv_binop_at
+          (fun a b => mask_width W64
+            (Z.quot (signed_at ty a) (signed_at ty b)))
+          u64 (eval_smt_arith e1 v) (eval_smt_arith e2 v)
+    | SmtBitSRem ty e1 e2 =>
+        iv_binop_at
+          (fun a b => mask_width W64
+            (Z.rem (signed_at ty a) (signed_at ty b)))
+          u64 (eval_smt_arith e1 v) (eval_smt_arith e2 v)
+    | SmtSignExt ty e =>
+        match eval_smt_arith e v with
+        | IntVal a ta =>
+            if crinttype_eqb ta u64
+            then mk_int u64 (signed_at ty a)
+            else ErrorVal
+        | _ => ErrorVal
+        end
     (* An out-of-bounds (or undeclared-region) read is [ErrorVal], not a
        rejection: see the totality argument on [CrTransformer.LoadOp].  The
        [len] on the node is redundant with the region's own [arr_len] here --

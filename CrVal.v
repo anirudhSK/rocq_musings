@@ -15,24 +15,28 @@ Arguments Illegal {T}.
 Inductive CrWidth : Type :=
 | W8 | W16 | W32 | W64.
 
-(* The integer "type" carried by a value and required by an operation.  Today
-   this is just a width; it is the extension point for signedness (add
-   [it_signed : bool] here). *)
 Record CrIntType : Type := mkCrIntType {
   it_width : CrWidth;
+  it_signed : bool;
 }.
 
-Definition u8  : CrIntType := mkCrIntType W8.
-Definition u16 : CrIntType := mkCrIntType W16.
-Definition u32 : CrIntType := mkCrIntType W32.
-Definition u64 : CrIntType := mkCrIntType W64.
+Definition u8  : CrIntType := mkCrIntType W8 false.
+Definition u16 : CrIntType := mkCrIntType W16 false.
+Definition u32 : CrIntType := mkCrIntType W32 false.
+Definition u64 : CrIntType := mkCrIntType W64 false.
+Definition s8  : CrIntType := mkCrIntType W8 true.
+Definition s16 : CrIntType := mkCrIntType W16 true.
+Definition s32 : CrIntType := mkCrIntType W32 true.
+Definition s64 : CrIntType := mkCrIntType W64 true.
 
 Definition width_bits (w : CrWidth) : Z :=
   match w with W8 => 8 | W16 => 16 | W32 => 32 | W64 => 64 end.
 
 Definition crwidth_eqb (a b : CrWidth) : bool :=
   match a, b with W8,W8 | W16,W16 | W32,W32 | W64,W64 => true | _,_ => false end.
-Definition crinttype_eqb (a b : CrIntType) : bool := crwidth_eqb (it_width a) (it_width b).
+Definition crinttype_eqb (a b : CrIntType) : bool :=
+  crwidth_eqb (it_width a) (it_width b) &&
+  Bool.eqb (it_signed a) (it_signed b).
 
 (* A value is uniform 64-bit storage [val] tagged with its integer type [ity].
    Operations require their operands to already carry the matching type and
@@ -99,6 +103,14 @@ Definition mask_width (w : CrWidth) (z : Z) : uint64 :=
 Definition mk_int (ty : CrIntType) (z : Z) : CrVal :=
   IntVal (mask_width (it_width ty) z) ty.
 
+Definition bits_at (ty : CrIntType) (a : uint64) : Z :=
+  Z.land (unsigned a) (Z.ones (width_bits (it_width ty))).
+
+Definition signed_at (ty : CrIntType) (a : uint64) : Z :=
+  let w := width_bits (it_width ty) in
+  let bits := bits_at ty a in
+  if bits <? 2 ^ (w - 1) then bits else bits - 2 ^ w.
+
 (* ------------------------------------------------------------------ *)
 (* A region cell is a BYTE.
 
@@ -136,7 +148,9 @@ Definition mk_int (ty : CrIntType) (z : Z) : CrVal :=
    an artefact.  Only the initial contents are constrained. *)
 Definition to_byte (c : MemVal CrVal) : MemVal CrVal :=
   match c with
-  | Init (IntVal b {| it_width := W8 |}) => Init (mk_int u8 (unsigned b))
+  | Init (IntVal b ty) =>
+      if crinttype_eqb ty u8 then Init (mk_int u8 (unsigned b))
+      else Init (mk_int u8 0)
   | _ => Init (mk_int u8 0)
   end.
 
@@ -201,7 +215,10 @@ Definition eqb (x y : CrVal) : bool :=
 
 Definition ltb (x y : CrVal) : bool :=
   match x, y with
-  | IntVal a ta, IntVal b tb => crinttype_eqb ta tb && Integers.ltu a b
+  | IntVal a ta, IntVal b tb =>
+      crinttype_eqb ta tb &&
+      if it_signed ta then signed_at ta a <? signed_at ta b
+      else Integers.ltu a b
   | _, _ => false
   end.
 
@@ -226,6 +243,24 @@ Definition mul_at  (ty : CrIntType) : CrVal -> CrVal -> CrVal := iv_binop_at Int
 Definition divu_at (ty : CrIntType) : CrVal -> CrVal -> CrVal := iv_binop_at Integers.divu ty.
 Definition modu_at (ty : CrIntType) : CrVal -> CrVal -> CrVal := iv_binop_at Integers.modu ty.
 
+Definition signed_binop_at (f : Z -> Z -> Z) (ty : CrIntType)
+    (x y : CrVal) : CrVal :=
+  match x, y with
+  | IntVal a ta, IntVal b tb =>
+      if crinttype_eqb ta ty && crinttype_eqb tb ty
+      then mk_int ty (f (signed_at ty a) (signed_at ty b))
+      else ErrorVal
+  | _, _ => ErrorVal
+  end.
+
+Definition div_at (ty : CrIntType) : CrVal -> CrVal -> CrVal :=
+  if it_signed ty then signed_binop_at Z.quot ty
+  else divu_at ty.
+
+Definition mod_at (ty : CrIntType) : CrVal -> CrVal -> CrVal :=
+  if it_signed ty then signed_binop_at Z.rem ty
+  else modu_at ty.
+
 (* Bitwise complement at the value's own type (no separate op-type to check). *)
 Definition not (x : CrVal) : CrVal :=
   match x with
@@ -237,7 +272,13 @@ Definition not (x : CrVal) : CrVal :=
    [to] and typed [to]. *)
 Definition cast (from to : CrIntType) (x : CrVal) : CrVal :=
   match x with
-  | IntVal a ta => if crinttype_eqb ta from then mk_int to (unsigned a) else ErrorVal
+  | IntVal a ta =>
+      if crinttype_eqb ta from then
+        mk_int to
+          (if it_signed from then
+             unsigned (mask_width W64 (signed_at from a))
+           else unsigned (mask_width (it_width from) (unsigned a)))
+      else ErrorVal
   | _ => ErrorVal
   end.
 
@@ -352,7 +393,13 @@ Definition tag_of (v : CrVal) : Z :=
   match v with
   | ErrorVal => 0
   | UninitVal => 1
-  | IntVal _ ty => match it_width ty with W8 => 2 | W16 => 3 | W32 => 4 | W64 => 5 end
+  | IntVal _ ty =>
+      match it_signed ty, it_width ty with
+      | false, W8 => 2 | false, W16 => 3
+      | false, W32 => 4 | false, W64 => 5
+      | true, W8 => 6 | true, W16 => 7
+      | true, W32 => 8 | true, W64 => 9
+      end
   end.
 
 Definition val_of (v : CrVal) : Z :=
@@ -366,14 +413,20 @@ Definition mk_cell (value tag : Z) : CrVal :=
   else if Z.eqb tag 3 then IntVal (repr value) u16
   else if Z.eqb tag 4 then IntVal (repr value) u32
   else if Z.eqb tag 5 then IntVal (repr value) u64
+  else if Z.eqb tag 6 then IntVal (repr value) s8
+  else if Z.eqb tag 7 then IntVal (repr value) s16
+  else if Z.eqb tag 8 then IntVal (repr value) s32
+  else if Z.eqb tag 9 then IntVal (repr value) s64
   else if Z.eqb tag 1 then UninitVal
   else ErrorVal.
 
 Lemma mk_cell_val_tag : forall v, mk_cell (val_of v) (tag_of v) = v.
 Proof.
-  intros [a [w]| |]; try reflexivity.
-  destruct w; unfold mk_cell, val_of, tag_of, it_width;
-    cbn [Z.eqb Pos.eqb]; f_equal; apply repr_unsigned.
+  intros [a [w sg]| |]; try reflexivity.
+  destruct sg, w;
+    cbn [tag_of val_of it_signed it_width];
+    unfold mk_cell; cbn [Z.add Z.eqb Pos.eqb];
+    f_equal; apply repr_unsigned.
 Qed.
 
 (* ------------------------------------------------------------------ *)
@@ -415,8 +468,8 @@ Proof. intros a b H; destruct a, b; simpl in H; try discriminate; reflexivity. Q
 
 Lemma crinttype_eqb_true : forall a b, crinttype_eqb a b = true -> a = b.
 Proof.
-  intros [wa] [wb] H. unfold crinttype_eqb in H. simpl in H.
-  apply crwidth_eqb_true in H. subst. reflexivity.
+  intros [wa sa] [wb sb] H.
+  destruct wa, wb, sa, sb; cbn in H; try discriminate; reflexivity.
 Qed.
 
 Lemma int_eq_true : forall (a b : uint64), Integers.eq a b = true -> a = b.
@@ -430,7 +483,7 @@ Lemma crwidth_eqb_refl : forall w, crwidth_eqb w w = true.
 Proof. destruct w; reflexivity. Qed.
 
 Lemma crinttype_eqb_refl : forall t, crinttype_eqb t t = true.
-Proof. intros [w]; apply crwidth_eqb_refl. Qed.
+Proof. intros [w sg]; destruct w, sg; reflexivity. Qed.
 
 Lemma int_eq_refl : forall (a : uint64), Integers.eq a a = true.
 Proof.
@@ -494,6 +547,16 @@ Proof.
   rewrite Zmod_small by lia. apply repr_unsigned.
 Qed.
 
+Lemma bits_at_u64 : forall a, bits_at u64 a = unsigned a.
+Proof.
+  intro a. unfold bits_at, u64. cbn [it_width width_bits].
+  rewrite Z.land_ones by lia.
+  pose proof (unsigned_range a) as [Hlo Hhi].
+  assert (Hmod : @modulus 64%positive = (2 ^ 64)%Z)
+    by (vm_compute; reflexivity).
+  rewrite Hmod in Hhi. apply Z.mod_small. lia.
+Qed.
+
 Lemma mask_width_W64_small : forall z, 0 <= z < 2 ^ 64 -> mask_width W64 z = repr z.
 Proof.
   intros z Hz. unfold mask_width, width_bits.
@@ -529,6 +592,20 @@ Proof.
     apply Z.mod_mod_divide;
     [ exists (2 ^ 56)%Z | exists (2 ^ 48)%Z | exists (2 ^ 32)%Z | exists 1%Z ];
     vm_compute; reflexivity.
+Qed.
+
+Lemma signed_binop_as_iv : forall f ty x y,
+  signed_binop_at f ty x y =
+  iv_binop_at
+    (fun a b => mask_width W64 (f (signed_at ty a) (signed_at ty b)))
+    ty x y.
+Proof.
+  intros f ty [a ta | |] [b tb | |]; try reflexivity.
+  unfold signed_binop_at, iv_binop_at.
+  destruct (crinttype_eqb ta ty && crinttype_eqb tb ty);
+    [| reflexivity].
+  unfold mk_int. f_equal. symmetry.
+  apply mask_width_unsigned_mask_W64.
 Qed.
 
 (* Masking at a width, reading the bits back out, and masking again at the same
@@ -580,6 +657,8 @@ Qed.
 Lemma cast_u64_mk_int : forall ty z, cast u64 ty (mk_int u64 z) = mk_int ty z.
 Proof.
   intros ty z. unfold cast, mk_int.
-  cbn [u64 it_width crinttype_eqb crwidth_eqb].
-  f_equal. apply mask_width_unsigned_mask_W64.
+  rewrite crinttype_eqb_refl.
+  cbn [u64 it_width it_signed].
+  rewrite mask_width_W64_unsigned_idem. f_equal.
+  apply mask_width_unsigned_mask_W64.
 Qed.
